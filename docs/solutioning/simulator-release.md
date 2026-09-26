@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Current release: **`d59c5ef`**, deployed September 26, 2026 at 19:35 UTC. The expanded catalog, theatrical clients, pace tuning and private transcript archive are recorded under [Expanded catalog and archive release](#expanded-catalog-and-archive-release).
+Current release: **`f81f08b`**, deployed September 26, 2026 at 20:10 UTC. [The happy hour](#happy-hour-release) adds a ninth, final scenario for open conversation with any client, without objectives, coaching or scoring. The earlier catalog expansion and private archive remain included.
 
 Initial source baseline: `6415f0a` on `simulator-mvp`. Andrew requested deployment and a readiness check for trying the simulator on a phone.
 
@@ -114,3 +114,21 @@ Accepted production evidence:
 - Cloud receipts: `output/simulator-expanded-release-deploy.log`, `-deployments.json`, `-version.json`, `-d1-create.log`, `-d1-migrate.log`, and `-d1-migrations.log`.
 
 All production acceptance commands used `ACCEPTANCE_URL=https://outofcharacter.droopy.dev`; browser reports record the target. The voice smoke establishes deployed WebRTC, feedback, shutdown and archival behavior with synthetic speech, not physical-phone audio acceptance or a quantified increase in human difficulty. Archive writes remain best effort, and no audio is archived. Refresh an already-open tab to load the expanded catalog. No branch push or merge was performed.
+
+
+## Happy hour release
+
+Andrew requested deployment of the [happy-hour follow-up](simulator-catalog-expansion.md#happy-hour-follow-up). Source **`f81f08bc2fbd313a9e418dcdabf74424cdeeffd3`** adds **The happy hour** as the ninth and last scenario, available with all seven clients. It is free conversation with no agenda, hidden business objective, live coaching, scoring or winning condition. Clients retain their personalities and can improvise everyday stories and preferences. The existing ten-minute limit, transcript, provider shutdown and private archive remain in use.
+
+Deployed **2026-09-26 at 20:10 UTC** to [the simulator](https://outofcharacter.droopy.dev/simulator). Fresh Cloudflare receipts confirm **100% traffic** on version **`1b62fca7-129f-492b-b06c-845953014701`**, tagged **`f81f08b`**. Deployment used `--keep-vars`; the three enabled flags, existing provider secrets and archive binding remain configured. The remote database has no pending migrations.
+
+Accepted evidence:
+
+- Fresh `bun run check` passed: **131 tests / 4,253 assertions**, types, production build, privacy scan of **15 client assets**, and Worker dry run. The new session test covers settled speech, no live/final judging or direction, shutdown and an unscored SQLite archive. Log: `output/simulator-happy-hour-release-check.log`.
+- All six checked HTTPS routes return 200. The live catalog contains **nine scenarios / seven clients**, with happy hour last and empty objectives/services. All **67 public served assets** match the release build. Report: `output/simulator-happy-hour-release-http.json`.
+- Production workshop acceptance passes **12/12**, including last-place ordering, every client selection, the mobile brief, and unscored live/closing screens. Compact interaction acceptance passes **5/5** at 320, 390 and 1672 pixels. No browser errors, horizontal overflow, unexpected API calls or microphone requests. Reports and screenshots: `output/simulator-happy-hour-release-workshop/` and `output/simulator-happy-hour-release-compact/`.
+- A bounded real-provider happy-hour conversation with Jamie passes **9/9** browser checks at 390 × 844 using prerecorded synthetic trainee speech. Both speakers were transcribed; every observed live/final evaluation remained null; live and closing screens had no coaching or scores; one injected polling failure recovered; provider closure and local media cleanup were confirmed. **28 provider seconds**, zero browser/test errors. Report: `output/simulator-happy-hour-release-live/report.json`. The scoped harness is `output/simulator-happy-hour-release-live.mjs`.
+- That attempt's actual remote D1 export passes **18/18 comparisons**: complete transcript matches the browser, evaluation remains null, no direction cues were saved, closure is confirmed, and actor/opening hashes and Worker provenance match this release. Report: `output/simulator-happy-hour-release-live/archive-verification.json`. The export remains ignored with mode 0600.
+- Cloud receipts: `output/simulator-happy-hour-release-deploy.log`, `-deployments.json`, and `-version.json`.
+
+Every production browser command used `ACCEPTANCE_URL=https://outofcharacter.droopy.dev`. Workshop checks use illustrative dialogue without provider requests. The real voice smoke began with trainee speech and establishes the unscored conversation, closure and archival path; it does not establish spontaneous-greeting reliability, subjective improvisation quality or physical-phone audio behavior. Refresh an already-open tab to load the new scenario. No branch push or merge was performed.

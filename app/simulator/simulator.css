@@ -3,12 +3,12 @@
 .simulator-header .brand { font-weight: 700; }
 .simulator-title { font-family: Silkscreen, monospace; color: #44efcd; font-size: 22px; font-weight: 700; white-space: nowrap; }
 .simulator-shell .game-main { max-width: 1620px; }
-.simulator-header { height: 72px; flex-basis: 72px; border-bottom: 0; }
-.sim-heading { text-align: center; padding: 15px 16px 20px; }
+.simulator-header { height: 64px; flex-basis: 64px; border-bottom: 0; }
+.sim-heading { text-align: center; padding: 6px 16px 10px; }
 .sim-heading h1 { font-size: clamp(26px, 3.1vw, 46px); margin: 8px 0; line-height: 1.15; }
 .sim-heading p { color: #c8ddee; font-size: 22px; }
 .sim-selection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.sim-panel { padding: 25px; border: 1px solid #3296b5; border-radius: 3px; background: #031d2b60; min-width: 0; }
+.sim-panel { padding: 22px; border: 1px solid #3296b5; border-radius: 3px; background: #031d2b60; min-width: 0; }
 .sim-section-heading { display: flex; gap: 14px; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .sim-section-heading h2 { font-size: 30px; line-height: 1.2; }
 .sim-section-heading > span { font-size: 16px; color: #9bbbd4; text-align: right; }
@@ -37,12 +37,12 @@
 .sim-rail-controls button:disabled { opacity: .3; }
 .sim-client-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 3px 3px 16px; scrollbar-color: #467d9f #102b3d; scrollbar-width: thin; }
 .sim-client-card { flex: 0 0 180px; scroll-snap-align: start; position: relative; padding: 10px 10px 15px; border: 1px solid #2b566e; border-radius: 5px; background: #0a2332; color: #d9eaf7; display: flex; flex-direction: column; align-items: center; }
-.sim-client-card img { width: 154px; height: 172px; object-fit: cover; image-rendering: pixelated; margin: 5px 0; }
+.sim-client-card img { width: 154px; height: 166px; object-fit: cover; image-rendering: pixelated; margin: 5px 0; }
 .sim-client-card strong { font-family: Silkscreen, monospace; font-size: 20px; }
 .sim-client-card > span:last-child { font-weight: 700; font-family: Silkscreen, monospace; text-transform: uppercase; font-size: 13px; color: #79cfff; margin-top: 4px; }
 .sim-client-card .sim-choice-mark { position: absolute; right: 8px; top: 8px; width: 20px; height: 20px; }
 .sim-client-brief { display: grid; grid-template-columns: 155px 1fr; gap: 0 20px; align-items: center; margin-top: 10px; padding-top: 16px; border-top: 1px solid #32768b; }
-.sim-selected-portrait { width: 155px; height: 175px; object-fit: contain; image-rendering: pixelated; border-right: 1px solid #32768b; padding-right: 15px; }
+.sim-selected-portrait { width: 155px; height: 155px; object-fit: contain; image-rendering: pixelated; border-right: 1px solid #32768b; padding-right: 15px; }
 .sim-client-brief .sim-traits { grid-column: 1/-1; margin-top: 8px; }
 .sim-client-brief h3 { color: #44efcd; font-family: Silkscreen, monospace; font-size: 32px; }
 .sim-client-brief span { font-size: 15px; color: #90b2cc; }
@@ -171,7 +171,7 @@
 .sim-client-rail::-webkit-scrollbar { height: 10px; }
 .sim-scenario-list::-webkit-scrollbar-track, .sim-client-rail::-webkit-scrollbar-track { background: #173f58; border-radius: 6px; }
 .sim-scenario-list::-webkit-scrollbar-thumb, .sim-client-rail::-webkit-scrollbar-thumb { background: #47b8e8; border-radius: 6px; }
-.sim-scenario-list, .sim-client-rail { scrollbar-color: #47b8e8 #173f58; }
+.sim-scenario-list, .sim-client-rail { scrollbar-color: auto; scrollbar-width: auto; }
 .sim-lab-column-title { color: #89b4d0; font-family: Silkscreen, monospace; font-size: 17px !important; padding-bottom: 12px; border-bottom: 1px solid #234b62; }
 .sim-lab-provenance { font-size: 13px; max-width: 80ch; margin: 10px 0 20px; padding: 12px 16px; background: #0b2838; border-left: 2px solid #39718d; }
 .sim-lab-checks span { font-size: 11px; padding: 5px 8px; }

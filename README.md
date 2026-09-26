@@ -25,12 +25,15 @@ The workshop lets you replay the draw and reel, inspect the flat cast, backstori
 
 For local voice practice, add `OPENAI_API_KEY` to the ignored `.dev.vars` alongside `TYPESAFE_API_KEY`, and set `SIMULATOR_ENABLED=true` and `PAID_SERVICES_ENABLED=true`. Set `SIMULATOR_DIRECTOR_ENABLED=true` to enable private client cues. The committed deployment flags remain off. Attempts last at most ten minutes, close after page abandonment, and keep no conversation history. Muting does not stop the paid session; use **End session**.
 
-The DIY workshop has four simulator stories:
+The DIY workshop has five simulator stories:
 
 - `/storybook/simulator-selection`: scrollable collections, character changes, connection availability, and microphone errors.
 - `/storybook/simulator-live`: replay, pause, seek, and reset recorded dialogue, animated objectives, hints, skill bars, and connection states.
+- `/storybook/simulator-voice`: client/trainee/overlap spectra, connection states, intensity, pause/reset/replay, and reduced motion.
 - `/storybook/simulator-debrief`: successful, unsuccessful, and unconfirmed endings with source quotations.
 - `/storybook/simulator-judging`: authored transcripts, stored real Jev judgments, source evidence, client diagnostics, and raw distributions. Opening any story uses no microphone or paid API.
+
+Use **Screen only** to compare each screen with the mockup without workshop controls. The live voice display uses real frequency analysis; the workshop uses clearly labeled deterministic samples. See [the two design iterations](docs/solutioning/simulator-design-iterations.md) for responsive and motion evidence.
 
 Explicit paid recordings use `bun run eval:simulator`, `bun run eval:simulator --replay`, or `bun run eval:simulator --holdout`. The last command runs independently authored challenge cases and exits nonzero when an expectation is missed; retain those results when assessing rubric changes. These are synthetic examples, not validated personnel assessments.
 

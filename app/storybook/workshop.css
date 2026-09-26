@@ -87,7 +87,7 @@
   .workshop-sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
   .workshop-sidebar nav { grid-template-columns: repeat(2, 1fr); margin: 16px 0; }
   .workshop-sidebar h1 { font-size: 26px; }
-  .workshop-viewports { flex-wrap: wrap; }
+  .workshop-viewports { flex-wrap: wrap; max-width: 100%; }
 }
 
 .workshop-judge-description { border-top: 1px solid #344846; margin-top: 20px; padding-top: 16px; }

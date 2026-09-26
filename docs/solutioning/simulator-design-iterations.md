@@ -42,8 +42,16 @@ Local evidence: `output/simulator-design-1-after/{selection,live,debrief,judging
 
 ### Changes applied
 
-Implemented tighter desktop spacing, persistent scroll tracks and card-size paging with disabled endpoints, larger portrait crops and touch targets, grouped debrief quotes, a shorter mobile-safe debrief title, one navigation link and a non-overlapping workshop return, a stable mobile timer/end row, and clearer lab column headings/provenance. Reduced-motion production and preview use steady activity indicators; state replay remains available. Final checks/captures are running.
+Implemented tighter desktop spacing, custom scroll tracks and card-size paging with disabled endpoints, larger portrait crops and touch targets, grouped debrief quotes, a shorter mobile-safe debrief title, one navigation link and a non-overlapping workshop return, a stable mobile timer/end row, and clearer lab column headings/provenance. Reduced-motion production and preview use steady activity indicators; state replay remains available. Final checks and captures pass.
 
 ### After screenshots
 
-Pending: `output/simulator-design-2-after/`.
+Accepted final set: `output/simulator-design-2-accepted/`, 16 views at 1672×941, 1024×900, 390×844 and 320×800. Each has a full-page screen image and a true viewport image. All have zero horizontal overflow or API requests. The desktop selector's Start button and the complete live controls fit within the 941-pixel viewport. Raw JSON has separate expanded-pane captures at all widths.
+
+Earlier `simulator-design-2-after` records the intermediate spacing and one capture that lost Screen only mode during a development reload; it is not the final acceptance set. The capture script now requires that mode before and after capture. A fresh 320-pixel debrief capture passes.
+
+Motion evidence: `output/simulator-voice-final-accepted/report.json` and its seven-state PNGs, across normal/reduced motion and 390/1440 widths. All five checks pass (four UI combinations plus a real browser analyser). The normal spectrum changes over time, pause freezes it, reset restores it, and replay advances to the next state; all seven states are also checked individually. Reduced motion shows steady client/trainee activity indicators; live audio does not animate their height or glow. The analyser distinguishes 440 Hz from 1800 Hz and returns to zero after stop. No microphone/provider calls, page errors or console errors.
+
+A first audio run exposed fractional inline-height hydration warnings and a tight timer-based replay assertion. Integer pixel heights remove the warnings; the assertion now waits for the observable state with a bounded timeout. The earlier failed report remains in `output/simulator-voice-final/`; the accepted run required no retry.
+
+Opus passed checkpoint 6 with no blocking bugs and confirmed the selection/live compositions closely follow their references. Its last small finding was workshop-control overflow at 320 pixels outside Screen only mode. A width constraint lets the existing flex row wrap; `output/simulator-workshop-narrow-final/report.json` records ten passing checks across all five simulator stories at 320 and 390, with no overflow, API/microphone access or errors. Remaining cosmetic observations are recorded in the progress log.

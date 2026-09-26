@@ -1,13 +1,13 @@
 # Simulator MVP acceptance
 
-Implementation: `simulator-mvp`. Checkpoint commits: `5804582` (plan), `e7f1602` (scenario/Jev foundations), `c3f56ee` (owned Live sessions), and `44c74b9` (UI/workshop and review fixes). [Progress and review dispositions](simulator-progress.md) track the final acceptance gate. No merge or deployment was performed.
+Implementation: `simulator-mvp`. Checkpoint commits: `5804582` (plan), `e7f1602` (scenario/Jev foundations), `c3f56ee` (owned Live sessions), `44c74b9` (UI/workshop and review fixes), `917bf84` (core acceptance), and `584e18b` (mockup fidelity and speaking display). [Progress and review dispositions](simulator-progress.md) track the final acceptance gate. No merge or deployment was performed.
 
 ## Delivered behavior
 
 - Sales: explore an adjacent SharePoint opportunity with an existing software client. Consultancy: handle an unestimated dashboard request without surrendering scope or ignoring the real need.
 - Morgan, Avery, and Casey provide interchangeable behavior profiles. Six stable traits shape expression; scenario interests, disclosure rules, budget, and authority determine resistance and concessions.
 - GPT-Live 1 provides WebRTC speech and authoritative transcripts. Jev, through AI SDK 7, independently assesses seven trainee skills, unordered achievement of ordered objectives, and client behavior. The voice actor receives authored private cues only when a fresh judgment supports intervention.
-- Selection, live conversation, debrief, and the Jev lab share production components with the DIY workshop. Replay controls cover hints, objective checks, score bars, captions, errors, unavailable grading, and connection transitions. No microphone or paid request occurs when opening a story.
+- Selection, live conversation, audio states, debrief, and the Jev lab share production components with the DIY workshop. Replay controls cover hints, objective checks, score bars, captions, errors, unavailable grading, and connection transitions. No microphone or paid request occurs when opening a story.
 - Exact dialogue passages support displayed evidence. Missing observations remain unscored. Discoveries and demonstrated behaviors persist; client agreements can be withdrawn. Results are transient, with whole-attempt restart.
 
 ## Evidence
@@ -40,6 +40,8 @@ Nonpaid checks:
 bun run check
 bun scripts/simulator-workshop-acceptance.mjs
 bun scripts/simulator-failure-acceptance.mjs
+bun scripts/simulator-voice-acceptance.mjs
+DESIGN_SCREEN=1 bun scripts/simulator-design-capture.mjs
 bun scripts/selection-acceptance.mjs
 ```
 
@@ -89,4 +91,6 @@ The separate `simulator-cue-probe.mjs --paid [--cue]` requires a prepared `outpu
 
 The direct role-play and cue probes bypass the production session owner. Their director gate tests probability and deduplication; production freshness and cooldown are covered separately by session/state tests. The final fixed-audio smoke had no client filler during the trainee passage; the overlapping-backchannel settling case is established by its unit regression.
 
-Visual acceptance is being extended in `simulator-design-iterations.md` for the mockup fidelity and speaking-display requirements.
+Two screenshot-driven visual rounds are recorded in [design iterations](simulator-design-iterations.md). Final full-screen captures at 1672, 1024, 390 and 320 pixels have no overflow; the desktop selection and live controls fit the reference viewport. The speaking display uses actual microphone/remote-audio frequency bands, with distinct client, trainee, overlap, idle, muted, connecting and ending states. A dedicated workshop provides intensity, pause/reset and state replay without a microphone. Normal/reduced-motion browser checks and a real local oscillator/analyser check pass, including zero console errors. Assets and exact image-generation prompts are recorded in [client assets](../mockups/simulator-client-assets.md).
+
+Final local evidence directories: `output/simulator-workshop-final`, `simulator-failures-final`, `simulator-game-final`, `simulator-design-2-accepted`, `simulator-voice-final-accepted`, and `simulator-workshop-narrow-final`. The final narrow workshop check covers all five simulator stories with controls shown at 320 and 390 pixels: ten passes with no overflow, errors, API or microphone requests. One first game-regression run timed out under parallel browser load and passed on a single retry; the accepted report is retained. New image/layout work did not change provider/session policy. The original real-provider evidence above remains the voice lifecycle evidence; the new frequency display was tested locally with actual Web Audio.

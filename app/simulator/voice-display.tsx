@@ -16,8 +16,8 @@ export function VoiceDisplay({ client, levels, phase, muted }: {
     </div>
     <div className="sim-speaking"><i />{labels[state]}</div>
     <div className="sim-voice" aria-hidden="true">
-      <div className="sim-spectrum client">{Array.from({ length: SPECTRUM_BANDS }, (_, i) => <i key={i} style={{ height: `${2 + (clientSpeaking ? levels.outputBands[i] ?? 0 : 0) * 28}px`, '--bar': i } as CSSProperties} />)}</div>
-      <div className="sim-spectrum trainee">{Array.from({ length: SPECTRUM_BANDS }, (_, i) => <i key={i} style={{ height: `${2 + (traineeSpeaking ? levels.inputBands[i] ?? 0 : 0) * 22}px` }} />)}</div>
+      <div className="sim-spectrum client">{Array.from({ length: SPECTRUM_BANDS }, (_, i) => <i key={i} style={{ height: `${Math.round(2 + (clientSpeaking ? levels.outputBands[i] ?? 0 : 0) * 28)}px`, '--bar': String(i) } as CSSProperties} />)}</div>
+      <div className="sim-spectrum trainee">{Array.from({ length: SPECTRUM_BANDS }, (_, i) => <i key={i} style={{ height: `${Math.round(2 + (traineeSpeaking ? levels.inputBands[i] ?? 0 : 0) * 22)}px` }} />)}</div>
       <div className="sim-voice-key"><span>{client.name}</span><span>{muted ? 'You · muted' : 'You'}</span></div>
     </div>
   </div>;

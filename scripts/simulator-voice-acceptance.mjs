@@ -17,6 +17,7 @@ try {
       navigator.mediaDevices.getUserMedia = () => { window.__micCalls++; return Promise.reject(new Error('No microphone in workshop')); };
     });
     page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.route('**/api/**', route => { api.push(route.request().url()); return route.abort(); });
     try {
       await page.goto(`${base}/storybook/simulator-voice`, { waitUntil: 'networkidle' });
@@ -78,7 +79,7 @@ try {
       await page.getByRole('button', { name: 'Reset', exact: true }).click();
       check(await page.getByLabel('Audio state').inputValue() === 'client', 'reset did not restore client');
       await page.getByRole('button', { name: 'Replay all states' }).click();
-      await page.waitForTimeout(2550);
+      await page.waitForFunction(() => document.querySelector('.sim-voice-display')?.dataset.state === 'trainee', undefined, { timeout: 10000 });
       check(await page.locator('.sim-voice-display').getAttribute('data-state') === 'trainee', 'state replay did not advance');
       const dimensions = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth, mic: window.__micCalls }));
       check(dimensions.document <= width + 1, 'horizontal overflow');

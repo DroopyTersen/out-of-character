@@ -17,7 +17,10 @@ try {
       if (story === 'selection') await page.getByLabel('Larger collection (illustrative)').check();
       if (story === 'live') for (let i = 0; i < 9; i++) await page.getByRole('button', { name: 'Next turn' }).click();
       if (story === 'judging') await page.getByRole('button', { name: 'Show full result' }).click();
-      if (process.env.DESIGN_SCREEN === '1') await page.getByRole('button', { name: 'Screen only', exact: true }).click();
+      if (process.env.DESIGN_SCREEN === '1') {
+        await page.getByRole('button', { name: 'Screen only', exact: true }).click();
+        await page.locator('.workshop-shell.screen-only').waitFor();
+      }
       await page.evaluate(() => document.fonts.ready);
       const screen = page.locator(selector);
       await screen.scrollIntoViewIfNeeded();
@@ -33,6 +36,7 @@ try {
       }
       const dimensions = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
       if (dimensions.document > dimensions.viewport + 1) errors.push(`Overflow: ${dimensions.document} > ${dimensions.viewport}`);
+      if (process.env.DESIGN_SCREEN === '1' && !await page.locator('.workshop-shell.screen-only').count()) errors.push('Screen only mode was lost during capture');
       const bounds = await screen.boundingBox();
       results.push({ story, viewport, bounds, dimensions, errors, apiCalls: api.length });
       await context.close();

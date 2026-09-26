@@ -1,6 +1,12 @@
 # Simulator deployment
 
-Current release: **`f81f08b`**, deployed September 26, 2026 at 20:10 UTC. [The happy hour](#happy-hour-release) adds a ninth, final scenario for open conversation with any client, without objectives, coaching or scoring. The earlier catalog expansion and private archive remain included.
+Current release: **`63b633a`**, deployed September 26, 2026 at 20:35 UTC. [Voice Lab](#voice-lab-release) lets a consultant try any of seven clients with a selected GPT-Live voice in an open conversation. The nine simulator scenarios and private archive remain included.
+
+## Voice Lab release
+
+Andrew requested deployment of the Voice Lab. Source commit `63b633a2cafdfdfed3dca223fbb580f76193127a` adds `/simulator/voice-lab`, with 22 allowlisted built-in voices, the selected client's public traits/background, documented voice descriptions, and open-ended conversation using the existing happy-hour session flow. The selected voice reaches Live session creation and is recorded in the private archive provenance.
+
+The full pre-deployment gate passed: 133 tests, typecheck, production build, client-bundle boundary check, and Wrangler deploy dry run. `bun run deploy` preserved existing Worker variables and deployed version `6c9c8176-04b1-4a65-801f-f40e711900ef` on September 26 at 20:35 UTC. A fresh deployment listing showed 100% traffic on that version. The HTTPS Voice Lab returned 200, the public catalog reported enabled practice with seven clients and nine scenarios, and the new Voice Lab JavaScript matched the production build byte-for-byte. In the deployed browser, selecting Harper and Willow updated the client profile and voice description while retaining the voice across client changes. No paid voice call or physical-device microphone test was run for this UI release.
 
 Initial source baseline: `6415f0a` on `simulator-mvp`. Andrew requested deployment and a readiness check for trying the simulator on a phone.
 

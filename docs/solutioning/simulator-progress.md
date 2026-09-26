@@ -151,3 +151,14 @@ The MVP acceptance follow-up accepted the exact `simulator-design-2-accepted` an
 - Deferred cosmetic suggestions: a different font for the debrief count separator, removing reserved scrollbar gutter when a catalog is short, smoothing the speaking-state threshold, shortening the smallest-phone Start label and further reducing repeated labels. These do not block the MVP; no new state/timer machinery was added for them.
 
 An independent MVP acceptance audit found no missing UI/animation/fixture acceptance requirement. Evidence distinguishes each selected audio state from the replay button's verified first transition, and preserves initial failed runs instead of replacing their history. Human voice realism and physical-phone behavior remain the explicit practical limits documented in [acceptance](simulator-acceptance.md).
+
+
+## Role ownership and longer practice review checkpoint
+
+The role-play follow-up is implemented in the isolated `simulator-role-boundaries` branch and includes the completed prepared-sample Voice Lab. Actor/scenario instructions preserve client knowledge and interests while returning consultancy planning to the trainee. Rubric v5 credits the trainee’s own contribution, preserves ordinary discovery, and rechecks historical evidence in the final grade.
+
+Independent Opus and Astra reviews found startup cleanup and full-history citation gaps. Those are fixed, including late-ready expiry, server-driven microphone shutdown, all-passage evidence batches, explicit cue eligibility in evaluation reports, and bounded parallel question groups for long Jev inputs. Four successful provider boundary shapes cover 128/20k through 800/80k passages/characters, including all-trainee and mixed dialogue, in 425–784 ms. Longer grades cost more because each group includes the full state; no transcript summary or evidence-dropping fallback was added.
+
+Six direct-provider rehearsals now total 924 usage seconds. Weak Harper/Jamie prompts did not elicit consultancy plans; owned proposals earned cooperation. Harper’s rambling/correction rehearsal demonstrated premature interpretation and recovery in text. The active browser attempt remained live for650.659 wall seconds and ended normally. Its original duration assertion incorrectly compared provider audio time with wall time; the corrected harness records receipt times. A fresh production check will exercise that assertion. The catalog run passes144/147 expectations, with all three misses confined to conservative director selection/eligibility. These limits and review dispositions are detailed in [role-play follow-ups](simulator-roleplay-followups.md).
+
+Full release checks, final targeted review, deployment, and production/archive verification are the remaining steps. No human listening or physical-phone acceptance is claimed.

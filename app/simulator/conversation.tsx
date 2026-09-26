@@ -17,7 +17,7 @@ export const formatTime = (seconds: number) => `${Math.floor(Math.max(0, seconds
 export function SimulatorConversation({ scenario, client, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, error }: {
   scenario: ScenarioSummary; client: Client; snapshot: SessionSnapshot | null;
   phase: 'connecting' | 'live' | 'ending'; muted: boolean; levels: AudioLevels; elapsed: number;
-  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue?: () => void; error?: string | null;
+  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue: () => void; error?: string | null;
 }) {
   const openEnded = scenario.objectives.length === 0;
   const [transcriptOpen, setTranscriptOpen] = useState(false);

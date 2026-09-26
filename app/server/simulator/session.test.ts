@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
+import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
 
 // Bun cannot load the Workers runtime. Substitute only its base-class/storage
@@ -273,6 +274,58 @@ test('server alarm closes abandoned practice without browser cooperation', async
   expect(result.finalization).toBe('confirmed');
   expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(true);
 });
+for (const polling of [false, true]) test(`a connection that never becomes ready closes ${polling ? 'despite polling' : 'after abandonment'}`, async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  const startedAt = Date.now();
+  if (polling) {
+    for (let seconds = 20; seconds <= 60; seconds += 20) {
+      setSystemTime(startedAt + seconds * 1000);
+      await f.session.fetch(activityPoll(true, true));
+    }
+  } else setSystemTime(startedAt + 40_000);
+  await f.session.alarm();
+  await Promise.all(f.pending);
+  const result = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(['ended', 'interrupted']).toContain(result.status);
+  expect(result.finalization).toBe('confirmed');
+  expect(f.socket.sent.filter(event => event.type === 'session.close')).toHaveLength(1);
+  expect(f.row()).toBeNull();
+});
+test('late ready cannot turn an expired connection into live practice', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  const startedAt = Date.now();
+  for (const seconds of [20, 40]) {
+    setSystemTime(startedAt + seconds * 1000);
+    await f.session.fetch(activityPoll(true, true));
+  }
+  setSystemTime(startedAt + 60_001);
+  await f.session.fetch(request('ready'));
+  await Promise.all(f.pending);
+  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(snapshot.status).toBe('interrupted');
+  expect(snapshot.finalization).toBe('confirmed');
+  expect(snapshot.message).toContain('timed out');
+  expect(f.socket.sent.some(event => event.type === 'session.instructions.append')).toBe(false);
+  expect(f.row()).toBeNull();
+});
+test('a completed slow connection gets a fresh page-contact grace', async () => {
+  let release!: () => void;
+  const f = await fixture({ pendingCreation: new Promise<void>(resolve => { release = resolve; }) });
+  const starting = f.session.fetch(request('start'));
+  while (!f.creations()) await Promise.resolve();
+  setSystemTime(Date.now() + 40_000);
+  release();
+  expect((await starting).status).toBe(200);
+  await f.session.alarm();
+  const connecting = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(connecting.status).toBe('connecting');
+  expect(connecting.finalization).toBe('pending');
+  expect((await (await f.session.fetch(request('ready'))).json() as Record<string, any>).status).toBe('live');
+  await f.session.fetch(request('end'));
+});
+
 test('regular conversation activity keeps a practice live beyond ten minutes', async () => {
   const f = await fixture();
   await f.session.fetch(request('start'));
@@ -355,6 +408,30 @@ test('the 60-minute warning and automatic audio drain stay bounded by twenty sec
   await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
   await Promise.all(f.pending);
   expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ended');
+});
+test('transcript capacity warns before closing after a short quiet drain', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  const warningAt = Math.ceil(TRANSCRIPT_LIMIT.entries * .9);
+  for (let turn = 0; turn < warningAt; turn++) {
+    f.socket.emit({
+      type: turn % 2 ? 'session.output_transcript.delta' : 'session.input_transcript.delta',
+      delta: `Turn ${turn}.`, start_ms: turn * 3000, end_ms: turn * 3000 + 1000,
+    });
+  }
+  const warning = (await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).warning;
+  expect(warning).toMatchObject({ kind: 'capacity' });
+  setSystemTime(warning.endsAt + 2500);
+  expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).status).toBe('live');
+  setSystemTime(warning.endsAt + 3100);
+  await f.session.fetch(activityPoll(false));
+  await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+  await Promise.all(f.pending);
+  const ended = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(ended.status).toBe('ended');
+  expect(ended.transcript).toHaveLength(warningAt);
+  expect(ended.message).toContain('transcript capacity');
 });
 test('failed provider finalization remains explicit and retains a closure lease', async () => {
   const f = await fixture();

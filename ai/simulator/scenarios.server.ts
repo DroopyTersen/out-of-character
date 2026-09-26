@@ -412,7 +412,7 @@ export function getClient(id: string): CastMember {
 
 const consultantOwnershipCue: ClientCue = {
   id: 'consultant-ownership',
-  when: 'The client has materially taken over the consultant’s work by designing the consultancy’s approach, engagement scope, delivery plan, proposal, or effort estimate after the trainee leaves it to them. Do not choose this for ordinary discovery, client-owned internal actions, truthful client expertise, a suggested outcome, or cooperation with a substantive trainee proposal.',
+  when: 'The client is supplying the consultancy’s approach, engagement scope, delivery plan, proposal, or effort estimate after the trainee leaves that work to them. A request to write up or estimate the plan the client just supplied does not undo this takeover. Choose this when the client is still doing that work, not after they have stopped and returned responsibility. Ordinary discovery, client-owned internal actions, truthful client expertise, desired outcomes, and cooperation with a substantive trainee proposal are not takeover.',
   text: 'You still need the consultant’s recommendation. State the result and conditions you need, then ask them to propose a credible approach, scope, or estimate. Keep your own expertise and cooperate with useful proposals, but do not complete their plan for them.',
 };
 

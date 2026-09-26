@@ -10,7 +10,7 @@ import { archiveProvenance, writeArchive } from './archive.server';
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
 const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
 const GRADE_INTERVAL_MS = 5000;
-const MAX_LIVE_GRADES = 719; // One more call is reserved for the final grade.
+const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
 
 /** Owns one transient attempt. Only the closure lease survives a worker restart. */
 export class SimulatorSession extends DurableObject<Env> {
@@ -72,6 +72,7 @@ export class SimulatorSession extends DurableObject<Env> {
       if (activity.audio) this.lastAudio = Date.now();
     }
     if (action === '/ready' && this.snapshot.status === 'connecting') {
+      if (this.checkLifetime()) return simulatorJson(this.snapshot);
       // The lease makes start single-use, so this transition and its greeting happen once.
       this.snapshot.status = 'live';
       this.reachedLive = true;
@@ -103,6 +104,7 @@ export class SimulatorSession extends DurableObject<Env> {
       if (this.snapshot.status === 'ending' || this.lease.closed) {
         return simulatorJson({ error: 'The attempt was cancelled.' }, 409);
       }
+      this.lastSeen = Date.now();
       this.timer = setInterval(() => this.tick(), 500);
       return simulatorJson({ sdp: created.sdp, snapshot: this.snapshot });
     } catch {
@@ -210,11 +212,17 @@ export class SimulatorSession extends DurableObject<Env> {
   /** Shared by polls, the live tick and the durable alarm; browser contact is not conversation activity. */
   private checkLifetime(): boolean {
     const snapshot = this.snapshot;
-    if (!snapshot || snapshot.status !== 'live') return !!this.closing;
+    if (!snapshot || (snapshot.status !== 'live' && snapshot.status !== 'connecting')) return !!this.closing;
     const now = Date.now();
     if (now - this.lastSeen > 35_000) {
       snapshot.message = 'Practice ended after losing contact with this page.';
       this.ctx.waitUntil(this.end());
+      return true;
+    }
+    if (snapshot.status === 'connecting') {
+      if (now - snapshot.startedAt < 60_000) return false;
+      snapshot.message = 'The voice connection timed out before practice began.';
+      this.ctx.waitUntil(this.end(true));
       return true;
     }
     let warning: SessionWarning | null = null;
@@ -238,8 +246,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.gradeCalls++;
     try {
       const achievedIds = final ? [] : snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
-      const evidenceIds = snapshot.evaluation?.objectives.flatMap(item => item.evidence ? [item.evidence.entryId] : []) ?? [];
-      const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, evidenceIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
+      const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
       if (!final && this.closing) return;
       if (snapshot.evaluation && revision < snapshot.evaluation.revision) return;
       // Explicit public projection: raw client diagnostics and grader questions stay private.

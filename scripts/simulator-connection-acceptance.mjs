@@ -10,7 +10,8 @@ const results = [];
 const snapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 3600, warning: null, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
 
 try {
-  for (const mode of ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity']) {
+  for (const mode of ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity', 'server-ending']) {
+    console.log(`Checking ${mode}`);
     const context = await browser.newContext();
     const page = await context.newPage();
     const pageErrors = [];
@@ -63,7 +64,7 @@ try {
     });
 
     let id;
-    let automaticFinish = false, automaticEnded = false;
+    let automaticFinish = false, automaticEnding = false, automaticEnded = false;
     const activityPolls = [];
     let releaseEnd;
     let endRequests = 0;
@@ -81,12 +82,12 @@ try {
       if (action === 'end') {
         endRequests++;
         endSeen();
-        if (mode === 'activity') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
+        if (mode === 'activity' || mode === 'server-ending') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
         await new Promise(resolve => { releaseEnd = resolve; });
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
       }
       if (action === 'poll') activityPolls.push(route.request().postDataJSON());
-      const value = snapshot(id, automaticEnded ? 'ended' : 'live');
+      const value = snapshot(id, automaticEnded ? 'ended' : automaticEnding ? 'ending' : 'live');
       if (automaticFinish) value.warning = { kind: 'limit', endsAt: Date.now() - 1000 };
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) });
     });
@@ -100,6 +101,15 @@ try {
         void audit.connection.start('sharepoint', 'morgan');
       });
       await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'live'), null, { timeout: 20_000 });
+      if (mode === 'server-ending') {
+        const micWasEnabled = await page.evaluate(() => window.__connectionAudit.tracks.every(track => track.enabled));
+        automaticEnding = true;
+        await page.waitForFunction(() => window.__connectionAudit.snapshots.at(-1)?.status === 'ending' && window.__connectionAudit.tracks.every(track => !track.enabled));
+        automaticEnded = true;
+        await page.waitForFunction(() => window.__connectionAudit.tracks.every(track => track.readyState === 'ended'));
+        results.push({ mode, pass: micWasEnabled && pageErrors.length === 0, checks: { micStopsBeforeFinalGrade: true, mediaReleased: true }, pageErrors });
+        continue;
+      }
       if (mode === 'activity') {
         const waitPoll = async predicate => {
           const expires = Date.now() + 8000;
@@ -189,12 +199,12 @@ try {
       results.push({ mode, pass: false, error: error.message, pageErrors });
     } finally {
       releaseEnd?.();
-      await page.evaluate(async () => {
+      await page.evaluate(() => {
         const audit = window.__connectionAudit;
         audit.connection?.dispose();
         audit.remotes.forEach(peer => peer.close());
         audit.tracks.forEach(track => track.stop());
-        await audit.sourceContext?.close();
+        void audit.sourceContext?.close();
       }).catch(() => {});
       await context.close();
     }

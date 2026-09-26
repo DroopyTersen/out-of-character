@@ -127,7 +127,7 @@ export class LiveConnection {
         this.activeSincePoll = false;
         const snapshot = await this.request('poll', { active, audio: Date.now() - this.lastAudioAt < 1500 }) as SessionSnapshot;
         if (this.ending) return;
-        this.autoMuted = !!snapshot.warning && snapshot.warning.kind !== 'idle' && Date.now() >= snapshot.warning.endsAt;
+        this.autoMuted = snapshot.status === 'ending' || (!!snapshot.warning && snapshot.warning.kind !== 'idle' && Date.now() >= snapshot.warning.endsAt);
         this.applyMute();
         this.callbacks.snapshot(snapshot);
         if (snapshot.status === 'ended' || snapshot.status === 'interrupted') { this.release(); return; }

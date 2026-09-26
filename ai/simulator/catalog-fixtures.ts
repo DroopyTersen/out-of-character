@@ -100,7 +100,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'A short workshop to map the workflow, check integration and security, then a narrow pilot plan. Could you write that up and estimate the effort?'],
       ['trainee', 'How many hours would you put in it?'],
       ['client', 'That is for your team to estimate. I can explain what Thursday needs, but I need your recommendation.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], objectiveEvidence: { assumption: 'p1', stakes: 'p1', limits: 'p2' }, cue: 'consultant-ownership' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], objectiveEvidence: { assumption: 'p1', stakes: 'p1', limits: 'p2' }, cue: 'no_hint' },
   },
   {
     id: 'catalog-demo-takeover-open', title: 'Client still writing the consultant’s scope', scenarioId: 'demo', clientId: 'harper',
@@ -152,7 +152,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Perhaps map one workflow, bring in my systems lead, check integration, and write a plan.'],
       ['trainee', 'Right. Tell me what the proposal and hours should be.'],
       ['client', 'You need to recommend and estimate your own work. I can tell you who needs the result and what Thursday must decide.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe'], absent: ['next-step'], lowSkills: ['guidance'], objectiveEvidence: { reframe: 'p2', stakes: 'p1' }, cue: 'consultant-ownership' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe'], absent: ['next-step'], lowSkills: ['guidance'], objectiveEvidence: { reframe: 'p2', stakes: 'p1' }, cue: 'no_hint' },
   },
   {
     id: 'catalog-demo-owned-proposal', title: 'Consultant owns a bounded validation proposal', scenarioId: 'demo', clientId: 'harper',

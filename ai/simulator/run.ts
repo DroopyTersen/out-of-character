@@ -3,6 +3,7 @@ import { evaluateClient, evaluateTrainee } from './evaluate.server';
 import { simulatorFixtures, simulatorHoldouts, simulatorValidation } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
 import { simulatorBlindFixtures } from './blind-fixtures';
+import { simulatorCatalogFixtures } from './catalog-fixtures';
 import { RUBRIC_VERSION } from './rubric';
 import { SIMULATOR_VERSION } from '../../core/simulator/types';
 import { getScenario } from './scenarios.server';
@@ -16,6 +17,7 @@ const outputArg = process.argv.find(arg => arg.startsWith('--output='))?.slice(9
 if (process.argv.includes('--output=')) throw new Error('Provide a path after --output=.');
 // --fixture wins, then the first listed flag present; --replay also sets checkpoint lengths on its own.
 const suites = [
+  { flag: '--catalog', fixtures: simulatorCatalogFixtures, output: 'output/simulator-catalog.json' },
   { flag: '--blind', fixtures: simulatorBlindFixtures, output: 'output/simulator-blind.json' },
   { flag: '--challenge', fixtures: simulatorChallenges, output: 'output/simulator-challenges.json' },
   { flag: '--validation', fixtures: simulatorValidation, output: 'ai/simulator/validation-results.json' },
@@ -23,7 +25,7 @@ const suites = [
   { flag: '--replay', fixtures: simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)), output: 'ai/simulator/replay.json' },
 ];
 const suite = only
-  ? { fixtures: [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures].filter(item => item.id === only), output: `output/simulator-${only}.json` }
+  ? { fixtures: [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures, ...simulatorCatalogFixtures].filter(item => item.id === only), output: `output/simulator-${only}.json` }
   : suites.find(item => process.argv.includes(item.flag)) ?? { fixtures: simulatorFixtures, output: 'ai/simulator/results.json' };
 if (!suite.fixtures.length) throw new Error('Unknown fixture.');
 const rows = [];

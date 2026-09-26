@@ -43,10 +43,25 @@ async function test(route, viewport, run) {
 for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
   await test('simulator-selection', viewport, async page => {
     const scenarios = page.locator('.sim-scenario');
-    check(await scenarios.count() === 2, 'initial scenario count');
+    check(await scenarios.count() === 8, 'initial scenario count');
+    check(await page.locator('.sim-client-card').count() === 7, 'initial client count');
+    for (const title of ['Just send me a proposal', 'We could build this ourselves', 'The courtesy call', 'The demo went too well', 'The swap request', 'Done, but not deployed']) {
+      await scenarios.filter({ hasText: title }).click();
+      await page.locator('.sim-brief summary').getByText('What you know going in', { exact: true }).waitFor();
+      check(await page.locator('.sim-brief details[open] li').count() >= 2, `${title} is missing its public briefing`);
+    }
+    for (const name of ['Harper', 'Quinn', 'Riley', 'Jamie']) {
+      await page.locator('.sim-client-card').filter({ hasText: name }).click();
+      await page.locator('.sim-client-brief h3').getByText(name, { exact: true }).waitFor();
+      await page.waitForFunction(() => {
+        const portrait = document.querySelector('.sim-selected-portrait');
+        return portrait?.complete && portrait.naturalWidth > 0;
+      });
+    }
+    await page.screenshot({ path: `${output}/expanded-catalog-${viewport.width}.png`, fullPage: true });
     await page.getByLabel('Larger collection (illustrative)').check();
-    check(await scenarios.count() === 8, 'expanded scenario count');
-    check(await page.locator('.sim-client-card').count() === 9, 'expanded client count');
+    check(await scenarios.count() === 14, 'expanded scenario count');
+    check(await page.locator('.sim-client-card').count() === 13, 'expanded client count');
     const rail = page.locator('.sim-client-rail');
     const before = await rail.evaluate(node => node.scrollLeft);
     await page.getByRole('button', { name: 'Next clients' }).click();

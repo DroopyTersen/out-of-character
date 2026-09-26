@@ -35,6 +35,7 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
         </div>
         <AnimatePresence mode="wait" initial={false}><motion.div key={scenario.id} className="sim-brief" initial={{ opacity: 0, y: reduced ? 0 : 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .15 }}>
           <span className="eyebrow">YOUR LEAD · {scenario.role.toUpperCase()}</span><p>{scenario.lead}</p><div className="sim-meta"><Target size={15} />{scenario.objectives.length} objectives · {scenario.durationMinutes} minutes · Live coaching</div>
+          {scenario.briefing && <details className="sim-company sim-preparation" open><summary>What you know going in</summary><ul>{scenario.briefing.map(fact => <li key={fact}>{fact}</li>)}</ul></details>}
           <details className="sim-company"><summary>Objectives &amp; services</summary><p><strong>Your objectives · any order</strong></p><ul>{scenario.objectives.map(objective => <li key={objective.id}>{objective.label}</li>)}</ul><p><strong>Your consultancy</strong></p><p>You help clients improve how their people and software work together.</p><ul>{scenario.services.map(service => <li key={service}>{service}</li>)}</ul></details>
         </motion.div></AnimatePresence>
       </section>

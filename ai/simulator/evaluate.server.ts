@@ -77,7 +77,7 @@ export async function evaluateTrainee(input: Input) {
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
     state: {
       dialogue: input.transcript,
-      referenceNotSpoken: { lead: scenario.lead, services: scenario.services, constraints: scenario.constraints, clientStyle: client.behavior },
+      referenceNotSpoken: { lead: scenario.lead, briefing: scenario.briefing ?? [], services: scenario.services, constraints: scenario.constraints, clientStyle: client.behavior },
     },
     questions: traineeQuestions(scenario, input.transcript, input.achievedIds),
     abortSignal: input.signal,
@@ -111,7 +111,7 @@ export async function evaluateClient(input: Input): Promise<ClientEvaluation> {
     state: {
       dialogue: input.transcript,
       client: { name: client.name, stats: client.stats, behavior: client.behavior },
-      scenario: { interests: scenario.interests, facts: scenario.facts, constraints: scenario.constraints },
+      scenario: { briefing: scenario.briefing ?? [], interests: scenario.interests, facts: scenario.facts, constraints: scenario.constraints },
     },
     questions: clientQuestions(scenario), abortSignal: input.signal, maxRetries: 0,
   });

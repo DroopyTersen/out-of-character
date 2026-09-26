@@ -37,6 +37,7 @@
 .sim-company { font-size: 12px; color: #89acc5; margin-top: 10px; }
 .sim-company summary, .sim-debrief-transcript summary { cursor: pointer; padding: 12px 0; min-height: 44px; }
 .sim-company p { margin: 8px 0; }
+.sim-preparation ul { list-style: disc; }.sim-preparation li + li { margin-top: 8px; }
 .sim-company ul { padding-left: 20px; line-height: 1.7; }
 .sim-company > p, .sim-company > ul { font-size: 14px; }.sim-company li, .sim-company strong { color: #c5d7e4; }
 .sim-rail-controls { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #90b2cc; }

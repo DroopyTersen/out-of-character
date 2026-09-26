@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import { actorBrief, getClient, getScenario, publicCatalog } from '../../ai/simulator/scenarios.server';
 import { appendTranscript, buildDebrief, canSendCue, reconcileObjectives, settledTranscript } from './state';
 import { emptySkills, type ObjectiveReading, type TranscriptEntry } from './types';
@@ -6,12 +7,23 @@ import { emptySkills, type ObjectiveReading, type TranscriptEntry } from './type
 describe('simulator boundaries', () => {
   test('public selection contains no private agenda, reaction rules, or evaluation criteria', () => {
     const catalog = publicCatalog();
-    expect(catalog.scenarios).toHaveLength(2);
-    expect(catalog.clients).toHaveLength(3);
+    expect(catalog.scenarios.map(item => item.id)).toEqual(['sharepoint', 'scope', 'proposal', 'in-house', 'courtesy', 'demo', 'deployment', 'swap']);
+    expect(catalog.clients.map(item => item.id)).toEqual(['morgan', 'avery', 'casey', 'harper', 'quinn', 'riley', 'jamie']);
     const json = JSON.stringify(catalog);
     for (const client of catalog.clients) {
       expect(Object.keys(client).sort()).toEqual(['description', 'id', 'image', 'name', 'style']);
       expect(client).not.toHaveProperty('stats');
+      expect(existsSync(new URL(`../../public${client.image}`, import.meta.url))).toBe(true);
+    }
+    for (const scenario of catalog.scenarios) {
+      expect(Object.keys(scenario).sort()).toEqual(['briefing', 'category', 'clientRole', 'durationMinutes', 'id', 'lead', 'objectives', 'role', 'services', 'summary', 'title']);
+      for (const objective of scenario.objectives) expect(Object.keys(objective).sort()).toEqual(['id', 'kind', 'label']);
+      const privateScenario = getScenario(scenario.id);
+      for (const client of catalog.clients) {
+        const brief = actorBrief(privateScenario, getClient(client.id));
+        for (const constraint of privateScenario.constraints) expect(brief).toContain(constraint);
+        for (const fact of scenario.briefing ?? []) expect(brief).toContain(fact);
+      }
     }
     for (const secret of ['8,000', 'took the blame', 'operations analyst', 'overdue-item history', 'seriousMistake', 'criterion', 'behavior', 'voice', 'approval-boundary']) {
       // "behavior" is a public objective kind, not the private character instructions.

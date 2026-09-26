@@ -10,7 +10,7 @@ import { appendTranscript } from '../core/simulator/state.ts';
 // real GPT-Live supplies the client and Jev selects optional private direction.
 // A plan chooses each trainee line from what the client has actually said so far.
 // Usage: bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid
-//   [--scenario=sharepoint|scope] [--client=morgan|avery|casey] [--plan=<name>] [--label=before] [--director]
+//   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--director]
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded paid rehearsal.');
 if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -25,6 +25,26 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   sharepoint: {
+    // A personable client should not confuse pleasant conversation with consent.
+    surface: {
+      turns: 3,
+      lines: {
+        pitch: 'We have a wonderful SharePoint team and I am sure you will like working with them. Does that sound good?',
+        reassure: 'Wonderful. I hear your concerns and I can assure you we will take care of everything. Could we book the next meeting for Friday?',
+        close: 'You have been so positive. I will count that as agreement and send a kickoff invitation.',
+      },
+      choose: ({ turn }) => ['pitch', 'reassure', 'close'][turn],
+    },
+    candid: {
+      turns: 4,
+      lines: {
+        notice: 'Before I propose anything, what worries you about another SharePoint engagement? It is fine to say it would be a poor fit.',
+        listen: 'Thank you for being direct. What would have to be different for this to be worth trying?',
+        owner: 'Who owns the workflow, and what happens when people cannot find the approved version?',
+        next: 'Then ownership and adoption need attention before another site. Our collaboration team could explore those with operations, separately from the current release. Could you ask them about a short scoping call and let me know by Friday? We would agree the assessment scope and price before any delivery. I would rather hear a remaining concern than assume agreement.',
+      },
+      choose: ({ turn }) => ['notice', 'listen', 'owner', 'next'][turn],
+    },
     budget: {
       turns: 3,
       lines: {
@@ -100,6 +120,27 @@ const plans = {
         if (!used.has('owner') && !/operations director|owns|owner/i.test(heard)) return 'owner';
         return sharepointClose({ answer, used });
       },
+    },
+  },
+  deployment: {
+    good: {
+      turns: 4,
+      lines: {
+        status: 'Development and our internal tests are complete, but we have not deployed to staging. The infrastructure request exposed architecture, governance, and security operations reviews. No review slots or provisioning date are confirmed, so Thursday testing is unconfirmed. We should have asked about those processes and planned for them earlier. We missed that. What have you already arranged around Thursday?',
+        impact: 'I understand this affects your people and your credibility with leadership. I should have surfaced the environment dependency before calling the work on track. What do you need to be able to tell operations now?',
+        plan: 'Our team will prepare the application diagram and data-handling summary today. Could you introduce me to the IT service manager so I can identify each review owner, required input, and lead time? I will own that coordination and revise the testing plan from confirmed dependencies. We cannot waive the reviews or promise when they will finish.',
+        next: 'Could you notify the testers today that Thursday is unconfirmed and make the service manager introduction? I will send a status update tomorrow at noon even if some dates remain unknown, showing completed work, outstanding reviews, owners, and the next decisions. Can we agree those responsibilities?',
+      },
+      choose: ({ turn }) => ['status', 'impact', 'plan', 'next'][turn],
+    },
+    poor: {
+      turns: 3,
+      lines: {
+        blame: 'The code is finished. You never told us about these reviews, so the delay is your company’s problem. We have done our part.',
+        guarantee: 'I am sure all the reviews will finish tomorrow. I guarantee we will deploy straight after, so keep Thursday in the calendar.',
+        bypass: 'If security takes too long, we can put it in a different environment without those approvals. Let us call the milestone done.',
+      },
+      choose: ({ turn }) => ['blame', 'guarantee', 'bypass'][turn],
     },
   },
   scope: {

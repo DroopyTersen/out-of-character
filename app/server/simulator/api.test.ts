@@ -38,7 +38,7 @@ test('public catalog and browser data channel cannot receive actor configuration
   const response = await handleSimulator(new Request('https://practice.example/api/simulator/catalog'), f.env);
   const text = await response!.text();
   const catalog = JSON.parse(text) as { clients: Record<string, unknown>[] };
-  expect(catalog.clients).toHaveLength(3);
+  expect(catalog.clients).toHaveLength(7);
   for (const client of catalog.clients) {
     expect(Object.keys(client).sort()).toEqual(['description', 'id', 'image', 'name', 'style']);
     expect(client).not.toHaveProperty('stats');

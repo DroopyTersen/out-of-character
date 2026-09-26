@@ -35,6 +35,7 @@ export type ScenarioSummary = {
   category: 'Sales' | 'Consultancy';
   summary: string;
   lead: string;
+  briefing?: string[];
   role: string;
   clientRole: string;
   durationMinutes: number;

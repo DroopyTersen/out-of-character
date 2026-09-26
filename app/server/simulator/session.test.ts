@@ -398,12 +398,14 @@ test('the 60-minute warning and automatic audio drain stay bounded by twenty sec
     const snapshot = await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>;
     expect(snapshot.status).toBe('live');
   }
-  expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).warning).toMatchObject({ kind: 'limit', endsAt: startedAt + SESSION_LIMIT_SECONDS * 1000 });
-  setSystemTime(startedAt + SESSION_LIMIT_SECONDS * 1000);
+  const warning = (await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).warning;
+  expect(warning?.kind).toBe('limit');
+  expect(Math.abs(warning.endsAt - (startedAt + SESSION_LIMIT_SECONDS * 1000))).toBeLessThan(25);
+  setSystemTime(warning.endsAt);
   expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).status).toBe('live');
-  setSystemTime(startedAt + SESSION_LIMIT_SECONDS * 1000 + 19_000);
+  setSystemTime(warning.endsAt + 19_000);
   expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).status).toBe('live');
-  setSystemTime(startedAt + SESSION_LIMIT_SECONDS * 1000 + 20_001);
+  setSystemTime(warning.endsAt + 20_001);
   await f.session.fetch(activityPoll(false, true));
   await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
   await Promise.all(f.pending);

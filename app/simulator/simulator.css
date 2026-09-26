@@ -162,7 +162,8 @@ details[open] > summary > .sim-disclosure { transform: rotate(180deg); }
 .sim-lab-grid { margin-top: 20px; }
 .sim-lab .sim-transcript { max-height: none; overflow: visible; }
 .sim-lab-source summary { cursor: pointer; padding: 12px 0; min-height: 44px; }
-.sim-lab .sim-skills { margin-top: 24px; }
+/* Objectives and skills stack in the lab's assessment column; divide them as the live coaching column does. */
+.sim-lab .sim-skills { margin-top: 28px; padding-top: 28px; border-top: 1px solid #21465c; }
 .sim-lab-provenance { padding: 14px 0; font-size: 12px; color: #7da5bf; line-height: 1.6; }
 .sim-lab-checks { display: flex; gap: 7px; flex-wrap: wrap; margin: 15px 0; }
 .sim-lab-checks span { border: 1px solid #31556b; padding: 3px 7px; font-size: 10px; color: #9fdccf; }

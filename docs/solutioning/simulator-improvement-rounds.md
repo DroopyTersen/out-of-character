@@ -29,7 +29,7 @@ Then run four screenshot-driven design iterations independently for each main sc
 | Selection: four iterations | Complete | [Selection log](simulator-selection-design-loop.md) |
 | Live practice: four iterations | Complete | [Live practice log](simulator-live-design-loop.md) |
 | Debrief: four iterations | Complete | [Debrief log](simulator-debrief-design-loop.md) |
-| Jev lab: four iterations | 3/4 | [Lab log](simulator-judging-design-loop.md) |
+| Jev lab: four iterations | Complete | [Lab log](simulator-judging-design-loop.md) |
 | Final acceptance | Pending | Full gate, browser regressions, review dispositions and clean committed tree |
 
 ## Engine round 1
@@ -83,3 +83,26 @@ Review adjustments kept bargaining conditional, preserved truthful responses to 
 The challenge suite remeasured after round-2 scenario changes is still **42/48** (`output/simulator-engine-r3-baseline.json`). Preserve this baseline and validate the revised rubric on the unchanged challenge suite, previous suites and sealed fresh cases.
 
 Round 3 completed with Opus review and fixes for its concrete findings. Normal End now mutes immediately and closes local resources within three seconds while the server preserves the last trainee words and excludes unheard client replies. The same-WAV after probe passes. See the [round-3 log](simulator-engine-round-3.md) for final suite counts, preserved classification misses, the disputed director fixture, and the accepted latching/segmentation limits. The standard workshop recordings now reflect the final v4 rubric, including the remaining holdout failure.
+
+## UI review dispositions
+
+The four screen logs retain separate before/critique/change/after records. Iterations alternate lead, Opus, lead, Opus. The lead reviewed the Opus diffs and screenshots, and Opus reviewed the lead's checkpoints through the desktop app. Independent read-only reviews also checked the transcript, corrective debrief and route-focus changes.
+
+- Selection keeps the approved scenario/client composition and adds preparation inside the existing disclosure. Narrow layouts, client scrolling and keyboard outlines are verified. The neutral scroll hint avoids extra scroll-tracking state.
+- Live practice keeps the client, hints/objectives and seven skills in their approved columns. Unavailable and ending states are truthful, transcript focus returns to its trigger, and mute no longer shifts the audio spectrum for shorter client names. Reduced motion remains supported.
+- Debrief preserves the original scores and evidence while avoiding advice to repeat a harmful guarantee. Shared evidence is quoted once, missing assessment has distinct copy, and one route-level focus rule covers screen transitions without interrupting live updates.
+- The lab exposes recorded provenance, failures and the complete transcript. Completed replay controls are explicit. Its longer phone page is an accepted tradeoff for reading the evidence without a nested transcript scroller.
+
+## Final acceptance
+
+Final verification is in progress. Reports are local artifacts under `output/`; the screen logs link the per-iteration evidence.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Connection lifecycle | 4/4 modes | `simulator-improvement-final-connection/report.json`; real browser media and WebRTC loopback, controlled HTTP/provider boundary |
+| Original game selection | 2/2 desktop/phone | `simulator-improvement-final-game/report.json` |
+| Repository gate | Pass: 110 tests, 3,739 assertions | `simulator-improvement-final-check.log`; typecheck, tests, build, 15 client assets checked and deployment dry-run |
+| Final simulator browser checks | Pending | Workshop, feedback, failure and audio regressions |
+| Final responsive captures | Pending | Four screens at 1672, 1024, 390 and 320 px |
+
+Remaining limits are explicit: the final classifier recordings still under-credit some objectives; one challenge has a disputed director expectation; and the single same-WAV immediate-End probe does not establish every timing race. Browser focus, responsive captures and synthetic voice/transcript probes are not physical-device, screen-reader or human-naturalness studies. No deployment or public paid enablement is part of this follow-up.

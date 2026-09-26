@@ -91,4 +91,50 @@ The focused before/after browser check covers both lab and live workshop control
 
 ## Iteration 4 — Opus
 
-Pending.
+### Before
+
+Fresh reduced-motion captures: [desktop](../../output/simulator-ui-iteration-4-before/judging-1672.png), [phone](../../output/simulator-ui-iteration-4-before/judging-390.png), plus 1024 and 320 px. Alternate states are in `output/simulator-ui-iteration-4-before/alt/lab-*` at 1672/390/320:
+- turn 0
+- an unrecorded turn
+- the failing holdout `holdout-relevant-but-steamrolling`
+- recording details and raw judgments open
+
+The workshop controls were also inspected at 320 and 1672 px. `alt/lab-exhaust-focus.json` records where keyboard focus goes when a control uses up the replay, in both the lab and the live workshop at 1672/390. The focus audit found 16 focusables with no clipped outline.
+
+### Critique and changes
+
+| Finding | Disposition |
+| --- | --- |
+| Observed: iteration 3 correctly disables Next turn and Show full result at the end of a replay. Activating either from the keyboard therefore disables the focused button, and focus fell to `BODY` in all four lab/live × 1672/390 cases. | **Applied.** When a button step reaches the end, focus moves to the Transcript turn slider. The slider reports "13 / 13" and ignores a repeated Enter. Replay was rejected as the target, because a held or repeated Enter would immediately restart playback. Show full result moves into `Playback` behind a `full` prop, so both buttons share one step helper and one ref. Its position and label are unchanged, and it is still disabled at the end. Replay, Reset and scrubbing behave as in iteration 3. |
+| Judgment: the assessment column stacks Objectives and Your skills. The gap between the last objective and the skills heading (24 px) roughly matched the gap between objectives (27 px), so the boundary between the two sections depended only on heading style. Live and debrief separate these sections with a rule: a column border side by side, or a top rule when they stack. | **Applied.** Lab-scoped: the skills section gets the same 1 px divider and 28 px spacing as `.sim-coaching .sim-objectives`. |
+| Judgment: the client metrics are labelled "Interest 1–3", while the raw JSON uses `interest:0–2`. | **Not changed.** Interest wording is private scenario data (`scenarios.server.ts`) and is deliberately kept out of the client bundle. The numbers follow the authored priority order. Showing the names would mean shipping private prompt material to the workshop. |
+| Judgment: at an unrecorded turn, the shared skills footer still says "Open a skill to see the evidence". | **Not changed.** The section status says "No recording yet"; an open unobserved skill says "Not enough relevant evidence yet". The footer remains a shared instruction for inspecting evidence when available. |
+| Previously noted: the failed chip `× achieved:capability` does not say whether the check expected or observed the objective. | **Not changed.** This is harness vocabulary, as noted in iteration 2. The objective list beside it shows what was observed. |
+
+The layouts at 1672/1024/390/320 raised nothing new. Iteration 2's accepted tradeoffs stand: the unbounded transcript, and the client analysis appearing below it on phone. There are no evaluator, fixture, recording, scoring or timing changes.
+
+Files: `app/storybook/simulator-stories.tsx` (`Playback` focus and the Show full result placement) and `app/simulator/simulator.css` (the lab skills divider).
+
+### After and verification
+
+[Desktop](../../output/simulator-ui-iteration-4-after/judging-1672.png) · [Phone](../../output/simulator-ui-iteration-4-after/judging-390.png) · [320 px](../../output/simulator-ui-iteration-4-after/judging-320.png) · [Assessment column before/after](../../output/simulator-ui-iteration-4-after/alt/lab-assessment-before-after-1672.png) · [End-of-replay focus, phone](../../output/simulator-ui-iteration-4-after/alt/lab-controls-end-focus-390.png). Alternate states are in `output/simulator-ui-iteration-4-after/alt/lab-*`.
+
+Screenshots viewed:
+- assessment column before and after at 1672
+- turn 0 at 390
+- end-of-replay controls at 390: Replay is available, Next turn and Show full result are disabled, and the focus ring is on the slider
+
+| Check | Before | After |
+| --- | --- | --- |
+| Next turn to the end: lab and live, 1672/390 | `BODY` in all 4 | slider "13", with a visible ring, in all 4 |
+| A further Enter | nothing happens | nothing happens; still 13 / 13 |
+| Show full result: lab, 1672/390 | `BODY` | slider "13" |
+
+Reports: `output/simulator-ui-iteration-4-{before,after}/alt/lab-exhaust-focus.json`.
+
+Checks:
+- `report-judging.json`: 4/4 captures with no overflow, errors or API calls.
+- `lab-alt.json` is identical before and after: checks, failures, checkpoints and cues for every fixture.
+- The focus audit finds 16 focusables at 1672/390 with no clipping.
+- Typecheck passes.
+- Workshop acceptance: `output/simulator-ui-iteration-4-lab-workshop/report.json`, 8/8.

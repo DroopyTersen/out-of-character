@@ -26,7 +26,50 @@ simulator-stories.tsx, feedback.tsx and simulator.css. Raw typed distributions, 
 
 ## Iteration 2 — Opus
 
-Pending.
+### Before
+
+Fresh reduced-motion captures: [desktop](../../output/simulator-ui-iteration-2-before/judging-1672.png), [phone](../../output/simulator-ui-iteration-2-before/judging-390.png), plus 1024 and 320 px. Alternate states at 1672/390/320 are in `output/simulator-ui-iteration-2-before/alt/lab-*` (screen-only mode):
+- turn 0 (empty)
+- turn 1 (unrecorded checkpoint)
+- check failure: `holdout-relevant-but-steamrolling`, the only fixture whose recording fails a check (`achieved:capability`)
+- recording details and raw typed judgments opened
+
+`lab-alt.json` lists every fixture's check summary, failures, checkpoint and selected cue. There is no lab mockup; the baseline is the accepted iteration-1 composition.
+
+### Critique and changes
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| 1 | Observed: at "Show full result", the conversation sat in a 400 px nested scroller that opened at the top. The turns the checkpoint and checks refer to were hidden. The holdout showed turns 1–4 of 7, hiding the refusal that makes it a holdout. On phone, earned progress showed 3 of 13. | **Applied.** In the lab only, the transcript is unbounded and the page scrolls. The live and debrief transcripts keep their bounded scrollers. |
+| 2 | Observed: a failing recording's summary, "8 of 9 checks passed", had the same neutral tone as "9 of 9". The only failure signal was one 11 px chip. | **Applied.** When any check fails, the summary uses the failure rose already used by the chip. The disclosure still opens automatically. |
+| 3 | Observed: with no recording, "No checks at this turn" was a disclosure whose arrow opened nothing. | **Applied.** It is now plain text; only a recorded checkpoint has the disclosure. |
+| 4 | Observed: without the optional Recording details disclosure (turn 0 and unrecorded turns), the checkpoint line touched the "Conversation evidence" column title. That disclosure supplied the only spacing. | **Applied.** The spacing now sits on the lab grid, so the gap is the same with or without recording details. |
+| 5 | Judgment: at an unrecorded turn, "Advance to a recorded checkpoint" did not say how far to step. Fixtures have up to 13 turns and sparse checkpoints. | **Applied.** The line now names the next recorded turn, for example "Next recorded checkpoint: turn 3". It falls back to the original wording if none exists. |
+
+Also noted, not changed:
+- Check tokens such as `absent:impact` and `cue:no_hint` are harness vocabulary; the lab is a developer surface, and the objectives beside them give the plain reading.
+- The raw JSON at 11 px in a 440 px scroller is appropriate for raw distributions.
+- "Selected cue: no_hint · 100%" is truthful.
+- Finding 1 is an explicit tradeoff: readability over page length. With the 13-turn fixture, the left column now runs past the right on desktop, and on phone the checks and client analysis sit further down the page. That is accepted for an inspection surface, where one page scroll is easier than a nested scroller.
+
+Files: `app/storybook/simulator-stories.tsx` (lab markup only; Playback is unchanged) and `app/simulator/simulator.css` (lab-scoped rules). There are no evaluator, fixture, recording or scoring changes.
+
+### After and verification
+
+[Desktop](../../output/simulator-ui-iteration-2-after/judging-1672.png) · [Phone](../../output/simulator-ui-iteration-2-after/judging-390.png) · [320 px](../../output/simulator-ui-iteration-2-after/judging-320.png). Alternate states are in `output/simulator-ui-iteration-2-after/alt/lab-*`.
+
+Screenshots viewed:
+- the full-result desktop capture
+- check failure at 1672
+- the unrecorded turn at 390
+
+Checks:
+- `report-judging.json`: 4/4 captures with no overflow, errors or API calls.
+- The alternate-state run is clean at all three widths.
+- Typecheck passes.
+- Workshop acceptance: `output/simulator-ui-iteration-2-workshop/report.json`, 8/8.
+
+Ownership of `simulator-stories.tsx` returns to root for lab iteration 3.
 
 ## Iteration 3 — lead
 

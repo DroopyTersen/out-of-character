@@ -26,7 +26,41 @@ selection.tsx and simulator.css. A first after capture exposed a new narrow-head
 
 ## Iteration 2 — Opus
 
-Pending.
+### Before
+
+Fresh reduced-motion captures: [desktop viewport](../../output/simulator-ui-iteration-2-before/selection-1672-viewport.png), [phone](../../output/simulator-ui-iteration-2-before/selection-390.png), [320 px](../../output/simulator-ui-iteration-2-before/selection-320.png), plus 1024 px. Alternate states at 1672/1024/390/320 are in `output/simulator-ui-iteration-2-before/alt/selection-*`, with measurements in `selection-alt.json`:
+- every disclosure expanded
+- scenario list and client rail scrolled
+- disabled start with an error
+
+Intermediate measurements are in `output/simulator-ui-iteration-2-selection-check/`.
+
+### Critique and changes
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| 1 | Observed: at 320 px the "Your client" heading wrapped beside the rail arrows, making the header 43 px tall against the scenario header's single line. | **Applied.** At ≤360 px: a tighter heading gap, 17 px heading type and closer arrow controls. The header is now 20 px, one line. |
+| 2 | Observed: at 320 px the Start button label wrapped to two lines (85 px tall). | **Applied.** The phone Start label scales with the viewport (`clamp`). It is one line, 55 px. |
+| 3 | Observed: at 1672 px the scenario list showed only a 5 px sliver of the next scenario, so the scroll cue carried the whole signal. | **Applied.** The list is taller (322 px) and the brief spacing is tighter. The next item now peeks 33 px, and Start remains above the fold (bottom at 938 of 941 px). |
+| 4 | Observed: the client rail mis-peeked. At 1672, 97% of the next card was visible, so it read as fully shown but cut off. At 390, only 4% was visible, too little to signal more cards. | **Applied.** Card width uses a clamped flex basis, and long names end in an ellipsis. The next card now shows 48% at 1672 and 30% at 390. |
+| 5 | Observed: the behavior-profile trait meters used the browser's default green and grey, outside the palette. | **Applied.** The meters use the theme track and accent colours in both engines' pseudo-elements. |
+
+Also noted, not changed:
+- The 1024 px scenario peek depends on content.
+- "Scroll ↓" remains after the list reaches its end.
+- The disabled/error state reads correctly.
+- The brief column at 320 px is narrow but legible.
+
+Files: `app/simulator/simulator.css` only. No `selection.tsx` change was needed.
+
+### After and verification
+
+[Desktop viewport](../../output/simulator-ui-iteration-2-after/selection-1672-viewport.png) · [Phone](../../output/simulator-ui-iteration-2-after/selection-390.png) · [320 px](../../output/simulator-ui-iteration-2-after/selection-320.png). Alternate states are in `output/simulator-ui-iteration-2-after/alt/selection-*`, with measurements in `selection-alt.json`; the phone rail comparison is `rail-390-pair.png`.
+
+Checks:
+- `report-selection.json`: 4/4 captures with no overflow, errors or API calls.
+- Typecheck passes.
+- Iteration 3 later reused the company disclosure as "Objectives & services"; the alternate-state script targets that summary.
 
 ## Iteration 3 — lead
 

@@ -2,9 +2,11 @@
 
 Plan: [implementation plan](simulator-implementation-plan.md). Product decisions: [proposal](simulator-proposal.md). Scenario content: [framework](simulator-scenario-framework.md).
 
-## Current status
+This document preserves the original MVP checkpoint record. The subsequent three engine rounds and four design iterations per screen are tracked in [critique and improvement rounds](simulator-improvement-rounds.md), including the current v4 classifier measurements.
 
-Checkpoints 0–6 reviewed on `simulator-mvp`. The complete voice practice flow, live Jev feedback, private client direction, debrief, five workshop stories, and two visual iteration rounds are implemented and verified. Opus passed the final checkpoint with no blocking bugs. Final evidence and review dispositions are below. No merge, deployment, or public paid enablement was performed.
+## Original MVP acceptance
+
+Checkpoints 0–6 reviewed on `simulator-mvp`. The complete voice practice flow, live Jev feedback, private client direction, debrief, five workshop stories, and two visual iteration rounds were implemented and verified at MVP acceptance. Opus passed that checkpoint with no blocking bugs. The original evidence and review dispositions are below. No merge, deployment, or public paid enablement was performed.
 
 ## Decisions
 
@@ -126,7 +128,7 @@ Parallel read-only audit found no new material privacy or paid-session lifecycle
 
 Opus 5.5 passed the second visual iteration with no blocking bugs, including the final CSS/audio/capture-script follow-ups. The reviewer independently checked all 13 debrief fixtures, 320-pixel layouts and the production selection route. All checkpoint 5 conditions are met: comparable full-screen captures, steady reduced-motion indicators and an honest attempt-ended banner. Selection and live screens are close to their approved v3/v4 references; the seven-skill debrief intentionally remains scrollable.
 
-The final follow-up accepted the exact `simulator-design-2-accepted` and `simulator-voice-final-accepted` reports and independently verified the workshop width fix. No material issue remains. The last complete repository gate is recorded in `output/simulator-final-completion-check.log` and includes that final CSS change.
+The MVP acceptance follow-up accepted the exact `simulator-design-2-accepted` and `simulator-voice-final-accepted` reports and independently verified the workshop width fix. No material issue remained in that audit. The MVP acceptance gate is recorded in `output/simulator-final-completion-check.log` and includes that final CSS change.
 
 - Fixed: the desktop Start button is above the reference viewport fold; the phone timer/end row and header fit narrow widths. Custom scroll tracks, partial cards and correctly bounded arrows make the collections navigable.
 - Fixed: integer bar heights avoid hydration warnings. Browser audio acceptance now records console errors and waits for the visible replay transition instead of relying on a tight fixed timer.
@@ -134,4 +136,4 @@ The final follow-up accepted the exact `simulator-design-2-accepted` and `simula
 - Verified: 16 final selection/live/debrief/lab captures at four widths; four normal/reduced-motion audio combinations covering seven states, plus a real browser oscillator/analyser check. Workshop 8/8, failure flows 3/3 and original-game checks at two widths pass. The full repository gate passes 103 tests / 3,709 assertions, types, production builds, 15-asset boundary scan and Wrangler dry run.
 - Deferred cosmetic suggestions: a different font for the debrief count separator, removing reserved scrollbar gutter when a catalog is short, smoothing the speaking-state threshold, shortening the smallest-phone Start label and further reducing repeated labels. These do not block the MVP; no new state/timer machinery was added for them.
 
-An independent final audit found no missing UI/animation/fixture acceptance requirement. Evidence distinguishes each selected audio state from the replay button's verified first transition, and preserves initial failed runs instead of replacing their history. Human voice realism and physical-phone behavior remain the explicit practical limits documented in [acceptance](simulator-acceptance.md).
+An independent MVP acceptance audit found no missing UI/animation/fixture acceptance requirement. Evidence distinguishes each selected audio state from the replay button's verified first transition, and preserves initial failed runs instead of replacing their history. Human voice realism and physical-phone behavior remain the explicit practical limits documented in [acceptance](simulator-acceptance.md).

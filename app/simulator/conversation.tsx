@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileText, Mic, MicOff, Volume2 } from 'lucide-react';
 import type { AudioLevels } from './audio-levels';
 import { VoiceDisplay } from './voice-display';
@@ -16,16 +16,21 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
   onEnd: () => void; onMute: () => void; onAudio: () => void; error?: string | null;
 }) {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const transcriptButton = useRef<HTMLButtonElement>(null);
+  const transcriptPanel = useRef<HTMLElement>(null);
+  useEffect(() => { if (transcriptOpen) transcriptPanel.current?.focus(); }, [transcriptOpen]);
+  const closeTranscript = () => { setTranscriptOpen(false); transcriptButton.current?.focus(); };
+  const micOff = muted || phase === 'ending';
   const evaluation = snapshot?.evaluation ?? null;
   const caption = snapshot?.transcript.toSorted((a, b) => b.endMs - a.endMs)[0];
   return <section className="sim-conversation">
     <header className="sim-session-bar"><span className="eyebrow">{scenario.category}</span><h1>{scenario.title}</h1><time>{formatTime(elapsed)}<small> / {formatTime(snapshot?.limitSeconds ?? 600)}</small></time><button className="sim-end" onClick={onEnd} disabled={phase === 'ending'}>{phase === 'connecting' ? 'Cancel' : phase === 'ending' ? 'Finishing…' : 'End session'}</button></header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
     <div className="sim-live-grid">
-      <section className="sim-client-stage"><h2>{client.name}</h2><p>{scenario.clientRole} · {client.style}</p><VoiceDisplay client={client} levels={levels} phase={phase} muted={muted} /><div className="sim-caption">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Review your objectives while the voice connection opens.' : 'Say hello when you are ready.'}</p>}</div><div className="sim-call-controls"><button onClick={onMute} disabled={phase !== 'live'} className={muted ? 'muted' : ''} aria-pressed={muted}>{muted ? <MicOff size={18} /> : <Mic size={18} />}{muted ? 'Mic off' : 'Mic on'}</button><button onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen}><FileText size={18} />Transcript</button><button onClick={onAudio} aria-label="Enable audio"><Volume2 size={18} /></button></div></section>
-      <div className="sim-coaching"><SimulatorHint evaluation={evaluation} waiting={phase === 'connecting'} /><SimulatorObjectives scenario={scenario} evaluation={evaluation} /></div>
-      <SimulatorSkills evaluation={evaluation} status={snapshot?.feedbackStatus ?? 'waiting'} />
+      <section className="sim-client-stage"><h2>{client.name}</h2><p>{scenario.clientRole} · {client.style}</p><VoiceDisplay client={client} levels={levels} phase={phase} muted={micOff} /><div className="sim-caption">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Review your objectives while the voice connection opens.' : phase === 'ending' ? 'Your conversation has ended.' : 'Say hello when you are ready.'}</p>}</div><div className="sim-call-controls"><button onClick={onMute} disabled={phase !== 'live'} className={micOff ? 'muted' : ''} aria-pressed={micOff}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls={transcriptOpen ? 'sim-conversation-transcript' : undefined}><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'} aria-label="Enable audio"><Volume2 size={18} /></button></div></section>
+      <div className="sim-coaching"><SimulatorHint evaluation={evaluation} phase={phase} /><SimulatorObjectives scenario={scenario} evaluation={evaluation} /></div>
+      <SimulatorSkills evaluation={evaluation} status={phase === 'ending' && evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} />
     </div>
-    {transcriptOpen && <section className="sim-transcript-panel"><header className="sim-section-heading"><h2>Conversation</h2><button className="quiet-button" onClick={() => setTranscriptOpen(false)}>Close transcript</button></header><SimulatorTranscript entries={snapshot?.transcript ?? []} /></section>}
+    {transcriptOpen && <section className="sim-transcript-panel" ref={transcriptPanel} id="sim-conversation-transcript" tabIndex={-1} aria-label="Conversation transcript"><header className="sim-section-heading"><h2>Conversation</h2><button className="quiet-button" onClick={closeTranscript}>Close transcript</button></header><SimulatorTranscript entries={snapshot?.transcript ?? []} /></section>}
   </section>;
 }

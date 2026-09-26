@@ -1,6 +1,6 @@
 # Simulator MVP progress
 
-Pending follow-up: [role-play ownership, scoring and longer sessions](simulator-roleplay-followups.md). A diagnostic review of saved practice sessions identified client takeover of consulting work and the ten-minute cutoff interrupting active conversation. The follow-up tasks are recorded; runtime changes are not yet implemented.
+In implementation review: [role-play ownership, scoring and longer sessions](simulator-roleplay-followups.md). Actor boundaries, attribution, longer active practice and inactivity controls are implemented in isolated checkpoints. Independent review, final combined checks and deployment are in progress; the Voice Lab checkpoint is integrated.
 
 Latest release: [The happy hour](simulator-release.md#happy-hour-release), deployed from `f81f08b` on September 26 at 20:10 UTC. The ninth and last scenario allows free conversation with any of the seven clients, without objectives, coaching or scoring. The full gate passes **131 tests / 4,253 assertions**; production workshop checks pass **12/12**, compact interactions **5/5**, real-provider happy-hour voice acceptance **9/9**, and remote archive comparisons **18/18**. All **67 served assets** match the release build. Cloudflare confirms **100% traffic** on the tagged version. Refresh an already-open simulator tab.
 

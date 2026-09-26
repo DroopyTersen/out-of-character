@@ -59,6 +59,37 @@
 .sim-panel-foot { margin-top: 12px; border-top: 1px solid #32768b; padding-top: 10px; color: #9dbbd0; text-align: center; font-size: 12px; }
 .sim-start { display: flex; align-items: center; flex-direction: column; gap: 16px; padding: 30px 0 38px; }
 .sim-start > small { color: #749ab3; font-size: 12px; max-width: 540px; text-align: center; line-height: 1.5; }
+.sim-lab-link { margin: 0 auto 30px; text-align: center; color: #9dbbd0; }
+.sim-lab-link a, .sim-voice-lab-source a { color: #44efcd; text-decoration: underline; }
+.sim-voice-lab { width: 100%; max-width: 1250px; margin: 0 auto; }
+.sim-voice-lab .sim-heading { padding: 25px 16px 30px; }
+.sim-voice-lab .sim-heading p { max-width: 700px; margin: 0 auto; font-size: 18px; line-height: 1.5; }
+.sim-voice-lab-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; }
+.sim-voice-lab-clients { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sim-voice-lab-client { display: flex; align-items: center; gap: 12px; padding: 7px; min-width: 0; text-align: left; border: 1px solid #2b566e; border-radius: 4px; color: #d9eaf7; background: #0a2332; }
+.sim-voice-lab-client.selected { border-color: #44efcd; box-shadow: inset 0 0 0 1px #44efcd; background: #10363460; }
+.sim-voice-lab-client:hover { border-color: #7dc6ee; }
+.sim-voice-lab-client img { width: 66px; height: 70px; object-fit: cover; image-rendering: pixelated; }
+.sim-voice-lab-client span { min-width: 0; display: grid; gap: 3px; }
+.sim-voice-lab-client strong { font-family: Silkscreen, monospace; font-size: 17px; }
+.sim-voice-lab-client small { color: #95b5cb; font-size: 12px; }
+.sim-voice-lab-person { display: flex; gap: 16px; align-items: center; padding-bottom: 14px; border-bottom: 1px solid #32768b; }
+.sim-voice-lab-person img { width: 110px; height: 118px; object-fit: cover; image-rendering: pixelated; }
+.sim-voice-lab-person h3 { color: #44efcd; font-family: Silkscreen, monospace; font-size: 27px; }
+.sim-voice-lab-person p, .sim-voice-lab-profile p { color: #c5d7e4; line-height: 1.5; }
+.sim-voice-lab-profile { padding: 16px 0; border-bottom: 1px solid #32768b; }
+.sim-voice-lab-profile h3 { font-size: 18px; margin-bottom: 10px; }
+.sim-voice-lab-traits { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.sim-voice-lab-traits span { padding: 5px 9px; border: 1px solid #397e91; border-radius: 20px; color: #a9e6e2; font-size: 12px; }
+.sim-voice-lab-profile p + p { margin-top: 8px; }
+.sim-voice-lab-profile strong { color: #8ac7fc; }
+.sim-voice-lab-select { display: grid; gap: 8px; margin-top: 17px; color: #8ac7fc; font-size: 14px; font-weight: 700; }
+.sim-voice-lab-select select { width: 100%; min-height: 48px; padding: 8px 12px; color: #eef9ff; background: #102f41; border: 1px solid #4b90ab; border-radius: 4px; font: 18px 'Chakra Petch', sans-serif; }
+.sim-voice-lab-description { margin-top: 12px; min-height: 45px; color: #c5d7e4; line-height: 1.5; }
+.sim-voice-lab-description strong { color: #44efcd; margin-right: 8px; }
+.sim-voice-lab-source, .sim-voice-lab-default, .sim-voice-lab-note, .sim-voice-lab-now { margin-top: 9px; color: #92b1c7; font-size: 13px; line-height: 1.5; }
+.sim-voice-lab-note { margin-top: 16px; }
+.sim-voice-lab-now { font-family: Silkscreen, monospace; text-transform: uppercase; }
 .sim-notice { max-width: 900px; margin: 14px auto; background: #152f40; border-left: 3px solid #f1bf64; color: #e5d7b7; padding: 12px 17px; font-size: 14px; line-height: 1.5; }
 .sim-notice.error { border-color: #fb7786; color: #f6b3bc; }
 .sim-notice a { text-decoration: underline; }
@@ -229,7 +260,7 @@ p.sim-lab-check-details { padding: 12px 0; }
 }
 
 @media (max-width: 720px) {
-  .sim-heading { padding: 25px 3px; }.sim-heading p { font-size: 14px; }.sim-selection-grid, .sim-live-grid, .sim-debrief-grid, .sim-lab-grid { grid-template-columns: 1fr; gap: 20px; }.sim-live-grid > :nth-child(n+2) { border-left: 0; padding: 24px 0 0; border-top: 1px solid #21465c; }.sim-panel { padding: 18px; }.sim-session-bar { flex-wrap: wrap; gap: 12px; padding: 18px 0; }.sim-session-bar h1 { font-size: 18px; min-width: 50%; }.sim-session-bar time { margin-right: auto; }.sim-session-bar .eyebrow { padding-right: 10px; font-size: 9px; }.sim-client-stage { text-align: center; }.sim-client-stage h2 { font-size: 30px; }.sim-caption { min-height: 60px; max-height: 125px; text-align: left; font-size: 16px; }.sim-hint { min-height: 110px; }.sim-hint p { font-size: 17px; }.sim-live-grid .sim-skill-list { grid-template-columns: 1fr; gap: 21px; }.sim-debrief-grid > .sim-skills { padding: 24px 0 0; border-left: 0; border-top: 1px solid #21465c; }.sim-debrief-actions { flex-direction: column; gap: 16px; }.sim-debrief-actions > button { width: min(100%, 360px); justify-content: center; }.sim-outcome strong { font-size: 19px; }.sim-brief > p { font-size: 15px; }.sim-start .arcade-button { min-width: 0; width: 100%; font-size: clamp(16px, 5.6vw, 19px); }.sim-rail-controls > span { display: none; }.sim-lab { padding: 14px; }
+  .sim-heading { padding: 25px 3px; }.sim-heading p { font-size: 14px; }.sim-selection-grid, .sim-live-grid, .sim-debrief-grid, .sim-lab-grid, .sim-voice-lab-grid { grid-template-columns: 1fr; gap: 20px; }.sim-live-grid > :nth-child(n+2) { border-left: 0; padding: 24px 0 0; border-top: 1px solid #21465c; }.sim-panel { padding: 18px; }.sim-session-bar { flex-wrap: wrap; gap: 12px; padding: 18px 0; }.sim-session-bar h1 { font-size: 18px; min-width: 50%; }.sim-session-bar time { margin-right: auto; }.sim-session-bar .eyebrow { padding-right: 10px; font-size: 9px; }.sim-client-stage { text-align: center; }.sim-client-stage h2 { font-size: 30px; }.sim-caption { min-height: 60px; max-height: 125px; text-align: left; font-size: 16px; }.sim-hint { min-height: 110px; }.sim-live-grid .sim-skill-list { grid-template-columns: 1fr; gap: 21px; }.sim-debrief-grid > .sim-skills { padding: 24px 0 0; border-left: 0; border-top: 1px solid #21465c; }.sim-debrief-actions { flex-direction: column; gap: 16px; }.sim-debrief-actions > button { width: min(100%, 360px); justify-content: center; }.sim-outcome strong { font-size: 19px; }.sim-brief > p { font-size: 15px; }.sim-start .arcade-button { min-width: 0; width: 100%; font-size: clamp(16px, 5.6vw, 19px); }.sim-rail-controls > span { display: none; }.sim-lab { padding: 14px; }
   .simulator-header .brand { font-size: 17px; }.simulator-header nav { width: 100%; }.simulator-title { margin-left: auto; font-size: 16px; }
   .sim-heading h1 { font-size: 28px; }.sim-heading p { font-size: 16px; }
   .sim-section-heading h2 { font-size: 24px; }.sim-section-heading > span { font-size: 12px; }

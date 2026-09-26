@@ -11,22 +11,22 @@ export const transcriptEvent = z.object({
   start_ms: z.number().finite().nonnegative(), end_ms: z.number().finite().nonnegative(),
 }).refine(event => event.end_ms >= event.start_ms);
 
-export function liveConfiguration(scenarioId: string, clientId: string) {
+export function liveConfiguration(scenarioId: string, clientId: string, voice?: string) {
   const client = getClient(clientId);
   return {
     model: LIVE_MODEL, instructions: actorBrief(getScenario(scenarioId), client),
     delegation: { type: 'client' }, store: false,
-    audio: { output: { voice: client.voice } },
+    audio: { output: { voice: voice ?? client.voice } },
     // Config snapshots (including session.closed) contain the actor brief. The
     // browser gets only audio; our capability-protected API supplies public state.
     client: { data_channel: { allowed_client_events: ['session.close'], allowed_server_events: [] } },
   };
 }
 
-export async function createLive(input: { scenarioId: string; clientId: string; sdp: string }, apiKey: string) {
+export async function createLive(input: { scenarioId: string; clientId: string; voice?: string; sdp: string }, apiKey: string) {
   const response = await fetch('https://api.openai.com/v1/live/sessions', {
     method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session: liveConfiguration(input.scenarioId, input.clientId), transport: { type: 'webrtc', sdp: input.sdp } }),
+    body: JSON.stringify({ session: liveConfiguration(input.scenarioId, input.clientId, input.voice), transport: { type: 'webrtc', sdp: input.sdp } }),
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`Live creation failed (${response.status}).`);

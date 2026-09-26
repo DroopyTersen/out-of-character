@@ -23,6 +23,7 @@ test('creation fails closed on foreign origins, missing capability, disabled ser
   expect((await handleSimulator(f.request('sessions', f.start, { Authorization: '' }), f.env))!.status).toBe(401);
   expect((await handleSimulator(f.request('sessions', f.start), { ...f.env, SIMULATOR_ENABLED: 'false' }))!.status).toBe(503);
   expect((await handleSimulator(f.request('sessions', { ...f.start, clientId: 'invented' }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request('sessions', { ...f.start, voice: 'invented' }), f.env))!.status).toBe(400);
   f.env.RATE_SIMULATOR = { limit: async () => ({ success: false }) };
   expect((await handleSimulator(f.request('sessions', f.start), f.env))!.status).toBe(429);
   expect(f.calls).toHaveLength(0);
@@ -51,6 +52,13 @@ test('public catalog and browser data channel cannot receive actor configuration
   expect(config.store).toBe(false);
   expect(config.client.data_channel.allowed_server_events).toEqual([]);
   expect(config.client.data_channel.allowed_client_events).toEqual(['session.close']);
+});
+test('a supported voice reaches the owned session and overrides only its audio choice', async () => {
+  const f = fixture();
+  expect((await handleSimulator(f.request('sessions', { ...f.start, voice: 'willow' }), f.env))!.status).toBe(200);
+  expect((await f.calls[0]!.json() as { voice: string }).voice).toBe('willow');
+  expect(liveConfiguration('happy-hour', 'morgan', 'willow').audio.output.voice).toBe('willow');
+  expect(liveConfiguration('happy-hour', 'morgan').audio.output.voice).toBe('cedar');
 });
 test('invalid protocol timestamps and unknown event kinds are rejected', () => {
   expect(transcriptEvent.safeParse({ type: 'session.input_transcript.delta', delta: 'Yes', start_ms: 10, end_ms: 5 }).success).toBe(false);

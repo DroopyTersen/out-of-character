@@ -25,6 +25,7 @@ describe('simulator boundaries', () => {
         for (const fact of scenario.briefing ?? []) expect(brief).toContain(fact);
       }
     }
+    // Default voices are shown by Voice Lab, but the general catalog still exposes only public client summaries.
     for (const secret of ['8,000', 'took the blame', 'operations analyst', 'overdue-item history', 'seriousMistake', 'criterion', 'behavior', 'voice', 'approval-boundary']) {
       // "behavior" is a public objective kind, not the private character instructions.
       if (secret === 'behavior') expect(catalog.clients[0]).not.toHaveProperty(secret);

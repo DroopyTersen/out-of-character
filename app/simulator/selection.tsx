@@ -31,7 +31,7 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
   return <section className="sim-selection">
     <header className="sim-heading"><h1>Choose your simulation</h1><p>A real conversation. A safe place to practice.</p></header>
     <div className="sim-selection-grid">
-      <section className="sim-panel"><header className="sim-section-heading"><h2>The scenario</h2><span>{catalog.scenarios.length} scenarios</span></header>
+      <section className="sim-panel"><header className="sim-section-heading"><h2>The scenario</h2><span>{catalog.scenarios.length} scenarios{catalog.scenarios.length > 3 && <small>Scroll ↓</small>}</span></header>
         <div className="sim-scenario-list" role="group" aria-label="Choose a scenario">
           {catalog.scenarios.map(item => <button className={`sim-scenario ${item.id === scenarioId ? 'selected' : ''}`} key={item.id} aria-pressed={item.id === scenarioId} onClick={() => onScenario(item.id)}><span className="sim-scenario-icon" aria-hidden="true">{item.category === 'Sales' ? <Presentation /> : <FileText />}</span><span className="sim-scenario-copy"><small>{item.category}</small><strong>{item.title}</strong></span><span className="sim-choice-mark">{item.id === scenarioId && <Check size={17} />}</span></button>)}
         </div>

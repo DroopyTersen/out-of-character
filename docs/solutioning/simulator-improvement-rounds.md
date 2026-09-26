@@ -26,10 +26,10 @@ Then run four screenshot-driven design iterations independently for each main sc
 | Engine round 1 | Complete | `bfe6a1e`; Opus accepted cleanup and stale-feedback changes |
 | Engine round 2 | Complete | [Scenario critique and six voice probes](simulator-engine-round-2.md) |
 | Engine round 3 | Complete | [Evidence, retry, classification and spoken-End regressions](simulator-engine-round-3.md) |
-| Selection: four iterations | Pending | Separate screen log and comparable captures |
-| Live practice: four iterations | Pending | Includes audio, feedback and alternate states |
-| Debrief: four iterations | Pending | Includes incomplete and unsuccessful attempts |
-| Jev lab: four iterations | Pending | Includes provenance, replay and raw inspection |
+| Selection: four iterations | 1/4 | [Selection log](simulator-selection-design-loop.md) |
+| Live practice: four iterations | 1/4 | [Live practice log](simulator-live-design-loop.md) |
+| Debrief: four iterations | 1/4 | [Debrief log](simulator-debrief-design-loop.md) |
+| Jev lab: four iterations | 1/4 | [Lab log](simulator-judging-design-loop.md) |
 | Final acceptance | Pending | Full gate, browser regressions, review dispositions and clean committed tree |
 
 ## Engine round 1

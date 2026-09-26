@@ -8,6 +8,7 @@ const results = [];
 try {
   for (const viewport of (process.env.DESIGN_SCREEN === '1' ? [{ width: 1672, height: 941 }, { width: 1024, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 800 }] : [{ width: 1672, height: 941 }, { width: 390, height: 844 }])) {
     for (const [story, selector] of [['selection', '.sim-selection'], ['live', '.sim-conversation'], ['debrief', '.sim-debrief'], ['judging', '.sim-lab']]) {
+      if (process.env.DESIGN_STORY && process.env.DESIGN_STORY !== story) continue;
       const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
       const page = await context.newPage();
       const errors = [], api = [];

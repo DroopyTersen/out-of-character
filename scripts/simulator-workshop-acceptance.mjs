@@ -107,7 +107,8 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
   });
   await test('simulator-judging', viewport, async page => {
     await page.getByRole('button', { name: 'Show full result' }).click();
-    check((await page.locator('.sim-lab-provenance').first().innerText()).includes('Trainee'), 'full result timing missing');
+    await page.getByText('Recording details', { exact: true }).click();
+    check((await page.locator('.sim-lab-source .sim-lab-provenance').innerText()).includes('Trainee'), 'full result timing missing');
     check(await page.locator('.sim-director-readout').getByText(/Role fidelity/).isVisible(), 'client diagnostics missing');
     check(await page.locator('.sim-lab-checks span').count() > 0, 'fixture checks missing');
     await page.locator('.sim-objectives details').first().locator('summary').click();

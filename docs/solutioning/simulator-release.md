@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Current release: **`63b633a`**, deployed September 26, 2026 at 20:35 UTC. [Voice Lab](#voice-lab-release) lets a consultant try any of seven clients with a selected GPT-Live voice in an open conversation. The nine simulator scenarios and private archive remain included.
+Current release: **`b86c7e9`**, deployed September 26, 2026 at 23:41 UTC. [Voice Lab](#client-voice-release) plays prepared samples for each client and voice while showing the selected portrait. The nine simulator scenarios and private archive remain included.
 
 ## Voice Lab release
 
@@ -164,3 +164,11 @@ Production browser commands used `ACCEPTANCE_URL=https://outofcharacter.droopy.d
 Opus's final follow-up accepted the deployment evidence and test-only fix without changing its no-blocker verdict. The one-hour warning, drain and close have controlled-clock evidence only. Near-capacity grading has synthetic evidence only; future real near-capacity diagnostics should capture the largest per-request input token count before changing limits.
 
 Cloud receipts: `output/simulator-role-boundary-release-deploy.log`, `-deployments.json`, `-final-deployments.json`, `-version.json`, and `-migrations.log`. Source work and review checkpoints are committed on the isolated `simulator-role-boundaries` branch; the final evidence/test-only commit is later than the deployed runtime. The original `simulator-mvp` checkout is preserved. No branch push or merge was performed. Refresh an already-open simulator tab before trying the changes.
+
+## Client voice release
+
+The completed role-play and session-length work from `simulator-role-boundaries` is integrated into `simulator-mvp`. The selected default voices are Morgan–Meridian, Avery–Alloy, Casey–Cedar, Harper–Meridian, Quinn–Beacon, Riley–Ripple, and Jamie–Gleam. Voice Lab samples remain prepared clips; simulator conversations use the same defaults with GPT-Live.
+
+Source **`b86c7e9`** deployed September 26, 2026 at 23:41 UTC to [the simulator](https://outofcharacter.droopy.dev/simulator). Cloudflare version **`465140f0-e7c0-458b-afec-46e05ca110b9`** is tagged `b86c7e9` and receives **100% traffic**. Existing variables and secrets were retained, and the remote D1 migration list had no pending entries.
+
+The complete release gate passed **152 tests / 5,917 assertions**, typecheck, production build, bundle privacy check, and Wrangler dry run. Production Voice Lab playback and selection passed at 1440 and 390 pixels; all seven selected defaults, portraits, and audio URLs were checked. Production workshop acceptance passed **12/12**. A real-provider production simulator attempt passed **9/9** checks, including live Jev feedback, poll recovery, confirmed closure, and local media cleanup. Its final private D1 record confirms Morgan used **Meridian** on the exact Worker version and tag above. The smoke used prerecorded synthetic trainee speech, not a physical-device microphone.

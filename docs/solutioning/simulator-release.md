@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Current release: **`b86c7e9`**, deployed September 26, 2026 at 23:41 UTC. [Voice Lab](#client-voice-release) plays prepared samples for each client and voice while showing the selected portrait. The nine simulator scenarios and private archive remain included.
+Current release: **`2123149`**, deployed September 26, 2026 at 23:54 UTC. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) plays prepared samples for each client and voice while showing the selected portrait; it is also a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab). The nine simulator scenarios and private archive remain included.
 
 ## Voice Lab release
 
@@ -172,3 +172,7 @@ The completed role-play and session-length work from `simulator-role-boundaries`
 Source **`b86c7e9`** deployed September 26, 2026 at 23:41 UTC to [the simulator](https://outofcharacter.droopy.dev/simulator). Cloudflare version **`465140f0-e7c0-458b-afec-46e05ca110b9`** is tagged `b86c7e9` and receives **100% traffic**. Existing variables and secrets were retained, and the remote D1 migration list had no pending entries.
 
 The complete release gate passed **152 tests / 5,917 assertions**, typecheck, production build, bundle privacy check, and Wrangler dry run. Production Voice Lab playback and selection passed at 1440 and 390 pixels; all seven selected defaults, portraits, and audio URLs were checked. Production workshop acceptance passed **12/12**. A real-provider production simulator attempt passed **9/9** checks, including live Jev feedback, poll recovery, confirmed closure, and local media cleanup. Its final private D1 record confirms Morgan used **Meridian** on the exact Worker version and tag above. The smoke used prerecorded synthetic trainee speech, not a physical-device microphone.
+
+## Workshop Voice Lab tab
+
+The standalone Voice Lab interface is shared with `/storybook/simulator-voice-lab` and appears in the Workshop navigation. Source **`2123149`** deployed September 26, 2026 at 23:54 UTC as Worker version **`e595f373-66aa-4f87-8429-b2246b11a630`**, tagged `2123149`, with **100% traffic**. The complete gate passed **152 tests / 5,917 assertions**, typecheck, production build, privacy scan of 18 client assets, and Wrangler dry run. Production Workshop browser acceptance passed **14/14** at desktop and phone widths, including Voice Lab playback and client/voice selection; the standalone Voice Lab also passed at both widths. No paid provider call or microphone access is needed for either Voice Lab view.

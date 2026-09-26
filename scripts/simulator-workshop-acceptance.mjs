@@ -22,7 +22,7 @@ async function test(route, viewport, run) {
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/**', request => { api.push(request.request().url()); return request.abort(); });
   try {
-    const response = await page.goto(`${baseUrl}/storybook/${route}`, { waitUntil: 'networkidle' });
+    const response = await page.goto(`${baseUrl}/storybook/${route}`, { waitUntil: route === 'simulator-voice-lab' ? 'domcontentloaded' : 'networkidle' });
     check(response?.status() === 200, `route HTTP ${response?.status()}`);
     check(await page.locator('.workshop-heading h2').count() === 1, 'workshop heading absent');
     await run(page);

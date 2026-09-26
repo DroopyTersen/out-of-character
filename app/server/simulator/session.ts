@@ -1,12 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
-import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
-import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
+import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
-import { SESSION_LIMIT_SECONDS, SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
-import { attachLive, createLive, LIVE_MODEL, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
+import { SESSION_LIMIT_SECONDS, type SessionSnapshot } from '../../../core/simulator/types';
+import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { simulatorJson, startSchema } from './api';
-import { writeArchive } from './archive.server';
+import { archiveProvenance, writeArchive } from './archive.server';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
 const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
@@ -196,7 +195,7 @@ export class SimulatorSession extends DurableObject<Env> {
     for (const entry of transcript) this.judgedPassages.add(entry.id);
     this.grading = this.grade(transcript, snapshot.revision, false).finally(() => { this.grading = undefined; });
     this.ctx.waitUntil(this.grading);
-    if (String(this.env.SIMULATOR_DIRECTOR_ENABLED) === 'true' && !this.directing && now - this.lastDirected >= 8000 && !this.closing) {
+    if (this.env.SIMULATOR_DIRECTOR_ENABLED === 'true' && !this.directing && now - this.lastDirected >= 8000 && !this.closing) {
       this.lastDirected = now;
       this.ctx.waitUntil(this.direct(transcript, snapshot.revision));
     }
@@ -334,17 +333,8 @@ export class SimulatorSession extends DurableObject<Env> {
       const snapshot = structuredClone(this.snapshot!);
       const cues = structuredClone(this.sentCues);
       const capturedAt = Date.now();
-      const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
-      const digest = async (text: string) => {
-        const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-        return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 12);
-      };
-      const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
-      await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, cues, provenance: {
-        model: LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
-        actorDigest, openingDigest, workerId: this.env.CF_VERSION_METADATA?.id ?? null, workerTag: this.env.CF_VERSION_METADATA?.tag ?? null,
-        directorEnabled: String(this.env.SIMULATOR_DIRECTOR_ENABLED) === 'true',
-      } });
+      const provenance = await archiveProvenance(this.env, snapshot);
+      await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, cues, provenance });
     } catch {
       // Best effort: never delay closure or retry a failed transcript save.
       console.warn('Simulator archive save failed', { id: this.snapshot?.id, category: state });

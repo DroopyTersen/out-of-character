@@ -63,3 +63,5 @@ Verification ran from a managed isolated checkout because a separate task was ex
 - Earlier shared-development failures remain under `output/simulator-best-effort-local-*`: catalog edits reloaded active sessions, and one run ended before the current live-feedback state. The harness now waits for the visible current live state before ending. The final isolated run passes that stronger check.
 
 All evidence above is local or synthetic. Character pace measurements and their limits are in [the rehearsal record](simulator-pace-evidence.md). Cloudflare OAuth remains expired; restore authentication, add the real D1 database ID, apply the remote migration, deploy, then verify production voice and its archive before claiming cloud availability.
+
+The subsequent [parallel quality review](simulator-simplification.md#archive-and-pace-follow-up-review) removes duplicate archive serialization, centralizes provenance and simplifies the test setup, while preserving best-effort saves and the existing provider closure lifecycle.

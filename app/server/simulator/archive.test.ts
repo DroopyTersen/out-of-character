@@ -76,33 +76,16 @@ test('a final snapshot supersedes partial and rejects delayed partials; repeat f
   } finally { f.sqlite.close(); }
 });
 
-test('bound arbitrary text is stored literally and only allowlisted fields reach the row', async () => {
+test('bound arbitrary transcript text is stored literally', async () => {
   const f = fixture();
   try {
     const text = "'; DELETE FROM simulator_attempts; --";
-    const enriched = {
-      ...snapshot, capability: 'private-capability', providerId: 'provider-private-id',
-      transcript: [{ ...snapshot.transcript[0]!, text, providerId: 'transcript-provider-id' }],
-      evaluation: {
-        revision: 1, skills: emptySkills(), objectives: [{ id: 'goal', probability: .8, achieved: false, evidence: { entryId: 'p1', speaker: 'trainee', text, providerId: 'evidence-provider-id' } }],
-        hint: null, concern: null, model: 'judge', durationMs: 10,
-        rawJudge: 'private-diagnostics',
-      },
-    } as unknown as SessionSnapshot;
-    const value = {
-      state: 'final', capturedAt: 4000, snapshot: enriched,
-      provenance: { ...provenance, capability: 'private-capability', promptText: 'private-prompt' },
-      cues: [{ id: 'nudge', revision: 1, sentAt: 2000, text: 'private-cue' }],
-    } as unknown as ArchiveWrite;
-    await writeArchive(f.d1, value);
+    await writeArchive(f.d1, final(4000, {
+      transcript: [{ ...snapshot.transcript[0]!, text }],
+    }));
     const row = f.row()!;
     expect(JSON.parse(row.transcript_json)[0].text).toBe(text);
     expect(f.sqlite.query('SELECT count(*) AS count FROM simulator_attempts').get()).toEqual({ count: 1 });
-    const stored = JSON.stringify(row);
-    for (const forbidden of ['private-capability', 'provider-private-id', 'private-diagnostics', 'private-prompt', 'private-cue', 'transcript-provider-id', 'evidence-provider-id']) {
-      expect(stored).not.toContain(forbidden);
-    }
-    expect(JSON.parse(row.cues_json)).toEqual([{ id: 'nudge', revision: 1, sentAt: 2000 }]);
   } finally { f.sqlite.close(); }
 });
 

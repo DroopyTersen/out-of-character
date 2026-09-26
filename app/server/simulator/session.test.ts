@@ -25,7 +25,7 @@ const request = (action: string, cap = capability) => new Request(`https://sessi
 function archiveDatabase() {
   const sqlite = new Database(':memory:');
   sqlite.exec(migration);
-  let failures = 0;
+  let failNext = false;
   let held: { entered: () => void; wait: Promise<void> } | undefined;
   const d1 = {
     prepare: (sql: string) => ({
@@ -34,7 +34,7 @@ function archiveDatabase() {
           const pause = held;
           held = undefined;
           if (pause) { pause.entered(); await pause.wait; }
-          if (failures > 0) { failures--; throw new Error('D1 unavailable'); }
+          if (failNext) { failNext = false; throw new Error('D1 unavailable'); }
           sqlite.prepare(sql).run(...args);
           return { success: true };
         },
@@ -50,7 +50,7 @@ function archiveDatabase() {
     held = { entered, wait };
     return { started, release };
   };
-  return { d1, row, failNext: (count = 1) => { failures = count; }, holdNext };
+  return { d1, row, failNext: () => { failNext = true; }, holdNext };
 }
 
 class ProviderSocket extends EventTarget {
@@ -65,7 +65,14 @@ class ProviderSocket extends EventTarget {
   emit(event: unknown) { this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(event) })); }
   close() { this.readyState = 3; this.dispatchEvent(new Event('close')); }
 }
-async function fixture(pendingCreation?: Promise<void>, values = new Map<string, unknown>(), overrides: Partial<NonNullable<ConstructorParameters<typeof SimulatorSession>[2]>> = {}, archive = archiveDatabase(), bindings: { archive?: boolean; metadata?: boolean } = {}) {
+type FixtureOptions = {
+  pendingCreation?: Promise<void>;
+  values?: Map<string, unknown>;
+  overrides?: Partial<NonNullable<ConstructorParameters<typeof SimulatorSession>[2]>>;
+  archive?: ReturnType<typeof archiveDatabase>;
+  metadata?: boolean;
+};
+async function fixture({ pendingCreation, values = new Map<string, unknown>(), overrides = {}, archive = archiveDatabase(), metadata = true }: FixtureOptions = {}) {
   const socket = new ProviderSocket();
   let ready = Promise.resolve();
   let alarm = 0;
@@ -79,8 +86,8 @@ async function fixture(pendingCreation?: Promise<void>, values = new Map<string,
   const session = new SimulatorSession(ctx, {
     OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture',
     SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient ? 'true' : 'false',
-    ...(bindings.archive === false ? {} : { SIMULATOR_ARCHIVE: archive.d1 }),
-    ...(bindings.metadata === false ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
+    SIMULATOR_ARCHIVE: archive.d1,
+    ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
     createLive: async () => { creations++; await pendingCreation; return { session: { id: 'provider-private-id' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } }; },
     attachLive: async () => socket as unknown as WebSocket,
@@ -112,13 +119,13 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
 });
 test('normal End keeps a late trainee tail but excludes an unheard client agreement', async () => {
   let graded: { speaker: string; text: string }[] = [];
-  const f = await fixture(undefined, undefined, {
+  const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       graded = input.transcript;
       const agreement = input.transcript.find(item => item.speaker === 'client' && item.text.includes('I agree'));
       return { revision: input.revision, skills: emptySkills(), objectives: agreement ? [{ id: 'next-step', achieved: true, probability: .99, evidence: { entryId: agreement.id, speaker: agreement.speaker, text: agreement.text } }] : [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
     },
-  });
+  } });
   f.socket.holdClose = true;
   let ending: Promise<Response> | undefined;
   try {
@@ -163,7 +170,7 @@ test('provider connection loss during explicit End does not replace the complete
 }, 10_000);
 test('cancelling during provider creation closes the eventual session', async () => {
   let release!: () => void;
-  const f = await fixture(new Promise<void>(resolve => { release = resolve; }));
+  const f = await fixture({ pendingCreation: new Promise<void>(resolve => { release = resolve; }) });
   const starting = f.session.fetch(request('start'));
   // Wait until creation actually reaches the paid boundary, then race cancellation.
   while (!f.creations()) await Promise.resolve();
@@ -258,7 +265,7 @@ test('failed provider finalization remains explicit and retains a closure lease'
 test('a replacement session owner closes the persisted provider lease', async () => {
   const original = await fixture();
   await original.session.fetch(request('start'));
-  const replacement = await fixture(undefined, original.values);
+  const replacement = await fixture({ values: original.values });
   await replacement.session.alarm();
   expect(replacement.socket.sent.map(event => event.type)).toEqual(['session.close']);
   expect(replacement.values.get('lease')).toMatchObject({ closed: true });
@@ -269,20 +276,20 @@ test('a replacement session owner closes the persisted provider lease', async ()
 test('a cancelled attempt remains unusable after its owner restarts', async () => {
   const original = await fixture();
   await original.session.fetch(request('end'));
-  const replacement = await fixture(undefined, original.values);
+  const replacement = await fixture({ values: original.values });
   expect((await replacement.session.fetch(request('start'))).status).toBe(409);
   expect(replacement.creations()).toBe(0);
 });
 
 test('restart recovery clears an already-closed provider and a lease with no recovered id', async () => {
   const values = new Map<string, unknown>([['lease', { capability, providerId: 'gone', deadline: 0, closed: false }]]);
-  const gone = await fixture(undefined, values, { attachLive: async () => { throw new LiveSessionGone(); } });
+  const gone = await fixture({ values: values, overrides: { attachLive: async () => { throw new LiveSessionGone(); } } });
   await gone.session.alarm();
   expect(values.get('lease')).toMatchObject({ closed: true });
   await gone.session.alarm();
   expect(values.size).toBe(0);
   values.set('lease', { capability, deadline: 0, closed: false });
-  const unknown = await fixture(undefined, values);
+  const unknown = await fixture({ values: values });
   await unknown.session.alarm();
   expect(values.size).toBe(0);
 });
@@ -292,7 +299,7 @@ test('a late same-speaker delta cannot change the passage cited by an objective'
   let gradingStarted!: () => void;
   let gradingCalls = 0;
   const started = new Promise<void>(resolve => { gradingStarted = resolve; });
-  const f = await fixture(undefined, undefined, {
+  const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++gradingCalls === 1) {
         gradingStarted();
@@ -301,7 +308,7 @@ test('a late same-speaker delta cannot change the passage cited by an objective'
       const passage = input.transcript[0]!;
       return { revision: input.revision, skills: emptySkills(), objectives: [{ id: 'capability', achieved: true, probability: .99, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
     },
-  });
+  } });
   try {
     await f.session.fetch(request('start'));
     await f.session.fetch(request('ready'));
@@ -323,12 +330,12 @@ test('a late same-speaker delta cannot change the passage cited by an objective'
 
 test('one transient judging failure retries unchanged dialogue and stops after success', async () => {
   let calls = 0;
-  const f = await fixture(undefined, undefined, {
+  const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++calls === 1) throw new Error('Transient failure');
       return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
     },
-  });
+  } });
   try {
     await f.session.fetch(request('start'));
     await f.session.fetch(request('ready'));
@@ -351,12 +358,12 @@ test('one transient judging failure retries unchanged dialogue and stops after s
 
 test('two failed judgments stop retrying until new dialogue earns its own retry', async () => {
   let calls = 0;
-  const f = await fixture(undefined, undefined, {
+  const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++calls < 4) throw new Error('Transient failure');
       return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
     },
-  });
+  } });
   try {
     await f.session.fetch(request('start'));
     await f.session.fetch(request('ready'));
@@ -384,12 +391,12 @@ test('two failed judgments stop retrying until new dialogue earns its own retry'
 test('new settled dialogue marks earlier feedback delayed while reassessment is pending', async () => {
   let release!: () => void;
   let calls = 0;
-  const f = await fixture(undefined, undefined, {
+  const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++calls === 2) await new Promise<void>(resolve => { release = resolve; });
       return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
     },
-  });
+  } });
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Who owns the workflow?', start_ms: 0, end_ms: 1000 });
@@ -415,13 +422,13 @@ for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a
   let resolve!: () => void;
   let assessed!: () => void;
   const started = new Promise<void>(done => { assessed = done; });
-  const f = await fixture(undefined, undefined, {
+  const f = await fixture({ overrides: {
     evaluateClient: async input => {
       assessed();
       await new Promise<void>(done => { resolve = done; });
       return { revision: input.revision, cueId: 'approval-boundary', cueProbability: .99, fidelity: 1, interests: [1], model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
     },
-  });
+  } });
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Sign today.', start_ms: 0, end_ms: 900 });
@@ -468,7 +475,10 @@ test('live alarm checkpoints dialogue, then End saves the final public score and
   await waitFor(() => f.row()?.archive_state === 'final');
   const row = f.row()!;
   expect(row).toMatchObject({ archive_state: 'final', session_status: 'ended', finalization: 'confirmed', usage_seconds: 12 });
-  expect(JSON.parse(row.evaluation_json)).toMatchObject({ revision: ended.revision, model: 'fixture' });
+  expect(JSON.parse(row.transcript_json)).toEqual(ended.transcript);
+  expect(JSON.parse(row.evaluation_json)).toEqual(ended.evaluation);
+  expect(row.evaluation_json).not.toContain('answers');
+  expect(row.evaluation_json).not.toContain('usage');
   expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', directorEnabled: false });
   const stored = JSON.stringify(row);
   expect(stored).not.toContain(capability);
@@ -486,11 +496,10 @@ test('a live but silent attempt has a final archive; a creation failure has none
   expect(JSON.parse(silent.row()!.transcript_json)).toEqual([]);
   expect(silent.row()!.evaluation_json).toBeNull();
 
-  const failed = await fixture(undefined, undefined, { createLive: async () => { throw new Error('Provider unavailable'); } });
+  const failed = await fixture({ overrides: { createLive: async () => { throw new Error('Provider unavailable'); } } });
   expect((await failed.session.fetch(request('start'))).status).toBe(502);
   await Promise.allSettled(failed.pending);
   expect(failed.row()).toBeNull();
-  expect(failed.values.has('archive')).toBe(false);
 });
 
 test('failed final D1 save is best effort and closure lease cleanup continues', async () => {
@@ -502,7 +511,6 @@ test('failed final D1 save is best effort and closure lease cleanup continues', 
   await f.session.fetch(request('end'));
   await Promise.all(f.pending);
   expect(f.row()).toBeNull();
-  expect(f.values.has('archive')).toBe(false);
   expect(f.values.get('lease')).toMatchObject({ closed: true });
   setSystemTime(Date.now() + 300_001);
   await f.session.alarm();
@@ -519,7 +527,7 @@ test('restart closes the provider and leaves the last successful checkpoint part
   await active.session.alarm();
   await Promise.all(active.pending);
   expect(active.row()?.archive_state).toBe('partial');
-  const replacement = await fixture(undefined, active.values, {}, active.archive);
+  const replacement = await fixture({ values: active.values, archive: active.archive });
   await replacement.session.alarm();
   expect(replacement.row()).toMatchObject({ archive_state: 'partial', session_status: 'live', finalization: 'pending' });
   expect(JSON.parse(replacement.row()!.transcript_json)[0].text).toBe('A captured question.');
@@ -539,7 +547,6 @@ test('a failed partial save leaves closure scheduled and the next alarm can save
   await Promise.all(f.pending);
   expect(f.row()).toBeNull();
   expect(f.alarm()).toBeGreaterThan(Date.now());
-  expect(f.values.has('archive')).toBe(false);
 
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Operations owns it.', start_ms: 1000, end_ms: 1900 });
   setSystemTime(Date.now() + 30_000);
@@ -551,25 +558,27 @@ test('a failed partial save leaves closure scheduled and the next alarm can save
   await f.session.fetch(request('end'));
 });
 
-test('missing archive binding does not delay an unconfirmed provider close or its retry alarm', async () => {
-  const f = await fixture(undefined, undefined, {}, archiveDatabase(), { archive: false, metadata: false });
+test('a stalled failing final save does not delay End or the provider closure alarm', async () => {
+  const f = await fixture();
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   f.socket.readyState = 3;
-  const began = performance.now();
-  const ended = await (await f.session.fetch(request('end'))).json() as Record<string, unknown>;
-  expect(performance.now() - began).toBeLessThan(2500);
-  expect(ended.finalization).toBe('unconfirmed');
-  expect(f.values.get('lease')).toMatchObject({ closed: false });
-  expect(f.alarm()).toBeGreaterThan(Date.now() + 14_000);
-  expect(f.alarm()).toBeLessThan(Date.now() + 16_000);
+  f.archive.failNext();
+  const held = f.archive.holdNext();
+  try {
+    const ended = await (await f.session.fetch(request('end'))).json() as Record<string, unknown>;
+    await held.started;
+    expect(ended.finalization).toBe('unconfirmed');
+    expect(f.values.get('lease')).toMatchObject({ closed: false });
+    expect(f.alarm()).toBeGreaterThan(Date.now() + 14_000);
+    expect(f.alarm()).toBeLessThan(Date.now() + 16_000);
+  } finally { held.release(); }
   await Promise.all(f.pending);
   expect(f.row()).toBeNull();
-  expect(f.values.has('archive')).toBe(false);
 });
 
 test('missing version metadata is stored as null without losing the final archive', async () => {
-  const f = await fixture(undefined, undefined, {}, archiveDatabase(), { metadata: false });
+  const f = await fixture({ metadata: false });
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   await f.session.fetch(request('end'));

@@ -1,5 +1,8 @@
-import { skills, type Evidence, type SessionSnapshot } from '../../../core/simulator/types';
+import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
+import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
+import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
 import type { SentCue } from '../../../core/simulator/state';
+import { LIVE_MODEL } from './live.server';
 
 export type ArchiveProvenance = {
   model: string;
@@ -17,62 +20,30 @@ export type ArchiveWrite = {
   state: 'partial' | 'final'; capturedAt: number; snapshot: SessionSnapshot; provenance: ArchiveProvenance; cues: SentCue[];
 };
 
-function evidence(value: Evidence | null) {
-  return value && { entryId: value.entryId, speaker: value.speaker, text: value.text };
-}
-
-function evaluation(snapshot: SessionSnapshot) {
-  const value = snapshot.evaluation;
-  if (!value) return null;
+export async function archiveProvenance(env: Env, snapshot: SessionSnapshot): Promise<ArchiveProvenance> {
+  const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
+  const digest = async (text: string) => {
+    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 12);
+  };
+  const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
   return {
-    revision: value.revision,
-    skills: Object.fromEntries(skills.map(({ id }) => {
-      const reading = value.skills[id];
-      return [id, {
-        value: reading.value,
-        distribution: reading.distribution && Object.fromEntries(Object.entries(reading.distribution).filter(([, score]) => typeof score === 'number')),
-        evidence: evidence(reading.evidence),
-      }];
-    })),
-    objectives: value.objectives.map(item => ({
-      id: item.id, probability: item.probability, achieved: item.achieved, evidence: evidence(item.evidence),
-    })),
-    hint: value.hint,
-    hintId: value.hintId ?? null,
-    concern: value.concern,
-    model: value.model,
-    durationMs: value.durationMs,
+    model: LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
+    actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
+    directorEnabled: env.SIMULATOR_DIRECTOR_ENABLED === 'true',
   };
 }
 
-/** The archive stores only the public session projection and selected provenance. */
+/** SessionSnapshot is the public projection built by the session owner, not raw provider output. */
 export async function writeArchive(db: D1Database, value: ArchiveWrite): Promise<void> {
   const { snapshot, capturedAt, state, provenance, cues } = value;
-  const transcript = snapshot.transcript.map(item => ({
-    id: item.id, speaker: item.speaker, text: item.text, startMs: item.startMs, endMs: item.endMs,
-  }));
-  const source = {
-    model: provenance.model,
-    voice: provenance.voice,
-    rubricVersion: provenance.rubricVersion,
-    simulatorVersion: provenance.simulatorVersion,
-    actorDigest: provenance.actorDigest,
-    openingDigest: provenance.openingDigest,
-    workerId: provenance.workerId,
-    workerTag: provenance.workerTag,
-    directorEnabled: provenance.directorEnabled,
-  };
-  const sentCues = cues.map(cue => ({ id: cue.id, revision: cue.revision, sentAt: cue.sentAt }));
-  const score = evaluation(snapshot);
   const columns = [
     snapshot.id, snapshot.scenarioId, snapshot.clientId, snapshot.startedAt, capturedAt,
     state === 'final' ? capturedAt : null, state, snapshot.status, snapshot.finalization,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
-    JSON.stringify(transcript), score ? JSON.stringify(score) : null, JSON.stringify(source), JSON.stringify(sentCues),
+    JSON.stringify(snapshot.transcript), snapshot.evaluation ? JSON.stringify(snapshot.evaluation) : null,
+    JSON.stringify(provenance), JSON.stringify(cues),
   ];
-  const guard = state === 'partial'
-    ? "WHERE simulator_attempts.archive_state = 'partial' AND excluded.updated_at >= simulator_attempts.updated_at"
-    : '';
   const result = await db.prepare(`
     INSERT INTO simulator_attempts (
       id, scenario_id, client_id, started_at, updated_at, ended_at, archive_state,
@@ -88,7 +59,9 @@ export async function writeArchive(db: D1Database, value: ArchiveWrite): Promise
       message = excluded.message, transcript_json = excluded.transcript_json,
       evaluation_json = excluded.evaluation_json, provenance_json = excluded.provenance_json,
       cues_json = excluded.cues_json
-    ${guard}
+    WHERE excluded.archive_state = 'final' OR (
+      simulator_attempts.archive_state = 'partial' AND excluded.updated_at >= simulator_attempts.updated_at
+    )
   `).bind(...columns).run();
   if (!result.success) throw new Error('Simulator archive write failed.');
 }

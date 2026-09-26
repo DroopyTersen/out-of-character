@@ -110,3 +110,26 @@ Verification used saved model results and local browser loopback. Prompts, rubri
 - Lead pass: complete, committed as `586af05`.
 - Claude pass: complete and independently reviewed.
 - Final acceptance: complete.
+
+## Archive and pace follow-up review
+
+Scope: `b75b636..bc8f3da`. The lead and Claude Opus 5.5 independently used the thermo-nuclear review skill in parallel. The source of the separate catalog expansion was excluded from the audit; the final check also exercises that stable combined working tree. Neither review found a reason to rewrite the session lifecycle or add reliability machinery.
+
+Applied findings:
+
+- Removed the archive's second field-by-field reconstruction of transcripts, public scores, provenance and cue records. The existing evaluator and session owner already construct these explicit public objects before either browser delivery or archival. The archive now persists those canonical values directly, deleting duplicate serialization rules and their artificial cast-based input tests.
+- Moved prompt hashes and model/release provenance into the archive module. The session owner still freezes the snapshot before asynchronous work and catches capture/write failures. Removed redundant conversion of the string-valued director flag.
+- Replaced interpolated SQL update guards with one static predicate. Partial writes update only partial rows with an equal or earlier capture time; finals still supersede partials and are idempotent.
+- Replaced the session fixture's five positional arguments with named options. Removed tests for the deleted staging key and the unused failure-count parameter.
+- Strengthened the failure test instead of deleting unconfirmed-provider coverage: hold the final D1 write pending, require End and its provider-close alarm to complete before release, then fail that write. The separate delayed-partial test remains. The archive integration tests now check exact transcript/evaluation equality with the public debrief and absence of raw answers, usage internals, capabilities, provider IDs and private prompt/cue text.
+
+Kept the short explicit column mapping at the external Wrangler JSON export boundary; changing that contract saves little. Kept the two small SQLite boundary adapters local to their tests, since extracting a configurable helper would add more indirection. No digest cache, retry, outbox, new state machine or new module was introduced. Production session/archive code is 37 lines smaller. Both files remain well below 1,000 lines.
+
+Verification:
+
+- Focused archive/session/export suite: 36 tests, 145 assertions, zero failures; typecheck passes. Receipts: `output/simulator-archive-quality-tests.log`, `output/simulator-archive-quality-types.log`.
+- Differential SQLite check: the committed `bc8f3da` writer and simplified writer produce structurally identical rows across all 49 recorded browser snapshots, including actual transcripts and scores. Receipt: `output/simulator-archive-quality-comparison.json`.
+- The full combined `bun run check` passes: 130 tests / 4,230 assertions, typecheck, production builds, the 15-asset privacy scan and deployment dry run. Receipt: `output/simulator-archive-quality-check.log`.
+- Opus reviewed the four changed code/test files again after the fixes and found no defects or unnecessary complexity. It accepted the stronger pending-write test and the retained CLI mapping. Optional shorthand formatting was left alone.
+
+These checks use recorded data and local implementations, with no additional paid voice calls or deployment. Production D1 setup and release still await restored Cloudflare authentication.

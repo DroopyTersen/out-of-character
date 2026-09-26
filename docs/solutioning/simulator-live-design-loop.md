@@ -84,4 +84,54 @@ Fresh [desktop](../../output/simulator-ui-iteration-3-live-before/live-1672.png)
 
 ## Iteration 4 — Opus
 
-Pending.
+### Before
+
+Fresh [desktop](../../output/simulator-ui-iteration-4-before/live-1672.png) and [phone](../../output/simulator-ui-iteration-4-before/live-390.png), plus 1024 and 320 px. Alternate states are in `output/simulator-ui-iteration-4-before/alt/live-*` at 1672/390/320:
+- connecting and ending
+- delayed skills and unavailable feedback
+- muted stage
+- expanded evidence
+- turn 0
+
+The same folder has the animated and reduced voice states. Root's independent audio review (`output/simulator-voice-label-audit.mjs`) found a mute shift for two clients. `alt/voice-label-measure.json` reproduces it in the voice workbench for all three clients at 1440/390/320. `alt/voice-live-measure.json` reproduces it for each live-story conversation at 390/320.
+
+### Critique and changes
+
+| Finding | Disposition |
+| --- | --- |
+| Observed: when feedback was unavailable, the hint still said "Your next hint will appear here", beside 0/5 objectives and seven dashes. Only a 12 px header label explained that nothing was being assessed. | **Applied.** When unavailable and without a concern, the hint says live feedback is unavailable, that the trainee should keep going, and that hints and objectives update if it returns. That matches `session.ts`, where a retry or new dialogue can recover feedback. The status region, concern priority and ending copy from iteration 3 are unchanged. |
+| Observed (root's audit): the label column is `min-content`, so "You · muted" widened it whenever it was wider than the client name. Muting moved the spectrum 2.9 px for Avery and 2.4 px for Casey at 1440/390, and 2.6/2.2 px at 320. Morgan's name is wider, so Morgan did not shift. Iteration 2 claimed a fixed column but measured only Morgan. | **Applied.** A zero-height hidden "muted" line reserves the width of the muted label, so the column already fits it while listening. There is no new state, timer or fixed pixel width. |
+| Judgment: the speaker control is icon-only, while the blocked-playback notice says "Use Enable audio". | **Still deferred.** The reasons from iteration 2 stand: it needs session state to reveal the label only after playback is blocked. |
+| Judgment: "Mic on" appears disabled while connecting. | **Not changed.** The disabled state is truthful and shows the setting that will apply. |
+| Judgment: unobserved skill rows remain expandable. | **Not changed.** They open the skill description and "Not enough relevant evidence yet", which explains the dash. |
+
+A keyboard focus audit tabbed through all 15 live-screen focusables at 1672/390 and found no outline clipped by an overflow ancestor.
+
+Files: `feedback.tsx` (an optional status prop on the hint), `conversation.tsx` (passes it through) and `simulator.css` (one voice-key rule). There are no transport, session, scoring or director changes.
+
+### After and verification
+
+[Desktop](../../output/simulator-ui-iteration-4-after/live-1672.png) · [Phone](../../output/simulator-ui-iteration-4-after/live-390.png) · [320 px](../../output/simulator-ui-iteration-4-after/live-320.png) · [Unavailable, phone](../../output/simulator-ui-iteration-4-after/alt/live-unavailable-390.png) · [Casey muted, live 320](../../output/simulator-ui-iteration-4-after/alt/voice-live-casey-muted-320.png). The default captures are byte-identical to before: the default story shows Morgan with recorded feedback.
+
+Screenshots viewed:
+- unavailable before/after at 390
+- the muted voice key for Avery and Casey at 320
+
+Measurements, mute shift before → after:
+
+| Client | 1440 | 390 | 320 |
+| --- | --- | --- | --- |
+| Morgan | 0 → 0 | 0 → 0 | 0 → 0 |
+| Avery | 2.91 → 0 | 2.91 → 0 | 2.63 → 0 |
+| Casey | 2.39 → 0 | 2.39 → 0 | 2.16 → 0 |
+
+The table is the voice workbench. The live stage matches it: Casey 2.39 → 0 at 390 and 2.16 → 0 at 320, with Morgan at 0.
+
+- There is no height or trainee-lane change.
+- All 24 bands stay inside the spectrum.
+- The narrowest case is Morgan in the 320 px live stage: a 107.6 px spectrum with 2.56 px bands, unchanged. Casey's live spectrum at 320 narrows from 117.8 to 115.7 px, with bands of at least 2.89 px.
+
+Checks:
+- `report-live.json`: 4/4 captures with no overflow, errors or API calls. The alternate-state and voice runs are clean.
+- Typecheck passes.
+- Workshop acceptance: `output/simulator-ui-iteration-4-live-workshop/report.json`, 8/8.

@@ -14,9 +14,9 @@ export function SimulatorObjectives({ scenario, evaluation }: { scenario: Scenar
   })}</ol></section>;
 }
 
-export function SimulatorHint({ evaluation, phase = 'live' }: { evaluation: TraineeEvaluation | null; phase?: 'connecting' | 'live' | 'ending' }) {
+export function SimulatorHint({ evaluation, phase = 'live', status }: { evaluation: TraineeEvaluation | null; phase?: 'connecting' | 'live' | 'ending'; status?: FeedbackStatus }) {
   const reduced = useReducedMotion();
-  const text = evaluation?.concern ?? (phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : evaluation?.hint ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : 'Listen for what matters to the client. Your next hint will appear here.'));
+  const text = evaluation?.concern ?? (phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : evaluation?.hint ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : status === 'unavailable' ? 'Live feedback is unavailable right now. Keep going; hints and objectives will update if it returns.' : 'Listen for what matters to the client. Your next hint will appear here.'));
   return <section className={`sim-hint ${evaluation?.concern ? 'concern' : ''}`} role="status" aria-atomic="true"><h2><Lightbulb size={18} />{phase === 'ending' ? 'Session review' : 'Live hint'}</h2><AnimatePresence mode="wait" initial={false}><motion.p key={text} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .18 }}>{text}</motion.p></AnimatePresence></section>;
 }
 

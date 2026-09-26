@@ -27,7 +27,7 @@ Then run four screenshot-driven design iterations independently for each main sc
 | Engine round 2 | Complete | [Scenario critique and six voice probes](simulator-engine-round-2.md) |
 | Engine round 3 | Complete | [Evidence, retry, classification and spoken-End regressions](simulator-engine-round-3.md) |
 | Selection: four iterations | Complete | [Selection log](simulator-selection-design-loop.md) |
-| Live practice: four iterations | 3/4 | [Live practice log](simulator-live-design-loop.md) |
+| Live practice: four iterations | Complete | [Live practice log](simulator-live-design-loop.md) |
 | Debrief: four iterations | 3/4 | [Debrief log](simulator-debrief-design-loop.md) |
 | Jev lab: four iterations | 3/4 | [Lab log](simulator-judging-design-loop.md) |
 | Final acceptance | Pending | Full gate, browser regressions, review dispositions and clean committed tree |

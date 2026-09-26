@@ -203,6 +203,8 @@ p.sim-lab-check-details { padding: 12px 0; }
 .sim-voice-key span:first-child { grid-row: 1; align-self: end; color: var(--voice-client); }
 .sim-voice-key span:last-child { grid-row: 2; align-self: start; margin-top: 3px; color: var(--voice-trainee); }
 .sim-voice[data-muted=true] .sim-voice-key span:last-child { color: #efba57; }
+/* Reserve the muted label's width so the spectrum does not move when mute toggles. */
+.sim-voice-key span:last-child::after { content: 'muted'; display: block; height: 0; visibility: hidden; }
 .sim-voice-workbench { max-width: 460px; margin: 30px auto; padding: 24px; text-align: center; border: 1px solid #28536e; }
 .sim-raw-judgments { max-height: 440px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: #03151f; font-size: 11px; line-height: 1.6; }
 @keyframes sim-connect { 50% { opacity: .25; transform: scaleY(5); } }

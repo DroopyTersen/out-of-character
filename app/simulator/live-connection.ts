@@ -1,8 +1,9 @@
 import type { SessionSnapshot } from '../../core/simulator/types';
+import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
 
 type Callbacks = {
   snapshot: (value: SessionSnapshot) => void;
-  levels: (input: number, output: number) => void;
+  levels: (value: AudioLevels) => void;
   error: (message: string, fatal?: boolean) => void;
 };
 class SessionRequestError extends Error {
@@ -87,7 +88,10 @@ export class LiveConnection {
       if (this.disposed || this.ending) return;
       this.callbacks.snapshot(await this.request('ready') as SessionSnapshot);
       this.poll();
-      this.meterTimer = setInterval(() => this.callbacks.levels(this.level(this.inputMeter), this.level(this.outputMeter)), 100);
+      this.meterTimer = setInterval(() => {
+        const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
+        this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
+      }, 80);
     } catch (error) {
       if (this.disposed || this.ending) return;
       const message = error instanceof DOMException && error.name === 'NotAllowedError' ? 'Microphone access was denied. Allow access in your browser, then try again.' : error instanceof Error ? error.message : 'The voice connection could not be established.';
@@ -97,15 +101,10 @@ export class LiveConnection {
 
   private meter(stream: MediaStream) {
     const meter = this.context!.createAnalyser();
-    meter.fftSize = 256;
+    meter.fftSize = 1024;
+    meter.smoothingTimeConstant = .65;
     this.context!.createMediaStreamSource(stream).connect(meter);
     return meter;
-  }
-  private level(meter?: AnalyserNode) {
-    if (!meter) return 0;
-    const data = new Uint8Array(meter.fftSize);
-    meter.getByteTimeDomainData(data);
-    return Math.min(1, Math.sqrt(data.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / data.length) * 5);
   }
 
   private poll() {
@@ -172,6 +171,6 @@ export class LiveConnection {
     this.audio.pause();
     this.audio.srcObject = null;
     void this.context?.close().catch(() => {});
-    this.callbacks.levels(0, 0);
+    this.callbacks.levels(silentLevels);
   }
 }

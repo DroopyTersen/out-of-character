@@ -6,7 +6,7 @@ export const links = () => [
   { rel: "icon", type: "image/png", href: "/logo-consultant-masks.png" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" as const },
-  { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Silkscreen&display=swap" },
+  { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

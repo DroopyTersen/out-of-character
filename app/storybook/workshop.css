@@ -92,3 +92,7 @@
 
 .workshop-judge-description { border-top: 1px solid #344846; margin-top: 20px; padding-top: 16px; }
 .workshop-judge-description h3 { color: #8fe3ca; font-size: 15px; margin: 0 0 10px; }
+
+.workshop-return { background: transparent; border: 0; color: #9ebbd0; padding: 8px 0; font-size: 11px; min-height: 44px; }
+.screen-only { padding: 0 30px; }.screen-only .workshop-layout { display: block; max-width: 1620px; }.screen-only .workshop-sidebar, .screen-only .workshop-heading, .screen-only .workshop-controls, .screen-only .sim-collection-note { display: none; }.screen-only .workshop-main { padding: 0; }.screen-only .workshop-preview-scroll { overflow: visible; }.screen-only .workshop-preview { width: 100% !important; padding: 0; }.screen-only > .game-header { padding-inline: 0; }
+@media (max-width: 720px) { .screen-only { padding: 0 16px; } }

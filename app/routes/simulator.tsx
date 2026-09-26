@@ -28,7 +28,7 @@ export default function Simulator() {
   }, [session.phase]);
   const scenario = catalog.scenarios.find(item => item.id === scenarioId)!;
   const client = catalog.clients.find(item => item.id === clientId)!;
-  return <div className="app-shell"><GameHeader simulator /><main className="game-main">
+  return <div className="app-shell simulator-shell"><GameHeader simulator /><main className="game-main">
     {session.phase === 'selection' ? <SimulatorSelection catalog={catalog} scenarioId={scenarioId} clientId={clientId} onScenario={setScenarioId} onClient={setClientId} onStart={() => session.start(scenarioId, clientId)} enabled={enabled} error={session.error} />
       : session.phase === 'debrief' ? <SimulatorDebrief scenario={scenario} client={client} snapshot={session.snapshot} onRetry={() => session.start(scenarioId, clientId)} onChoose={session.reset} error={session.error} />
         : <SimulatorConversation scenario={scenario} client={client} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, (now - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} error={session.error} />}

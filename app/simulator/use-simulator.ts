@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { LiveConnection } from './live-connection';
+import { silentLevels } from './audio-levels';
 
 export function useSimulator() {
   const [phase, setPhase] = useState<'selection' | 'connecting' | 'live' | 'ending' | 'debrief'>('selection');
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
-  const [levels, setLevels] = useState({ input: 0, output: 0 });
+  const [levels, setLevels] = useState(silentLevels);
   const connection = useRef<LiveConnection | null>(null);
   const generation = useRef(0);
   useEffect(() => {
@@ -29,7 +30,7 @@ export function useSimulator() {
         setSnapshot(value);
         setPhase(value.status === 'ended' || value.status === 'interrupted' ? reachedLive ? 'debrief' : 'selection' : value.status);
       },
-      levels: (input, output) => { if (active()) setLevels({ input, output }); },
+      levels: value => { if (active()) setLevels(value); },
       error: (message, fatal) => { if (active()) { setError(message); if (fatal) setPhase(reachedLive ? 'debrief' : 'selection'); } },
     });
     connection.current = live;
@@ -46,7 +47,7 @@ export function useSimulator() {
   function reset() {
     generation.current++;
     connection.current?.dispose(); connection.current = null;
-    setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels({ input: 0, output: 0 });
+    setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels(silentLevels);
   }
   function toggleMute() { setMuted(value => { connection.current?.mute(!value); return !value; }); }
   return { phase, snapshot, error, muted, levels, start, end, reset, toggleMute, playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };

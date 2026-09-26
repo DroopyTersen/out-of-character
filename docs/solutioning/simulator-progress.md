@@ -25,8 +25,8 @@ Checkpoints 0–4 reviewed on `simulator-mvp`. The goal is active. Live ownershi
 | 2 — Live session | Reviewed | Opus 5.5 review passed with conditions, addressed below. Nine session lifecycle tests and four API tests pass. Real WebRTC audio/transcripts, live Jev updates, provider closure, and local media cleanup pass. |
 | 3 — Complete simulator | Reviewed | Production selection/live/debrief components and four DIY workshop stories implemented. Seven recorded prefix evaluations support replay. Workshop browser acceptance passes 8/8 flows at desktop and phone widths, with no microphone/API requests or page errors. |
 | 4 — Core acceptance | Reviewed | Final gate passed: 103 tests / 3,709 assertions, typecheck, builds, bundle scan, Wrangler dry run. Accepted browser runs pass 8/8 workshop and 3/3 failures. Opus review passed; disposition below. |
-| 5 — Visual iteration one | Pending | Selection, live/audio/coaching, debrief, and lab before/after capture; expressive actual-audio display and replayable states. |
-| 6 — Visual iteration two and final acceptance | Pending | Reinspect all major elements on desktop/phone, refine, capture motion and reduced motion, repeat relevant checks and Opus review. |
+| 5 — Visual iteration one | Reviewed | Selection, live/audio/coaching, debrief, and lab before/after capture; expressive actual-audio display and replayable states. |
+| 6 — Visual iteration two and final acceptance | In progress | Reinspect all major elements on desktop/phone, refine, capture motion and reduced motion, repeat relevant checks and Opus review. |
 
 ## Verification and remaining gaps
 
@@ -109,3 +109,15 @@ No deployment, merge, public enablement, or infrastructure change has been perfo
 Opus 5.5 passed the core acceptance review with no blocking code findings. Accepted documentation clarifications: the direct role-play/cue probes bypass the production session owner and its freshness/cooldown scheduler; the final fixed-audio smoke did not contain a client filler during trainee speech, so the backchannel case is covered by the unit regression. All paid probes have finite deadlines and cleanup. Core evidence/scripts are committed in this checkpoint.
 
 The user subsequently expanded acceptance to require two visual iteration rounds and a dedicated speaking display. Those are checkpoints 5–6; core approval does not complete the active goal. The approved selection/live mockups are now the fidelity target for typography, proportions, portrait identities, spacing and colors, adapted to screen size.
+
+## Visual iteration one
+
+Mockup comparison and scoped critique are recorded in [design iterations](simulator-design-iterations.md). Dedicated transparent client portraits replace unrelated game sprites. The live screen has stronger type and feedback hierarchy, a real frequency-driven dual audio display, and a compact phone stage. Selection uses compact rows and a selected-client portrait; debrief has a portrait/outcome/count banner. The lab caps expanded JSON. A fifth simulator workshop story replays all audio states with intensity and reduced-motion behavior. Typecheck passes; browser/animation verification and Opus review are in progress.
+
+## Checkpoint 5 review disposition
+
+Opus 5.5 passed visual iteration one with conditions and independently ran 103 tests / 3,709 assertions. No audio lifecycle regression was found. Required fixes are applied: iteration two uses full page and viewport captures in Screen only mode (including the header), production reduced motion now uses steady channel indicators with no reactive glow or bar movement, and the debrief says Attempt ended without reusing the scenario pitch as an outcome.
+
+Additional fixes: the workshop return moved into header flow; duplicate navigation was removed; connecting bars grow upward; breakpoints are consolidated; client arrows have 44-pixel targets and correct endpoint availability. Shared-strength evidence is displayed once with both labels. A synthetic browser analyser check distinguished 440 Hz (band 8) and 1800 Hz (band 17), with zero before/after. The audio story passes all seven states at 390/1440 in normal and reduced motion, including pause/reset/replay, with zero API/microphone calls. An initial reduced-motion hydration mismatch in the description was fixed by using static copy. The complete workshop still passes 8/8.
+
+Parallel read-only audit found no new material privacy or paid-session lifecycle bug. Independent responsive inspection found a 4-pixel header overflow at 320, fixed-button overlap, awkward mobile session wrapping and small control targets; iteration two addresses them and will recheck the exact widths.

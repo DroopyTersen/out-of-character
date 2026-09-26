@@ -10,7 +10,7 @@ const results = [];
 const snapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 600, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
 
 try {
-  for (const mode of ['explicit-end', 'hard-failure', 'dispose']) {
+  for (const mode of ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end']) {
     const context = await browser.newContext();
     const page = await context.newPage();
     const pageErrors = [];
@@ -50,6 +50,7 @@ try {
 
     let id;
     let releaseEnd;
+    let endRequests = 0;
     let endSeen;
     const endRequest = new Promise(resolve => { endSeen = resolve; });
     await page.route('**/api/simulator/sessions**', async route => {
@@ -62,6 +63,7 @@ try {
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sdp, snapshot: snapshot(id, 'connecting') }) });
       }
       if (action === 'end') {
+        endRequests++;
         endSeen();
         await new Promise(resolve => { releaseEnd = resolve; });
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
@@ -78,7 +80,7 @@ try {
         void audit.connection.start('sharepoint', 'morgan');
       });
       await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'live'), null, { timeout: 20_000 });
-      if (mode === 'explicit-end') {
+      if (mode === 'explicit-end' || mode === 'dispose-during-end') {
         await page.evaluate(() => { void window.__connectionAudit.connection.end(); });
       } else if (mode === 'dispose') {
         await page.evaluate(() => { window.__connectionAudit.connection.dispose(); });
@@ -92,23 +94,35 @@ try {
           delete peer.connectionState;
         });
       }
+      await page.waitForTimeout(150);
+      const early = await page.evaluate(() => {
+        const audit = window.__connectionAudit;
+        return { tracksSilent: audit.tracks.every(track => !track.enabled || track.readyState === 'ended'), contextsClosed: audit.contexts.every(context => context.state === 'closed'), peerOpen: audit.peers.every(peer => peer.signalingState !== 'closed') };
+      });
+      const endDuringDrain = endRequests;
+      if (mode === 'dispose-during-end') await page.evaluate(() => window.__connectionAudit.connection.dispose());
       await Promise.race([endRequest, new Promise((_, reject) => setTimeout(() => reject(new Error('No /end request.')), 5000))]);
-      await page.waitForTimeout(1200); // HTTP /end is still held deliberately.
+      await page.waitForTimeout(3200); // HTTP /end is still held beyond the resource deadline.
       const pending = await page.evaluate(() => {
         const audit = window.__connectionAudit;
         return { tracksEnded: audit.tracks.every(track => track.readyState === 'ended'), peersClosed: audit.peers.every(peer => peer.signalingState === 'closed'), contextsClosed: audit.contexts.every(context => context.state === 'closed'), fatal: audit.errors.some(error => error.fatal), terminal: audit.snapshots.some(item => item.status === 'ended') };
       });
       releaseEnd();
-      if (mode !== 'dispose') await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'ended'), null, { timeout: 10_000 });
+      const disposed = mode.startsWith('dispose');
+      if (!disposed) await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'ended'), null, { timeout: 10_000 });
       else await page.waitForTimeout(200);
       const settled = await page.evaluate(() => ({ terminal: window.__connectionAudit.snapshots.at(-1)?.status === 'ended', fatal: window.__connectionAudit.errors.some(error => error.fatal) }));
       const checks = {
+        microphoneAndPlaybackSilentPromptly: early.tracksSilent && early.contextsClosed,
+        healthyPeerDrainsBeforeClose: mode !== 'explicit-end' && mode !== 'dispose-during-end' || early.peerOpen,
+        closureRequestStartsPromptly: endDuringDrain === 1,
         localCleanupBeforeHttpEnd: pending.tracksEnded && pending.peersClosed && pending.contextsClosed,
         fatalBeforeHttpEnd: mode !== 'hard-failure' || pending.fatal,
-        terminalSnapshotAfterHttpEnd: mode === 'dispose' ? !settled.terminal : settled.terminal,
+        terminalSnapshotAfterHttpEnd: disposed ? !settled.terminal : settled.terminal,
         fatalAfterHttpEnd: mode !== 'hard-failure' || settled.fatal,
+        oneClosureRequest: endRequests === 1,
       };
-      results.push({ mode, pass: Object.values(checks).every(Boolean) && !pageErrors.length, checks, pending, settled, pageErrors });
+      results.push({ mode, pass: Object.values(checks).every(Boolean) && !pageErrors.length, checks, early, endDuringDrain, pending, settled, pageErrors });
     } catch (error) {
       results.push({ mode, pass: false, error: error.message, pageErrors });
     } finally {

@@ -3,6 +3,7 @@ import { skills } from '../../core/simulator/types';
 import { readTraineeAnswers } from './evaluate.server';
 import { getScenario } from './scenarios.server';
 import { simulatorFixtures } from './fixtures';
+import { simulatorChallenges } from './challenge-fixtures';
 
 // Only the paid, probabilistic provider result is substituted. Parsing, public
 // evidence projection, and outcome eligibility use the production implementation.
@@ -33,12 +34,18 @@ test('feedback quotes source text and leaves unavailable or wrong-speaker eviden
   expect(result.objectives.find(item => item.id === 'impact')!.achieved).toBe(false);
   expect(result.hint).toBeNull();
 });
-test('material uncorrected overpromises cannot produce a successful outcome', () => {
+test('an independent bounded agreement can coexist with a concern about another claim', () => {
   const raw = answers();
   raw.mistake = { type: 'boolean', probability: .99 };
-  const result = readTraineeAnswers(getScenario('sharepoint'), simulatorFixtures[0]!.transcript, raw);
-  expect(result.objectives.find(item => item.id === 'next-step')!.achieved).toBe(false);
+  raw['objective:next-step:evidence'] = { type: 'choice', choice: 'p5' };
+  const transcript = simulatorChallenges.find(item => item.id === 'challenge-independent-agreement')!.transcript;
+  const result = readTraineeAnswers(getScenario('sharepoint'), transcript, raw);
+  expect(result.objectives.find(item => item.id === 'next-step')!.achieved).toBe(true);
+  expect(result.objectives.find(item => item.id === 'next-step')!.evidence?.text).toBe(transcript[4]!.text);
   expect(result.concern).not.toBeNull();
+  // The agreement still needs its own positive judgment; a concern grants no credit.
+  raw['objective:next-step'] = { type: 'boolean', probability: .1 };
+  expect(readTraineeAnswers(getScenario('sharepoint'), transcript, raw).objectives.find(item => item.id === 'next-step')!.achieved).toBe(false);
 });
 test('a trainee proposal cannot supply client agreement or a discovered fact, and latched goals cannot hint again', () => {
   const raw = answers();

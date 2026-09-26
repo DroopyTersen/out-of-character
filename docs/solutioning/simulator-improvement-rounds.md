@@ -25,7 +25,7 @@ Then run four screenshot-driven design iterations independently for each main sc
 | --- | --- | --- |
 | Engine round 1 | Complete | `bfe6a1e`; Opus accepted cleanup and stale-feedback changes |
 | Engine round 2 | Complete | [Scenario critique and six voice probes](simulator-engine-round-2.md) |
-| Engine round 3 | In progress | Evidence integrity, bounded retry and classification counterexamples |
+| Engine round 3 | Complete | [Evidence, retry, classification and spoken-End regressions](simulator-engine-round-3.md) |
 | Selection: four iterations | Pending | Separate screen log and comparable captures |
 | Live practice: four iterations | Pending | Includes audio, feedback and alternate states |
 | Debrief: four iterations | Pending | Includes incomplete and unsuccessful attempts |
@@ -81,3 +81,5 @@ Review adjustments kept bargaining conditional, preserved truthful responses to 
 6. Volunteered discoveries and earlier demonstrated behaviors counting despite later poor performance are intentional. Poor listening and withdrawn agreements affect their own readings. A second confirmation requirement for every objective would change that product behavior and add latency; defer it.
 
 The challenge suite remeasured after round-2 scenario changes is still **42/48** (`output/simulator-engine-r3-baseline.json`). Preserve this baseline and validate the revised rubric on the unchanged challenge suite, previous suites and sealed fresh cases.
+
+Round 3 completed with Opus review and fixes for its concrete findings. Normal End now mutes immediately and closes local resources within three seconds while the server preserves the last trainee words and excludes unheard client replies. The same-WAV after probe passes. See the [round-3 log](simulator-engine-round-3.md) for final suite counts, preserved classification misses, the disputed director fixture, and the accepted latching/segmentation limits. The standard workshop recordings now reflect the final v4 rubric, including the remaining holdout failure.

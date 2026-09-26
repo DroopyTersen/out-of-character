@@ -4,11 +4,11 @@ import { skills } from './types';
 export type TranscriptDelta = { speaker: TranscriptEntry['speaker']; text: string; startMs: number; endMs: number };
 
 /** Arrival order preserves overlapping speakers; timestamps describe approximate audio time. */
-export function appendTranscript(entries: TranscriptEntry[], delta: TranscriptDelta): TranscriptEntry[] {
+export function appendTranscript(entries: TranscriptEntry[], delta: TranscriptDelta, frozenIds?: ReadonlySet<string>): TranscriptEntry[] {
   if (!delta.text || !Number.isFinite(delta.startMs) || !Number.isFinite(delta.endMs) || delta.startMs < 0 || delta.endMs < delta.startMs) return entries;
   const last = entries.findLast(entry => entry.speaker === delta.speaker);
   const replied = last && entries.some(entry => entry.speaker !== delta.speaker && entry.startMs >= last.endMs);
-  if (last && !replied && delta.startMs - last.endMs <= 2000 && last.text.length + delta.text.length <= 1200) {
+  if (last && !frozenIds?.has(last.id) && !replied && delta.startMs - last.endMs <= 2000 && last.text.length + delta.text.length <= 1200) {
     return entries.map(entry => entry.id === last.id ? { ...last, text: last.text + delta.text, endMs: Math.max(last.endMs, delta.endMs) } : entry);
   }
   return [...entries, { id: `p${entries.length + 1}`, speaker: delta.speaker, text: delta.text, startMs: delta.startMs, endMs: delta.endMs }];

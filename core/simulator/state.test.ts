@@ -68,6 +68,14 @@ describe('transcript and feedback behavior', () => {
     entries = appendTranscript(entries, { speaker: 'trainee', text: 'Let us invite Dana.', startMs: 1500, endMs: 2400 });
     expect(entries.map(entry => entry.text)).toEqual(['Who owns it?', 'Dana.', 'Let us invite Dana.']);
   });
+  test('a judged passage remains exact when more speech arrives from the same speaker', () => {
+    let entries: TranscriptEntry[] = [];
+    entries = appendTranscript(entries, { speaker: 'client', text: 'Versions are a problem.', startMs: 0, endMs: 900 });
+    const judgedText = entries[0]!.text;
+    entries = appendTranscript(entries, { speaker: 'client', text: ' Actually, I was mistaken.', startMs: 1000, endMs: 1500 }, new Set(['p1']));
+    expect(entries.map(entry => entry.text)).toEqual([judgedText, ' Actually, I was mistaken.']);
+    expect(entries.map(entry => entry.id)).toEqual(['p1', 'p2']);
+  });
   test('client cues require fresh, probable, nonrepeating evidence and a cooldown', () => {
     const cue = { id: 'earned-progress', probability: .95, revision: 7 };
     expect(canSendCue(cue, null, true, 50_000)).toBe(true);

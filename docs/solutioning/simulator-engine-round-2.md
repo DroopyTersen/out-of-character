@@ -84,7 +84,7 @@ Reports and client audio are in `output/simulator-roleplay-{scope-casey-good,sha
 
 ## Verification
 
-- **Tests:** `bun test ai/simulator core/simulator app/server/simulator` gives 29/29, 124 assertions.
+- **Tests:** `bun test ai/simulator core/simulator app/server/simulator` gave 29/29, 124 assertions on the round-2 files alone. Later round-3 regression results are recorded separately.
 - **Typecheck:** `bunx tsc --noEmit` passes. `react-router typegen` was not run, to avoid touching generated files; routes are unchanged.
 
 ## Limits

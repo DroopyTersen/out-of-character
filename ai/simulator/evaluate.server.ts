@@ -53,7 +53,7 @@ export function readTraineeAnswers(scenario: Scenario, transcript: TranscriptEnt
     const selected = choice(answers, `objective:${objective.id}:evidence`, evidenceIds);
     const evidence = findEvidence(transcript, selected.choice);
     const appropriateSpeaker = evidence?.speaker === (objective.kind === 'behavior' ? 'trainee' : 'client');
-    const achieved = p >= (objective.kind === 'discovery' ? .75 : .85) && !!evidence && appropriateSpeaker && !(objective.kind === 'outcome' && mistake);
+    const achieved = p >= (objective.kind === 'discovery' ? .75 : .85) && !!evidence && appropriateSpeaker;
     return { id: objective.id, probability: p, achieved, evidence: achieved ? evidence : null };
   });
   const selected = choice(answers, 'hint', ['none', ...scenario.objectives.map(item => item.id)]);

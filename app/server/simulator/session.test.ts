@@ -9,17 +9,25 @@ mock.module('cloudflare:workers', () => ({ DurableObject: class {
 } }));
 const { SimulatorSession } = await import('./session');
 afterEach(() => setSystemTime());
+async function waitFor(check: () => boolean) {
+  const deadline = performance.now() + 2500;
+  while (!check()) {
+    if (performance.now() > deadline) throw new Error('Timed out waiting for the session event.');
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+}
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
 const request = (action: string, cap = capability) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(attempt) : undefined });
 
 class ProviderSocket extends EventTarget {
   readyState = 1;
+  holdClose = false;
   sent: Record<string, unknown>[] = [];
   send(text: string) {
     const event = JSON.parse(text);
     this.sent.push(event);
-    if (event.type === 'session.close') queueMicrotask(() => this.emit({ type: 'session.closed', reason: 'close_requested', usage: { seconds: 12 }, session: { instructions: 'private actor brief' } }));
+    if (event.type === 'session.close' && !this.holdClose) queueMicrotask(() => this.emit({ type: 'session.closed', reason: 'close_requested', usage: { seconds: 12 }, session: { instructions: 'private actor brief' } }));
   }
   emit(event: unknown) { this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(event) })); }
   close() { this.readyState = 3; this.dispatchEvent(new Event('close')); }
@@ -64,6 +72,57 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(JSON.stringify(result)).not.toContain('answers');
   expect(f.socket.readyState).toBe(3);
 });
+test('normal End keeps a late trainee tail but excludes an unheard client agreement', async () => {
+  let graded: { speaker: string; text: string }[] = [];
+  const f = await fixture(undefined, undefined, {
+    evaluateTrainee: async input => {
+      graded = input.transcript;
+      const agreement = input.transcript.find(item => item.speaker === 'client' && item.text.includes('I agree'));
+      return { revision: input.revision, skills: emptySkills(), objectives: agreement ? [{ id: 'next-step', achieved: true, probability: .99, evidence: { entryId: agreement.id, speaker: agreement.speaker, text: agreement.text } }] : [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+    },
+  });
+  f.socket.holdClose = true;
+  let ending: Promise<Response> | undefined;
+  try {
+    await f.session.fetch(request('start'));
+    await f.session.fetch(request('ready'));
+    ending = f.session.fetch(request('end'));
+    expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Let us schedule a scoped assessment.', start_ms: 100, end_ms: 900 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'I agree to that next step.', start_ms: 1000, end_ms: 1600 });
+    await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+    const result = await (await ending).json() as Record<string, any>;
+    expect(result.status).toBe('ended');
+    expect(result.finalization).toBe('confirmed');
+    expect(result.transcript.map((item: { speaker: string }) => item.speaker)).toEqual(['trainee']);
+    expect(graded.map(item => item.speaker)).toEqual(['trainee']);
+    expect(result.evaluation.objectives.find((item: { id: string }) => item.id === 'next-step').achieved).toBe(false);
+  } finally {
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+    await ending;
+  }
+}, 10_000);
+test('provider connection loss during explicit End does not replace the completed message', async () => {
+  const f = await fixture();
+  f.socket.holdClose = true;
+  let ending: Promise<Response> | undefined;
+  try {
+    await f.session.fetch(request('start'));
+    await f.session.fetch(request('ready'));
+    ending = f.session.fetch(request('end'));
+    expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
+    await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+    f.socket.emit({ type: 'session.closed', reason: 'connection_lost' });
+    const result = await (await ending).json() as Record<string, any>;
+    expect(result.status).toBe('ended');
+    expect(result.finalization).toBe('confirmed');
+    expect(result.message).toBeNull();
+  } finally {
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+    await ending;
+  }
+}, 10_000);
 test('cancelling during provider creation closes the eventual session', async () => {
   let release!: () => void;
   const f = await fixture(new Promise<void>(resolve => { release = resolve; }));
@@ -155,6 +214,100 @@ test('restart recovery clears an already-closed provider and a lease with no rec
   await unknown.session.alarm();
   expect(values.size).toBe(0);
 });
+
+test('a late same-speaker delta cannot change the passage cited by an objective', async () => {
+  let releaseGrade!: () => void;
+  let gradingStarted!: () => void;
+  let gradingCalls = 0;
+  const started = new Promise<void>(resolve => { gradingStarted = resolve; });
+  const f = await fixture(undefined, undefined, {
+    evaluateTrainee: async input => {
+      if (++gradingCalls === 1) {
+        gradingStarted();
+        await new Promise<void>(resolve => { releaseGrade = resolve; });
+      }
+      const passage = input.transcript[0]!;
+      return { revision: input.revision, skills: emptySkills(), objectives: [{ id: 'capability', achieved: true, probability: .99, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+    },
+  });
+  try {
+    await f.session.fetch(request('start'));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We can help assess document ownership.', start_ms: 0, end_ms: 1000 });
+    await started;
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: ' Actually, I cannot promise that.', start_ms: 1100, end_ms: 1500 });
+    releaseGrade();
+    await Promise.all(f.pending);
+    const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    const evidence = snapshot.evaluation.objectives.find((item: { id: string }) => item.id === 'capability').evidence;
+    expect(snapshot.transcript).toHaveLength(2);
+    expect(evidence.text).toBe(snapshot.transcript.find((item: { id: string }) => item.id === evidence.entryId).text);
+    expect(snapshot.transcript[1].text).toContain('cannot promise');
+  } finally {
+    releaseGrade?.();
+    await f.session.fetch(request('end'));
+  }
+}, 10_000);
+
+test('one transient judging failure retries unchanged dialogue and stops after success', async () => {
+  let calls = 0;
+  const f = await fixture(undefined, undefined, {
+    evaluateTrainee: async input => {
+      if (++calls === 1) throw new Error('Transient failure');
+      return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+    },
+  });
+  try {
+    await f.session.fetch(request('start'));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Who owns the workflow?', start_ms: 0, end_ms: 1000 });
+    setSystemTime(Date.now() + 2000);
+    await waitFor(() => calls === 1);
+    await Promise.all(f.pending);
+    expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).feedbackStatus).toBe('unavailable');
+    setSystemTime(Date.now() + 4000);
+    await waitFor(() => calls === 2);
+    await Promise.all(f.pending);
+    const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    expect(snapshot.feedbackStatus).toBe('current');
+    expect(snapshot.evaluation.revision).toBe(snapshot.revision);
+    setSystemTime(Date.now() + 4000);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    expect(calls).toBe(2);
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
+test('two failed judgments stop retrying until new dialogue earns its own retry', async () => {
+  let calls = 0;
+  const f = await fixture(undefined, undefined, {
+    evaluateTrainee: async input => {
+      if (++calls < 4) throw new Error('Transient failure');
+      return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+    },
+  });
+  try {
+    await f.session.fetch(request('start'));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'What happens today?', start_ms: 0, end_ms: 1000 });
+    setSystemTime(Date.now() + 2000);
+    await waitFor(() => calls === 1);
+    await Promise.all(f.pending);
+    setSystemTime(Date.now() + 4000);
+    await waitFor(() => calls === 2);
+    await Promise.all(f.pending);
+    setSystemTime(Date.now() + 4000);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    expect(calls).toBe(2);
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'How much time does it cost?', start_ms: 4000, end_ms: 4800 });
+    setSystemTime(Date.now() + 2000);
+    await waitFor(() => calls === 3);
+    await Promise.all(f.pending);
+    setSystemTime(Date.now() + 4000);
+    await waitFor(() => calls === 4);
+    await Promise.all(f.pending);
+    expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).feedbackStatus).toBe('current');
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
 
 test('new settled dialogue marks earlier feedback delayed while reassessment is pending', async () => {
   let release!: () => void;

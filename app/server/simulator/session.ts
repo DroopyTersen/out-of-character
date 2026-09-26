@@ -21,8 +21,10 @@ export class SimulatorSession extends DurableObject<Env> {
   private closeReceived: (() => void) | undefined;
   private lastSeen = Date.now();
   private passageUpdatedAt = new Map<string, number>();
+  private judgedPassages = new Set<string>();
   private lastGrade = 0;
   private gradedText = '';
+  private retriedText = '';
   private gradeCalls = 0;
   private grading: Promise<void> | undefined;
   private gradeAbort = new AbortController();
@@ -130,7 +132,7 @@ export class SimulatorSession extends DurableObject<Env> {
       snapshot.finalization = 'confirmed';
       const usage = event.usage as { seconds?: unknown } | undefined;
       if (typeof usage?.seconds === 'number' && Number.isFinite(usage.seconds)) snapshot.usageSeconds = usage.seconds;
-      if (event.reason !== 'close_requested') snapshot.message = event.reason === 'connection_lost' ? 'The voice connection was interrupted.' : 'The voice session ended.';
+      if (event.reason !== 'close_requested' && !this.closing) snapshot.message = event.reason === 'connection_lost' ? 'The voice connection was interrupted.' : 'The voice session ended.';
       this.closeReceived?.();
       if (!this.closing) this.ctx.waitUntil(this.end(event.reason === 'connection_lost'));
       return;
@@ -138,11 +140,13 @@ export class SimulatorSession extends DurableObject<Env> {
     const transcript = transcriptEvent.safeParse(event);
     if (transcript.success) {
       const value = transcript.data;
+      // The trainee cannot hear a reply generated after they end practice.
+      if (snapshot.status === 'ending' && value.type === 'session.output_transcript.delta') return;
       if (value.event_id && this.seenEvents.has(value.event_id)) return;
       if (value.event_id) this.seenEvents.add(value.event_id);
       const next = appendTranscript(snapshot.transcript, {
         speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms,
-      });
+      }, this.judgedPassages);
       // Late deltas may arrive during close. Keep the final grading input valid.
       if (next.length > 240 || next.reduce((sum, item) => sum + item.text.length, 0) > 80_000) return;
       const changed = next.find(entry => !snapshot.transcript.includes(entry));
@@ -187,6 +191,8 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < interval || this.gradeCalls >= 179) return;
     this.lastGrade = now;
     this.gradedText = text;
+    // A quoted source must stay exact, even if more speech arrives during grading.
+    for (const entry of transcript) this.judgedPassages.add(entry.id);
     this.grading = this.grade(transcript, snapshot.revision, false).finally(() => { this.grading = undefined; });
     this.ctx.waitUntil(this.grading);
     if (String(this.env.SIMULATOR_DIRECTOR_ENABLED) === 'true' && !this.directing && now - this.lastDirected >= 8000 && !this.closing) {
@@ -210,6 +216,11 @@ export class SimulatorSession extends DurableObject<Env> {
     } catch {
       if (this.gradeAbort.signal.aborted && !final) return;
       snapshot.feedbackStatus = snapshot.evaluation ? 'delayed' : 'unavailable';
+      // One cadence-limited retry per input, still inside the overall paid-call cap.
+      if (!final && this.retriedText !== this.gradedText) {
+        this.retriedText = this.gradedText;
+        this.gradedText = '';
+      }
       if (final && snapshot.evaluation) {
         const outcomes = getScenario(snapshot.scenarioId).objectives.filter(item => item.kind === 'outcome').map(item => item.id);
         snapshot.evaluation.objectives = snapshot.evaluation.objectives.map(item => outcomes.includes(item.id) ? { ...item, achieved: false, probability: null, evidence: null } : item);
@@ -244,6 +255,7 @@ export class SimulatorSession extends DurableObject<Env> {
 
   private async finish(interrupted: boolean) {
     const snapshot = this.snapshot!;
+    const drain = snapshot.status === 'live' && !interrupted;
     snapshot.status = 'ending';
     clearInterval(this.timer);
     this.gradeAbort.abort();
@@ -251,6 +263,8 @@ export class SimulatorSession extends DurableObject<Env> {
     await this.grading;
     this.gradeAbort = new AbortController();
     if (snapshot.finalization !== 'confirmed') {
+      // The browser sends silence while the final trainee audio/transcript arrives.
+      if (drain) await new Promise(resolve => setTimeout(resolve, 1000));
       if ((!this.socket || this.socket.readyState !== WebSocket.OPEN) && this.lease?.providerId) {
         try { this.socket = await this.paid.attachLive(this.lease.providerId, this.env.OPENAI_API_KEY!); this.listen(this.socket); }
         catch (error) { if (error instanceof LiveSessionGone) snapshot.finalization = 'confirmed'; /* Otherwise the alarm retains closure responsibility. */ }

@@ -28,6 +28,7 @@ export class LiveConnection {
   private requested = false;
   private disposed = false;
   private ending: Promise<void> | undefined;
+  private remoteClosure: Promise<unknown> | undefined;
   private pollFailures = 0;
 
   constructor(private callbacks: Callbacks) { this.audio.autoplay = true; }
@@ -55,6 +56,7 @@ export class LiveConnection {
       this.context = new AudioContext();
       this.inputMeter = this.meter(stream);
       pc.addEventListener('track', event => {
+        if (this.disposed || this.ending) return;
         const remote = event.streams[0] ?? new MediaStream([event.track]);
         this.audio.srcObject = remote;
         void this.audio.play().catch(() => this.callbacks.error('Audio playback was blocked. Use Enable audio to listen.'));
@@ -139,38 +141,50 @@ export class LiveConnection {
 
   end(): Promise<void> {
     if (this.ending) return this.ending;
+    const drain = this.pc?.connectionState === 'connected';
     this.ending = (async () => {
+      // Silence lets the server finish the last utterance during its short grace.
+      // A stalled HTTP response must not retain local resources indefinitely.
+      this.silence();
+      if (!drain) this.release();
+      const closeDeadline = setTimeout(() => this.release(), 3000);
       try {
         if (this.requested) {
-          const snapshot = await this.request('end', undefined, true) as SessionSnapshot;
+          const snapshot = await this.closeRemote() as SessionSnapshot;
           if (!this.disposed && snapshot.id) this.callbacks.snapshot(snapshot);
         }
       } catch {
         if (!this.disposed) this.callbacks.error('The session ended locally; server finalization could not be confirmed.', true);
+      } finally {
+        clearTimeout(closeDeadline);
+        this.release();
       }
     })();
-    // Stop local media immediately. Provider closure and final scoring can finish
-    // through the keepalive request and the server-owned lease after WebRTC closes.
-    try { if (this.channel?.readyState === 'open') this.channel.send(JSON.stringify({ type: 'session.close' })); } catch { /* Server closure remains responsible. */ }
-    this.release();
     return this.ending;
   }
+
+  private closeRemote() { return this.remoteClosure ??= this.request('end', undefined, true); }
 
   /** Page departure cannot wait for finalization; the server lease remains responsible. */
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    if (this.requested && !this.ending) void this.request('end', undefined, true).catch(() => {});
+    if (this.requested) void this.closeRemote().catch(() => {});
     this.release();
   }
 
   private release() {
+    this.silence();
+    this.stream?.getTracks().forEach(track => track.stop());
+    this.pc?.close();
+  }
+
+  private silence() {
+    this.mute(true);
     this.controller.abort();
     clearInterval(this.meterTimer);
     clearTimeout(this.pollTimer);
     clearTimeout(this.disconnectTimer);
-    this.stream?.getTracks().forEach(track => track.stop());
-    this.pc?.close();
     this.audio.pause();
     this.audio.srcObject = null;
     void this.context?.close().catch(() => {});

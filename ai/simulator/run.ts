@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { evaluateClient, evaluateTrainee } from './evaluate.server';
 import { simulatorFixtures, simulatorHoldouts, simulatorValidation } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
+import { simulatorBlindFixtures } from './blind-fixtures';
 import { RUBRIC_VERSION } from './rubric';
 import { SIMULATOR_VERSION } from '../../core/simulator/types';
 import { getScenario } from './scenarios.server';
@@ -14,9 +15,10 @@ const replay = process.argv.includes('--replay');
 const holdout = process.argv.includes('--holdout');
 const validation = process.argv.includes('--validation');
 const challenge = process.argv.includes('--challenge');
+const blind = process.argv.includes('--blind');
 const outputArg = process.argv.find(arg => arg.startsWith('--output='))?.slice(9);
 if (process.argv.includes('--output=')) throw new Error('Provide a path after --output=.');
-const selected = only ? [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges].filter(item => item.id === only) : challenge ? simulatorChallenges : validation ? simulatorValidation : holdout ? simulatorHoldouts : replay ? simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)) : simulatorFixtures;
+const selected = only ? [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures].filter(item => item.id === only) : blind ? simulatorBlindFixtures : challenge ? simulatorChallenges : validation ? simulatorValidation : holdout ? simulatorHoldouts : replay ? simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)) : simulatorFixtures;
 if (!selected.length) throw new Error('Unknown fixture.');
 const rows = [];
 fixtures: for (const fixture of selected) {
@@ -50,7 +52,7 @@ fixtures: for (const fixture of selected) {
   }
   }
 }
-const output = outputArg ?? (only ? `output/simulator-${only}.json` : challenge ? 'output/simulator-challenges.json' : validation ? 'ai/simulator/validation-results.json' : holdout ? 'ai/simulator/holdout-results.json' : replay ? 'ai/simulator/replay.json' : 'ai/simulator/results.json');
+const output = outputArg ?? (only ? `output/simulator-${only}.json` : blind ? 'output/simulator-blind.json' : challenge ? 'output/simulator-challenges.json' : validation ? 'ai/simulator/validation-results.json' : holdout ? 'ai/simulator/holdout-results.json' : replay ? 'ai/simulator/replay.json' : 'ai/simulator/results.json');
 await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), simulatorVersion: SIMULATOR_VERSION, rubricVersion: RUBRIC_VERSION, rows }, null, 2) + '\n');
 if (rows.some(row => row.checks.some(check => !check.passed))) process.exitCode = 1;
 console.log(`Saved ${rows.length} measured fixture results to ${output}.`);

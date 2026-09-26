@@ -1,8 +1,8 @@
 {
   "synthetic": true,
-  "collectedAt": "2026-09-26T04:49:40.853Z",
+  "collectedAt": "2026-09-26T09:55:36.703Z",
   "simulatorVersion": "simulator-v1",
-  "rubricVersion": "simulator-rubric-v3",
+  "rubricVersion": "simulator-rubric-v4",
   "rows": [
     {
       "fixtureId": "validation-capability-then-dismissal",
@@ -25,12 +25,12 @@
             }
           },
           "confidence": {
-            "value": 0.15,
+            "value": 0.23,
             "distribution": {
-              "0": 0.92,
+              "0": 0.88,
               "1": 0.03,
-              "2": 0.05,
-              "3": 0,
+              "2": 0.08,
+              "3": 0.01,
               "4": 0
             },
             "evidence": {
@@ -40,11 +40,11 @@
             }
           },
           "listening": {
-            "value": 0.36,
+            "value": 0.38,
             "distribution": {
-              "0": 0.76,
-              "1": 0.14,
-              "2": 0.1,
+              "0": 0.75,
+              "1": 0.13,
+              "2": 0.12,
               "3": 0,
               "4": 0
             },
@@ -55,10 +55,10 @@
             }
           },
           "rapport": {
-            "value": 0.39,
+            "value": 0.37,
             "distribution": {
-              "0": 0.62,
-              "1": 0.38,
+              "0": 0.64,
+              "1": 0.36,
               "2": 0,
               "3": 0,
               "4": 0
@@ -70,12 +70,12 @@
             }
           },
           "clarity": {
-            "value": 2.1,
+            "value": 2.08,
             "distribution": {
-              "0": 0.04,
-              "1": 0.15,
-              "2": 0.49,
-              "3": 0.32,
+              "0": 0.05,
+              "1": 0.14,
+              "2": 0.5,
+              "3": 0.31,
               "4": 0
             },
             "evidence": {
@@ -85,11 +85,11 @@
             }
           },
           "guidance": {
-            "value": 0.22,
+            "value": 0.34,
             "distribution": {
-              "0": 0.85,
-              "1": 0.07,
-              "2": 0.08,
+              "0": 0.8,
+              "1": 0.08,
+              "2": 0.12,
               "3": 0,
               "4": 0
             },
@@ -108,7 +108,7 @@
         "objectives": [
           {
             "id": "problem",
-            "probability": 0.9,
+            "probability": 0.96,
             "achieved": true,
             "evidence": {
               "entryId": "p1",
@@ -118,7 +118,7 @@
           },
           {
             "id": "impact",
-            "probability": 0.84,
+            "probability": 0.89,
             "achieved": true,
             "evidence": {
               "entryId": "p3",
@@ -128,13 +128,13 @@
           },
           {
             "id": "stakeholder",
-            "probability": 0.11,
+            "probability": 0.15,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "capability",
-            "probability": 0.87,
+            "probability": 0.91,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -149,21 +149,21 @@
             "evidence": null
           }
         ],
-        "hintId": null,
-        "hint": null,
+        "hintId": "next-step",
+        "hint": "Agree what happens next, who owns it, and how it gets scheduled.",
         "concern": null,
         "revision": 5,
         "model": "jev-1.13.0",
-        "durationMs": 246,
+        "durationMs": 263,
         "usage": {
-          "inputTokens": 8335,
-          "outputTokens": 977,
-          "totalTokens": 9312
+          "inputTokens": 9323,
+          "outputTokens": 978,
+          "totalTokens": 10301
         },
         "answers": {
           "skill:credibility:observable": {
             "type": "boolean",
-            "probability": 0.95
+            "probability": 0.96
           },
           "skill:credibility": {
             "type": "score",
@@ -180,8 +180,8 @@
             "type": "choice",
             "choice": "p2",
             "probabilities": {
-              "p4": 0.15,
-              "p2": 0.85
+              "p2": 0.7,
+              "p4": 0.3
             }
           },
           "skill:confidence:observable": {
@@ -190,12 +190,12 @@
           },
           "skill:confidence": {
             "type": "score",
-            "score": 0.15,
+            "score": 0.23,
             "probabilities": {
-              "0": 0.92,
+              "0": 0.88,
               "1": 0.03,
-              "2": 0.05,
-              "3": 0,
+              "2": 0.08,
+              "3": 0.01,
               "4": 0
             }
           },
@@ -203,8 +203,8 @@
             "type": "choice",
             "choice": "p2",
             "probabilities": {
-              "p4": 0.5,
-              "p2": 0.5
+              "p2": 0.52,
+              "p4": 0.48
             }
           },
           "skill:listening:observable": {
@@ -213,11 +213,11 @@
           },
           "skill:listening": {
             "type": "score",
-            "score": 0.36,
+            "score": 0.38,
             "probabilities": {
-              "0": 0.76,
-              "1": 0.14,
-              "2": 0.1,
+              "0": 0.75,
+              "1": 0.13,
+              "2": 0.12,
               "3": 0,
               "4": 0
             }
@@ -226,8 +226,8 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.99,
-              "p2": 0.01
+              "p2": 0.01,
+              "p4": 0.99
             }
           },
           "skill:rapport:observable": {
@@ -236,10 +236,10 @@
           },
           "skill:rapport": {
             "type": "score",
-            "score": 0.39,
+            "score": 0.37,
             "probabilities": {
-              "0": 0.62,
-              "1": 0.38,
+              "0": 0.64,
+              "1": 0.36,
               "2": 0,
               "3": 0,
               "4": 0
@@ -249,22 +249,22 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.84,
-              "p2": 0.16
+              "p2": 0.14,
+              "p4": 0.86
             }
           },
           "skill:clarity:observable": {
             "type": "boolean",
-            "probability": 0.91
+            "probability": 0.92
           },
           "skill:clarity": {
             "type": "score",
-            "score": 2.1,
+            "score": 2.08,
             "probabilities": {
-              "0": 0.04,
-              "1": 0.15,
-              "2": 0.49,
-              "3": 0.32,
+              "0": 0.05,
+              "1": 0.14,
+              "2": 0.5,
+              "3": 0.31,
               "4": 0
             }
           },
@@ -272,8 +272,8 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.88,
-              "p2": 0.12
+              "p2": 0.14,
+              "p4": 0.86
             }
           },
           "skill:guidance:observable": {
@@ -282,11 +282,11 @@
           },
           "skill:guidance": {
             "type": "score",
-            "score": 0.22,
+            "score": 0.34,
             "probabilities": {
-              "0": 0.85,
-              "1": 0.07,
-              "2": 0.08,
+              "0": 0.8,
+              "1": 0.08,
+              "2": 0.12,
               "3": 0,
               "4": 0
             }
@@ -295,20 +295,20 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.97,
-              "p2": 0.03
+              "p2": 0.02,
+              "p4": 0.98
             }
           },
           "skill:adaptability:observable": {
             "type": "boolean",
-            "probability": 0.74
+            "probability": 0.79
           },
           "skill:adaptability": {
             "type": "score",
-            "score": 0.04,
+            "score": 0.02,
             "probabilities": {
-              "0": 0.97,
-              "1": 0.03,
+              "0": 0.98,
+              "1": 0.02,
               "2": 0,
               "3": 0,
               "4": 0
@@ -318,55 +318,55 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.97,
-              "p2": 0.03
+              "p2": 0.04,
+              "p4": 0.96
             }
           },
           "objective:problem": {
             "type": "boolean",
-            "probability": 0.9
+            "probability": 0.96
           },
           "objective:problem:evidence": {
             "type": "choice",
             "choice": "p1",
             "probabilities": {
-              "p5": 0,
+              "none": 0,
               "p3": 0,
               "p1": 1,
-              "none": 0
+              "p5": 0
             }
           },
           "objective:impact": {
             "type": "boolean",
-            "probability": 0.84
+            "probability": 0.89
           },
           "objective:impact:evidence": {
             "type": "choice",
             "choice": "p3",
             "probabilities": {
-              "p5": 0,
-              "p3": 0.67,
-              "p1": 0.32,
-              "none": 0.01
+              "p1": 0.3,
+              "p3": 0.6900000000000001,
+              "none": 0.01,
+              "p5": 0
             }
           },
           "objective:stakeholder": {
             "type": "boolean",
-            "probability": 0.11
+            "probability": 0.15
           },
           "objective:stakeholder:evidence": {
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "p5": 0.08,
+              "p1": 0.07,
               "p3": 0.02,
-              "p1": 0.08,
-              "none": 0.82
+              "none": 0.87,
+              "p5": 0.04
             }
           },
           "objective:capability": {
             "type": "boolean",
-            "probability": 0.87
+            "probability": 0.91
           },
           "objective:capability:evidence": {
             "type": "choice",
@@ -385,100 +385,100 @@
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "p5": 0.01,
-              "p3": 0.02,
               "p1": 0,
-              "none": 0.97
+              "p3": 0,
+              "none": 0.97,
+              "p5": 0.03
             }
           },
           "mistake": {
             "type": "boolean",
-            "probability": 0.79
+            "probability": 0.83
           },
           "hint": {
             "type": "choice",
-            "choice": "problem",
+            "choice": "next-step",
             "probabilities": {
-              "none": 0.06,
-              "problem": 0.31,
+              "next-step": 0.31,
               "stakeholder": 0.03,
-              "impact": 0.12,
-              "capability": 0.2,
-              "next-step": 0.28
+              "problem": 0.28,
+              "impact": 0.15,
+              "capability": 0.14,
+              "none": 0.09
             }
           }
         }
       },
       "client": {
         "revision": 5,
-        "fidelity": 3.57,
+        "fidelity": 3.59,
         "interests": [
-          1.2,
-          1.95,
-          0.8
+          1.29,
+          1.97,
+          0.81
         ],
         "cueId": "no_hint",
         "cueProbability": 1,
         "model": "jev-1.13.0",
-        "durationMs": 108,
+        "durationMs": 160,
         "usage": {
-          "inputTokens": 2617,
+          "inputTokens": 2642,
           "outputTokens": 125,
-          "totalTokens": 2742
+          "totalTokens": 2767
         },
         "answers": {
           "fidelity": {
             "type": "score",
-            "score": 3.57,
+            "score": 3.59,
             "probabilities": {
               "0": 0,
               "1": 0.01,
               "2": 0.02,
-              "3": 0.34,
-              "4": 0.63
+              "3": 0.32,
+              "4": 0.65
             }
           },
           "cue": {
             "type": "choice",
             "choice": "no_hint",
             "probabilities": {
-              "adoption-open": 0,
-              "no_hint": 1,
-              "reasonable-tradeoff": 0,
+              "approval-boundary": 0,
               "earned-progress": 0,
-              "approval-boundary": 0
+              "adoption-open": 0,
+              "reasonable-tradeoff": 0,
+              "no_hint": 1
             }
           },
           "interest:0": {
             "type": "score",
-            "score": 1.2,
+            "score": 1.29,
             "probabilities": {
-              "0": 0.38,
+              "0": 0.34,
               "1": 0.1,
-              "2": 0.48,
-              "3": 0.04,
-              "4": 0
+              "2": 0.49,
+              "3": 0.06,
+              "4": 0.01
             }
           },
           "interest:1": {
             "type": "score",
-            "score": 1.95,
+            "score": 1.97,
             "probabilities": {
-              "0": 0.17,
-              "1": 0.09,
-              "2": 0.4,
-              "3": 0.29,
-              "4": 0.05
+              "0": 0.2,
+              "1": 0.11,
+              "2": 0.28,
+              "3": 0.35,
+              "4": 0.06
             }
           },
           "interest:2": {
             "type": "score",
-            "score": 0.8,
+            "score": 0.81,
             "probabilities": {
-              "0": 0.37,
-              "1": 0.46,
-              "2": 0.17,
-              "3": 0,
+              "0": 0.42,
+              "1": 0.36,
+              "2": 0.21,
+              "3": 0.01,
               "4": 0
             }
           }
@@ -513,12 +513,12 @@
       "trainee": {
         "skills": {
           "credibility": {
-            "value": 1.92,
+            "value": 2.02,
             "distribution": {
               "0": 0,
-              "1": 0.21,
-              "2": 0.66,
-              "3": 0.13,
+              "1": 0.16,
+              "2": 0.67,
+              "3": 0.17,
               "4": 0
             },
             "evidence": {
@@ -533,11 +533,11 @@
             "evidence": null
           },
           "listening": {
-            "value": 1.66,
+            "value": 1.59,
             "distribution": {
-              "0": 0.06,
-              "1": 0.27,
-              "2": 0.62,
+              "0": 0.09,
+              "1": 0.29,
+              "2": 0.57,
               "3": 0.05,
               "4": 0
             },
@@ -548,12 +548,12 @@
             }
           },
           "rapport": {
-            "value": 1.88,
+            "value": 1.85,
             "distribution": {
               "0": 0,
-              "1": 0.19,
-              "2": 0.74,
-              "3": 0.07,
+              "1": 0.2,
+              "2": 0.75,
+              "3": 0.05,
               "4": 0
             },
             "evidence": {
@@ -563,19 +563,9 @@
             }
           },
           "clarity": {
-            "value": 1.49,
-            "distribution": {
-              "0": 0.01,
-              "1": 0.52,
-              "2": 0.44,
-              "3": 0.03,
-              "4": 0
-            },
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We support SharePoint collaboration, adoption, and modern Azure applications. We begin with the people using a system, set measurable goals, and protect ongoing delivery before recommending a change."
-            }
+            "value": null,
+            "distribution": null,
+            "evidence": null
           },
           "guidance": {
             "value": null,
@@ -609,7 +599,7 @@
           },
           {
             "id": "capability",
-            "probability": 0.18,
+            "probability": 0.16,
             "achieved": false,
             "evidence": null
           },
@@ -620,16 +610,16 @@
             "evidence": null
           }
         ],
-        "hintId": "capability",
-        "hint": "Connect one relevant capability to what you have heard.",
+        "hintId": null,
+        "hint": null,
         "concern": null,
         "revision": 5,
         "model": "jev-1.13.0",
-        "durationMs": 170,
+        "durationMs": 167,
         "usage": {
-          "inputTokens": 8338,
-          "outputTokens": 976,
-          "totalTokens": 9314
+          "inputTokens": 9362,
+          "outputTokens": 974,
+          "totalTokens": 10336
         },
         "answers": {
           "skill:credibility:observable": {
@@ -638,12 +628,12 @@
           },
           "skill:credibility": {
             "type": "score",
-            "score": 1.92,
+            "score": 2.02,
             "probabilities": {
               "0": 0,
-              "1": 0.21,
-              "2": 0.66,
-              "3": 0.13,
+              "1": 0.16,
+              "2": 0.67,
+              "3": 0.17,
               "4": 0
             }
           },
@@ -651,21 +641,21 @@
             "type": "choice",
             "choice": "p2",
             "probabilities": {
-              "p4": 0.37,
-              "p2": 0.63
+              "p4": 0.39,
+              "p2": 0.61
             }
           },
           "skill:confidence:observable": {
             "type": "boolean",
-            "probability": 0.63
+            "probability": 0.59
           },
           "skill:confidence": {
             "type": "score",
-            "score": 1.45,
+            "score": 1.48,
             "probabilities": {
               "0": 0.01,
-              "1": 0.54,
-              "2": 0.45,
+              "1": 0.51,
+              "2": 0.48,
               "3": 0,
               "4": 0
             }
@@ -674,8 +664,8 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.61,
-              "p2": 0.39
+              "p4": 0.6,
+              "p2": 0.4
             }
           },
           "skill:listening:observable": {
@@ -684,11 +674,11 @@
           },
           "skill:listening": {
             "type": "score",
-            "score": 1.66,
+            "score": 1.59,
             "probabilities": {
-              "0": 0.06,
-              "1": 0.27,
-              "2": 0.62,
+              "0": 0.09,
+              "1": 0.29,
+              "2": 0.57,
               "3": 0.05,
               "4": 0
             }
@@ -697,8 +687,8 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p2": 0.29,
-              "p4": 0.71
+              "p4": 0.75,
+              "p2": 0.25
             }
           },
           "skill:rapport:observable": {
@@ -707,12 +697,12 @@
           },
           "skill:rapport": {
             "type": "score",
-            "score": 1.88,
+            "score": 1.85,
             "probabilities": {
               "0": 0,
-              "1": 0.19,
-              "2": 0.74,
-              "3": 0.07,
+              "1": 0.2,
+              "2": 0.75,
+              "3": 0.05,
               "4": 0
             }
           },
@@ -720,22 +710,22 @@
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p2": 0.4,
-              "p4": 0.6
+              "p4": 0.62,
+              "p2": 0.38
             }
           },
           "skill:clarity:observable": {
             "type": "boolean",
-            "probability": 0.87
+            "probability": 0.84
           },
           "skill:clarity": {
             "type": "score",
-            "score": 1.49,
+            "score": 1.46,
             "probabilities": {
               "0": 0.01,
-              "1": 0.52,
-              "2": 0.44,
-              "3": 0.03,
+              "1": 0.55,
+              "2": 0.42,
+              "3": 0.02,
               "4": 0
             }
           },
@@ -743,21 +733,21 @@
             "type": "choice",
             "choice": "p2",
             "probabilities": {
-              "p4": 0.45,
-              "p2": 0.55
+              "p4": 0.5,
+              "p2": 0.5
             }
           },
           "skill:guidance:observable": {
             "type": "boolean",
-            "probability": 0.53
+            "probability": 0.5
           },
           "skill:guidance": {
             "type": "score",
-            "score": 1.24,
+            "score": 1.33,
             "probabilities": {
               "0": 0,
-              "1": 0.77,
-              "2": 0.23,
+              "1": 0.67,
+              "2": 0.33,
               "3": 0,
               "4": 0
             }
@@ -772,25 +762,25 @@
           },
           "skill:adaptability:observable": {
             "type": "boolean",
-            "probability": 0.58
+            "probability": 0.59
           },
           "skill:adaptability": {
             "type": "score",
-            "score": 1.68,
+            "score": 1.71,
             "probabilities": {
-              "0": 0.02,
+              "0": 0.03,
               "1": 0.46,
-              "2": 0.35,
-              "3": 0.16,
-              "4": 0.01
+              "2": 0.3,
+              "3": 0.19,
+              "4": 0.02
             }
           },
           "skill:adaptability:evidence": {
             "type": "choice",
             "choice": "p4",
             "probabilities": {
-              "p4": 0.88,
-              "p2": 0.12
+              "p4": 0.89,
+              "p2": 0.11
             }
           },
           "objective:problem": {
@@ -801,10 +791,10 @@
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "p5": 0,
               "p1": 0.01,
               "p3": 0,
-              "none": 0.99
+              "none": 0.99,
+              "p5": 0
             }
           },
           "objective:impact": {
@@ -815,10 +805,10 @@
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "p5": 0,
               "p1": 0.01,
               "p3": 0,
-              "none": 0.99
+              "none": 0.99,
+              "p5": 0
             }
           },
           "objective:stakeholder": {
@@ -829,23 +819,23 @@
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "none": 0.98,
               "p1": 0,
               "p3": 0,
-              "p5": 0.02
+              "none": 0.96,
+              "p5": 0.04
             }
           },
           "objective:capability": {
             "type": "boolean",
-            "probability": 0.18
+            "probability": 0.16
           },
           "objective:capability:evidence": {
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "p4": 0.07,
-              "p2": 0.13,
-              "none": 0.8
+              "p4": 0.1,
+              "p2": 0.17,
+              "none": 0.73
             }
           },
           "objective:next-step": {
@@ -856,10 +846,10 @@
             "type": "choice",
             "choice": "none",
             "probabilities": {
-              "p5": 0.03,
               "p1": 0,
               "p3": 0,
-              "none": 0.97
+              "none": 0.97,
+              "p5": 0.03
             }
           },
           "mistake": {
@@ -868,88 +858,88 @@
           },
           "hint": {
             "type": "choice",
-            "choice": "capability",
+            "choice": "none",
             "probabilities": {
+              "capability": 0.37,
               "stakeholder": 0,
+              "none": 0.54,
+              "problem": 0.04,
               "next-step": 0.05,
-              "impact": 0,
-              "capability": 0.49,
-              "problem": 0.07,
-              "none": 0.39
+              "impact": 0
             }
           }
         }
       },
       "client": {
         "revision": 5,
-        "fidelity": 3.47,
+        "fidelity": 3.51,
         "interests": [
-          2.45,
-          3.22,
-          1.1
+          2.72,
+          3.23,
+          1.17
         ],
         "cueId": "no_hint",
         "cueProbability": 1,
         "model": "jev-1.13.0",
-        "durationMs": 97,
+        "durationMs": 106,
         "usage": {
-          "inputTokens": 2621,
+          "inputTokens": 2682,
           "outputTokens": 125,
-          "totalTokens": 2746
+          "totalTokens": 2807
         },
         "answers": {
           "fidelity": {
             "type": "score",
-            "score": 3.47,
+            "score": 3.51,
             "probabilities": {
               "0": 0,
               "1": 0.01,
               "2": 0.03,
-              "3": 0.43,
-              "4": 0.53
+              "3": 0.4,
+              "4": 0.56
             }
           },
           "cue": {
             "type": "choice",
             "choice": "no_hint",
             "probabilities": {
-              "adoption-open": 0,
               "reasonable-tradeoff": 0,
               "no_hint": 1,
               "approval-boundary": 0,
-              "earned-progress": 0
+              "earned-progress": 0,
+              "adoption-open": 0
             }
           },
           "interest:0": {
             "type": "score",
-            "score": 2.45,
+            "score": 2.72,
             "probabilities": {
               "0": 0,
-              "1": 0.29,
-              "2": 0.17,
-              "3": 0.34,
-              "4": 0.2
+              "1": 0.2,
+              "2": 0.12,
+              "3": 0.44,
+              "4": 0.24
             }
           },
           "interest:1": {
             "type": "score",
-            "score": 3.22,
+            "score": 3.23,
             "probabilities": {
               "0": 0,
-              "1": 0.08,
-              "2": 0.07,
-              "3": 0.38,
-              "4": 0.47
+              "1": 0.07,
+              "2": 0.06,
+              "3": 0.44,
+              "4": 0.43
             }
           },
           "interest:2": {
             "type": "score",
-            "score": 1.1,
+            "score": 1.17,
             "probabilities": {
               "0": 0.01,
-              "1": 0.88,
-              "2": 0.1,
-              "3": 0.01,
+              "1": 0.83,
+              "2": 0.14,
+              "3": 0.02,
               "4": 0
             }
           }

@@ -54,14 +54,21 @@ describe('transcript and feedback behavior', () => {
     expect(second.filter(item => item.achieved).map(item => item.id)).toEqual(['stakeholder']);
     expect(second[2]!.evidence?.text).toBe('Operations owns it.');
   });
+  test('a reply separates two trainee turns even when the gap is short', () => {
+    let entries: TranscriptEntry[] = [];
+    entries = appendTranscript(entries, { speaker: 'trainee', text: 'Who owns it?', startMs: 0, endMs: 900 });
+    entries = appendTranscript(entries, { speaker: 'client', text: 'Dana.', startMs: 1000, endMs: 1400 });
+    entries = appendTranscript(entries, { speaker: 'trainee', text: 'Let us invite Dana.', startMs: 1500, endMs: 2400 });
+    expect(entries.map(entry => entry.text)).toEqual(['Who owns it?', 'Dana.', 'Let us invite Dana.']);
+  });
   test('client cues require fresh, probable, nonrepeating evidence and a cooldown', () => {
     const cue = { id: 'earned-progress', probability: .95, revision: 7 };
-    expect(canSendCue(cue, null, 7, 50_000)).toBe(true);
-    expect(canSendCue(cue, null, 8, 50_000)).toBe(false);
-    for (const p of [.6, NaN, 1.1]) expect(canSendCue({ ...cue, probability: p }, null, 7, 50_000)).toBe(false);
-    expect(canSendCue({ ...cue, id: 'no_hint' }, null, 7, 50_000)).toBe(false);
-    expect(canSendCue(cue, { id: 'approval-boundary', revision: 5, sentAt: 40_000 }, 7, 50_000)).toBe(false);
-    expect(canSendCue(cue, { ...cue, sentAt: 1 }, 7, 50_000)).toBe(false);
+    expect(canSendCue(cue, null, true, 50_000)).toBe(true);
+    expect(canSendCue(cue, null, false, 50_000)).toBe(false);
+    for (const p of [.6, NaN, 1.1]) expect(canSendCue({ ...cue, probability: p }, null, true, 50_000)).toBe(false);
+    expect(canSendCue({ ...cue, id: 'no_hint' }, null, true, 50_000)).toBe(false);
+    expect(canSendCue(cue, { id: 'approval-boundary', revision: 5, sentAt: 40_000 }, true, 50_000)).toBe(false);
+    expect(canSendCue(cue, { ...cue, sentAt: 1 }, true, 50_000)).toBe(false);
   });
   test('debrief never invents performance for unobserved skills', () => {
     const scenario = publicCatalog().scenarios[0]!;

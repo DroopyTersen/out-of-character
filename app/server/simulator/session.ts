@@ -1,0 +1,309 @@
+import { DurableObject } from 'cloudflare:workers';
+import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
+import { getScenario } from '../../../ai/simulator/scenarios.server';
+import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, type SentCue } from '../../../core/simulator/state';
+import { SESSION_LIMIT_SECONDS, type SessionSnapshot } from '../../../core/simulator/types';
+import { attachLive, createLive, LiveSessionGone, transcriptEvent } from './live.server';
+import { simulatorJson, startSchema } from './api';
+
+type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
+const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
+
+/** Owns one transient attempt. Only the closure lease survives a worker restart. */
+export class SimulatorSession extends DurableObject<Env> {
+  private lease: Lease | undefined;
+  private snapshot: SessionSnapshot | undefined;
+  private socket: WebSocket | undefined;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private closing: Promise<void> | undefined;
+  private orphaning: Promise<void> | undefined;
+  private connecting: Promise<{ sdp: string }> | undefined;
+  private closeReceived: (() => void) | undefined;
+  private lastSeen = Date.now();
+  private lastDelta = 0;
+  private lastGrade = 0;
+  private gradedText = '';
+  private gradeCalls = 0;
+  private grading: Promise<void> | undefined;
+  private gradeAbort = new AbortController();
+  private directing = false;
+  private lastDirected = 0;
+  private lastCue: SentCue | null = null;
+  private sentCues = new Set<string>();
+  private seenEvents = new Set<string>();
+  private greeted = false;
+
+  constructor(ctx: DurableObjectState, env: Env, private readonly paid = services) {
+    super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => { this.lease = await ctx.storage.get<Lease>('lease'); });
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const action = new URL(request.url).pathname;
+    const capability = request.headers.get('Authorization') ?? '';
+    if (!/^Bearer [a-f0-9]{64}$/.test(capability)) return simulatorJson({ error: 'Session capability is required.' }, 401);
+    if (this.lease && capability !== this.lease.capability) return simulatorJson({ error: 'Session ownership did not match.' }, 403);
+    if (action === '/start') return this.start(request, capability);
+    if (!this.lease) {
+      // A cancelled browser may send end before its creation request arrives.
+      if (action === '/end') {
+        this.lease = { capability, deadline: Date.now(), closed: true };
+        await this.ctx.storage.put('lease', this.lease);
+        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+        return simulatorJson({ ended: true });
+      }
+      return simulatorJson({ error: 'This practice session was not found.' }, 404);
+    }
+    if (!this.snapshot) {
+      if (!this.lease.closed) this.ctx.waitUntil(this.closeOrphan());
+      return simulatorJson({ error: 'This practice session was interrupted. Start a new attempt.' }, 410);
+    }
+    this.lastSeen = Date.now();
+    if (action === '/ready' && this.snapshot.status === 'connecting') {
+      this.snapshot.status = 'live';
+      if (!this.greeted) {
+        this.greeted = this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: `Open this meeting now in English, naturally: ${getScenario(this.snapshot.scenarioId).opening} Then pause and listen.` });
+      }
+    }
+    if (action === '/end') await this.end();
+    return simulatorJson(this.snapshot);
+  }
+
+  private async start(request: Request, capability: string): Promise<Response> {
+    if (this.lease) return simulatorJson({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
+    const input = startSchema.parse(await request.json());
+    this.lease = { capability, deadline: Date.now() + SESSION_LIMIT_SECONDS * 1000, closed: false };
+    this.snapshot = {
+      id: input.id, scenarioId: input.scenarioId, clientId: input.clientId,
+      status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS,
+      revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting',
+      message: null, finalization: 'pending', usageSeconds: null,
+    };
+    await this.ctx.storage.put('lease', this.lease);
+    await this.ctx.storage.setAlarm(Date.now() + 30_000);
+    try {
+      this.connecting = this.openLive(input);
+      const created = await this.connecting;
+      if (this.snapshot.status === 'ending' || this.lease.closed) {
+        return simulatorJson({ error: 'The attempt was cancelled.' }, 409);
+      }
+      this.timer = setInterval(() => this.tick(), 500);
+      return simulatorJson({ sdp: created.sdp, snapshot: this.snapshot });
+    } catch {
+      this.snapshot.message = 'The voice connection could not be established.';
+      await this.end(true);
+      return simulatorJson({ error: this.snapshot.message }, 502);
+    }
+  }
+
+  private async openLive(input: { scenarioId: string; clientId: string; sdp: string }) {
+    const created = await this.paid.createLive(input, this.env.OPENAI_API_KEY!);
+    this.lease!.providerId = created.session.id;
+    await this.ctx.storage.put('lease', this.lease);
+    this.socket = await this.paid.attachLive(created.session.id, this.env.OPENAI_API_KEY!);
+    this.listen(this.socket);
+    return { sdp: created.transport.sdp };
+  }
+
+  private listen(socket: WebSocket) {
+    socket.addEventListener('message', event => {
+      if (typeof event.data !== 'string') return;
+      try { this.onEvent(JSON.parse(event.data)); } catch { /* Ignore malformed protocol messages, never log private payloads. */ }
+    });
+    socket.addEventListener('close', () => {
+      if (!this.closing && this.snapshot?.finalization !== 'confirmed') this.ctx.waitUntil(this.end(true));
+    });
+    socket.addEventListener('error', () => { if (!this.closing) this.ctx.waitUntil(this.end(true)); });
+  }
+
+  private send(event: Record<string, unknown>): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    try { this.socket.send(JSON.stringify(event)); return true; } catch { return false; }
+  }
+
+  private onEvent(event: Record<string, unknown>) {
+    const snapshot = this.snapshot;
+    if (!snapshot || snapshot.status === 'ended' || snapshot.status === 'interrupted') return;
+    if (event.type === 'session.closed') {
+      snapshot.finalization = 'confirmed';
+      const usage = event.usage as { seconds?: unknown } | undefined;
+      if (typeof usage?.seconds === 'number' && Number.isFinite(usage.seconds)) snapshot.usageSeconds = usage.seconds;
+      if (event.reason !== 'close_requested') snapshot.message = event.reason === 'connection_lost' ? 'The voice connection was interrupted.' : 'The voice session ended.';
+      this.closeReceived?.();
+      if (!this.closing) this.ctx.waitUntil(this.end(event.reason === 'connection_lost'));
+      return;
+    }
+    const transcript = transcriptEvent.safeParse(event);
+    if (transcript.success) {
+      const value = transcript.data;
+      if (value.event_id && this.seenEvents.has(value.event_id)) return;
+      if (value.event_id) this.seenEvents.add(value.event_id);
+      const next = appendTranscript(snapshot.transcript, {
+        speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms,
+      });
+      // Late deltas may arrive during close. Keep the final grading input valid.
+      if (next.length > 240 || next.reduce((sum, item) => sum + item.text.length, 0) > 80_000) return;
+      snapshot.transcript = next;
+      snapshot.revision++;
+      this.lastDelta = Date.now();
+      if (snapshot.transcript.length >= 240 || snapshot.transcript.reduce((sum, item) => sum + item.text.length, 0) >= 72_000) {
+        snapshot.message = 'The transcript limit has been reached.';
+        this.ctx.waitUntil(this.end());
+      }
+      return;
+    }
+    if (snapshot.status === 'ending') return;
+    if (event.type === 'session.delegation.created') {
+      const delegation = event.delegation as { id?: unknown; target?: unknown } | undefined;
+      if (delegation?.target === 'client' && typeof delegation.id === 'string') {
+        this.send({ type: 'session.thinking.append', event_id: crypto.randomUUID(), delegation_id: delegation.id, content: 'No external task is available or necessary in this meeting. Continue as the client using your existing facts, interests, and authority limits. Make no claims about work being done outside this conversation.' });
+      }
+    }
+    if (event.type === 'error') {
+      const error = event.error as { client_event_id?: unknown } | undefined;
+      // A declined optional cue need not interrupt otherwise-working practice.
+      if (typeof error?.client_event_id === 'string' && error.client_event_id.startsWith('cue-')) return;
+      snapshot.message = 'The voice service reported a problem. You can end this attempt and try again.';
+    }
+  }
+
+  private tick() {
+    const snapshot = this.snapshot;
+    if (!snapshot || snapshot.status !== 'live') return;
+    const now = Date.now();
+    if (now >= this.lease!.deadline || now - this.lastSeen > 35_000) {
+      snapshot.message = now >= this.lease!.deadline ? 'Practice time is up.' : 'Practice ended after losing contact with this page.';
+      this.ctx.waitUntil(this.end());
+      return;
+    }
+    const transcript = settledTranscript(snapshot.transcript, now - this.lastDelta);
+    const text = JSON.stringify(transcript);
+    const interval = Math.max(2000, (this.lease!.deadline - now) / Math.max(1, 179 - this.gradeCalls));
+    if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < interval || this.gradeCalls >= 179) return;
+    this.lastGrade = now;
+    this.gradedText = text;
+    this.grading = this.grade(transcript, snapshot.revision, false).finally(() => { this.grading = undefined; });
+    this.ctx.waitUntil(this.grading);
+    if (String(this.env.SIMULATOR_DIRECTOR_ENABLED) === 'true' && !this.directing && now - this.lastDirected >= 8000 && !this.closing) {
+      this.lastDirected = now;
+      this.ctx.waitUntil(this.direct(transcript, snapshot.revision));
+    }
+  }
+
+  private async grade(transcript: SessionSnapshot['transcript'], revision: number, final: boolean) {
+    const snapshot = this.snapshot!;
+    this.gradeCalls++;
+    try {
+      const scenario = getScenario(snapshot.scenarioId);
+      const achievedIds = snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
+      const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
+      if (!final && this.closing) return;
+      if (snapshot.evaluation && revision < snapshot.evaluation.revision) return;
+      // Explicit public projection: raw client diagnostics and grader questions stay private.
+      snapshot.evaluation = { revision: result.revision, skills: result.skills, hint: result.hint, hintId: result.hintId, concern: result.concern, model: result.model, durationMs: result.durationMs, objectives: reconcileObjectives(scenario, snapshot.evaluation?.objectives ?? [], result.objectives) };
+      snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
+    } catch {
+      if (this.gradeAbort.signal.aborted && !final) return;
+      snapshot.feedbackStatus = snapshot.evaluation ? 'delayed' : 'unavailable';
+      if (final && snapshot.evaluation) {
+        const outcomes = getScenario(snapshot.scenarioId).objectives.filter(item => item.kind === 'outcome').map(item => item.id);
+        snapshot.evaluation.objectives = snapshot.evaluation.objectives.map(item => outcomes.includes(item.id) ? { ...item, achieved: false, probability: null, evidence: null } : item);
+      }
+    }
+  }
+
+  private isFresh(transcript: SessionSnapshot['transcript']): boolean {
+    return JSON.stringify(transcript) === JSON.stringify(settledTranscript(this.snapshot!.transcript, Date.now() - this.lastDelta));
+  }
+
+  private async direct(transcript: SessionSnapshot['transcript'], revision: number) {
+    this.directing = true;
+    const snapshot = this.snapshot!;
+    try {
+      const result = await this.paid.evaluateClient({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
+      const cue = getScenario(snapshot.scenarioId).cues.find(item => item.id === result.cueId);
+      if (this.closing || !cue || this.sentCues.has(cue.id) || !canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.lastCue, this.isFresh(transcript), Date.now())) return;
+      if (this.send({ type: 'session.thinking.append', event_id: `cue-${crypto.randomUUID()}`, delegation_id: null, content: cue.text })) {
+        this.sentCues.add(cue.id);
+        this.lastCue = { id: cue.id, revision, sentAt: Date.now() };
+      }
+    } catch { /* Client direction is optional. Continue the original role-play. */ }
+    finally { this.directing = false; }
+  }
+
+  private end(interrupted = false): Promise<void> {
+    if (this.closing) return this.closing;
+    this.closing = this.finish(interrupted);
+    return this.closing;
+  }
+
+  private async finish(interrupted: boolean) {
+    const snapshot = this.snapshot!;
+    snapshot.status = 'ending';
+    clearInterval(this.timer);
+    this.gradeAbort.abort();
+    try { await this.connecting; } catch { /* Creation failure is surfaced by start. */ }
+    await this.grading;
+    this.gradeAbort = new AbortController();
+    if (snapshot.finalization !== 'confirmed') {
+      if ((!this.socket || this.socket.readyState !== WebSocket.OPEN) && this.lease?.providerId) {
+        try { this.socket = await this.paid.attachLive(this.lease.providerId, this.env.OPENAI_API_KEY!); this.listen(this.socket); }
+        catch (error) { if (error instanceof LiveSessionGone) snapshot.finalization = 'confirmed'; /* Otherwise the alarm retains closure responsibility. */ }
+      }
+      if (String(snapshot.finalization) !== 'confirmed') await new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, 10_000);
+        this.closeReceived = () => { clearTimeout(timer); resolve(); };
+        if (!this.send({ type: 'session.close' })) { clearTimeout(timer); resolve(); }
+      });
+      if (String(snapshot.finalization) !== 'confirmed') snapshot.finalization = 'unconfirmed';
+    }
+    this.socket?.close();
+    if (snapshot.transcript.some(item => item.speaker === 'trainee')) await this.grade(snapshot.transcript, snapshot.revision, true);
+    snapshot.status = interrupted ? 'interrupted' : 'ended';
+    if (snapshot.finalization !== 'confirmed') snapshot.message = 'Practice ended, but the voice service did not confirm finalization.';
+    this.lease!.closed = snapshot.finalization === 'confirmed' || !this.lease!.providerId;
+    await this.ctx.storage.put('lease', this.lease);
+    await this.ctx.storage.setAlarm(Date.now() + (this.lease!.closed ? 300_000 : 15_000));
+  }
+
+  private closeOrphan(): Promise<void> {
+    if (!this.orphaning) this.orphaning = this.recoverLease().finally(() => { this.orphaning = undefined; });
+    return this.orphaning;
+  }
+
+  private async recoverLease() {
+    if (!this.lease || this.lease.closed) return;
+    // No provider id survives a process loss during creation. There is no Live
+    // lookup-by-attempt API; do not leave this local lease retrying forever.
+    if (!this.lease.providerId) { await this.ctx.storage.deleteAll(); return; }
+    let socket: WebSocket | undefined;
+    try {
+      socket = await this.paid.attachLive(this.lease.providerId, this.env.OPENAI_API_KEY!);
+      const control = socket;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Closure not confirmed.')), 10_000);
+        control.addEventListener('message', event => {
+          if (typeof event.data !== 'string') return;
+          try {
+            if (JSON.parse(event.data).type === 'session.closed') { clearTimeout(timeout); resolve(); }
+          } catch { /* Ignore unrelated protocol data. */ }
+        });
+        control.send(JSON.stringify({ type: 'session.close' }));
+      });
+    } catch (error) { if (!(error instanceof LiveSessionGone)) throw error; }
+    finally { socket?.close(); }
+    this.lease.closed = true;
+    await this.ctx.storage.put('lease', this.lease);
+    await this.ctx.storage.setAlarm(Date.now() + 300_000);
+  }
+
+  async alarm() {
+    if (this.lease?.closed) { await this.ctx.storage.deleteAll(); return; }
+    if (!this.snapshot || this.snapshot.status === 'ended' || this.snapshot.status === 'interrupted') {
+      await this.closeOrphan();
+      return;
+    }
+    if (Date.now() >= this.lease!.deadline || Date.now() - this.lastSeen > 35_000) await this.end();
+    else await this.ctx.storage.setAlarm(Math.min(this.lease!.deadline, Date.now() + 30_000));
+  }
+}

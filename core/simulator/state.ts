@@ -7,7 +7,8 @@ export type TranscriptDelta = { speaker: TranscriptEntry['speaker']; text: strin
 export function appendTranscript(entries: TranscriptEntry[], delta: TranscriptDelta): TranscriptEntry[] {
   if (!delta.text || !Number.isFinite(delta.startMs) || !Number.isFinite(delta.endMs) || delta.startMs < 0 || delta.endMs < delta.startMs) return entries;
   const last = entries.findLast(entry => entry.speaker === delta.speaker);
-  if (last && delta.startMs - last.endMs <= 2000 && last.text.length + delta.text.length <= 1200) {
+  const replied = last && entries.some(entry => entry.speaker !== delta.speaker && entry.startMs >= last.endMs);
+  if (last && !replied && delta.startMs - last.endMs <= 2000 && last.text.length + delta.text.length <= 1200) {
     return entries.map(entry => entry.id === last.id ? { ...last, text: last.text + delta.text, endMs: Math.max(last.endMs, delta.endMs) } : entry);
   }
   return [...entries, { id: `p${entries.length + 1}`, speaker: delta.speaker, text: delta.text, startMs: delta.startMs, endMs: delta.endMs }];
@@ -71,9 +72,9 @@ export type CueDecision = { id: string; probability: number; revision: number };
 export type SentCue = { id: string; revision: number; sentAt: number };
 
 /** Scores never modify character stats. A cue needs fresh evidence and a reason to intervene. */
-export function canSendCue(candidate: CueDecision, last: SentCue | null, currentRevision: number, now: number): boolean {
+export function canSendCue(candidate: CueDecision, last: SentCue | null, fresh: boolean, now: number): boolean {
   if (candidate.id === 'no_hint' || candidate.probability < .9 || candidate.probability > 1 || !Number.isFinite(candidate.probability)) return false;
-  if (candidate.revision !== currentRevision) return false;
+  if (!fresh) return false;
   if (last && (now - last.sentAt < 20_000 || candidate.id === last.id)) return false;
   return true;
 }

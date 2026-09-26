@@ -9,9 +9,12 @@
   ],
   "compatibility_date": "2026-04-28",
   "main": "./app/workers/app.ts",
-  "vars": { "PAID_SERVICES_ENABLED": "true" },
+  "vars": { "PAID_SERVICES_ENABLED": "true", "SIMULATOR_ENABLED": "false", "SIMULATOR_DIRECTOR_ENABLED": "false" },
+  "durable_objects": { "bindings": [{ "name": "SIMULATOR_SESSIONS", "class_name": "SimulatorSession" }] },
+  "migrations": [{ "tag": "simulator-v1", "new_sqlite_classes": ["SimulatorSession"] }],
   "ai": { "binding": "AI", "remote": true },
   "ratelimits": [
+    { "name": "RATE_SIMULATOR", "namespace_id": "26092501", "simple": { "limit": 3, "period": 60 } },
     { "name": "RATE_JUDGE", "namespace_id": "26091801", "simple": { "limit": 180, "period": 60 } },
     { "name": "RATE_SCENE", "namespace_id": "26091802", "simple": { "limit": 20, "period": 60 } },
     { "name": "RATE_SPEECH", "namespace_id": "26091803", "simple": { "limit": 12, "period": 60 } }

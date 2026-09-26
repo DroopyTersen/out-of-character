@@ -23,7 +23,7 @@ The workshop lets you replay the draw and reel, inspect the flat cast, backstori
 
 `/simulator` adds serious sales and consultancy practice. Choose one of two scenarios and three reusable client personalities, then talk to GPT-Live 1. Jev updates seven skills, ordered objectives that can be achieved in any sequence, and an authored coaching hint. The client pursues its own interests and respects hidden budget, scope, and approval constraints. A separate Jev assessment can select private reminders without changing the client's personality. The debrief uses the actual dialogue as evidence.
 
-For local voice practice, add `OPENAI_API_KEY` to the ignored `.dev.vars` alongside `TYPESAFE_API_KEY`, and set `SIMULATOR_ENABLED=true` and `PAID_SERVICES_ENABLED=true`. Set `SIMULATOR_DIRECTOR_ENABLED=true` to enable private client cues. The committed deployment flags remain off. Attempts last at most ten minutes, close after page abandonment, and keep no conversation history. Muting does not stop the paid session; use **End session**.
+For local voice practice, add `OPENAI_API_KEY` to the ignored `.dev.vars` alongside `TYPESAFE_API_KEY`, and set `SIMULATOR_ENABLED=true` and `PAID_SERVICES_ENABLED=true`. Set `SIMULATOR_DIRECTOR_ENABLED=true` to enable private client cues. The deployment configuration enables live practice and client cues; the Worker also needs `OPENAI_API_KEY` and `TYPESAFE_API_KEY` secrets. Attempts last at most ten minutes, close after page abandonment, and keep no conversation history. Muting does not stop the paid session; use **End session**.
 
 The DIY workshop has five simulator stories:
 

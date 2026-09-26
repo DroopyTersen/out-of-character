@@ -9,7 +9,7 @@
   ],
   "compatibility_date": "2026-04-28",
   "main": "./app/workers/app.ts",
-  "vars": { "PAID_SERVICES_ENABLED": "true", "SIMULATOR_ENABLED": "false", "SIMULATOR_DIRECTOR_ENABLED": "false" },
+  "vars": { "PAID_SERVICES_ENABLED": "true", "SIMULATOR_ENABLED": "true", "SIMULATOR_DIRECTOR_ENABLED": "true" },
   "durable_objects": { "bindings": [{ "name": "SIMULATOR_SESSIONS", "class_name": "SimulatorSession" }] },
   "migrations": [{ "tag": "simulator-v1", "new_sqlite_classes": ["SimulatorSession"] }],
   "ai": { "binding": "AI", "remote": true },

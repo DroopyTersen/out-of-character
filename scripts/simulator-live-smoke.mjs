@@ -9,9 +9,10 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true,
   args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
 });
-const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, permissions: ['microphone'] });
+const viewport = process.env.ACCEPTANCE_PHONE === '1' ? { width: 390, height: 844 } : { width: 1440, height: 960 };
+const context = await browser.newContext({ viewport, permissions: ['microphone'] });
 await context.route('**/__simulator_fixture.wav', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: audio }));
-const report = { at: new Date().toISOString(), synthetic: true, checks: [], snapshots: [], errors: [] };
+const report = { at: new Date().toISOString(), synthetic: true, viewport, checks: [], snapshots: [], errors: [] };
 let retriedPoll = false;
 await context.route('**/api/simulator/sessions/*/poll', route => {
   if (!retriedPoll) { retriedPoll = true; return route.fulfill({ status: 503, contentType: 'text/html', body: 'Temporary upstream failure' }); }
@@ -52,13 +53,13 @@ try {
   await page.goto(`${process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173'}/simulator`);
   await page.getByRole('button', { name: 'Start simulation' }).click();
   await page.getByRole('button', { name: 'End session', exact: true }).waitFor({ timeout: 45_000 });
-  await page.waitForFunction(() => document.querySelector('.sim-caption')?.textContent?.includes('Client') || document.querySelector('.sim-caption small')?.textContent === 'Morgan', { timeout: 25_000 });
+  await page.waitForFunction(() => document.querySelector('.sim-caption')?.textContent?.includes('Client') || document.querySelector('.sim-caption small')?.textContent === 'Morgan', null, { timeout: 25_000 });
   await page.waitForTimeout(24_000);
   await page.waitForFunction(() => [...document.querySelectorAll('.sim-skill strong')].some(node => /^\d\.\d$/.test(node.textContent)), null, { timeout: 25_000 });
   await page.waitForTimeout(800); // Let the visible score transition finish before capturing it.
   await page.screenshot({ path: `${output}/live.png`, fullPage: true });
   await page.getByRole('button', { name: 'End session', exact: true }).click();
-  await page.getByRole('heading', { name: 'A conversation to build on.' }).waitFor({ timeout: 35_000 });
+  await page.getByRole('heading', { name: 'Your session debrief', exact: true }).waitFor({ timeout: 35_000 });
   report.browser = await page.evaluate(async () => {
     const audit = window.__simulatorSmoke;
     // Only the provider's data-channel permission notice is expected. Checking

@@ -182,6 +182,7 @@ export class SimulatorSession extends DurableObject<Env> {
     }
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
+    if (snapshot.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
     const interval = Math.max(2000, (this.lease!.deadline - now) / Math.max(1, 179 - this.gradeCalls));
     if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < interval || this.gradeCalls >= 179) return;
     this.lastGrade = now;

@@ -156,6 +156,36 @@ test('restart recovery clears an already-closed provider and a lease with no rec
   expect(values.size).toBe(0);
 });
 
+test('new settled dialogue marks earlier feedback delayed while reassessment is pending', async () => {
+  let release!: () => void;
+  let calls = 0;
+  const f = await fixture(undefined, undefined, {
+    evaluateTrainee: async input => {
+      if (++calls === 2) await new Promise<void>(resolve => { release = resolve; });
+      return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+    },
+  });
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Who owns the workflow?', start_ms: 0, end_ms: 1000 });
+  await new Promise(resolve => setTimeout(resolve, 1600));
+  const first = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(first.feedbackStatus).toBe('current');
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Operations does, but do not contact them yet.', start_ms: 1100, end_ms: 2300 });
+  await new Promise(resolve => setTimeout(resolve, 1600));
+  const waiting = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(waiting.evaluation.revision).toBe(first.evaluation.revision);
+  expect(waiting.feedbackStatus).toBe('delayed');
+  // Wait for the owner cadence to start the next request, then release its result.
+  while (!release) await new Promise(resolve => setTimeout(resolve, 100));
+  release();
+  await Promise.all(f.pending);
+  const current = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(current.feedbackStatus).toBe('current');
+  expect(current.evaluation.revision).toBe(current.revision);
+  await f.session.fetch(request('end'));
+}, 10_000);
+
 for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a new settled reply' : 'allows continuing client audio'} during assessment`, async () => {
   let resolve!: () => void;
   let assessed!: () => void;

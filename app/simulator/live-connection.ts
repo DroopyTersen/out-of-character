@@ -131,14 +131,14 @@ export class LiveConnection {
   async playAudio() { await this.context?.resume(); await this.audio.play(); }
 
   private async fail(message: string) {
-    await this.end();
+    if (this.disposed || this.ending) return;
+    const closing = this.end();
     this.callbacks.error(message, true);
+    await closing;
   }
 
   end(): Promise<void> {
     if (this.ending) return this.ending;
-    this.mute(true);
-    clearTimeout(this.pollTimer);
     this.ending = (async () => {
       try {
         if (this.requested) {
@@ -147,9 +147,12 @@ export class LiveConnection {
         }
       } catch {
         if (!this.disposed) this.callbacks.error('The session ended locally; server finalization could not be confirmed.', true);
-        if (this.channel?.readyState === 'open') this.channel.send(JSON.stringify({ type: 'session.close' }));
-      } finally { this.release(); }
+      }
     })();
+    // Stop local media immediately. Provider closure and final scoring can finish
+    // through the keepalive request and the server-owned lease after WebRTC closes.
+    try { if (this.channel?.readyState === 'open') this.channel.send(JSON.stringify({ type: 'session.close' })); } catch { /* Server closure remains responsible. */ }
+    this.release();
     return this.ending;
   }
 

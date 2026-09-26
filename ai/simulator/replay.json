@@ -1,0 +1,3415 @@
+{
+  "synthetic": true,
+  "collectedAt": "2026-09-26T04:47:58.185Z",
+  "simulatorVersion": "simulator-v1",
+  "rubricVersion": "simulator-rubric-v3",
+  "rows": [
+    {
+      "fixtureId": "earned-discovery",
+      "transcriptLength": 3,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "confidence": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "listening": {
+            "value": 2.49,
+            "distribution": {
+              "0": 0,
+              "1": 0.04,
+              "2": 0.45,
+              "3": 0.49,
+              "4": 0.02
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Understood. Before we get into solutions, who owns the process that is giving you trouble?"
+            }
+          },
+          "rapport": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "clarity": {
+            "value": 2.79,
+            "distribution": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.22,
+              "3": 0.74,
+              "4": 0.03
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Understood. Before we get into solutions, who owns the process that is giving you trouble?"
+            }
+          },
+          "guidance": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "adaptability": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "problem",
+            "probability": 0.17,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "impact",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "stakeholder",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "Our operations director owns it. They would need to be involved."
+            }
+          },
+          {
+            "id": "capability",
+            "probability": 0.13,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "next-step",
+            "probability": 0.08,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": "problem",
+        "hint": "Ask what goes wrong in the current day-to-day process.",
+        "concern": null,
+        "revision": 3,
+        "model": "jev-1.13.0",
+        "durationMs": 245,
+        "usage": {
+          "inputTokens": 8093,
+          "outputTokens": 880,
+          "totalTokens": 8973
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.12
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 2.5,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.45,
+              "3": 0.53,
+              "4": 0
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.15
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 1.91,
+            "probabilities": {
+              "0": 0.03,
+              "1": 0.15,
+              "2": 0.7,
+              "3": 0.11,
+              "4": 0.01
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 2.49,
+            "probabilities": {
+              "0": 0,
+              "1": 0.04,
+              "2": 0.45,
+              "3": 0.49,
+              "4": 0.02
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.78
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 2.46,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.51,
+              "3": 0.48,
+              "4": 0
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 2.79,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.22,
+              "3": 0.74,
+              "4": 0.03
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.16
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 2.08,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.88,
+              "3": 0.1,
+              "4": 0
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.15
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 3.36,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.05,
+              "3": 0.48,
+              "4": 0.45
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "objective:problem": {
+            "type": "boolean",
+            "probability": 0.17
+          },
+          "objective:problem:evidence": {
+            "type": "choice",
+            "choice": "p1",
+            "probabilities": {
+              "none": 0.46,
+              "p3": 0.01,
+              "p1": 0.53
+            }
+          },
+          "objective:impact": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "objective:impact:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "none": 0.93,
+              "p3": 0,
+              "p1": 0.07
+            }
+          },
+          "objective:stakeholder": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:stakeholder:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "none": 0,
+              "p3": 1,
+              "p1": 0
+            }
+          },
+          "objective:capability": {
+            "type": "boolean",
+            "probability": 0.13
+          },
+          "objective:capability:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p2": 0.11,
+              "none": 0.89
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.08
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "none": 0.89,
+              "p3": 0.11,
+              "p1": 0
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.04
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "problem",
+            "probabilities": {
+              "capability": 0.01,
+              "problem": 0.58,
+              "stakeholder": 0.2,
+              "impact": 0.01,
+              "next-step": 0.08,
+              "none": 0.12
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 3,
+        "fidelity": 3.72,
+        "interests": [
+          1.84,
+          1.4,
+          1.21
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 1,
+        "model": "jev-1.13.0",
+        "durationMs": 144,
+        "usage": {
+          "inputTokens": 2460,
+          "outputTokens": 125,
+          "totalTokens": 2585
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.72,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.26,
+              "4": 0.74
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "no_hint": 1,
+              "adoption-open": 0,
+              "earned-progress": 0,
+              "approval-boundary": 0,
+              "reasonable-tradeoff": 0
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 1.84,
+            "probabilities": {
+              "0": 0,
+              "1": 0.2,
+              "2": 0.76,
+              "3": 0.04,
+              "4": 0
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 1.4,
+            "probabilities": {
+              "0": 0,
+              "1": 0.6,
+              "2": 0.39,
+              "3": 0.01,
+              "4": 0
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 1.21,
+            "probabilities": {
+              "0": 0,
+              "1": 0.79,
+              "2": 0.21,
+              "3": 0,
+              "4": 0
+            }
+          }
+        }
+      },
+      "checks": []
+    },
+    {
+      "fixtureId": "earned-discovery",
+      "transcriptLength": 5,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "confidence": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "listening": {
+            "value": 2.82,
+            "distribution": {
+              "0": 0,
+              "1": 0.03,
+              "2": 0.23,
+              "3": 0.64,
+              "4": 0.1
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Understood. Before we get into solutions, who owns the process that is giving you trouble?"
+            }
+          },
+          "rapport": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "clarity": {
+            "value": 2.92,
+            "distribution": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.16,
+              "3": 0.73,
+              "4": 0.1
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "What actually goes wrong in the work they do?"
+            }
+          },
+          "guidance": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "adaptability": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "problem",
+            "probability": 0.94,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p5",
+              "speaker": "client",
+              "text": "Nobody knows which version is approved. Operations spends four hours every week reconciling files sent over email."
+            }
+          },
+          {
+            "id": "impact",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p5",
+              "speaker": "client",
+              "text": "Nobody knows which version is approved. Operations spends four hours every week reconciling files sent over email."
+            }
+          },
+          {
+            "id": "stakeholder",
+            "probability": 0.98,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "Our operations director owns it. They would need to be involved."
+            }
+          },
+          {
+            "id": "capability",
+            "probability": 0.11,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "next-step",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": null,
+        "hint": null,
+        "concern": null,
+        "revision": 5,
+        "model": "jev-1.13.0",
+        "durationMs": 162,
+        "usage": {
+          "inputTokens": 8221,
+          "outputTokens": 967,
+          "totalTokens": 9188
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.23
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 2.71,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.31,
+              "3": 0.64,
+              "4": 0.04
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.48,
+              "p4": 0.52
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.21
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 1.72,
+            "probabilities": {
+              "0": 0.06,
+              "1": 0.24,
+              "2": 0.63,
+              "3": 0.06,
+              "4": 0.01
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.42,
+              "p4": 0.58
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 2.82,
+            "probabilities": {
+              "0": 0,
+              "1": 0.03,
+              "2": 0.23,
+              "3": 0.64,
+              "4": 0.1
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 0.57,
+              "p4": 0.43
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.82
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 2.68,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.32,
+              "3": 0.68,
+              "4": 0
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 0.72,
+              "p4": 0.28
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 2.92,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.16,
+              "3": 0.73,
+              "4": 0.1
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.61,
+              "p2": 0.39
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.14
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 2.04,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.95,
+              "3": 0.04,
+              "4": 0
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.29,
+              "p4": 0.71
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.32
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 3.52,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.03,
+              "3": 0.36,
+              "4": 0.59
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 0.58,
+              "p4": 0.42
+            }
+          },
+          "objective:problem": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "objective:problem:evidence": {
+            "type": "choice",
+            "choice": "p5",
+            "probabilities": {
+              "p5": 1,
+              "p3": 0,
+              "none": 0,
+              "p1": 0
+            }
+          },
+          "objective:impact": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:impact:evidence": {
+            "type": "choice",
+            "choice": "p5",
+            "probabilities": {
+              "p5": 1,
+              "p3": 0,
+              "none": 0,
+              "p1": 0
+            }
+          },
+          "objective:stakeholder": {
+            "type": "boolean",
+            "probability": 0.98
+          },
+          "objective:stakeholder:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p5": 0,
+              "p3": 1,
+              "none": 0,
+              "p1": 0
+            }
+          },
+          "objective:capability": {
+            "type": "boolean",
+            "probability": 0.11
+          },
+          "objective:capability:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p2": 0.01,
+              "none": 0.95,
+              "p4": 0.04
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p3": 0.07,
+              "p5": 0,
+              "none": 0.93,
+              "p1": 0
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.04
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "impact",
+            "probabilities": {
+              "next-step": 0.06,
+              "capability": 0.23,
+              "problem": 0.05,
+              "impact": 0.49,
+              "none": 0.17
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 5,
+        "fidelity": 3.78,
+        "interests": [
+          1.98,
+          1.66,
+          1.58
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 1,
+        "model": "jev-1.13.0",
+        "durationMs": 129,
+        "usage": {
+          "inputTokens": 2589,
+          "outputTokens": 125,
+          "totalTokens": 2714
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.78,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.2,
+              "4": 0.8
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "reasonable-tradeoff": 0,
+              "adoption-open": 0,
+              "no_hint": 1,
+              "earned-progress": 0,
+              "approval-boundary": 0
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 1.98,
+            "probabilities": {
+              "0": 0,
+              "1": 0.06,
+              "2": 0.9,
+              "3": 0.04,
+              "4": 0
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 1.66,
+            "probabilities": {
+              "0": 0,
+              "1": 0.34,
+              "2": 0.65,
+              "3": 0.01,
+              "4": 0
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 1.58,
+            "probabilities": {
+              "0": 0,
+              "1": 0.42,
+              "2": 0.58,
+              "3": 0,
+              "4": 0
+            }
+          }
+        }
+      },
+      "checks": []
+    },
+    {
+      "fixtureId": "earned-discovery",
+      "transcriptLength": 9,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": 3.12,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.09,
+              "3": 0.7,
+              "4": 0.21
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "confidence": {
+            "value": 3,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.16,
+              "3": 0.6799999999999999,
+              "4": 0.16
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "listening": {
+            "value": 3.87,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.12,
+              "4": 0.88
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "rapport": {
+            "value": 3.06,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.01,
+              "3": 0.91,
+              "4": 0.08
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "clarity": {
+            "value": 3.08,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.09,
+              "3": 0.73,
+              "4": 0.18
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "guidance": {
+            "value": 2.64,
+            "distribution": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.38,
+              "3": 0.57,
+              "4": 0.04
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "adaptability": {
+            "value": 3.83,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.03,
+              "3": 0.11,
+              "4": 0.86
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "problem",
+            "probability": 0.95,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p5",
+              "speaker": "client",
+              "text": "Nobody knows which version is approved. Operations spends four hours every week reconciling files sent over email."
+            }
+          },
+          {
+            "id": "impact",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p5",
+              "speaker": "client",
+              "text": "Nobody knows which version is approved. Operations spends four hours every week reconciling files sent over email."
+            }
+          },
+          {
+            "id": "stakeholder",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "Our operations director owns it. They would need to be involved."
+            }
+          },
+          {
+            "id": "capability",
+            "probability": 0.92,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          {
+            "id": "next-step",
+            "probability": 0.18,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": "next-step",
+        "hint": "Agree what happens next, who owns it, and how it gets scheduled.",
+        "concern": null,
+        "revision": 9,
+        "model": "jev-1.13.0",
+        "durationMs": 142,
+        "usage": {
+          "inputTokens": 8515,
+          "outputTokens": 1147,
+          "totalTokens": 9662
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 3.12,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.09,
+              "3": 0.7,
+              "4": 0.21
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.09,
+              "p8": 0.91
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 3,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.16,
+              "3": 0.6799999999999999,
+              "4": 0.16
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0,
+              "p4": 0,
+              "p8": 0.99,
+              "p6": 0.01
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 3.87,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.12,
+              "4": 0.88
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0.02,
+              "p4": 0.01,
+              "p6": 0.39,
+              "p8": 0.58
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 3.06,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.01,
+              "3": 0.91,
+              "4": 0.08
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0.01,
+              "p4": 0,
+              "p6": 0.08,
+              "p8": 0.91
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 3.08,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.09,
+              "3": 0.73,
+              "4": 0.18
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.11,
+              "p8": 0.89
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.89
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 2.64,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.38,
+              "3": 0.57,
+              "4": 0.04
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0.01,
+              "p4": 0.01,
+              "p8": 0.85,
+              "p6": 0.13
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 3.83,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.03,
+              "3": 0.11,
+              "4": 0.86
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0.01,
+              "p4": 0,
+              "p6": 0.09,
+              "p8": 0.9
+            }
+          },
+          "objective:problem": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "objective:problem:evidence": {
+            "type": "choice",
+            "choice": "p5",
+            "probabilities": {
+              "p3": 0,
+              "p9": 0,
+              "p7": 0,
+              "none": 0,
+              "p5": 1,
+              "p1": 0
+            }
+          },
+          "objective:impact": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:impact:evidence": {
+            "type": "choice",
+            "choice": "p5",
+            "probabilities": {
+              "p3": 0,
+              "p9": 0,
+              "p7": 0,
+              "none": 0,
+              "p5": 1,
+              "p1": 0
+            }
+          },
+          "objective:stakeholder": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:stakeholder:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p3": 1,
+              "p9": 0,
+              "p7": 0,
+              "none": 0,
+              "p5": 0,
+              "p1": 0
+            }
+          },
+          "objective:capability": {
+            "type": "boolean",
+            "probability": 0.92
+          },
+          "objective:capability:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p2": 0,
+              "p4": 0,
+              "p6": 0,
+              "p8": 1,
+              "none": 0
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.18
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p3": 0.04,
+              "p9": 0.31,
+              "p7": 0,
+              "none": 0.65,
+              "p5": 0,
+              "p1": 0
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.17
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "next-step",
+            "probabilities": {
+              "next-step": 0.8,
+              "none": 0.13,
+              "capability": 0.07
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 9,
+        "fidelity": 3.55,
+        "interests": [
+          2.92,
+          2.32,
+          2.4
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 0.66,
+        "model": "jev-1.13.0",
+        "durationMs": 89,
+        "usage": {
+          "inputTokens": 2881,
+          "outputTokens": 125,
+          "totalTokens": 3006
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.55,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.08,
+              "3": 0.28,
+              "4": 0.64
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "approval-boundary": 0.01,
+              "reasonable-tradeoff": 0.25,
+              "adoption-open": 0.07,
+              "earned-progress": 0.01,
+              "no_hint": 0.66
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 2.92,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.15,
+              "3": 0.78,
+              "4": 0.07
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 2.32,
+            "probabilities": {
+              "0": 0.03,
+              "1": 0.01,
+              "2": 0.58,
+              "3": 0.36,
+              "4": 0.02
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 2.4,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.62,
+              "3": 0.36,
+              "4": 0.02
+            }
+          }
+        }
+      },
+      "checks": []
+    },
+    {
+      "fixtureId": "earned-discovery",
+      "transcriptLength": 13,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": 3.69,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.31,
+              "4": 0.69
+            },
+            "evidence": {
+              "entryId": "p10",
+              "speaker": "trainee",
+              "text": "A roadmap needs a separate scope and estimate. I would protect the current release. We could first do a short scoping conversation to decide whether an assessment would help, with no commitment to implementation."
+            }
+          },
+          "confidence": {
+            "value": 3.96,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.03,
+              "4": 0.97
+            },
+            "evidence": {
+              "entryId": "p10",
+              "speaker": "trainee",
+              "text": "A roadmap needs a separate scope and estimate. I would protect the current release. We could first do a short scoping conversation to decide whether an assessment would help, with no commitment to implementation."
+            }
+          },
+          "listening": {
+            "value": 3.98,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.02,
+              "4": 0.98
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "So the cost is recurring reconciliation, not simply an old site. What happened with the last attempt?"
+            }
+          },
+          "rapport": {
+            "value": 3.18,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.81,
+              "4": 0.19
+            },
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          "clarity": {
+            "value": 3.58,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.42,
+              "4": 0.58
+            },
+            "evidence": {
+              "entryId": "p10",
+              "speaker": "trainee",
+              "text": "A roadmap needs a separate scope and estimate. I would protect the current release. We could first do a short scoping conversation to decide whether an assessment would help, with no commitment to implementation."
+            }
+          },
+          "guidance": {
+            "value": 4,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 1
+            },
+            "evidence": {
+              "entryId": "p10",
+              "speaker": "trainee",
+              "text": "A roadmap needs a separate scope and estimate. I would protect the current release. We could first do a short scoping conversation to decide whether an assessment would help, with no commitment to implementation."
+            }
+          },
+          "adaptability": {
+            "value": 4,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 1
+            },
+            "evidence": {
+              "entryId": "p10",
+              "speaker": "trainee",
+              "text": "A roadmap needs a separate scope and estimate. I would protect the current release. We could first do a short scoping conversation to decide whether an assessment would help, with no commitment to implementation."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "problem",
+            "probability": 0.95,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p5",
+              "speaker": "client",
+              "text": "Nobody knows which version is approved. Operations spends four hours every week reconciling files sent over email."
+            }
+          },
+          {
+            "id": "impact",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p5",
+              "speaker": "client",
+              "text": "Nobody knows which version is approved. Operations spends four hours every week reconciling files sent over email."
+            }
+          },
+          {
+            "id": "stakeholder",
+            "probability": 0.98,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "Our operations director owns it. They would need to be involved."
+            }
+          },
+          {
+            "id": "capability",
+            "probability": 0.93,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p8",
+              "speaker": "trainee",
+              "text": "That concern makes sense. Our SharePoint and adoption work covers process ownership as well as the technology. I would start by understanding that workflow with operations, before recommending a rebuild."
+            }
+          },
+          {
+            "id": "next-step",
+            "probability": 0.96,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p13",
+              "speaker": "client",
+              "text": "Yes. I will ask operations and send possible times by Friday. A scoping conversation is a sensible next step."
+            }
+          }
+        ],
+        "hintId": null,
+        "hint": null,
+        "concern": null,
+        "revision": 13,
+        "model": "jev-1.13.0",
+        "durationMs": 146,
+        "usage": {
+          "inputTokens": 8942,
+          "outputTokens": 1360,
+          "totalTokens": 10302
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 3.69,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.31,
+              "4": 0.69
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p10",
+            "probabilities": {
+              "p12": 0.01,
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.11,
+              "p8": 0.41,
+              "p10": 0.47
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 3.96,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.03,
+              "4": 0.97
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p10",
+            "probabilities": {
+              "p12": 0.17,
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.01,
+              "p8": 0.11,
+              "p10": 0.71
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 3.98,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.02,
+              "4": 0.98
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p10": 0.05,
+              "p2": 0.01,
+              "p4": 0.01,
+              "p6": 0.5,
+              "p12": 0,
+              "p8": 0.43
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 3.18,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.81,
+              "4": 0.19
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p10": 0.19,
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.09,
+              "p12": 0.01,
+              "p8": 0.71
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 3.58,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.42,
+              "4": 0.58
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p10",
+            "probabilities": {
+              "p12": 0.01,
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.04,
+              "p8": 0.1,
+              "p10": 0.85
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 4,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 1
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p10",
+            "probabilities": {
+              "p12": 0.13,
+              "p2": 0,
+              "p4": 0.01,
+              "p6": 0.06,
+              "p8": 0.12,
+              "p10": 0.68
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 4,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 1
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p10",
+            "probabilities": {
+              "p10": 0.67,
+              "p2": 0,
+              "p4": 0,
+              "p6": 0.08,
+              "p12": 0.01,
+              "p8": 0.24
+            }
+          },
+          "objective:problem": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "objective:problem:evidence": {
+            "type": "choice",
+            "choice": "p5",
+            "probabilities": {
+              "p3": 0,
+              "none": 0,
+              "p9": 0,
+              "p1": 0,
+              "p5": 1,
+              "p11": 0,
+              "p7": 0,
+              "p13": 0
+            }
+          },
+          "objective:impact": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:impact:evidence": {
+            "type": "choice",
+            "choice": "p5",
+            "probabilities": {
+              "p3": 0,
+              "none": 0,
+              "p9": 0,
+              "p1": 0,
+              "p5": 1,
+              "p7": 0,
+              "p11": 0,
+              "p13": 0
+            }
+          },
+          "objective:stakeholder": {
+            "type": "boolean",
+            "probability": 0.98
+          },
+          "objective:stakeholder:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p3": 0.98,
+              "none": 0,
+              "p9": 0,
+              "p1": 0,
+              "p5": 0,
+              "p7": 0,
+              "p11": 0.01,
+              "p13": 0.01
+            }
+          },
+          "objective:capability": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "objective:capability:evidence": {
+            "type": "choice",
+            "choice": "p8",
+            "probabilities": {
+              "p12": 0,
+              "none": 0,
+              "p2": 0,
+              "p4": 0,
+              "p6": 0,
+              "p8": 1,
+              "p10": 0
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "p13",
+            "probabilities": {
+              "p3": 0,
+              "p7": 0,
+              "p9": 0,
+              "p1": 0,
+              "p5": 0,
+              "none": 0,
+              "p11": 0.02,
+              "p13": 0.98
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.05
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "none": 0.71,
+              "next-step": 0.29
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 13,
+        "fidelity": 3.89,
+        "interests": [
+          3.48,
+          3.77,
+          2.84
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 0.98,
+        "model": "jev-1.13.0",
+        "durationMs": 171,
+        "usage": {
+          "inputTokens": 3206,
+          "outputTokens": 125,
+          "totalTokens": 3331
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.89,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.01,
+              "3": 0.09,
+              "4": 0.9
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "no_hint": 0.98,
+              "adoption-open": 0,
+              "earned-progress": 0.01,
+              "reasonable-tradeoff": 0.01,
+              "approval-boundary": 0
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 3.48,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.01,
+              "3": 0.49,
+              "4": 0.5
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 3.77,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.23,
+              "4": 0.77
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 2.84,
+            "probabilities": {
+              "0": 0.02,
+              "1": 0,
+              "2": 0.21,
+              "3": 0.66,
+              "4": 0.11
+            }
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "achieved:problem",
+          "passed": true
+        },
+        {
+          "name": "achieved:impact",
+          "passed": true
+        },
+        {
+          "name": "achieved:stakeholder",
+          "passed": true
+        },
+        {
+          "name": "achieved:capability",
+          "passed": true
+        },
+        {
+          "name": "achieved:next-step",
+          "passed": true
+        },
+        {
+          "name": "high:listening",
+          "passed": true
+        },
+        {
+          "name": "high:guidance",
+          "passed": true
+        },
+        {
+          "name": "high:credibility",
+          "passed": true
+        },
+        {
+          "name": "cue:no_hint",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "fixtureId": "scope-tradeoff",
+      "transcriptLength": 3,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "confidence": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "listening": {
+            "value": 2.5,
+            "distribution": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.46,
+              "3": 0.51,
+              "4": 0.01
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "What decision is the dashboard for, and when do you need it?"
+            }
+          },
+          "rapport": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "clarity": {
+            "value": 2.78,
+            "distribution": {
+              "0": 0.01,
+              "1": 0.02,
+              "2": 0.34,
+              "3": 0.45,
+              "4": 0.18
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "What decision is the dashboard for, and when do you need it?"
+            }
+          },
+          "guidance": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "adaptability": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "need",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "An executive review in two weeks. I need a credible view of workload and overdue items. It would be embarrassing to have nothing to show."
+            }
+          },
+          {
+            "id": "pressure",
+            "probability": 0.93,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "An executive review in two weeks. I need a credible view of workload and overdue items. It would be embarrassing to have nothing to show."
+            }
+          },
+          {
+            "id": "boundary",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "options",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "next-step",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": "options",
+        "hint": "Offer a smaller option that still serves the underlying need.",
+        "concern": null,
+        "revision": 3,
+        "model": "jev-1.13.0",
+        "durationMs": 122,
+        "usage": {
+          "inputTokens": 7936,
+          "outputTokens": 859,
+          "totalTokens": 8795
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.14
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 2.3,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.66,
+              "3": 0.32,
+              "4": 0
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.15
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 1.37,
+            "probabilities": {
+              "0": 0.16,
+              "1": 0.32,
+              "2": 0.51,
+              "3": 0.01,
+              "4": 0
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.85
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 2.5,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.46,
+              "3": 0.51,
+              "4": 0.01
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.7
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 2.91,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.1,
+              "3": 0.89,
+              "4": 0.01
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 2.78,
+            "probabilities": {
+              "0": 0.01,
+              "1": 0.02,
+              "2": 0.34,
+              "3": 0.45,
+              "4": 0.18
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.12
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 2.04,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.93,
+              "3": 0.06,
+              "4": 0
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.15
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 2.09,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.21,
+              "2": 0.43,
+              "3": 0.23,
+              "4": 0.08
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1
+            }
+          },
+          "objective:need": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:need:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p1": 0,
+              "p3": 1,
+              "none": 0
+            }
+          },
+          "objective:pressure": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "objective:pressure:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p1": 0,
+              "p3": 0.98,
+              "none": 0.02
+            }
+          },
+          "objective:boundary": {
+            "type": "boolean",
+            "probability": 0.07
+          },
+          "objective:boundary:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p2": 0.01,
+              "none": 0.99
+            }
+          },
+          "objective:options": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "objective:options:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p2": 0.01,
+              "none": 0.99
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.07
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p1": 0,
+              "p3": 0.01,
+              "none": 0.99
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "options",
+            "probabilities": {
+              "options": 0.35,
+              "next-step": 0.08,
+              "need": 0.07,
+              "pressure": 0.2,
+              "none": 0.03,
+              "boundary": 0.27
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 3,
+        "fidelity": 3.63,
+        "interests": [
+          2,
+          1.8,
+          1.99
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 0.98,
+        "model": "jev-1.13.0",
+        "durationMs": 105,
+        "usage": {
+          "inputTokens": 2374,
+          "outputTokens": 124,
+          "totalTokens": 2498
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.63,
+            "probabilities": {
+              "0": 0.01,
+              "1": 0.01,
+              "2": 0.02,
+              "3": 0.29,
+              "4": 0.67
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "scope-pressure": 0,
+              "no_hint": 0.98,
+              "earned-progress": 0,
+              "approval-boundary": 0,
+              "executive-need": 0.02
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 2,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.98,
+              "3": 0.01,
+              "4": 0
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 1.8,
+            "probabilities": {
+              "0": 0,
+              "1": 0.19,
+              "2": 0.81,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 1.99,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.97,
+              "3": 0.01,
+              "4": 0
+            }
+          }
+        }
+      },
+      "checks": []
+    },
+    {
+      "fixtureId": "scope-tradeoff",
+      "transcriptLength": 5,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": 3.05,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.02,
+              "3": 0.91,
+              "4": 0.07
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          "confidence": {
+            "value": 2.58,
+            "distribution": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.5,
+              "3": 0.38,
+              "4": 0.11
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          "listening": {
+            "value": 3.01,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.08,
+              "3": 0.81,
+              "4": 0.1
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          "rapport": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "clarity": {
+            "value": 2.99,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.05,
+              "3": 0.91,
+              "4": 0.04
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          "guidance": {
+            "value": 2.78,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0.22,
+              "3": 0.77,
+              "4": 0.01
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          "adaptability": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "need",
+            "probability": 0.96,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "An executive review in two weeks. I need a credible view of workload and overdue items. It would be embarrassing to have nothing to show."
+            }
+          },
+          {
+            "id": "pressure",
+            "probability": 0.91,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "An executive review in two weeks. I need a credible view of workload and overdue items. It would be embarrassing to have nothing to show."
+            }
+          },
+          {
+            "id": "boundary",
+            "probability": 0.96,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          {
+            "id": "options",
+            "probability": 0.91,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          {
+            "id": "next-step",
+            "probability": 0.12,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": null,
+        "hint": null,
+        "concern": null,
+        "revision": 5,
+        "model": "jev-1.13.0",
+        "durationMs": 138,
+        "usage": {
+          "inputTokens": 8028,
+          "outputTokens": 943,
+          "totalTokens": 8971
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 3.05,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.02,
+              "3": 0.91,
+              "4": 0.07
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.03,
+              "p4": 0.97
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 2.58,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.5,
+              "3": 0.38,
+              "4": 0.11
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.02,
+              "p4": 0.98
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 3.01,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.08,
+              "3": 0.81,
+              "4": 0.1
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.15,
+              "p4": 0.85
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.72
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 2.55,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.44,
+              "3": 0.54,
+              "4": 0.01
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.21,
+              "p4": 0.79
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.94
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 2.99,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.05,
+              "3": 0.91,
+              "4": 0.04
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.03,
+              "p4": 0.97
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 2.78,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.22,
+              "3": 0.77,
+              "4": 0.01
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.04,
+              "p4": 0.96
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.43
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 3.09,
+            "probabilities": {
+              "0": 0,
+              "1": 0.06,
+              "2": 0.09,
+              "3": 0.53,
+              "4": 0.32
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.02,
+              "p4": 0.98
+            }
+          },
+          "objective:need": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "objective:need:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p5": 0,
+              "none": 0,
+              "p1": 0,
+              "p3": 1
+            }
+          },
+          "objective:pressure": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "objective:pressure:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p5": 0,
+              "none": 0.04,
+              "p1": 0,
+              "p3": 0.96
+            }
+          },
+          "objective:boundary": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "objective:boundary:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0,
+              "p4": 1,
+              "none": 0
+            }
+          },
+          "objective:options": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "objective:options:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0,
+              "p4": 0.99,
+              "none": 0.01
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.12
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p5": 0.03,
+              "p1": 0,
+              "none": 0.97,
+              "p3": 0
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "options",
+            "probabilities": {
+              "boundary": 0.03,
+              "next-step": 0.31,
+              "none": 0.05,
+              "options": 0.61
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 5,
+        "fidelity": 3.36,
+        "interests": [
+          2.14,
+          2.18,
+          2.11
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 0.94,
+        "model": "jev-1.13.0",
+        "durationMs": 94,
+        "usage": {
+          "inputTokens": 2527,
+          "outputTokens": 124,
+          "totalTokens": 2651
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.36,
+            "probabilities": {
+              "0": 0,
+              "1": 0.02,
+              "2": 0.05,
+              "3": 0.48,
+              "4": 0.45
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "executive-need": 0,
+              "no_hint": 0.94,
+              "earned-progress": 0.02,
+              "approval-boundary": 0.01,
+              "scope-pressure": 0.03
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 2.14,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.86,
+              "3": 0.14,
+              "4": 0
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 2.18,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.8200000000000001,
+              "3": 0.18,
+              "4": 0
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 2.11,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.88,
+              "3": 0.12,
+              "4": 0
+            }
+          }
+        }
+      },
+      "checks": []
+    },
+    {
+      "fixtureId": "scope-tradeoff",
+      "transcriptLength": 7,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": 3.89,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.11,
+              "4": 0.89
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          },
+          "confidence": {
+            "value": 3.96,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.04,
+              "4": 0.96
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          },
+          "listening": {
+            "value": 3.93,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.07,
+              "4": 0.93
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          },
+          "rapport": {
+            "value": 3.31,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.69,
+              "4": 0.31
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          },
+          "clarity": {
+            "value": 3.55,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.45,
+              "4": 0.55
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          "guidance": {
+            "value": 4,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 1
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          },
+          "adaptability": {
+            "value": 3.99,
+            "distribution": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.01,
+              "4": 0.99
+            },
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "need",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "An executive review in two weeks. I need a credible view of workload and overdue items. It would be embarrassing to have nothing to show."
+            }
+          },
+          {
+            "id": "pressure",
+            "probability": 0.91,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "An executive review in two weeks. I need a credible view of workload and overdue items. It would be embarrassing to have nothing to show."
+            }
+          },
+          {
+            "id": "boundary",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Then a reliable summary may matter more than an interactive dashboard. The dashboard is outside the release scope and we have not checked effort or permissions. I cannot commit it without an impact estimate and priority decision."
+            }
+          },
+          {
+            "id": "options",
+            "probability": 0.98,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "Let us investigate whether a manual report can show those two measures. I can bring the investigation estimate tomorrow. We can review the impact with the product owner before changing any release commitments."
+            }
+          },
+          {
+            "id": "next-step",
+            "probability": 0.96,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p7",
+              "speaker": "client",
+              "text": "That meets the immediate need. I will invite the product owner for tomorrow afternoon; bring the estimate and we will decide priorities together. Keep the existing release plan until then."
+            }
+          }
+        ],
+        "hintId": null,
+        "hint": null,
+        "concern": null,
+        "revision": 7,
+        "model": "jev-1.13.0",
+        "durationMs": 182,
+        "usage": {
+          "inputTokens": 8108,
+          "outputTokens": 1026,
+          "totalTokens": 9134
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 3.89,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.11,
+              "4": 0.89
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 0.51,
+              "p4": 0.48,
+              "p2": 0.01
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 3.96,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.04,
+              "4": 0.96
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 0.93,
+              "p4": 0.07,
+              "p2": 0
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 3.93,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.07,
+              "4": 0.93
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 0.51,
+              "p4": 0.42,
+              "p2": 0.07
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.89
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 3.31,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.69,
+              "4": 0.31
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 0.69,
+              "p4": 0.24,
+              "p2": 0.07
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 3.55,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.45,
+              "4": 0.55
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p6": 0.42,
+              "p4": 0.5700000000000001,
+              "p2": 0.01
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 4,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 1
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 0.74,
+              "p4": 0.25,
+              "p2": 0.01
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 3.99,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.01,
+              "4": 0.99
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 0.83,
+              "p4": 0.17,
+              "p2": 0
+            }
+          },
+          "objective:need": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:need:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p1": 0,
+              "p7": 0,
+              "p5": 0,
+              "p3": 1,
+              "none": 0
+            }
+          },
+          "objective:pressure": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "objective:pressure:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p1": 0,
+              "p7": 0,
+              "p5": 0,
+              "p3": 0.92,
+              "none": 0.08
+            }
+          },
+          "objective:boundary": {
+            "type": "boolean",
+            "probability": 0.97
+          },
+          "objective:boundary:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p6": 0,
+              "p4": 1,
+              "p2": 0,
+              "none": 0
+            }
+          },
+          "objective:options": {
+            "type": "boolean",
+            "probability": 0.98
+          },
+          "objective:options:evidence": {
+            "type": "choice",
+            "choice": "p6",
+            "probabilities": {
+              "p6": 1,
+              "p4": 0,
+              "p2": 0,
+              "none": 0
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "p7",
+            "probabilities": {
+              "p1": 0,
+              "p7": 1,
+              "p5": 0,
+              "p3": 0,
+              "none": 0
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.04
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "next-step": 0.06,
+              "none": 0.94
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 7,
+        "fidelity": 3.94,
+        "interests": [
+          3.04,
+          3.4,
+          3.29
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 1,
+        "model": "jev-1.13.0",
+        "durationMs": 97,
+        "usage": {
+          "inputTokens": 2694,
+          "outputTokens": 124,
+          "totalTokens": 2818
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.94,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3": 0.05,
+              "4": 0.95
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "scope-pressure": 0,
+              "no_hint": 1,
+              "earned-progress": 0,
+              "executive-need": 0,
+              "approval-boundary": 0
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 3.04,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.08,
+              "3": 0.8,
+              "4": 0.12
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 3.4,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.03,
+              "3": 0.54,
+              "4": 0.43
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 3.29,
+            "probabilities": {
+              "0": 0,
+              "1": 0,
+              "2": 0.02,
+              "3": 0.67,
+              "4": 0.31
+            }
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "achieved:need",
+          "passed": true
+        },
+        {
+          "name": "achieved:pressure",
+          "passed": true
+        },
+        {
+          "name": "achieved:boundary",
+          "passed": true
+        },
+        {
+          "name": "achieved:options",
+          "passed": true
+        },
+        {
+          "name": "achieved:next-step",
+          "passed": true
+        },
+        {
+          "name": "high:confidence",
+          "passed": true
+        },
+        {
+          "name": "high:adaptability",
+          "passed": true
+        },
+        {
+          "name": "high:guidance",
+          "passed": true
+        },
+        {
+          "name": "high:listening",
+          "passed": true
+        },
+        {
+          "name": "cue:no_hint",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

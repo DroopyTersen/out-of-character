@@ -20,7 +20,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private connecting: Promise<{ sdp: string }> | undefined;
   private closeReceived: (() => void) | undefined;
   private lastSeen = Date.now();
-  private lastDelta = 0;
+  private passageUpdatedAt = new Map<string, number>();
   private lastGrade = 0;
   private gradedText = '';
   private gradeCalls = 0;
@@ -70,8 +70,10 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private async start(request: Request, capability: string): Promise<Response> {
-    if (this.lease) return simulatorJson({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
     const input = startSchema.parse(await request.json());
+    // Claim after the asynchronous body read so concurrent starts cannot both
+    // observe an empty lease and create two paid sessions for the same attempt.
+    if (this.lease) return simulatorJson({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
     this.lease = { capability, deadline: Date.now() + SESSION_LIMIT_SECONDS * 1000, closed: false };
     this.snapshot = {
       id: input.id, scenarioId: input.scenarioId, clientId: input.clientId,
@@ -143,9 +145,11 @@ export class SimulatorSession extends DurableObject<Env> {
       });
       // Late deltas may arrive during close. Keep the final grading input valid.
       if (next.length > 240 || next.reduce((sum, item) => sum + item.text.length, 0) > 80_000) return;
+      const changed = next.find(entry => !snapshot.transcript.includes(entry));
+      if (!changed) return;
+      this.passageUpdatedAt.set(changed.id, Date.now());
       snapshot.transcript = next;
       snapshot.revision++;
-      this.lastDelta = Date.now();
       if (snapshot.transcript.length >= 240 || snapshot.transcript.reduce((sum, item) => sum + item.text.length, 0) >= 72_000) {
         snapshot.message = 'The transcript limit has been reached.';
         this.ctx.waitUntil(this.end());
@@ -176,7 +180,7 @@ export class SimulatorSession extends DurableObject<Env> {
       this.ctx.waitUntil(this.end());
       return;
     }
-    const transcript = settledTranscript(snapshot.transcript, now - this.lastDelta);
+    const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
     const interval = Math.max(2000, (this.lease!.deadline - now) / Math.max(1, 179 - this.gradeCalls));
     if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < interval || this.gradeCalls >= 179) return;
@@ -213,7 +217,7 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private isFresh(transcript: SessionSnapshot['transcript']): boolean {
-    return JSON.stringify(transcript) === JSON.stringify(settledTranscript(this.snapshot!.transcript, Date.now() - this.lastDelta));
+    return JSON.stringify(transcript) === JSON.stringify(settledTranscript(this.snapshot!.transcript, this.passageUpdatedAt, Date.now()));
   }
 
   private async direct(transcript: SessionSnapshot['transcript'], revision: number) {

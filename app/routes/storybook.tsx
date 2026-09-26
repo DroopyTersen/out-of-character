@@ -5,9 +5,17 @@ import { DrawStory, GalleryStory, ReelStory } from '../storybook/selection-stori
 import { GaugeStory, JudgingStory, RaceStory } from '../storybook/reading-stories';
 import { PerformanceStory, ResultStory } from '../storybook/performance-stories';
 import '../storybook/workshop.css';
+import { publicCatalog } from '../../ai/simulator/scenarios.server';
+import { SimulatorDebriefStory, SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
+
+export const loader = () => ({ simulatorCatalog: publicCatalog() });
 
 export const meta = () => [{ title: 'The Workshop — Out of Character' }];
 const stories = [
+  { id: 'simulator-selection', label: 'Simulator selection', description: 'Scenario scrolling, client rail, selection transitions, availability, and microphone errors.', component: SimulatorSelectionStory },
+  { id: 'simulator-live', label: 'Simulator conversation', description: 'The production screen with replayable hints, objective completions, skill bars, captions, and connection states.', component: SimulatorLiveStory },
+  { id: 'simulator-debrief', label: 'Simulator debrief', description: 'Successful and difficult attempts, real evidence, skill gaps, and unconfirmed finalization.', component: SimulatorDebriefStory },
+  { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, measured trainee judgments, client interests and fidelity, cue selection, and raw probabilities.', component: SimulatorJudgingStory },
   { id: 'draw', label: 'Complete draw', description: 'Idle, landing, scene timing, failure, and connection states.', component: DrawStory },
   { id: 'reel', label: 'Character reel', description: 'Replay the actual reel with a chosen landing character.', component: ReelStory },
   { id: 'gallery', label: 'Character gallery', description: 'All 42 personas, backstories, judge-facing descriptions, and individual artwork.', component: GalleryStory },

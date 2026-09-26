@@ -49,7 +49,7 @@ try {
     });
     page.on('pageerror', error => errors.push(error.message));
     const reSpin = page.getByRole('button', { name: 'Re-spin for a new character', exact: true });
-    const start = page.getByRole('button', { name: 'Start impersonating', exact: true });
+    const start = page.getByRole('button', { name: 'Start your turn', exact: true });
     const selected = () => page.locator('.reel').getAttribute('aria-label');
     const waitForSelection = () => page.waitForFunction(() => {
       const label = document.querySelector('.reel')?.getAttribute('aria-label') || '';

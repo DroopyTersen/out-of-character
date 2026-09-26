@@ -4,7 +4,7 @@ Plan: [implementation plan](simulator-implementation-plan.md). Product decisions
 
 ## Current status
 
-Checkpoints 0–2 reviewed on `simulator-mvp`. The goal is active. Live ownership, audio, and scoring work together; the production UI and workshop are implemented and entering checkpoint review. The branch starts from the current local `main`; no merge or deployment is authorized.
+Checkpoints 0–3 reviewed on `simulator-mvp`. The goal is active. Live ownership, audio, and scoring work together; the production UI and workshop are implemented and reviewed. Final acceptance is in progress. The branch starts from the current local `main`; no merge or deployment is authorized.
 
 ## Decisions
 
@@ -23,14 +23,16 @@ Checkpoints 0–2 reviewed on `simulator-mvp`. The goal is active. Live ownershi
 | 0 — Plan and baseline | Reviewed | `bun run check` passed: typecheck, 75 tests / 3,592 assertions, client/server builds, and Wrangler dry run. Opus 5.5 desktop review passed with conditions; dispositions below. Requested OpenAI credential loaded into ignored configuration; read-only model lookup returned HTTP 200 for `gpt-live-1`. No audio session yet. |
 | 1 — Scenario and judging foundations | Reviewed | Reviewed by Opus 5.5. Eight real Jev fixtures pass all 65 expectations, including unavailable skills and appropriate no-hint cases. Source evidence matches authored passages. Review fixes and verification below. |
 | 2 — Live session | Reviewed | Opus 5.5 review passed with conditions, addressed below. Nine session lifecycle tests and four API tests pass. Real WebRTC audio/transcripts, live Jev updates, provider closure, and local media cleanup pass. |
-| 3 — Complete simulator | In progress | Production selection/live/debrief components and four DIY workshop stories implemented. Seven recorded prefix evaluations support replay. Workshop browser acceptance passes 8/8 flows at desktop and phone widths, with no microphone/API requests or page errors. |
-| 4 — MVP acceptance | Pending | — |
+| 3 — Complete simulator | Reviewed | Production selection/live/debrief components and four DIY workshop stories implemented. Seven recorded prefix evaluations support replay. Workshop browser acceptance passes 8/8 flows at desktop and phone widths, with no microphone/API requests or page errors. |
+| 4 — MVP acceptance | In progress | Final full checks, reproducible evidence, and read-only review are next. |
 
 ## Verification and remaining gaps
 
-Typecheck and focused simulator tests pass. Eight authored transcripts pass 65/65 real Jev expectations, plus seven replay prefixes (19/19 final checks). These are development fixtures; independently authored holdouts are next. Thresholds: discovery 0.75, behavior/outcome 0.85, observable skill 0.85, client cue 0.90.
+Typecheck and focused simulator tests pass. Rubric v3 passes all 65 development expectations and 19 replay final checks. The first independent holdout run (v2) was 20/22; it exposed outcome wording applied to historical behaviors. After a kind-specific wording fix, v3 is 21/22 on those now-known cases. The remaining capability miss is borderline because a later line promises an unverified solution; it remains visible. Two new cases authored after v3 was frozen pass 11/11. Thresholds did not change. Archived v2 failures are retained in `ai/simulator/holdout-rubric-v2.json`.
 
-Real WebRTC smoke passed seven checks, including Jev feedback during live conversation and provider-confirmed closure (26 billed seconds). Three browser failure flows release media. Both primary-WebSocket cue probes closed cleanly at 32 seconds; the enabled probe acknowledged the private cue and maintained authority/budget limits. This forced cue was sent early, so the comparison proves protocol delivery, not causal improvement. Responsive dialogue and a stronger browser event inspection remain final acceptance work.
+The final synthetic WebRTC smoke passes 9/9, including a current live assessment after passage settling, recovery from a transient poll failure, safe data-channel notice shape, provider-confirmed closure, and local media cleanup (28 billed seconds). Workshop acceptance passes 8/8; failure flows pass 3/3; the original game selection passes at 1440 and 390 pixels. The prior full repository gate passed 99 tests before the final settling/concurrency tests were added; run it again for final acceptance.
+
+Four responsive synthetic roleplays (good/poor approach, director on/off) all finalized cleanly: 91/93 seconds for the good approach and 68/53 for the poor approach. Good approaches earned a bounded next step after resistance; poor approaches earned no agreement. All director judgments chose `no_hint`, appropriately leaving the actor alone. Separate forced-cue probes acknowledged private direction and closed cleanly. These establish protocol delivery and a small role-play proxy, not human realism or causal cue effectiveness.
 
 ## Checkpoint 0 review disposition
 
@@ -74,3 +76,17 @@ Opus 5.5 completed a read-only desktop review of session ownership and transport
 - Actual audio exposed a handshake-timeout bug: an abort timer remained active after WebSocket upgrade and closed the sideband. The timer now bounds only attachment, and finalization reattaches a dropped control socket.
 
 Residual boundary: a process loss after provider creation but before its returned ID is persisted cannot be recovered by attempt ID with the current Live API. Deployment can interrupt active sessions. Keep public creation disabled until a shared spending/concurrency policy is chosen; per-IP start limiting alone is not a daily budget.
+
+## Checkpoint 3 review disposition
+
+Opus 5.5 reviewed the complete UI, workshop, recorded analyses, scripts, and previous fixes through the desktop UI. Verdict: passes with conditions. A focused follow-up reviewed the independent holdout misses.
+
+- Fixed: passages now settle after their own 1.2-second quiet interval. A client backchannel cannot make an unfinished trainee statement ready for grading. Added a regression test and a real smoke assertion requiring current live feedback.
+- Fixed: `bun run check` now includes a client-asset scan for distinctive private actor/rubric text and credential-shaped values. Workshop dialogue and measured synthetic fixtures are intentionally public examples and can reveal scenario answers; the public-source demo is not cheating-proof.
+- Fixed: recorded rows carry the actual source file, rubric version, and collection time. Replay latching uses objective kinds rather than one hardcoded outcome ID. Replay stops outside its state updater. Speaking activity no longer floods a screen-reader status region.
+- Fixed: behavior/discovery timing is independent of current agreements. Existing negative cases still pass. Preserved the failed v2 evidence and retained the remaining borderline miss instead of changing thresholds. Two fresh v3 validation cases pass.
+- Verified: original game selection at desktop and phone widths. Its existing browser script had a stale button label; the selector now matches the current UI. Keeping the Simulator navigation entry while paid practice is off intentionally lets visitors reach the free workshop.
+- Small follow-ups: captions use the most recent audio timestamp during overlap, preview debrief buttons explain their action without silently swapping fixtures, and reduced-motion preferences cover hint/selection transitions.
+- Additional owner audit: concurrent starts now claim the lease after reading the request, preventing double paid creation. Tests also cover the hard deadline despite continued polling and explicitly unconfirmed provider finalization.
+
+No deployment, merge, public enablement, or infrastructure change has been performed.

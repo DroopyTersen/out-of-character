@@ -19,11 +19,9 @@ export function findEvidence(entries: TranscriptEntry[], id: string): Evidence |
   return entry ? { entryId: entry.id, speaker: entry.speaker, text: entry.text } : null;
 }
 
-/** A speaker change closes the preceding passage; otherwise wait for a quiet gap. */
-export function settledTranscript(entries: TranscriptEntry[], quietMs: number): TranscriptEntry[] {
-  if (quietMs >= 1200) return entries;
-  const latestEnd = Math.max(...entries.map(entry => entry.endMs));
-  return entries.filter(entry => entry.endMs < latestEnd);
+/** Each passage must stop growing; a backchannel cannot settle another speaker. */
+export function settledTranscript(entries: TranscriptEntry[], updatedAt: ReadonlyMap<string, number>, now: number): TranscriptEntry[] {
+  return entries.filter(entry => now - (updatedAt.get(entry.id) ?? now) >= 1200);
 }
 
 /** Discoveries and demonstrated behaviors persist; current agreements can be withdrawn. */

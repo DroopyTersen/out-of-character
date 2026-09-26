@@ -77,6 +77,13 @@ test('cancelling during provider creation closes the eventual session', async ()
   expect(result.finalization).toBe('confirmed');
   expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(true);
 });
+test('concurrent starts create only one paid session', async () => {
+  const f = await fixture();
+  const responses = await Promise.all([f.session.fetch(request('start')), f.session.fetch(request('start'))]);
+  expect(responses.map(response => response.status).sort()).toEqual([200, 409]);
+  expect(f.creations()).toBe(1);
+  await f.session.fetch(request('end'));
+});
 test('an end arriving before start prevents any paid creation for that attempt', async () => {
   const f = await fixture();
   await f.session.fetch(request('end'));
@@ -94,6 +101,27 @@ test('server alarm closes abandoned practice without browser cooperation', async
   expect(result.status).toBe('ended');
   expect(result.finalization).toBe('confirmed');
   expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(true);
+});
+test('a browser that keeps polling still cannot outlive the attempt deadline', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  setSystemTime(Date.now() + 601_000);
+  await f.session.fetch(request('poll'));
+  await f.session.alarm();
+  const result = await (await f.session.fetch(request('poll'))).json() as Record<string, unknown>;
+  expect(result.status).toBe('ended');
+  expect(result.finalization).toBe('confirmed');
+});
+test('failed provider finalization remains explicit and retains a closure lease', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  f.socket.readyState = 3; // Both the existing control socket and reattachment are unavailable.
+  const result = await (await f.session.fetch(request('end'))).json() as Record<string, unknown>;
+  expect(result.finalization).toBe('unconfirmed');
+  expect(result.message).toContain('did not confirm');
+  expect(f.values.get('lease')).toMatchObject({ closed: false });
+  expect(f.alarm()).toBeGreaterThan(Date.now());
 });
 
 test('a replacement session owner closes the persisted provider lease', async () => {
@@ -142,12 +170,14 @@ for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Sign today.', start_ms: 0, end_ms: 900 });
+  await new Promise(resolve => setTimeout(resolve, 1100));
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Sure,', start_ms: 1000, end_ms: 1500 });
   await started;
   f.socket.emit({ type: 'session.output_transcript.delta', delta: ' I can approve it.', start_ms: 1500, end_ms: 2000 });
   if (newerReply) {
     f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Actually, ask your COO first.', start_ms: 2200, end_ms: 3100 });
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Yes.', start_ms: 3200, end_ms: 3400 });
+    await new Promise(resolve => setTimeout(resolve, 1300));
   }
   resolve();
   await Promise.all(f.pending);

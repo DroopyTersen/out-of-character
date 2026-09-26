@@ -30,20 +30,27 @@ describe('simulator boundaries', () => {
 });
 
 describe('transcript and feedback behavior', () => {
-  test('preserves actual fragments and overlapping speakers, then waits for a settled passage', () => {
+  test('preserves actual fragments and overlapping speakers', () => {
     let entries: TranscriptEntry[] = [];
     entries = appendTranscript(entries, { speaker: 'trainee', text: 'I can', startMs: 100, endMs: 600 });
     entries = appendTranscript(entries, { speaker: 'trainee', text: ' help,', startMs: 600, endMs: 900 });
     expect(entries[0]!.text).toBe('I can help,');
-    expect(settledTranscript(entries, 300)).toEqual([]);
     entries = appendTranscript(entries, { speaker: 'client', text: ' wait.', startMs: 850, endMs: 1200 });
-    expect(settledTranscript(entries, 0).map(item => item.text)).toEqual(['I can help,']);
-    expect(settledTranscript(entries, 1200)).toHaveLength(2);
     entries = appendTranscript(entries, { speaker: 'trainee', text: ' after we check scope.', startMs: 950, endMs: 2000 });
     expect(entries).toHaveLength(2);
     expect(entries[0]!.text).toBe('I can help, after we check scope.');
-    expect(settledTranscript(entries, 0).map(entry => entry.speaker)).toEqual(['client']);
     expect(appendTranscript(entries, { speaker: 'client', text: 'bad', startMs: NaN, endMs: 10 })).toBe(entries);
+  });
+  test('a client backchannel cannot settle a trainee passage that is still growing', () => {
+    const entries: TranscriptEntry[] = [
+      { id: 'p1', speaker: 'trainee', text: 'What I can offer, after we check', startMs: 0, endMs: 4400 },
+      { id: 'p2', speaker: 'client', text: 'Mm.', startMs: 4300, endMs: 4600 },
+    ];
+    const updates = new Map([['p1', 4400], ['p2', 4600]]);
+    expect(settledTranscript(entries, updates, 4700)).toEqual([]);
+    updates.set('p1', 5700);
+    expect(settledTranscript(entries, updates, 5800).map(item => item.id)).toEqual(['p2']);
+    expect(settledTranscript(entries, updates, 6900).map(item => item.id)).toEqual(['p1', 'p2']);
   });
   test('later objectives can complete first; discoveries persist and agreements can be withdrawn', () => {
     const scenario = publicCatalog().scenarios[0]!;

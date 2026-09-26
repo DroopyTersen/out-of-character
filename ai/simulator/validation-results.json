@@ -1,0 +1,986 @@
+{
+  "synthetic": true,
+  "collectedAt": "2026-09-26T04:49:40.853Z",
+  "simulatorVersion": "simulator-v1",
+  "rubricVersion": "simulator-rubric-v3",
+  "rows": [
+    {
+      "fixtureId": "validation-capability-then-dismissal",
+      "transcriptLength": 5,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": 0.72,
+            "distribution": {
+              "0": 0.36,
+              "1": 0.56,
+              "2": 0.08,
+              "3": 0,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Our SharePoint and adoption team could map who approves each procedure and establish a review process so branches can find the current copy. I would check that workflow before recommending a new site."
+            }
+          },
+          "confidence": {
+            "value": 0.15,
+            "distribution": {
+              "0": 0.92,
+              "1": 0.03,
+              "2": 0.05,
+              "3": 0,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Our SharePoint and adoption team could map who approves each procedure and establish a review process so branches can find the current copy. I would check that workflow before recommending a new site."
+            }
+          },
+          "listening": {
+            "value": 0.36,
+            "distribution": {
+              "0": 0.76,
+              "1": 0.14,
+              "2": 0.1,
+              "3": 0,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "That was the previous supplier. We should skip the history and start implementation right away."
+            }
+          },
+          "rapport": {
+            "value": 0.39,
+            "distribution": {
+              "0": 0.62,
+              "1": 0.38,
+              "2": 0,
+              "3": 0,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "That was the previous supplier. We should skip the history and start implementation right away."
+            }
+          },
+          "clarity": {
+            "value": 2.1,
+            "distribution": {
+              "0": 0.04,
+              "1": 0.15,
+              "2": 0.49,
+              "3": 0.32,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "That was the previous supplier. We should skip the history and start implementation right away."
+            }
+          },
+          "guidance": {
+            "value": 0.22,
+            "distribution": {
+              "0": 0.85,
+              "1": 0.07,
+              "2": 0.08,
+              "3": 0,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "That was the previous supplier. We should skip the history and start implementation right away."
+            }
+          },
+          "adaptability": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "problem",
+            "probability": 0.9,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p1",
+              "speaker": "client",
+              "text": "Our branches cannot tell which procedure in SharePoint is approved, so they sometimes use an old copy."
+            }
+          },
+          {
+            "id": "impact",
+            "probability": 0.84,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p3",
+              "speaker": "client",
+              "text": "That could help. The last rollout still failed because nobody used the site. Can I explain what happened?"
+            }
+          },
+          {
+            "id": "stakeholder",
+            "probability": 0.11,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "capability",
+            "probability": 0.87,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Our SharePoint and adoption team could map who approves each procedure and establish a review process so branches can find the current copy. I would check that workflow before recommending a new site."
+            }
+          },
+          {
+            "id": "next-step",
+            "probability": 0.03,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": null,
+        "hint": null,
+        "concern": null,
+        "revision": 5,
+        "model": "jev-1.13.0",
+        "durationMs": 246,
+        "usage": {
+          "inputTokens": 8335,
+          "outputTokens": 977,
+          "totalTokens": 9312
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 0.72,
+            "probabilities": {
+              "0": 0.36,
+              "1": 0.56,
+              "2": 0.08,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p4": 0.15,
+              "p2": 0.85
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 0.15,
+            "probabilities": {
+              "0": 0.92,
+              "1": 0.03,
+              "2": 0.05,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p4": 0.5,
+              "p2": 0.5
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.96
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 0.36,
+            "probabilities": {
+              "0": 0.76,
+              "1": 0.14,
+              "2": 0.1,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.99,
+              "p2": 0.01
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 0.39,
+            "probabilities": {
+              "0": 0.62,
+              "1": 0.38,
+              "2": 0,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.84,
+              "p2": 0.16
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.91
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 2.1,
+            "probabilities": {
+              "0": 0.04,
+              "1": 0.15,
+              "2": 0.49,
+              "3": 0.32,
+              "4": 0
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.88,
+              "p2": 0.12
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.95
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 0.22,
+            "probabilities": {
+              "0": 0.85,
+              "1": 0.07,
+              "2": 0.08,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.97,
+              "p2": 0.03
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.74
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 0.04,
+            "probabilities": {
+              "0": 0.97,
+              "1": 0.03,
+              "2": 0,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.97,
+              "p2": 0.03
+            }
+          },
+          "objective:problem": {
+            "type": "boolean",
+            "probability": 0.9
+          },
+          "objective:problem:evidence": {
+            "type": "choice",
+            "choice": "p1",
+            "probabilities": {
+              "p5": 0,
+              "p3": 0,
+              "p1": 1,
+              "none": 0
+            }
+          },
+          "objective:impact": {
+            "type": "boolean",
+            "probability": 0.84
+          },
+          "objective:impact:evidence": {
+            "type": "choice",
+            "choice": "p3",
+            "probabilities": {
+              "p5": 0,
+              "p3": 0.67,
+              "p1": 0.32,
+              "none": 0.01
+            }
+          },
+          "objective:stakeholder": {
+            "type": "boolean",
+            "probability": 0.11
+          },
+          "objective:stakeholder:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p5": 0.08,
+              "p3": 0.02,
+              "p1": 0.08,
+              "none": 0.82
+            }
+          },
+          "objective:capability": {
+            "type": "boolean",
+            "probability": 0.87
+          },
+          "objective:capability:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p2": 1,
+              "p4": 0,
+              "none": 0
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.03
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p5": 0.01,
+              "p3": 0.02,
+              "p1": 0,
+              "none": 0.97
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.79
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "problem",
+            "probabilities": {
+              "none": 0.06,
+              "problem": 0.31,
+              "stakeholder": 0.03,
+              "impact": 0.12,
+              "capability": 0.2,
+              "next-step": 0.28
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 5,
+        "fidelity": 3.57,
+        "interests": [
+          1.2,
+          1.95,
+          0.8
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 1,
+        "model": "jev-1.13.0",
+        "durationMs": 108,
+        "usage": {
+          "inputTokens": 2617,
+          "outputTokens": 125,
+          "totalTokens": 2742
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.57,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.02,
+              "3": 0.34,
+              "4": 0.63
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "adoption-open": 0,
+              "no_hint": 1,
+              "reasonable-tradeoff": 0,
+              "earned-progress": 0,
+              "approval-boundary": 0
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 1.2,
+            "probabilities": {
+              "0": 0.38,
+              "1": 0.1,
+              "2": 0.48,
+              "3": 0.04,
+              "4": 0
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 1.95,
+            "probabilities": {
+              "0": 0.17,
+              "1": 0.09,
+              "2": 0.4,
+              "3": 0.29,
+              "4": 0.05
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 0.8,
+            "probabilities": {
+              "0": 0.37,
+              "1": 0.46,
+              "2": 0.17,
+              "3": 0,
+              "4": 0
+            }
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "achieved:problem",
+          "passed": true
+        },
+        {
+          "name": "achieved:capability",
+          "passed": true
+        },
+        {
+          "name": "absent:stakeholder",
+          "passed": true
+        },
+        {
+          "name": "absent:next-step",
+          "passed": true
+        },
+        {
+          "name": "cue:no_hint",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "fixtureId": "validation-polished-generic",
+      "transcriptLength": 5,
+      "trainee": {
+        "skills": {
+          "credibility": {
+            "value": 1.92,
+            "distribution": {
+              "0": 0,
+              "1": 0.21,
+              "2": 0.66,
+              "3": 0.13,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We support SharePoint collaboration, adoption, and modern Azure applications. We begin with the people using a system, set measurable goals, and protect ongoing delivery before recommending a change."
+            }
+          },
+          "confidence": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "listening": {
+            "value": 1.66,
+            "distribution": {
+              "0": 0.06,
+              "1": 0.27,
+              "2": 0.62,
+              "3": 0.05,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We would need to understand your workflow first. For now I can describe our approach and case studies."
+            }
+          },
+          "rapport": {
+            "value": 1.88,
+            "distribution": {
+              "0": 0,
+              "1": 0.19,
+              "2": 0.74,
+              "3": 0.07,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We would need to understand your workflow first. For now I can describe our approach and case studies."
+            }
+          },
+          "clarity": {
+            "value": 1.49,
+            "distribution": {
+              "0": 0.01,
+              "1": 0.52,
+              "2": 0.44,
+              "3": 0.03,
+              "4": 0
+            },
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We support SharePoint collaboration, adoption, and modern Azure applications. We begin with the people using a system, set measurable goals, and protect ongoing delivery before recommending a change."
+            }
+          },
+          "guidance": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          },
+          "adaptability": {
+            "value": null,
+            "distribution": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "problem",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "impact",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "stakeholder",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "capability",
+            "probability": 0.18,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "next-step",
+            "probability": 0.03,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "hintId": "capability",
+        "hint": "Connect one relevant capability to what you have heard.",
+        "concern": null,
+        "revision": 5,
+        "model": "jev-1.13.0",
+        "durationMs": 170,
+        "usage": {
+          "inputTokens": 8338,
+          "outputTokens": 976,
+          "totalTokens": 9314
+        },
+        "answers": {
+          "skill:credibility:observable": {
+            "type": "boolean",
+            "probability": 0.93
+          },
+          "skill:credibility": {
+            "type": "score",
+            "score": 1.92,
+            "probabilities": {
+              "0": 0,
+              "1": 0.21,
+              "2": 0.66,
+              "3": 0.13,
+              "4": 0
+            }
+          },
+          "skill:credibility:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p4": 0.37,
+              "p2": 0.63
+            }
+          },
+          "skill:confidence:observable": {
+            "type": "boolean",
+            "probability": 0.63
+          },
+          "skill:confidence": {
+            "type": "score",
+            "score": 1.45,
+            "probabilities": {
+              "0": 0.01,
+              "1": 0.54,
+              "2": 0.45,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:confidence:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.61,
+              "p2": 0.39
+            }
+          },
+          "skill:listening:observable": {
+            "type": "boolean",
+            "probability": 0.92
+          },
+          "skill:listening": {
+            "type": "score",
+            "score": 1.66,
+            "probabilities": {
+              "0": 0.06,
+              "1": 0.27,
+              "2": 0.62,
+              "3": 0.05,
+              "4": 0
+            }
+          },
+          "skill:listening:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.29,
+              "p4": 0.71
+            }
+          },
+          "skill:rapport:observable": {
+            "type": "boolean",
+            "probability": 0.87
+          },
+          "skill:rapport": {
+            "type": "score",
+            "score": 1.88,
+            "probabilities": {
+              "0": 0,
+              "1": 0.19,
+              "2": 0.74,
+              "3": 0.07,
+              "4": 0
+            }
+          },
+          "skill:rapport:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p2": 0.4,
+              "p4": 0.6
+            }
+          },
+          "skill:clarity:observable": {
+            "type": "boolean",
+            "probability": 0.87
+          },
+          "skill:clarity": {
+            "type": "score",
+            "score": 1.49,
+            "probabilities": {
+              "0": 0.01,
+              "1": 0.52,
+              "2": 0.44,
+              "3": 0.03,
+              "4": 0
+            }
+          },
+          "skill:clarity:evidence": {
+            "type": "choice",
+            "choice": "p2",
+            "probabilities": {
+              "p4": 0.45,
+              "p2": 0.55
+            }
+          },
+          "skill:guidance:observable": {
+            "type": "boolean",
+            "probability": 0.53
+          },
+          "skill:guidance": {
+            "type": "score",
+            "score": 1.24,
+            "probabilities": {
+              "0": 0,
+              "1": 0.77,
+              "2": 0.23,
+              "3": 0,
+              "4": 0
+            }
+          },
+          "skill:guidance:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.84,
+              "p2": 0.16
+            }
+          },
+          "skill:adaptability:observable": {
+            "type": "boolean",
+            "probability": 0.58
+          },
+          "skill:adaptability": {
+            "type": "score",
+            "score": 1.68,
+            "probabilities": {
+              "0": 0.02,
+              "1": 0.46,
+              "2": 0.35,
+              "3": 0.16,
+              "4": 0.01
+            }
+          },
+          "skill:adaptability:evidence": {
+            "type": "choice",
+            "choice": "p4",
+            "probabilities": {
+              "p4": 0.88,
+              "p2": 0.12
+            }
+          },
+          "objective:problem": {
+            "type": "boolean",
+            "probability": 0.04
+          },
+          "objective:problem:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p5": 0,
+              "p1": 0.01,
+              "p3": 0,
+              "none": 0.99
+            }
+          },
+          "objective:impact": {
+            "type": "boolean",
+            "probability": 0.04
+          },
+          "objective:impact:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p5": 0,
+              "p1": 0.01,
+              "p3": 0,
+              "none": 0.99
+            }
+          },
+          "objective:stakeholder": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "objective:stakeholder:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "none": 0.98,
+              "p1": 0,
+              "p3": 0,
+              "p5": 0.02
+            }
+          },
+          "objective:capability": {
+            "type": "boolean",
+            "probability": 0.18
+          },
+          "objective:capability:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p4": 0.07,
+              "p2": 0.13,
+              "none": 0.8
+            }
+          },
+          "objective:next-step": {
+            "type": "boolean",
+            "probability": 0.03
+          },
+          "objective:next-step:evidence": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "p5": 0.03,
+              "p1": 0,
+              "p3": 0,
+              "none": 0.97
+            }
+          },
+          "mistake": {
+            "type": "boolean",
+            "probability": 0.06
+          },
+          "hint": {
+            "type": "choice",
+            "choice": "capability",
+            "probabilities": {
+              "stakeholder": 0,
+              "next-step": 0.05,
+              "impact": 0,
+              "capability": 0.49,
+              "problem": 0.07,
+              "none": 0.39
+            }
+          }
+        }
+      },
+      "client": {
+        "revision": 5,
+        "fidelity": 3.47,
+        "interests": [
+          2.45,
+          3.22,
+          1.1
+        ],
+        "cueId": "no_hint",
+        "cueProbability": 1,
+        "model": "jev-1.13.0",
+        "durationMs": 97,
+        "usage": {
+          "inputTokens": 2621,
+          "outputTokens": 125,
+          "totalTokens": 2746
+        },
+        "answers": {
+          "fidelity": {
+            "type": "score",
+            "score": 3.47,
+            "probabilities": {
+              "0": 0,
+              "1": 0.01,
+              "2": 0.03,
+              "3": 0.43,
+              "4": 0.53
+            }
+          },
+          "cue": {
+            "type": "choice",
+            "choice": "no_hint",
+            "probabilities": {
+              "adoption-open": 0,
+              "reasonable-tradeoff": 0,
+              "no_hint": 1,
+              "approval-boundary": 0,
+              "earned-progress": 0
+            }
+          },
+          "interest:0": {
+            "type": "score",
+            "score": 2.45,
+            "probabilities": {
+              "0": 0,
+              "1": 0.29,
+              "2": 0.17,
+              "3": 0.34,
+              "4": 0.2
+            }
+          },
+          "interest:1": {
+            "type": "score",
+            "score": 3.22,
+            "probabilities": {
+              "0": 0,
+              "1": 0.08,
+              "2": 0.07,
+              "3": 0.38,
+              "4": 0.47
+            }
+          },
+          "interest:2": {
+            "type": "score",
+            "score": 1.1,
+            "probabilities": {
+              "0": 0.01,
+              "1": 0.88,
+              "2": 0.1,
+              "3": 0.01,
+              "4": 0
+            }
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "absent:problem",
+          "passed": true
+        },
+        {
+          "name": "absent:impact",
+          "passed": true
+        },
+        {
+          "name": "absent:stakeholder",
+          "passed": true
+        },
+        {
+          "name": "absent:capability",
+          "passed": true
+        },
+        {
+          "name": "absent:next-step",
+          "passed": true
+        },
+        {
+          "name": "cue:no_hint",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

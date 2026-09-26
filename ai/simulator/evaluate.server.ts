@@ -1,7 +1,7 @@
 import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
 import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationQuestion } from 'ai';
 import { JEV_MODEL } from '../judging';
-import { emptySkills, skills, type TraineeEvaluation, type TranscriptEntry } from '../../core/simulator/types';
+import { emptySkills, skills, type TranscriptEntry } from '../../core/simulator/types';
 import { findEvidence } from '../../core/simulator/state';
 import { getClient, getScenario, type Scenario } from './scenarios.server';
 import { clientQuestions, traineeQuestions } from './rubric';

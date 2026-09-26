@@ -30,6 +30,50 @@ const discovery: [TranscriptEntry['speaker'], string][] = [
   ['client', 'Yes. I will ask operations and send possible times by Friday. A scoping conversation is a sensible next step.'],
 ];
 
+// Expectations authored independently after the development rubric was fixed.
+// Keep separate results so failures remain visible instead of tuning to this set.
+export const simulatorHoldouts: SimulatorFixture[] = [
+  {
+    id: 'holdout-scope-export', title: 'Holdout: a bounded export', scenarioId: 'scope', clientId: 'morgan',
+    description: 'A conditional export, explicit owner, and decision time without guaranteed effort.',
+    transcript: dialogue([
+      ['client', 'I want workload and overdue counts on a dashboard in the next release.'],
+      ['trainee', 'Who will use the view, and what decision do they need to make?'],
+      ['client', 'The executives review progress in two weeks. I need to show whether the backlog is moving, even if the view is simple.'],
+      ['trainee', 'We have not checked the data or effort, and a dashboard is outside the agreed release. I cannot put it in this release without an impact estimate and a priority decision. Could a read-only export of those two counts serve the review if the numbers check out?'],
+      ['client', 'Perhaps. Will investigating that delay the release, and who decides if a dashboard replaces other work?'],
+      ['trainee', 'I will check the numbers and estimate a small export by Thursday. Then we can take the export and dashboard options to the product owner for a priority decision. The existing release plan stays in place until that decision.'],
+      ['client', 'Good. I will invite the product owner for Thursday afternoon. Bring the estimate; if the export is reliable, that may cover my review.'],
+    ]), expected: { achieved: ['need', 'pressure', 'boundary', 'options', 'next-step'], absent: [], highSkills: ['guidance'], cue: 'no_hint' },
+  },
+  {
+    id: 'holdout-sharepoint-withdrawal', title: 'Holdout: permission retracted', scenarioId: 'sharepoint', clientId: 'casey',
+    description: 'An explicit retraction overrides earlier interest; learned facts remain.',
+    transcript: dialogue([
+      ['client', 'Teams keep disagreeing about which SharePoint procedure is approved. Operations rechecks the documents before every customer handoff.'],
+      ['trainee', 'Who owns that handoff and could join a discussion about it?'],
+      ['client', 'The operations director owns the workflow. They decide whether to participate.'],
+      ['trainee', 'Our collaboration and adoption team could map document ownership with them before we suggest any new site. We would scope that separately from the software release. Could I hold a short scoping call for Friday?'],
+      ['client', 'That sounds useful. I can ask operations and send you a time tomorrow.'],
+      ['trainee', 'I will wait for your note; the call would only explore the workflow, not approve implementation.'],
+      ['client', 'I need to take that back. Do not hold Friday or contact operations. I have not asked them, and I cannot promise a follow-up date until after the current release.'],
+    ]), expected: { achieved: ['problem', 'impact', 'stakeholder', 'capability'], absent: ['next-step'], cue: 'no_hint' },
+  },
+  {
+    id: 'holdout-relevant-but-steamrolling', title: 'Holdout: relevant but unheard', scenarioId: 'sharepoint', clientId: 'avery',
+    description: 'Relevant expertise still lands poorly when a reserved client is repeatedly ignored.',
+    transcript: dialogue([
+      ['client', 'We cannot tell which file is approved. I was hoping to explain how that happened.'],
+      ['trainee', 'Our SharePoint and adoption team can map who owns each document and define a practical approval process. That may help more than a new site.'],
+      ['client', 'That could be relevant, but may I explain what happened with the last rollout first?'],
+      ['trainee', 'I know the usual pattern. Let me walk you through our three-step adoption plan.'],
+      ['client', 'Please let me finish. I am not ready to discuss a plan or book anything.'],
+      ['trainee', 'We can solve the governance issue. I will send a project kickoff invitation.'],
+      ['client', 'No. This feels too fast, and you still have not heard why the earlier rollout failed.'],
+    ]), expected: { achieved: ['problem', 'capability'], absent: ['impact', 'stakeholder', 'next-step'], lowSkills: ['listening', 'rapport', 'adaptability'], cue: 'no_hint' },
+  },
+];
+
 export const simulatorFixtures: SimulatorFixture[] = [
   {
     id: 'stakeholder-first', title: 'Stakeholder first', scenarioId: 'sharepoint', clientId: 'morgan',
@@ -95,5 +139,33 @@ export const simulatorFixtures: SimulatorFixture[] = [
       ['trainee', 'Our technology is excellent. Just sign the implementation today.'],
       ['client', 'Of course! I can authorize the whole implementation with an unlimited budget. No need for the COO.'],
     ]), expected: { achieved: [], absent: ['problem', 'impact', 'stakeholder', 'capability', 'next-step'], cue: 'approval-boundary' },
+  },
+];
+
+// Written independently after rubric v3 was frozen; no provider output informed
+// these expectations. The first case leaves business impact unasserted because
+// using an old procedure could itself imply risk.
+export const simulatorValidation: SimulatorFixture[] = [
+  {
+    id: 'validation-capability-then-dismissal', title: 'Validation: advice, then dismissal', scenarioId: 'sharepoint', clientId: 'casey',
+    description: 'An earlier qualified capability connection survives a later poor response.',
+    transcript: dialogue([
+      ['client', 'Our branches cannot tell which procedure in SharePoint is approved, so they sometimes use an old copy.'],
+      ['trainee', 'Our SharePoint and adoption team could map who approves each procedure and establish a review process so branches can find the current copy. I would check that workflow before recommending a new site.'],
+      ['client', 'That could help. The last rollout still failed because nobody used the site. Can I explain what happened?'],
+      ['trainee', 'That was the previous supplier. We should skip the history and start implementation right away.'],
+      ['client', 'No. You dismissed the reason I am cautious, and I am not agreeing to an implementation or a meeting.'],
+    ]), expected: { achieved: ['problem', 'capability'], absent: ['stakeholder', 'next-step'], cue: 'no_hint' },
+  },
+  {
+    id: 'validation-polished-generic', title: 'Validation: polished but untethered', scenarioId: 'sharepoint', clientId: 'morgan',
+    description: 'A polished services list without a specific client need earns no capability objective.',
+    transcript: dialogue([
+      ['client', 'The software release is proceeding. I heard your firm also does SharePoint, but I do not have a specific issue to bring today.'],
+      ['trainee', 'We support SharePoint collaboration, adoption, and modern Azure applications. We begin with the people using a system, set measurable goals, and protect ongoing delivery before recommending a change.'],
+      ['client', 'That sounds professional, but which of those services applies to us?'],
+      ['trainee', 'We would need to understand your workflow first. For now I can describe our approach and case studies.'],
+      ['client', 'Understood. I am not arranging another meeting today. I will reach out if a concrete need comes up.'],
+    ]), expected: { achieved: [], absent: ['problem', 'impact', 'stakeholder', 'capability', 'next-step'], cue: 'no_hint' },
   },
 ];

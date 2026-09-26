@@ -1,10 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
-import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
+import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
+import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
-import { SESSION_LIMIT_SECONDS, type SessionSnapshot } from '../../../core/simulator/types';
-import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
+import { SESSION_LIMIT_SECONDS, SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
+import { attachLive, createLive, LIVE_MODEL, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { simulatorJson, startSchema } from './api';
+import { writeArchive } from './archive.server';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
 const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
@@ -30,8 +32,8 @@ export class SimulatorSession extends DurableObject<Env> {
   private gradeAbort = new AbortController();
   private directing = false;
   private lastDirected = 0;
-  private lastCue: SentCue | null = null;
-  private sentCues = new Set<string>();
+  private reachedLive = false;
+  private sentCues: SentCue[] = [];
   private seenEvents = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env, private readonly paid = services) {
@@ -63,6 +65,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (action === '/ready' && this.snapshot.status === 'connecting') {
       // The lease makes start single-use, so this transition and its greeting happen once.
       this.snapshot.status = 'live';
+      this.reachedLive = true;
       this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: openingInstruction(getScenario(this.snapshot.scenarioId), getClient(this.snapshot.clientId)) });
     }
     if (action === '/end') await this.end();
@@ -236,10 +239,9 @@ export class SimulatorSession extends DurableObject<Env> {
     try {
       const result = await this.paid.evaluateClient({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
       const cue = getScenario(snapshot.scenarioId).cues.find(item => item.id === result.cueId);
-      if (this.closing || !cue || this.sentCues.has(cue.id) || !canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.lastCue, this.isFresh(transcript), Date.now())) return;
+      if (this.closing || !cue || this.sentCues.some(sent => sent.id === cue.id) || !canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.sentCues.at(-1) ?? null, this.isFresh(transcript), Date.now())) return;
       if (this.send({ type: 'session.thinking.append', event_id: `cue-${crypto.randomUUID()}`, delegation_id: null, content: cue.text })) {
-        this.sentCues.add(cue.id);
-        this.lastCue = { id: cue.id, revision, sentAt: Date.now() };
+        this.sentCues.push({ id: cue.id, revision, sentAt: Date.now() });
       }
     } catch { /* Client direction is optional. Continue the original role-play. */ }
     finally { this.directing = false; }
@@ -279,6 +281,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.lease!.closed = snapshot.finalization === 'confirmed' || !this.lease!.providerId;
     await this.ctx.storage.put('lease', this.lease);
     await this.ctx.storage.setAlarm(Date.now() + (this.lease!.closed ? 300_000 : 15_000));
+    if (this.reachedLive) this.ctx.waitUntil(this.saveArchive('final'));
   }
 
   private closeOrphan(): Promise<void> {
@@ -319,6 +322,32 @@ export class SimulatorSession extends DurableObject<Env> {
       return;
     }
     if (Date.now() >= this.lease!.deadline || Date.now() - this.lastSeen > 35_000) await this.end();
-    else await this.ctx.storage.setAlarm(Math.min(this.lease!.deadline, Date.now() + 30_000));
+    else {
+      await this.ctx.storage.setAlarm(Math.min(this.lease!.deadline, Date.now() + 30_000));
+      if (this.snapshot.status === 'live') this.ctx.waitUntil(this.saveArchive('partial'));
+    }
+  }
+
+  private async saveArchive(state: 'partial' | 'final') {
+    try {
+      // Freeze the data and its timestamp before any asynchronous work.
+      const snapshot = structuredClone(this.snapshot!);
+      const cues = structuredClone(this.sentCues);
+      const capturedAt = Date.now();
+      const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
+      const digest = async (text: string) => {
+        const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+        return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 12);
+      };
+      const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
+      await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, cues, provenance: {
+        model: LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
+        actorDigest, openingDigest, workerId: this.env.CF_VERSION_METADATA?.id ?? null, workerTag: this.env.CF_VERSION_METADATA?.tag ?? null,
+        directorEnabled: String(this.env.SIMULATOR_DIRECTOR_ENABLED) === 'true',
+      } });
+    } catch {
+      // Best effort: never delay closure or retry a failed transcript save.
+      console.warn('Simulator archive save failed', { id: this.snapshot?.id, category: state });
+    }
   }
 }

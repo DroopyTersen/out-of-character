@@ -271,6 +271,6 @@ await runCase('live', 320, async page => {
 });
 
 await browser.close();
-await writeFile(`${output}/report.json`, JSON.stringify({ checkedAt: new Date().toISOString(), results }, null, 2) + '\n');
+await writeFile(`${output}/report.json`, JSON.stringify({ checkedAt: new Date().toISOString(), baseUrl, results }, null, 2) + '\n');
 console.log(JSON.stringify({ total: results.length, passed: results.filter(result => result.pass).length, failed: results.filter(result => !result.pass).map(result => ({ route: result.route, width: result.width, error: result.error })) }));
 if (results.some(result => !result.pass)) process.exitCode = 1;

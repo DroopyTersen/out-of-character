@@ -1,3 +1,4 @@
+import { Database } from 'bun:sqlite';
 import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
 import { emptySkills } from '../../../core/simulator/types';
 import { LiveSessionGone } from './live.server';
@@ -8,6 +9,7 @@ mock.module('cloudflare:workers', () => ({ DurableObject: class {
   constructor(protected ctx: DurableObjectState, protected env: Env) {}
 } }));
 const { SimulatorSession } = await import('./session');
+const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
 afterEach(() => setSystemTime());
 async function waitFor(check: () => boolean) {
   const deadline = performance.now() + 2500;
@@ -19,6 +21,37 @@ async function waitFor(check: () => boolean) {
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
 const request = (action: string, cap = capability) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(attempt) : undefined });
+
+function archiveDatabase() {
+  const sqlite = new Database(':memory:');
+  sqlite.exec(migration);
+  let failures = 0;
+  let held: { entered: () => void; wait: Promise<void> } | undefined;
+  const d1 = {
+    prepare: (sql: string) => ({
+      bind: (...args: (string | number | null)[]) => ({
+        run: async () => {
+          const pause = held;
+          held = undefined;
+          if (pause) { pause.entered(); await pause.wait; }
+          if (failures > 0) { failures--; throw new Error('D1 unavailable'); }
+          sqlite.prepare(sql).run(...args);
+          return { success: true };
+        },
+      }),
+    }),
+  } as unknown as D1Database;
+  const row = () => sqlite.query('SELECT * FROM simulator_attempts WHERE id = ?').get(attempt.id) as Record<string, any> | null;
+  const holdNext = () => {
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    held = { entered, wait };
+    return { started, release };
+  };
+  return { d1, row, failNext: (count = 1) => { failures = count; }, holdNext };
+}
 
 class ProviderSocket extends EventTarget {
   readyState = 1;
@@ -32,7 +65,7 @@ class ProviderSocket extends EventTarget {
   emit(event: unknown) { this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(event) })); }
   close() { this.readyState = 3; this.dispatchEvent(new Event('close')); }
 }
-async function fixture(pendingCreation?: Promise<void>, values = new Map<string, unknown>(), overrides: Partial<NonNullable<ConstructorParameters<typeof SimulatorSession>[2]>> = {}) {
+async function fixture(pendingCreation?: Promise<void>, values = new Map<string, unknown>(), overrides: Partial<NonNullable<ConstructorParameters<typeof SimulatorSession>[2]>> = {}, archive = archiveDatabase(), bindings: { archive?: boolean; metadata?: boolean } = {}) {
   const socket = new ProviderSocket();
   let ready = Promise.resolve();
   let alarm = 0;
@@ -43,7 +76,12 @@ async function fixture(pendingCreation?: Promise<void>, values = new Map<string,
     storage: { get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }, setAlarm: async (value: number) => { alarm = value; }, deleteAll: async () => values.clear() },
     blockConcurrencyWhile: (fn: () => Promise<void>) => { ready = fn(); }, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); },
   } as unknown as DurableObjectState;
-  const session = new SimulatorSession(ctx, { OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture', SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient ? 'true' : 'false' } as Env, {
+  const session = new SimulatorSession(ctx, {
+    OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture',
+    SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient ? 'true' : 'false',
+    ...(bindings.archive === false ? {} : { SIMULATOR_ARCHIVE: archive.d1 }),
+    ...(bindings.metadata === false ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
+  } as Env, {
     createLive: async () => { creations++; await pendingCreation; return { session: { id: 'provider-private-id' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } }; },
     attachLive: async () => socket as unknown as WebSocket,
     evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
@@ -51,7 +89,7 @@ async function fixture(pendingCreation?: Promise<void>, values = new Map<string,
     ...overrides,
   });
   await ready;
-  return { session, socket, values, judged, pending, creations: () => creations, alarm: () => alarm };
+  return { session, socket, values, judged, pending, archive, row: archive.row, creations: () => creations, alarm: () => alarm };
 }
 
 test('session ownership, authoritative transcript, close acknowledgment, and public projection', async () => {
@@ -206,12 +244,15 @@ test('a browser that keeps polling still cannot outlive the attempt deadline', a
 test('failed provider finalization remains explicit and retains a closure lease', async () => {
   const f = await fixture();
   await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
   f.socket.readyState = 3; // Both the existing control socket and reattachment are unavailable.
   const result = await (await f.session.fetch(request('end'))).json() as Record<string, unknown>;
   expect(result.finalization).toBe('unconfirmed');
   expect(result.message).toContain('did not confirm');
   expect(f.values.get('lease')).toMatchObject({ closed: false });
   expect(f.alarm()).toBeGreaterThan(Date.now());
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(f.row()).toMatchObject({ session_status: 'ended', finalization: 'unconfirmed' });
 });
 
 test('a replacement session owner closes the persisted provider lease', async () => {
@@ -399,4 +440,159 @@ for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a
   const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   if (!newerReply) expect(snapshot.feedbackStatus).toBe('current');
   await f.session.fetch(request('end'));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(JSON.parse(f.row()!.cues_json).map((cue: { id: string }) => cue.id)).toEqual(newerReply ? [] : ['approval-boundary']);
+  if (!newerReply) {
+    const privateCue = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))?.content;
+    expect(JSON.stringify(f.row())).not.toContain(String(privateCue));
+  }
+});
+
+test('live alarm checkpoints dialogue, then End saves the final public score and provenance', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Who owns the workflow?', start_ms: 100, end_ms: 1300 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Operations owns it.', start_ms: 1400, end_ms: 2600 });
+  setSystemTime(Date.now() + 30_000);
+  await f.session.alarm();
+  await Promise.all(f.pending);
+  expect(f.row()).toMatchObject({
+    id: attempt.id, scenario_id: 'sharepoint', client_id: 'morgan',
+    archive_state: 'partial', session_status: 'live', finalization: 'pending', ended_at: null,
+  });
+  expect(JSON.parse(f.row()!.transcript_json).map((entry: { text: string }) => entry.text)).toEqual(['Who owns the workflow?', 'Operations owns it.']);
+
+  const ended = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(ended.status).toBe('ended');
+  await waitFor(() => f.row()?.archive_state === 'final');
+  const row = f.row()!;
+  expect(row).toMatchObject({ archive_state: 'final', session_status: 'ended', finalization: 'confirmed', usage_seconds: 12 });
+  expect(JSON.parse(row.evaluation_json)).toMatchObject({ revision: ended.revision, model: 'fixture' });
+  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', directorEnabled: false });
+  const stored = JSON.stringify(row);
+  expect(stored).not.toContain(capability);
+  expect(stored).not.toContain('provider-private-id');
+  expect(stored).not.toContain('private actor brief');
+  expect(stored).not.toContain(String(f.socket.sent.find(event => event.event_id === 'opening')?.content));
+});
+
+test('a live but silent attempt has a final archive; a creation failure has none', async () => {
+  const silent = await fixture();
+  await silent.session.fetch(request('start'));
+  await silent.session.fetch(request('ready'));
+  await silent.session.fetch(request('end'));
+  await waitFor(() => silent.row()?.archive_state === 'final');
+  expect(JSON.parse(silent.row()!.transcript_json)).toEqual([]);
+  expect(silent.row()!.evaluation_json).toBeNull();
+
+  const failed = await fixture(undefined, undefined, { createLive: async () => { throw new Error('Provider unavailable'); } });
+  expect((await failed.session.fetch(request('start'))).status).toBe(502);
+  await Promise.allSettled(failed.pending);
+  expect(failed.row()).toBeNull();
+  expect(failed.values.has('archive')).toBe(false);
+});
+
+test('failed final D1 save is best effort and closure lease cleanup continues', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I need a plan.', start_ms: 100, end_ms: 900 });
+  f.archive.failNext();
+  await f.session.fetch(request('end'));
+  await Promise.all(f.pending);
+  expect(f.row()).toBeNull();
+  expect(f.values.has('archive')).toBe(false);
+  expect(f.values.get('lease')).toMatchObject({ closed: true });
+  setSystemTime(Date.now() + 300_001);
+  await f.session.alarm();
+  expect(f.values.size).toBe(0);
+  expect(f.row()).toBeNull();
+});
+
+test('restart closes the provider and leaves the last successful checkpoint partial', async () => {
+  const active = await fixture();
+  await active.session.fetch(request('start'));
+  await active.session.fetch(request('ready'));
+  active.socket.emit({ type: 'session.input_transcript.delta', delta: 'A captured question.', start_ms: 100, end_ms: 900 });
+  setSystemTime(Date.now() + 30_000);
+  await active.session.alarm();
+  await Promise.all(active.pending);
+  expect(active.row()?.archive_state).toBe('partial');
+  const replacement = await fixture(undefined, active.values, {}, active.archive);
+  await replacement.session.alarm();
+  expect(replacement.row()).toMatchObject({ archive_state: 'partial', session_status: 'live', finalization: 'pending' });
+  expect(JSON.parse(replacement.row()!.transcript_json)[0].text).toBe('A captured question.');
+  expect((await replacement.session.fetch(request('poll'))).status).toBe(410);
+  await active.session.fetch(request('end')); // Stop the original fixture's timer after simulating restart.
+});
+
+test('a failed partial save leaves closure scheduled and the next alarm can save current dialogue', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'A first question.', start_ms: 100, end_ms: 900 });
+  setSystemTime(Date.now() + 30_000);
+  await f.session.fetch(request('poll'));
+  f.archive.failNext();
+  await f.session.alarm();
+  await Promise.all(f.pending);
+  expect(f.row()).toBeNull();
+  expect(f.alarm()).toBeGreaterThan(Date.now());
+  expect(f.values.has('archive')).toBe(false);
+
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Operations owns it.', start_ms: 1000, end_ms: 1900 });
+  setSystemTime(Date.now() + 30_000);
+  await f.session.fetch(request('poll'));
+  await f.session.alarm();
+  await Promise.all(f.pending);
+  expect(f.row()).toMatchObject({ archive_state: 'partial', session_status: 'live' });
+  expect(JSON.parse(f.row()!.transcript_json).map((entry: { text: string }) => entry.text)).toEqual(['A first question.', 'Operations owns it.']);
+  await f.session.fetch(request('end'));
+});
+
+test('missing archive binding does not delay an unconfirmed provider close or its retry alarm', async () => {
+  const f = await fixture(undefined, undefined, {}, archiveDatabase(), { archive: false, metadata: false });
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.readyState = 3;
+  const began = performance.now();
+  const ended = await (await f.session.fetch(request('end'))).json() as Record<string, unknown>;
+  expect(performance.now() - began).toBeLessThan(2500);
+  expect(ended.finalization).toBe('unconfirmed');
+  expect(f.values.get('lease')).toMatchObject({ closed: false });
+  expect(f.alarm()).toBeGreaterThan(Date.now() + 14_000);
+  expect(f.alarm()).toBeLessThan(Date.now() + 16_000);
+  await Promise.all(f.pending);
+  expect(f.row()).toBeNull();
+  expect(f.values.has('archive')).toBe(false);
+});
+
+test('missing version metadata is stored as null without losing the final archive', async () => {
+  const f = await fixture(undefined, undefined, {}, archiveDatabase(), { metadata: false });
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  await f.session.fetch(request('end'));
+  await Promise.all(f.pending);
+  expect(f.row()?.archive_state).toBe('final');
+  expect(JSON.parse(f.row()!.provenance_json)).toMatchObject({ workerId: null, workerTag: null });
+});
+
+test('a delayed live checkpoint cannot replace the completed archive', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The original question.', start_ms: 100, end_ms: 900 });
+  setSystemTime(Date.now() + 30_000);
+  const held = f.archive.holdNext();
+  await f.session.alarm();
+  await held.started;
+  try {
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: ' The final detail.', start_ms: 1000, end_ms: 1500 });
+    await f.session.fetch(request('end'));
+    await waitFor(() => f.row()?.archive_state === 'final');
+  } finally { held.release(); }
+  await Promise.all(f.pending);
+  expect(f.row()).toMatchObject({ archive_state: 'final', session_status: 'ended' });
+  expect(JSON.parse(f.row()!.transcript_json).map((entry: { text: string }) => entry.text)).toEqual(['The original question. The final detail.']);
 });

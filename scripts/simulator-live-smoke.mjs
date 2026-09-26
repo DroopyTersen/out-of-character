@@ -12,7 +12,8 @@ const browser = await chromium.launch({
 const viewport = process.env.ACCEPTANCE_PHONE === '1' ? { width: 390, height: 844 } : { width: 1440, height: 960 };
 const context = await browser.newContext({ viewport, permissions: ['microphone'] });
 await context.route('**/__simulator_fixture.wav', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: audio }));
-const report = { at: new Date().toISOString(), synthetic: true, viewport, checks: [], snapshots: [], errors: [] };
+const baseUrl = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173';
+const report = { at: new Date().toISOString(), baseUrl, synthetic: true, viewport, checks: [], snapshots: [], errors: [] };
 let retriedPoll = false;
 await context.route('**/api/simulator/sessions/*/poll', route => {
   if (!retriedPoll) { retriedPoll = true; return route.fulfill({ status: 503, contentType: 'text/html', body: 'Temporary upstream failure' }); }
@@ -50,12 +51,13 @@ page.on('response', async response => {
   }
 });
 try {
-  await page.goto(`${process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173'}/simulator`);
+  await page.goto(`${baseUrl}/simulator`);
   await page.getByRole('button', { name: 'Start simulation' }).click();
   await page.getByRole('button', { name: 'End session', exact: true }).waitFor({ timeout: 45_000 });
   await page.waitForFunction(() => document.querySelector('.sim-caption')?.textContent?.includes('Client') || document.querySelector('.sim-caption small')?.textContent === 'Morgan', null, { timeout: 25_000 });
   await page.waitForTimeout(24_000);
   await page.waitForFunction(() => [...document.querySelectorAll('.sim-skill strong')].some(node => /^\d\.\d$/.test(node.textContent)), null, { timeout: 25_000 });
+  await page.getByText('Jev · live', { exact: true }).waitFor({ timeout: 25_000 });
   await page.waitForTimeout(800); // Let the visible score transition finish before capturing it.
   await page.screenshot({ path: `${output}/live.png`, fullPage: true });
   await page.getByRole('button', { name: 'End session', exact: true }).click();

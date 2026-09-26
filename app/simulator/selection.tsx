@@ -44,6 +44,6 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
         <p className="sim-panel-foot">Same scenario. Different conversation.</p>
       </section>
     </div>
-    <div className="sim-start">{error && <p role="alert" className="sim-notice error">{error}</p>}{!enabled && <p className="sim-notice">Live practice is currently unavailable. Explore the <a href="/storybook/simulator-live">workshop previews</a>.</p>}<button className="arcade-button primary" disabled={!enabled} onClick={onStart}>Start simulation <Mic size={22} /></button><small>Speak naturally. The client has their own priorities.</small></div>
+    <div className="sim-start">{error && <p role="alert" className="sim-notice error">{error}</p>}{!enabled && <p className="sim-notice">Live practice is currently unavailable. Explore the <a href="/storybook/simulator-live">workshop previews</a>.</p>}<button className="arcade-button primary" disabled={!enabled} onClick={onStart}>Start simulation <Mic size={22} /></button><small>Transcripts and scores (no audio) are saved privately to improve the simulator.</small></div>
   </section>;
 }

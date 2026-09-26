@@ -57,7 +57,7 @@
 
 .sim-panel-foot { margin-top: 12px; border-top: 1px solid #32768b; padding-top: 10px; color: #9dbbd0; text-align: center; font-size: 12px; }
 .sim-start { display: flex; align-items: center; flex-direction: column; gap: 16px; padding: 30px 0 38px; }
-.sim-start > small { color: #749ab3; font-size: 12px; }
+.sim-start > small { color: #749ab3; font-size: 12px; max-width: 540px; text-align: center; line-height: 1.5; }
 .sim-notice { max-width: 900px; margin: 14px auto; background: #152f40; border-left: 3px solid #f1bf64; color: #e5d7b7; padding: 12px 17px; font-size: 14px; line-height: 1.5; }
 .sim-notice.error { border-color: #fb7786; color: #f6b3bc; }
 .sim-notice a { text-decoration: underline; }

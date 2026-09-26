@@ -4,7 +4,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 const output = process.env.ACCEPTANCE_OUTPUT || 'output/simulator-workshop';
 const baseUrl = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173';
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 const results = [];
 
 function check(value, message) { if (!value) throw new Error(message); }
@@ -137,6 +137,18 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     check((await page.locator('.sim-skills').innerText()).includes('Latest available feedback'), 'delayed feedback absent');
     await controls.getByLabel('Feedback').selectOption('unavailable');
     check((await page.locator('.sim-skills').innerText()).includes('Feedback unavailable'), 'unavailable feedback absent');
+  });
+  await test('simulator-voice-lab', viewport, async page => {
+    const tab = page.getByRole('navigation', { name: 'Component previews' }).getByRole('link', { name: 'Voice Lab' });
+    check(await tab.isVisible() && (await tab.getAttribute('class'))?.includes('active'), 'Voice Lab tab is missing or inactive');
+    const audio = page.locator('.sim-voice-lab audio');
+    check((await audio.getAttribute('src'))?.endsWith('/morgan/meridian.mp3'), 'Voice Lab default is missing');
+    await audio.evaluate(element => element.play());
+    await page.waitForFunction(() => document.querySelector('.sim-voice-lab audio')?.currentTime > .3);
+    await page.getByRole('button', { name: 'Jamie' }).click();
+    await page.getByLabel('GPT-Live voice').selectOption('gleam');
+    check((await audio.getAttribute('src'))?.endsWith('/jamie/gleam.mp3'), 'client or voice selection did not load the matching clip');
+    check((await page.locator('.sim-voice-lab-profile').innerText()).includes('Midwestern'), 'selected profile did not appear');
   });
   await test('simulator-debrief', viewport, async page => {
     check((await page.locator('.sim-outcome').innerText()).includes('5 of 5'), 'full result missing');

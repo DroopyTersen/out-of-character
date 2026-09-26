@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { NavLink, useParams } from 'react-router';
+import { NavLink, useLoaderData, useParams } from 'react-router';
 import { GameHeader } from '../ui/game-header';
 import { DrawStory, GalleryStory, ReelStory } from '../storybook/selection-stories';
 import { GaugeStory, JudgingStory, RaceStory } from '../storybook/reading-stories';
@@ -8,17 +8,24 @@ import '../storybook/workshop.css';
 import { SimulatorVoiceStory } from '../storybook/simulator-voice-story';
 import { clients, publicCatalog } from '../../ai/simulator/scenarios.server';
 import { SimulatorDebriefStory, SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
+import { VoiceLabContent } from '../simulator/voice-lab';
 
 export const loader = () => ({
   simulatorCatalog: publicCatalog(),
   workshopClientStats: clients.map(({ id, name, stats }) => ({ id, name, stats })),
+  defaultVoices: Object.fromEntries(clients.map(({ id, voice }) => [id, voice])),
 });
 
 export const meta = () => [{ title: 'The Workshop — Out of Character' }];
+function SimulatorVoiceLabStory() {
+  const { simulatorCatalog, defaultVoices } = useLoaderData<typeof loader>();
+  return <VoiceLabContent clients={simulatorCatalog.clients} defaultVoices={defaultVoices} />;
+}
 const stories = [
   { id: 'simulator-selection', label: 'Simulator selection', description: 'Scenario scrolling, client rail, selection transitions, availability, and microphone errors.', component: SimulatorSelectionStory },
   { id: 'simulator-live', label: 'Simulator conversation', description: 'The production screen with overlay hints, session brief, transcript, objective completions, skill bars, and connection states.', component: SimulatorLiveStory },
   { id: 'simulator-voice', label: 'Simulator audio', description: 'Replay every speaking, listening, overlap, muted, and connection state. Adjust intensity without a microphone.', component: SimulatorVoiceStory },
+  { id: 'simulator-voice-lab', label: 'Voice Lab', description: 'Hear prepared voice clips for each client while viewing their portrait and personality.', component: SimulatorVoiceLabStory },
   { id: 'simulator-debrief', label: 'Simulator debrief', description: 'Successful and difficult attempts, real evidence, skill gaps, and unconfirmed finalization.', component: SimulatorDebriefStory },
   { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, measured trainee judgments, client interests and fidelity, cue selection, and raw probabilities.', component: SimulatorJudgingStory },
   { id: 'draw', label: 'Complete draw', description: 'Idle, landing, scene timing, failure, and connection states.', component: DrawStory },

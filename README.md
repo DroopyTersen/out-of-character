@@ -27,11 +27,12 @@ For local voice practice, add `OPENAI_API_KEY` to the ignored `.dev.vars` alongs
 
 Live attempts save transcripts, scores, selected client/scenario and release provenance privately in Cloudflare D1 for improving the simulator. Saves are best effort; a database failure does not interrupt practice. Audio is not archived. Before local practice, run `bunx wrangler d1 migrations apply SIMULATOR_ARCHIVE --local`; the local database is separate from production. The workshop uses fixtures and writes no archives. Authenticated developers can list and export attempts with `bun scripts/simulator-transcripts.ts list` and `bun scripts/simulator-transcripts.ts export <attempt-id>`. See [transcript review and retention](docs/solutioning/simulator-transcript-review.md) for access, recovery limits and deletion commands.
 
-The DIY workshop has five simulator stories:
+The DIY workshop has six simulator stories:
 
 - `/storybook/simulator-selection`: scrollable collections, character changes, connection availability, and microphone errors.
 - `/storybook/simulator-live`: replay, pause, seek, and reset recorded dialogue, animated objectives, hints, skill bars, and connection states.
 - `/storybook/simulator-voice`: client/trainee/overlap spectra, connection states, intensity, pause/reset/replay, and reduced motion.
+- `/storybook/simulator-voice-lab`: the Voice Lab with prepared clips, portraits, and client profiles.
 - `/storybook/simulator-debrief`: successful, unsuccessful, and unconfirmed endings with source quotations.
 - `/storybook/simulator-judging`: authored transcripts, stored real Jev judgments, source evidence, client diagnostics, and raw distributions. Opening any story uses no microphone or paid API.
 

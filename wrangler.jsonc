@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "out-of-character",
+  "account_id": "bfdf9c3d5020465d9dd2fa73937b29a6",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    { "pattern": "outofcharacter.droopy.dev", "custom_domain": true }
+  ],
+  "compatibility_date": "2026-04-28",
+  "main": "./app/workers/app.ts",
+  "vars": { "PAID_SERVICES_ENABLED": "true" },
+  "ai": { "binding": "AI", "remote": true },
+  "ratelimits": [
+    { "name": "RATE_JUDGE", "namespace_id": "26091801", "simple": { "limit": 180, "period": 60 } },
+    { "name": "RATE_SCENE", "namespace_id": "26091802", "simple": { "limit": 20, "period": 60 } },
+    { "name": "RATE_SPEECH", "namespace_id": "26091803", "simple": { "limit": 12, "period": 60 } }
+  ],
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 }
+}

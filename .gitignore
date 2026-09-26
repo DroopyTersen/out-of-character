@@ -4,3 +4,10 @@
 node_modules/
 .DS_Store
 output/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+.react-router/
+build/
+test-results/

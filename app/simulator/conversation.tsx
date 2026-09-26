@@ -19,6 +19,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
   phase: 'connecting' | 'live' | 'ending'; muted: boolean; levels: AudioLevels; elapsed: number;
   onEnd: () => void; onMute: () => void; onAudio: () => void; error?: string | null;
 }) {
+  const openEnded = scenario.objectives.length === 0;
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const transcriptButton = useRef<HTMLButtonElement>(null);
   const transcriptPanel = useRef<HTMLElement>(null);
@@ -27,7 +28,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
   const [dismissedHints, setDismissedHints] = useState<string[]>([]);
   const hintButton = useRef<HTMLButtonElement>(null);
   const micOff = muted || phase === 'ending';
-  const evaluation = snapshot?.evaluation ?? null;
+  const evaluation = openEnded ? null : snapshot?.evaluation ?? null;
   const concern = evaluation?.concern;
   const feedbackStatus = snapshot?.feedbackStatus;
   // A cleared concern can become relevant again; score-only updates cannot reopen it.
@@ -51,7 +52,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
       <button className="sim-end sim-desktop-only" onClick={onEnd} disabled={phase === 'ending'}>{endLabel}</button>
     </header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
-    <div className="sim-live-grid">
+    <div className="sim-live-grid" data-open-ended={openEnded || undefined}>
       <section className="sim-client-stage">
         <div className="sim-client-area">
           <h2>{client.name}</h2><p className="sim-client-role">{scenario.clientRole}<span className="sim-desktop-only"> · {client.style}</span></p>
@@ -60,9 +61,9 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
             <DialogTrigger asChild><button className="sim-open-brief sim-mobile-only" aria-label="Open session brief"><span>Brief <ChevronRight size={18} aria-hidden="true" /></span></button></DialogTrigger>
             <SessionBrief scenario={scenario} client={client} />
           </Dialog>
-          <div className="sim-mobile-only"><SimulatorHintToast text={hintOpen ? hint : null} concern={!!evaluation?.concern} delayed={snapshot?.feedbackStatus === 'delayed'} onDismiss={dismissHint} /></div>
+          {!openEnded && <div className="sim-mobile-only"><SimulatorHintToast text={hintOpen ? hint : null} concern={!!evaluation?.concern} delayed={snapshot?.feedbackStatus === 'delayed'} onDismiss={dismissHint} /></div>}
         </div>
-        <div className="sim-caption sim-desktop-only">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Review your objectives while the voice connection opens.' : phase === 'ending' ? 'Your conversation has ended.' : 'Say hello when you are ready.'}</p>}</div>
+        <div className="sim-caption sim-desktop-only">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Your voice connection is opening.' : phase === 'ending' ? 'Your conversation has ended.' : 'Say hello when you are ready.'}</p>}</div>
         <div className="sim-call-controls" role="group" aria-label="Call controls">
           <button onClick={onMute} disabled={phase !== 'live'} className={micOff ? 'muted' : ''} aria-pressed={micOff}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button>
           <button className="sim-desktop-only" ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls={transcriptOpen ? 'sim-conversation-transcript' : undefined}><FileText size={18} />Transcript</button>
@@ -75,12 +76,12 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
             </DialogContent>
           </Dialog>
           <button onClick={onAudio} disabled={phase === 'ending'} aria-label="Enable audio"><Volume2 size={18} /></button>
-          <button ref={hintButton} className="sim-hint-button sim-mobile-only" aria-label={hintOpen ? 'Hide live hint' : 'Show live hint'} aria-expanded={hintOpen} disabled={!hint} onClick={() => hintOpen ? dismissHint() : setDismissedHints(previous => previous.filter(key => key !== hintKey))}><Lightbulb size={18} /></button>
+          {!openEnded && <button ref={hintButton} className="sim-hint-button sim-mobile-only" aria-label={hintOpen ? 'Hide live hint' : 'Show live hint'} aria-expanded={hintOpen} disabled={!hint} onClick={() => hintOpen ? dismissHint() : setDismissedHints(previous => previous.filter(key => key !== hintKey))}><Lightbulb size={18} /></button>}
           <button className="sim-end sim-mobile-only" onClick={onEnd} disabled={phase === 'ending'} aria-label={endLabel}>{phase === 'live' ? 'End' : endLabel}</button>
         </div>
       </section>
-      <div className="sim-coaching"><div className="sim-desktop-only"><SimulatorHint evaluation={evaluation} phase={phase} status={snapshot?.feedbackStatus} /></div><SimulatorObjectives scenario={scenario} evaluation={evaluation} /></div>
-      <SimulatorSkills evaluation={evaluation} status={phase === 'ending' && evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} compact />
+      {!openEnded && <><div className="sim-coaching"><div className="sim-desktop-only"><SimulatorHint evaluation={evaluation} phase={phase} status={snapshot?.feedbackStatus} /></div><SimulatorObjectives scenario={scenario} evaluation={evaluation} /></div>
+      <SimulatorSkills evaluation={evaluation} status={phase === 'ending' && evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} compact /></>}
     </div>
     {transcriptOpen && <section className="sim-transcript-panel sim-desktop-only" ref={transcriptPanel} id="sim-conversation-transcript" tabIndex={-1} aria-label="Conversation transcript"><header className="sim-section-heading"><h2>Conversation</h2><button className="quiet-button" onClick={closeTranscript}>Close transcript</button></header><SimulatorTranscript entries={snapshot?.transcript ?? []} /></section>}
   </section>;

@@ -7,7 +7,7 @@ import { emptySkills, type ObjectiveReading, type TranscriptEntry } from './type
 describe('simulator boundaries', () => {
   test('public selection contains no private agenda, reaction rules, or evaluation criteria', () => {
     const catalog = publicCatalog();
-    expect(catalog.scenarios.map(item => item.id)).toEqual(['sharepoint', 'scope', 'proposal', 'in-house', 'courtesy', 'demo', 'deployment', 'swap']);
+    expect(catalog.scenarios.map(item => item.id)).toEqual(['sharepoint', 'scope', 'proposal', 'in-house', 'courtesy', 'demo', 'deployment', 'swap', 'happy-hour']);
     expect(catalog.clients.map(item => item.id)).toEqual(['morgan', 'avery', 'casey', 'harper', 'quinn', 'riley', 'jamie']);
     const json = JSON.stringify(catalog);
     for (const client of catalog.clients) {

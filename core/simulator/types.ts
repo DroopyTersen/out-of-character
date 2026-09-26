@@ -39,6 +39,7 @@ export type ScenarioSummary = {
   role: string;
   clientRole: string;
   durationMinutes: number;
+  /** An empty list is an open conversation, without judging or coaching. */
   objectives: { id: string; label: string; kind: ObjectiveKind }[];
   services: string[];
 };

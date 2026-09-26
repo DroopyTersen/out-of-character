@@ -390,3 +390,5 @@ p.sim-lab-check-details { padding: 12px 0; }
 @media (prefers-reduced-motion: reduce) {
   .sim-dialog { animation: none; transition: none; }
 }
+
+.sim-live-grid[data-open-ended] { grid-template-columns: 1fr; max-width: 720px; margin-inline: auto; }

@@ -76,3 +76,15 @@ bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid --scenario=
 ```
 
 Voice rehearsals are explicit paid opt-ins, bounded by the existing three-minute deadline. Keep transcript and audio artifacts untracked.
+
+## Happy hour follow-up
+
+Implemented locally on September 26, 2026; not yet deployed. **The happy hour** is the ninth and last scenario, available with every client. It is a consultancy-hosted social conversation: talk about hobbies, pet peeves, everyday stories, work, or any tangent. There is no agenda, hidden concern, sales opportunity, required discovery, or next step.
+
+An empty objective list denotes an open conversation. The session skips live/final trainee judging and client direction. Selection, the session brief, the live screen and the closing screen omit objectives, hints and scores; the closing screen keeps the transcript and retry/selection controls. The existing ten-minute limit, provider shutdown and best-effort transcript archive still apply.
+
+Actor direction carries each client's voice and quirks into the social setting, gives a short casual greeting, and permits consistent everyday personal improvisation. Business-meeting pressure does not apply. The eight existing scenarios retain their actor instructions and scoring behavior.
+
+Verification: `bun run check` passes **131 tests / 4,253 assertions**, types, build, private-bundle scan and deployment dry run. The new session test exercises settled speech, no live/final judge or director calls, provider closure and a real SQLite transcript archive with no evaluation. Desktop/phone workshop checks pass **12/12**, including last-place ordering, all seven client selections and unscored live/closing screens; compact interactions pass **5/5**. Receipts are `output/simulator-happy-hour-check.log`, `output/simulator-happy-hour/workshop-frozen/report.json`, and `output/simulator-happy-hour/compact/report.json`. These checks use synthetic workshop dialogue and a narrow mocked provider boundary, not a paid voice rehearsal.
+
+The initial browser run exposed exact-label test selectors and a local Wrangler proxy connection failure. The selectors were fixed. After the proxy interrupted a later screenshot run, the final suite used an isolated copy of the production build and passed all 12 checks, including the mobile session brief and full-screen captures. Earlier failure receipts remain under `output/simulator-happy-hour/workshop/` and `workshop-accepted/`.

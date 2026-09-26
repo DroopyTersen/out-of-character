@@ -117,6 +117,38 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(JSON.stringify(result)).not.toContain('answers');
   expect(f.socket.readyState).toBe(3);
 });
+
+test('happy hour preserves conversation and archive without live or final judging', async () => {
+  let directed = 0;
+  const f = await fixture({ overrides: { evaluateClient: async () => { directed++; throw new Error('Unexpected social director'); } } });
+  await f.session.fetch(new Request('https://session/start', {
+    method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ ...attempt, scenarioId: 'happy-hour', clientId: 'jamie' }),
+  }));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Hi, I’m Jamie. How is your evening?', start_ms: 100, end_ms: 900 });
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Great. What do you do for fun?', start_ms: 1000, end_ms: 2000 });
+  setSystemTime(Date.now() + 12_000);
+  // Let the real session timer see settled speech, which normally starts both judges.
+  await new Promise(resolve => setTimeout(resolve, 750));
+  expect(f.judged).toHaveLength(0);
+  expect(directed).toBe(0);
+  const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(live.status).toBe('live');
+  expect(live.evaluation).toBeNull();
+  const ended = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
+  await Promise.all(f.pending);
+  expect(ended.status).toBe('ended');
+  expect(ended.finalization).toBe('confirmed');
+  expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['client', 'trainee']);
+  expect(ended.evaluation).toBeNull();
+  expect(f.judged).toHaveLength(0);
+  expect(directed).toBe(0);
+  expect(f.socket.readyState).toBe(3);
+  expect(f.row()?.archive_state).toBe('final');
+  expect(f.row()?.scenario_id).toBe('happy-hour');
+  expect(f.row()?.evaluation_json).toBeNull();
+  expect(JSON.parse(f.row()!.transcript_json)).toEqual(ended.transcript);
+});
 test('normal End keeps a late trainee tail but excludes an unheard client agreement', async () => {
   let graded: { speaker: string; text: string }[] = [];
   const f = await fixture({ overrides: {

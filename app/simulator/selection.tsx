@@ -9,6 +9,7 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
   enabled?: boolean; error?: string | null;
 }) {
   const scenario = catalog.scenarios.find(item => item.id === scenarioId)!;
+  const openEnded = scenario.objectives.length === 0;
   const client = catalog.clients.find(item => item.id === clientId)!;
   const rail = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
@@ -34,9 +35,9 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
           {catalog.scenarios.map(item => <button className={`sim-scenario ${item.id === scenarioId ? 'selected' : ''}`} key={item.id} aria-pressed={item.id === scenarioId} onClick={() => onScenario(item.id)}><span className="sim-scenario-icon" aria-hidden="true">{item.category === 'Sales' ? <Presentation /> : <FileText />}</span><span className="sim-scenario-copy"><small>{item.category}</small><strong>{item.title}</strong></span><span className="sim-choice-mark">{item.id === scenarioId && <Check size={17} />}</span></button>)}
         </div>
         <AnimatePresence mode="wait" initial={false}><motion.div key={scenario.id} className="sim-brief" initial={{ opacity: 0, y: reduced ? 0 : 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .15 }}>
-          <span className="eyebrow">YOUR LEAD · {scenario.role.toUpperCase()}</span><p>{scenario.lead}</p><div className="sim-meta"><Target size={15} />{scenario.objectives.length} objectives · {scenario.durationMinutes} minutes · Live coaching</div>
+          <span className="eyebrow">{openEnded ? 'THE SETTING' : 'YOUR LEAD'} · {scenario.role.toUpperCase()}</span><p>{scenario.lead}</p><div className="sim-meta"><Target size={15} />{openEnded ? 'Open conversation' : `${scenario.objectives.length} objectives`} · {scenario.durationMinutes} minutes · {openEnded ? 'No scoring' : 'Live coaching'}</div>
           {scenario.briefing && <details className="sim-company sim-preparation" open><summary>What you know going in</summary><ul>{scenario.briefing.map(fact => <li key={fact}>{fact}</li>)}</ul></details>}
-          <details className="sim-company"><summary>Objectives &amp; services</summary><p><strong>Your objectives · any order</strong></p><ul>{scenario.objectives.map(objective => <li key={objective.id}>{objective.label}</li>)}</ul><p><strong>Your consultancy</strong></p><p>You help clients improve how their people and software work together.</p><ul>{scenario.services.map(service => <li key={service}>{service}</li>)}</ul></details>
+          {!openEnded && <details className="sim-company"><summary>Objectives &amp; services</summary><p><strong>Your objectives · any order</strong></p><ul>{scenario.objectives.map(objective => <li key={objective.id}>{objective.label}</li>)}</ul><p><strong>Your consultancy</strong></p><p>You help clients improve how their people and software work together.</p><ul>{scenario.services.map(service => <li key={service}>{service}</li>)}</ul></details>}
         </motion.div></AnimatePresence>
       </section>
       <section className="sim-panel"><header className="sim-section-heading"><h2>Your client</h2><div className="sim-rail-controls"><span>{catalog.clients.length} clients</span><button className="quiet-button" aria-label="Previous clients" disabled={!canScroll.previous} onClick={() => scroll(-1)}><ArrowLeft size={16} /></button><button className="quiet-button" aria-label="Next clients" disabled={!canScroll.next} onClick={() => scroll(1)}><ArrowRight size={16} /></button></div></header>
@@ -45,6 +46,6 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
         <p className="sim-panel-foot">Same scenario. Different conversation.</p>
       </section>
     </div>
-    <div className="sim-start">{error && <p role="alert" className="sim-notice error">{error}</p>}{!enabled && <p className="sim-notice">Live practice is currently unavailable. Explore the <a href="/storybook/simulator-live">workshop previews</a>.</p>}<button className="arcade-button primary" disabled={!enabled} onClick={onStart}>Start simulation <Mic size={22} /></button><small>Transcripts and scores (no audio) are saved privately to improve the simulator.</small></div>
+    <div className="sim-start">{error && <p role="alert" className="sim-notice error">{error}</p>}{!enabled && <p className="sim-notice">Live practice is currently unavailable. Explore the <a href="/storybook/simulator-live">workshop previews</a>.</p>}<button className="arcade-button primary" disabled={!enabled} onClick={onStart}>Start simulation <Mic size={22} /></button><small>{openEnded ? 'Transcripts (no audio)' : 'Transcripts and scores (no audio)'} are saved privately to improve the simulator.</small></div>
   </section>;
 }

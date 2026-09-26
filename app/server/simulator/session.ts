@@ -184,6 +184,7 @@ export class SimulatorSession extends DurableObject<Env> {
       this.ctx.waitUntil(this.end());
       return;
     }
+    if (!getScenario(snapshot.scenarioId).objectives.length) return;
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
     if (snapshot.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
@@ -203,9 +204,10 @@ export class SimulatorSession extends DurableObject<Env> {
 
   private async grade(transcript: SessionSnapshot['transcript'], revision: number, final: boolean) {
     const snapshot = this.snapshot!;
+    const scenario = getScenario(snapshot.scenarioId);
+    if (!scenario.objectives.length) return;
     this.gradeCalls++;
     try {
-      const scenario = getScenario(snapshot.scenarioId);
       const achievedIds = snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
       const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
       if (!final && this.closing) return;

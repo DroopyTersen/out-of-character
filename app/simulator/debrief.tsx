@@ -19,13 +19,14 @@ export function SimulatorDebrief({
   onChoose: () => void;
   error?: string | null;
 }) {
+  const openEnded = scenario.objectives.length === 0;
   const debrief = buildDebrief(scenario, snapshot?.evaluation ?? null);
   const concern = snapshot?.evaluation?.concern;
   return (
     <section className="sim-debrief">
       <header className="sim-heading">
-        <span className="eyebrow">THE DEBRIEF · {client.name.toUpperCase()}</span>
-        <h1 tabIndex={-1}>Your session debrief</h1>
+        <span className="eyebrow">{openEnded ? 'THE CONVERSATION' : 'THE DEBRIEF'} · {client.name.toUpperCase()}</span>
+        <h1 tabIndex={-1}>{openEnded ? 'Your conversation' : 'Your session debrief'}</h1>
         <p>
           {scenario.title} · {formatTime(snapshot?.usageSeconds ?? (snapshot?.transcript.at(-1)?.endMs ?? 0) / 1000)}
         </p>
@@ -35,12 +36,12 @@ export function SimulatorDebrief({
           {error || snapshot?.message}
         </p>
       )}
-      {concern && (
+      {!openEnded && concern && (
         <p className="sim-notice">
           <strong>Concern:</strong> {concern}
         </p>
       )}
-      {snapshot?.feedbackStatus === 'delayed' && (
+      {!openEnded && snapshot?.feedbackStatus === 'delayed' && (
         <p className="sim-notice">
           Final feedback is incomplete. The outcome and readings below come from the latest assessment, which may not
           include the end of the conversation.
@@ -50,17 +51,17 @@ export function SimulatorDebrief({
         <img src={client.image} alt="" />
         <div className="sim-outcome-copy">
           <span className="eyebrow">ATTEMPT ENDED · {client.name.toUpperCase()}</span>
-          <strong>{debrief.outcome}</strong>
+          <strong>{openEnded ? `An open conversation with ${client.name}.` : debrief.outcome}</strong>
         </div>
-        <div className="sim-outcome-count">
+        {!openEnded && <div className="sim-outcome-count">
           <b>
             {debrief.completed}
             <small> of {debrief.total}</small>
           </b>
           <span>Objectives confirmed</span>
-        </div>
+        </div>}
       </div>
-      <div className="sim-debrief-grid">
+      {!openEnded && <div className="sim-debrief-grid">
         <div>
           <section className="sim-takeaways">
             <h2>Takeaways</h2>
@@ -92,7 +93,7 @@ export function SimulatorDebrief({
           status={snapshot?.feedbackStatus ?? 'unavailable'}
           final
         />
-      </div>
+      </div>}
       <div className="sim-debrief-actions">
         <button className="arcade-button primary" onClick={onRetry}>
           <RotateCcw size={20} />

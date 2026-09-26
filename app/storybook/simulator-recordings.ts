@@ -2,6 +2,7 @@ import {
   simulatorFixtures as development,
   simulatorHoldouts,
   simulatorValidation,
+  dialogue,
   type SimulatorFixture,
 } from '../../ai/simulator/fixtures';
 import holdouts from '../../ai/simulator/holdout-results.json';
@@ -28,6 +29,18 @@ type RecordedRow = {
 };
 
 export const simulatorFixtures = [...development, ...simulatorHoldouts, ...simulatorValidation];
+
+/** Illustrative social dialogue; deliberately has no judging recording. */
+export const happyHourFixture: SimulatorFixture = {
+  id: 'happy-hour', title: 'Happy hour · open conversation', scenarioId: 'happy-hour', clientId: 'jamie',
+  description: 'An informal conversation with no agenda or scoring.',
+  transcript: dialogue([
+    ['client', 'Hi, I’m Jamie. They really went all out with the snacks. I’m trying to decide if this tiny plate is a suggestion or a rule.'],
+    ['trainee', 'Definitely a suggestion. What do you like doing when you’re off the clock?'],
+    ['client', 'Oh, I love a good walk. My friend calls our route a hike, which is very generous when it ends at a bakery.'],
+  ]),
+  expected: { achieved: [], absent: [] },
+};
 
 function recorded(source: typeof results | typeof holdouts | typeof validation | typeof replay, file: string) {
   // JSON imports widen literals such as Evidence.speaker. Narrow once at this

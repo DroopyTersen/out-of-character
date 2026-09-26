@@ -43,8 +43,17 @@ async function test(route, viewport, run) {
 for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
   await test('simulator-selection', viewport, async page => {
     const scenarios = page.locator('.sim-scenario');
-    check(await scenarios.count() === 8, 'initial scenario count');
+    check(await scenarios.count() === 9, 'initial scenario count');
     check(await page.locator('.sim-client-card').count() === 7, 'initial client count');
+    check((await scenarios.last().innerText()).includes('The happy hour'), 'happy hour must be last');
+    await scenarios.last().click();
+    await page.locator('.sim-meta').getByText(/Open conversation/).waitFor();
+    check(!(await page.locator('.sim-brief').innerText()).includes('Objectives'), 'happy hour has an agenda');
+    for (const name of ['Morgan', 'Avery', 'Casey', 'Harper', 'Quinn', 'Riley', 'Jamie']) {
+      await page.locator('.sim-client-card').filter({ hasText: name }).click();
+      await page.locator('.sim-client-brief h3').getByText(name, { exact: true }).waitFor();
+    }
+    await page.screenshot({ path: `${output}/happy-hour-selection-${viewport.width}.png`, fullPage: true });
     for (const title of ['Just send me a proposal', 'We could build this ourselves', 'The courtesy call', 'The demo went too well', 'The swap request', 'Done, but not deployed']) {
       await scenarios.filter({ hasText: title }).click();
       await page.locator('.sim-brief summary').getByText('What you know going in', { exact: true }).waitFor();
@@ -60,7 +69,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     }
     await page.screenshot({ path: `${output}/expanded-catalog-${viewport.width}.png`, fullPage: true });
     await page.getByLabel('Larger collection (illustrative)').check();
-    check(await scenarios.count() === 14, 'expanded scenario count');
+    check(await scenarios.count() === 15, 'expanded scenario count');
     check(await page.locator('.sim-client-card').count() === 13, 'expanded client count');
     const rail = page.locator('.sim-client-rail');
     const before = await rail.evaluate(node => node.scrollLeft);
@@ -134,6 +143,36 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     check(await page.locator('.sim-objectives blockquote').first().isVisible(), 'source evidence not visible');
     await page.getByText('Inspect raw typed judgments and distributions').click();
     check((await page.locator('.sim-debrief-transcript pre').innerText()).includes('probability'), 'raw judgments missing');
+  });
+  await test('simulator-live', viewport, async page => {
+    await page.getByLabel('Conversation').selectOption('happy-hour');
+    check(await page.locator('.sim-session-bar h1').innerText() === 'The happy hour', 'happy hour not selected');
+    check(await page.locator('.sim-coaching, .sim-skills, .sim-hint-button').count() === 0, 'social conversation has coaching');
+    await page.getByRole('button', { name: 'Next turn', exact: true }).click();
+    await page.getByRole('button', { name: 'Transcript', exact: true }).click();
+    const transcript = page.getByRole(viewport.width <= 720 ? 'dialog' : 'region', { name: /Conversation transcript/i });
+    check((await transcript.innerText()).includes('tiny plate'), 'social transcript unavailable');
+    await transcript.getByRole('button', { name: 'Close transcript' }).click();
+    await transcript.waitFor({ state: 'hidden' });
+    if (viewport.width <= 720) {
+      await page.getByRole('button', { name: 'Open session brief' }).click();
+      const brief = page.getByRole('dialog', { name: 'Session brief' });
+      check(!(await brief.innerText()).includes('Your objectives'), 'social brief has an agenda');
+      await brief.getByRole('button', { name: 'Close session brief' }).click();
+      await brief.waitFor({ state: 'hidden' });
+    }
+    await page.getByRole('button', { name: 'Screen only', exact: true }).click();
+    await page.screenshot({ path: `${output}/happy-hour-live-${viewport.width}.png`, fullPage: true });
+  });
+  await test('simulator-debrief', viewport, async page => {
+    await page.getByLabel('Attempt').selectOption('happy-hour');
+    check(await page.getByRole('heading', { name: 'Your conversation', exact: true }).isVisible(), 'social closing screen unavailable');
+    check(await page.locator('.sim-outcome-count, .sim-takeaways, .sim-skills, .sim-objectives').count() === 0, 'social closing screen has scoring');
+    check(!(await page.locator('.sim-debrief').innerText()).includes('unavailable'), 'unscored conversation reported missing feedback');
+    await page.locator('.sim-debrief-transcript summary').click();
+    check(await page.locator('.sim-debrief-transcript article').count() === 3, 'social transcript missing');
+    await page.getByRole('button', { name: 'Screen only', exact: true }).click();
+    await page.screenshot({ path: `${output}/happy-hour-ended-${viewport.width}.png`, fullPage: true });
   });
 }
 await browser.close();

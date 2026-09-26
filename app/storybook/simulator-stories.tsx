@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLoaderData } from 'react-router';
 import { emptySkills, type Catalog } from '../../core/simulator/types';
-import { recordedAttempt, simulatorFixtures } from './simulator-recordings';
+import { happyHourFixture, recordedAttempt, simulatorFixtures } from './simulator-recordings';
 import { SimulatorSelection } from '../simulator/selection';
 import { SimulatorConversation, SimulatorTranscript } from '../simulator/conversation';
 import { SimulatorDebrief } from '../simulator/debrief';
@@ -162,8 +162,9 @@ export function SimulatorSelectionStory() {
 
 export function SimulatorLiveStory() {
   const catalog = useCatalog();
+  const conversations = [...simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff', 'scope-overpromise'].includes(item.id)), happyHourFixture];
   const [fixtureId, setFixtureId] = useState('earned-discovery');
-  const fixture = simulatorFixtures.find((item) => item.id === fixtureId)!;
+  const fixture = conversations.find((item) => item.id === fixtureId)!;
   const playback = useReplay(fixture.transcript.length);
   const [phase, setPhase] = useState<'connecting' | 'live' | 'ending'>('live');
   const [feedback, setFeedback] = useState<'recorded' | 'delayed' | 'unavailable'>('recorded');
@@ -195,9 +196,9 @@ export function SimulatorLiveStory() {
               playback.reset();
             }}
           >
-            {['earned-discovery', 'scope-tradeoff', 'scope-overpromise'].map((id) => (
-              <option key={id} value={id}>
-                {simulatorFixtures.find((item) => item.id === id)!.title}
+            {conversations.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
               </option>
             ))}
           </select>
@@ -221,7 +222,7 @@ export function SimulatorLiveStory() {
         <Playback playback={playback} max={fixture.transcript.length} />
         <label>Hint preview<select value={hintPreview} onChange={event => setHintPreview(event.target.value)}><option value="recorded">Recorded coaching</option><option value="sample">Sample hint</option><option value="another">Another hint</option><option value="concern">Concern</option><option value="none">No hint</option></select></label>
       </div>
-      <p className="sim-collection-note">Recorded Jev checkpoints; illustrative audio activity{hintPreview !== 'recorded' ? ' and coaching preview' : ''}. No live connection.</p>
+      <p className="sim-collection-note">{scenario.objectives.length ? `Recorded Jev checkpoints; illustrative audio activity${hintPreview !== 'recorded' ? ' and coaching preview' : ''}.` : 'Illustrative happy-hour conversation; no scoring.'} No live connection.</p>
       <SimulatorClientStats clientId={client.id} />
       <SimulatorConversation
         key={fixtureId}
@@ -242,11 +243,12 @@ export function SimulatorLiveStory() {
 
 export function SimulatorDebriefStory() {
   const catalog = useCatalog();
+  const conversations = [...simulatorFixtures, happyHourFixture];
   const [id, setId] = useState('earned-discovery');
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [finalFeedback, setFinalFeedback] = useState<'current' | 'delayed' | 'unavailable'>('current');
   const [action, setAction] = useState<string | null>(null);
-  const fixture = simulatorFixtures.find((item) => item.id === id)!;
+  const fixture = conversations.find((item) => item.id === id)!;
   const { snapshot, scenario, client } = recordedAttempt(catalog, fixture, fixture.transcript.length);
   snapshot.status = 'ended';
   snapshot.finalization = unconfirmed ? 'unconfirmed' : 'confirmed';
@@ -260,7 +262,7 @@ export function SimulatorDebriefStory() {
         <label>
           Attempt
           <select value={id} onChange={(event) => setId(event.target.value)}>
-            {simulatorFixtures.map((item) => (
+            {conversations.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.title}
               </option>

@@ -95,4 +95,61 @@ The concern gate is deliberately a presentation rule: legitimate strengths in a 
 
 ## Iteration 4 — Opus
 
-Pending.
+### Before
+
+Fresh [desktop](../../output/simulator-ui-iteration-4-before/debrief-1672.png) and [phone](../../output/simulator-ui-iteration-4-before/debrief-390.png), plus 1024 and 320 px. Alternate states are in `output/simulator-ui-iteration-4-before/alt/debrief-*` at 1672/390/320:
+- all 13 workshop attempts
+- the unconfirmed ending
+- incomplete and unavailable final feedback
+- evidence and transcript expanded
+
+`alt/debrief-transition.json` records where focus lands when the debrief replaces the live screen in the workshop. It also records the final copy for an unobserved skill and for unavailable feedback. `route/route-focus.json` drives the real `/simulator` route through Start, End session, Try this again, Choose another simulation and Cancel at 1672/390. It substitutes `LiveConnection` at the browser module boundary and aborts and counts every API request, so no provider or paid calls are made. Real transport has its own acceptance: root's unchanged loopback check passed 4/4 (`output/simulator-improvement-final-connection/report.json`). From this agent's shell the same unchanged harness does not connect (0/4), so the difference is environmental. The focus audit tabbed through 16 focusables at 1672/390 with no clipped outline.
+
+### Critique and changes
+
+| Finding | Disposition |
+| --- | --- |
+| Observed: when a session ends, the conversation and its focused control unmount. Keyboard focus fell to `BODY` at 1672 and 390, and nothing was announced after "Ending and reviewing…". A session can also end by time limit, spoken End or failure while the phone page is scrolled. | **Applied** as one route-level rule together with the next finding. See below. |
+| Observed on the real route: Start simulation, Try this again, Choose another simulation and Cancel also unmount the focused button. Focus fell to `BODY` on the next screen at both widths. | **Applied.** When the rendered screen changes, `app/routes/simulator.tsx` focuses the new screen's heading. There are three screens: selection, conversation (connecting, live and ending) and debrief. Each heading has `tabIndex=-1`. The rule is one effect and two refs, and it does not run on first load. Phase changes within the conversation, such as connecting to live, keep focus on the End control. The heading names the new screen, has no ring because it is a reading position rather than a control, and the next Tab reaches that screen's first control. Standard focus behaviour also scrolls the heading into view; this was not measured separately. An earlier draft had the debrief focus its own heading on mount. That effect was removed so that one rule covers every transition. |
+| Observed: in the final debrief, an unobserved skill still said "Not enough relevant evidence yet", although no further assessment will come. With feedback unavailable, every skill blamed insufficient evidence when there was no assessment at all. This is the same issue iteration 2 fixed for the empty takeaway text. | **Applied.** In final mode only: "No relevant evidence was found for this skill" for an assessed attempt, and "No assessment was available for this attempt" without one. Live keeps "yet"; the lab's recorded mode is unchanged. |
+| Judgment: the concern appeared as an unlabelled notice in the same style as system notices, such as the unconfirmed ending and incomplete feedback. "A commitment or claim may go beyond what has been established" could read as a caveat about the debrief itself. The empty-takeaway copy refers to "the concern above". | **Applied.** The notice starts with a bold "Concern:" label. The engine's wording is unchanged. |
+| Judgment: the concern ends with "Review it before proceeding", which reads as live coaching in a finished debrief. | **Not changed.** The string comes from `ai/simulator/evaluate.server.ts`, and engine edits are out of scope. The label makes it read as feedback on the conversation. |
+
+The layouts at 1672/1024/390/320 raised no new issues. Iteration 3's semantics are preserved: `debrief-alt.json` outcomes, counts and takeaway labels are identical before and after for all 13 attempts. Only the concern notice text differs, by its label. An unresolved concern still suppresses KEEP, and shared practice evidence stays grouped.
+
+Files:
+- `app/routes/simulator.tsx`: the screen-change focus rule
+- `debrief.tsx`, `selection.tsx`, `conversation.tsx`: heading `tabIndex=-1`, plus the concern label in the debrief
+- `feedback.tsx`: final-mode empty evidence copy
+- `simulator.css`: no ring on the focused screen headings
+
+There are no `buildDebrief`, scoring, session or transport changes.
+
+### After and verification
+
+[Desktop](../../output/simulator-ui-iteration-4-after/debrief-1672.png) · [Phone](../../output/simulator-ui-iteration-4-after/debrief-390.png) · [Route arrival, phone](../../output/simulator-ui-iteration-4-after/route/route-debrief-390.png) · [Return to selection, phone](../../output/simulator-ui-iteration-4-after/route/route-selection-return-390.png) · [Concern and unobserved skill](../../output/simulator-ui-iteration-4-after/alt/debrief-concern-unobserved-390.png) · [Unavailable, skills open](../../output/simulator-ui-iteration-4-after/alt/debrief-unavailable-open-390.png). The default debrief, live and selection captures are pixel-identical to before at all four widths (`output/simulator-ui-iteration-4-debrief-route/`), so the heading `tabIndex` and focus rule change nothing visually.
+
+Screenshots viewed:
+- the desktop default
+- concern and unobserved skill at 390
+- unavailable with skills open at 390
+- the return to selection at 390, with the heading focused, no ring, and the page at the top
+
+Checks:
+
+| Check | Before | After |
+| --- | --- | --- |
+| Start simulation → conversation | `BODY` | conversation `H1`; Tab → End session |
+| End session → debrief | `BODY` in the workshop, before any change | debrief `H1`; Tab → first skill summary |
+| Try this again → conversation | `BODY` | conversation `H1`; Tab → End session |
+| Choose another simulation → selection | `BODY` | selection `H1`; Tab → first scenario |
+| Cancel while connecting → selection | `BODY` | selection `H1`; Tab → first scenario |
+| First page load | `BODY` | `BODY`, unchanged |
+
+Route results are identical at 1672 and 390, with no page errors or API requests: `output/simulator-ui-iteration-4-{before,after}/route/route-focus.json`. The route "before" run was taken with the earlier debrief mount-focus draft in place, which is why End session → debrief already reached the heading there. The workshop measurement on the committed code was `BODY`.
+
+- The focus audit finds 17 focusable elements with no clipping: the 16 tab stops plus the heading, which is a focus target but not a tab stop.
+- `report-debrief.json`: 4/4 captures with no overflow, errors or API calls. The alternate-state run is clean at all three widths.
+- Typecheck passes.
+- Workshop acceptance: `output/simulator-ui-iteration-4-debrief-workshop/report.json`, 8/8, and again after the route rule in `output/simulator-ui-iteration-4-debrief-route/workshop/report.json`, 8/8.
+- This is browser focus behavior, not a physical screen-reader session.

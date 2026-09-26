@@ -7,6 +7,8 @@
 .simulator-header { height: 64px; flex-basis: 64px; border-bottom: 0; }
 .sim-heading { text-align: center; padding: 6px 16px 10px; }
 .sim-heading h1 { font-size: clamp(26px, 3.1vw, 46px); margin: 8px 0; line-height: 1.15; }
+/* Screen headings receive focus on arrival as a reading position, not as a control. */
+.sim-heading h1:focus, .sim-session-bar h1:focus { outline: none; }
 .sim-heading p { color: #c8ddee; font-size: 22px; }
 .sim-selection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .sim-panel { padding: 22px; border: 1px solid #3296b5; border-radius: 3px; background: #031d2b60; min-width: 0; }

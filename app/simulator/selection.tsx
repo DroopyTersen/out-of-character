@@ -29,7 +29,7 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
   }, [catalog.clients.length]);
   const scroll = (direction: number) => rail.current?.scrollBy({ left: direction * ((rail.current?.querySelector('button')?.getBoundingClientRect().width ?? 180) + 12), behavior: reduced ? 'instant' : 'smooth' });
   return <section className="sim-selection">
-    <header className="sim-heading"><h1>Choose your simulation</h1><p>A real conversation. A safe place to practice.</p></header>
+    <header className="sim-heading"><h1 tabIndex={-1}>Choose your simulation</h1><p>A real conversation. A safe place to practice.</p></header>
     <div className="sim-selection-grid">
       <section className="sim-panel"><header className="sim-section-heading"><h2>The scenario</h2><span>{catalog.scenarios.length} scenarios{catalog.scenarios.length > 3 && <small>Scroll to browse</small>}</span></header>
         <div className="sim-scenario-list" role="group" aria-label="Choose a scenario">

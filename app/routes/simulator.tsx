@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLoaderData } from 'react-router';
 import type { Route } from './+types/simulator';
 import { publicCatalog } from '../../ai/simulator/scenarios.server';
@@ -26,9 +26,17 @@ export default function Simulator() {
     const timer = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(timer);
   }, [session.phase]);
+  const screen = session.phase === 'selection' || session.phase === 'debrief' ? session.phase : 'conversation';
+  const shownScreen = useRef(screen);
+  const main = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // A new screen unmounts the control that had focus; start keyboard and screen-reader users at its heading.
+    if (shownScreen.current !== screen) main.current?.querySelector<HTMLElement>('h1')?.focus();
+    shownScreen.current = screen;
+  }, [screen]);
   const scenario = catalog.scenarios.find(item => item.id === scenarioId)!;
   const client = catalog.clients.find(item => item.id === clientId)!;
-  return <div className="app-shell simulator-shell"><GameHeader simulator /><main className="game-main">
+  return <div className="app-shell simulator-shell"><GameHeader simulator /><main className="game-main" ref={main}>
     {session.phase === 'selection' ? <SimulatorSelection catalog={catalog} scenarioId={scenarioId} clientId={clientId} onScenario={setScenarioId} onClient={setClientId} onStart={() => session.start(scenarioId, clientId)} enabled={enabled} error={session.error} />
       : session.phase === 'debrief' ? <SimulatorDebrief scenario={scenario} client={client} snapshot={session.snapshot} onRetry={() => session.start(scenarioId, clientId)} onChoose={session.reset} error={session.error} />
         : <SimulatorConversation scenario={scenario} client={client} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, (now - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} error={session.error} />}

@@ -53,4 +53,3 @@ HEADER CHANGE: Remove the "PRIVATE PRACTICE" text and its lock icon from the top
 Make only the requested modifications and the minimal spacing adjustments they require. This is the same screen with a few changes, not a redesign. All text must remain crisp and readable. Return one complete full-size flat UI screenshot, no collage, crop, device frame, or commentary.
 
 On this debrief screen the header change is the only change. Keep SESSION COMPLETE and all remaining elements exactly as shown: summary and Morgan portrait, 4 / 5 objective count, five checklist states and evidence, four skill bars and numbers, two timestamped evidence cards, amber coaching card, TRY AGAIN and CHANGE CLIENT buttons, and Back to scenarios link. Do not relocate or remove the existing debrief coaching card.
-

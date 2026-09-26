@@ -32,4 +32,3 @@ Adaptability 3.1
 Keep the whole left client column unchanged, including Morgan's appearance and size, role, speaking status, waveform, caption, Mic on and Transcript controls. Keep the entire top header and scenario row unchanged, including THE SIMULATOR at the top right, time 03:42, and End session.
 
 Preserve the original screenshot's dimensions, flat view, typography, colors, subtle dividers, whitespace, slim score bars, and calm appearance. Make only minimal horizontal spacing adjustments needed to exchange the two columns. Do not redesign, add, remove, rename, or reorder anything else. Return one complete 16:9 desktop screenshot.
-

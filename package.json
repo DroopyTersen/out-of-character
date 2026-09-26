@@ -11,7 +11,8 @@
     "check": "bun run typecheck && bun test && bun run build && wrangler deploy --dry-run",
     "deploy": "bun run build && wrangler deploy --keep-vars",
     "cf-typegen": "wrangler types && react-router typegen",
-    "eval:jev": "bun ai/evals/run.ts"
+    "eval:jev": "bun ai/evals/run.ts",
+    "eval:simulator": "bun --env-file=.dev.vars ai/simulator/run.ts"
   },
   "dependencies": {
     "@ai-sdk/typesafe-ai": "3.0.2",

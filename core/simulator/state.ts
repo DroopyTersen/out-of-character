@@ -34,10 +34,16 @@ export function reconcileObjectives(scenario: ScenarioSummary, previous: Objecti
   });
 }
 
+type DebriefReading = { skill: SkillId; label: string; value: number; evidence: Evidence };
+export type Takeaway = {
+  kind: 'keep' | 'practice';
+  labels: string[];
+  suggestions: { skill: SkillId; text: string }[];
+  evidence: Evidence;
+};
 export type Debrief = {
   outcome: string;
-  strengths: { skill: SkillId; label: string; value: number; evidence: Evidence }[];
-  improvements: { skill: SkillId; label: string; value: number; evidence: Evidence; suggestion: string }[];
+  takeaways: Takeaway[];
   completed: number;
   total: number;
 };
@@ -51,6 +57,20 @@ const suggestions: Record<SkillId, string> = {
   adaptability: 'Adjust your proposal to the new constraint while keeping a useful path forward.',
 };
 
+function groupTakeaways(kind: Takeaway['kind'], readings: DebriefReading[]): Takeaway[] {
+  const groups = new Map<string, Takeaway>();
+  for (const reading of readings) {
+    let group = groups.get(reading.evidence.entryId);
+    if (!group) {
+      group = { kind, labels: [], suggestions: [], evidence: reading.evidence };
+      groups.set(reading.evidence.entryId, group);
+    }
+    group.labels.push(reading.label);
+    if (kind === 'practice') group.suggestions.push({ skill: reading.skill, text: suggestions[reading.skill] });
+  }
+  return [...groups.values()];
+}
+
 export function buildDebrief(scenario: ScenarioSummary, evaluation: TraineeEvaluation | null): Debrief {
   const readings = skills.flatMap(skill => {
     const reading = evaluation?.skills[skill.id];
@@ -60,8 +80,10 @@ export function buildDebrief(scenario: ScenarioSummary, evaluation: TraineeEvalu
   const agreed = scenario.objectives.some(objective => objective.kind === 'outcome' && evaluation?.objectives.find(item => item.id === objective.id)?.achieved);
   return {
     outcome: !evaluation ? 'Feedback was unavailable for this attempt.' : agreed ? 'You earned an agreed next step.' : completed ? 'You made progress; an agreed next step is still open.' : 'No objectives were confirmed in this attempt.',
-    strengths: [...readings].filter(item => item.value >= 2.5).sort((a, b) => b.value - a.value).slice(0, 2),
-    improvements: [...readings].filter(item => item.value < 2.5).sort((a, b) => a.value - b.value).slice(0, 2).map(item => ({ ...item, suggestion: suggestions[item.skill] })),
+    takeaways: [
+      ...groupTakeaways('keep', evaluation?.concern ? [] : readings.filter(item => item.value >= 2.5).sort((a, b) => b.value - a.value).slice(0, 2)),
+      ...groupTakeaways('practice', readings.filter(item => item.value < 2.5).sort((a, b) => a.value - b.value).slice(0, 2)),
+    ],
     completed, total: scenario.objectives.length,
   };
 }

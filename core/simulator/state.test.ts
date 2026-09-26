@@ -87,12 +87,28 @@ describe('transcript and feedback behavior', () => {
   });
   test('debrief never invents performance for unobserved skills', () => {
     const scenario = publicCatalog().scenarios[0]!;
-    expect(buildDebrief(scenario, null).strengths).toEqual([]);
+    expect(buildDebrief(scenario, null).takeaways).toEqual([]);
     const readings = emptySkills();
     readings.listening = { value: 1, distribution: null, evidence: { entryId: 'p2', speaker: 'trainee', text: 'The features are what matter.' } };
     const result = buildDebrief(scenario, { revision: 2, skills: readings, objectives: [], hint: null, concern: null, model: 'fixture', durationMs: 0 });
-    expect(result.strengths).toEqual([]);
-    expect(result.improvements.map(item => item.skill)).toEqual(['listening']);
-    expect(result.improvements[0]!.evidence.text).toBe('The features are what matter.');
+    expect(result.takeaways.map(item => [item.kind, item.labels])).toEqual([['practice', ['Listening']]]);
+    expect(result.takeaways[0]!.evidence.text).toBe('The features are what matter.');
+  });
+  test('debrief groups shared evidence while keeping strengths and practice distinct', () => {
+    const readings = emptySkills();
+    const evidence = { entryId: 'p2', speaker: 'trainee' as const, text: 'We can decide the next step after a short assessment.' };
+    readings.credibility = { value: 3.2, distribution: null, evidence };
+    readings.confidence = { value: 3.4, distribution: null, evidence };
+    readings.listening = { value: .8, distribution: null, evidence };
+    readings.guidance = { value: .2, distribution: null, evidence };
+    const evaluation = { revision: 2, skills: readings, objectives: [], hint: null, concern: null, model: 'fixture', durationMs: 0 };
+    const result = buildDebrief(publicCatalog().scenarios[0]!, evaluation);
+    expect(result.takeaways.map(item => [item.kind, item.labels, item.suggestions.length])).toEqual([
+      ['keep', ['Confidence', 'Credibility'], 0],
+      ['practice', ['Guidance', 'Listening'], 2],
+    ]);
+    expect(result.takeaways.map(item => item.evidence.entryId)).toEqual(['p2', 'p2']);
+    const concerning = buildDebrief(publicCatalog().scenarios[0]!, { ...evaluation, concern: 'Unapproved commitment.' });
+    expect(concerning.takeaways.map(item => item.kind)).toEqual(['practice']);
   });
 });

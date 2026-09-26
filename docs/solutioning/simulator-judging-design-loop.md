@@ -73,7 +73,21 @@ Ownership of `simulator-stories.tsx` returns to root for lab iteration 3.
 
 ## Iteration 3 — lead
 
-Pending.
+### Before
+
+Fresh four-width captures after the Opus handoff: `output/simulator-ui-iteration-3-judging-before`. Inspected the full phone transcript, checkpoint/failure disclosures, recorded provenance and the [completed replay controls](../../output/simulator-ui-iteration-3-judging-before/judging-390-completed-controls.png).
+
+### Critique and changes
+
+The remaining concrete interaction defect was at the end of a replay: Next turn and Show full result were still enabled but did nothing, while Play secretly meant restart. Disabled the two exhausted actions and labelled the restart action Replay. Reset and scrubbing restore the ordinary controls. The shared Playback refinement also appears in the live workshop story; it does not affect a live voice session.
+
+Five areas were reviewed: playback completion, transcript access, missing checkpoints, failure visibility and source provenance. The latter four were addressed by iterations 1–2 and did not warrant more changes. The longer lab transcript remains an intentional tradeoff for reading the complete evidence without nested scrolling. No scoring, recording data, timing or new state was introduced.
+
+### After and verification
+
+[Completed phone controls](../../output/simulator-ui-iteration-3-judging-after/judging-390-completed-controls.png) show Replay as the available action, with the exhausted controls visibly disabled using existing workshop styling. Fresh screen captures pass at 1672/1024/390/320, without overflow, script errors or API calls.
+
+The focused before/after browser check covers both lab and live workshop controls at 1672 and 390 px. Before: 0/4 meet the finished-state expectations. After: 4/4 pass, including actual playback advancing from the start and Reset restoring turn zero, Play and Next turn. Reports: `output/simulator-ui-iteration-3-judging-{before,after}/replay-report.json`. Typecheck passes.
 
 ## Iteration 4 — Opus
 

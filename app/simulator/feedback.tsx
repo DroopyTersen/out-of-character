@@ -16,9 +16,9 @@ export function SimulatorObjectives({ scenario, evaluation }: { scenario: Scenar
 
 export function SimulatorHintToast({ text, concern, delayed, onDismiss }: { text: string | null | undefined; concern: boolean; delayed: boolean; onDismiss: () => void }) {
   const reduced = useReducedMotion();
-  return <><div className="sim-announcement" role="status" aria-atomic="true">{text}</div><AnimatePresence mode="wait">{text && <motion.aside className={`sim-hint-toast ${concern ? 'concern' : ''}`} key={text} initial={{ opacity: 0, y: reduced ? 0 : -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .18 }}>
+  return <><div className="sim-announcement" role="status" aria-atomic="true">{text}</div>{text && <motion.aside className={`sim-hint-toast ${concern ? 'concern' : ''}`} key={text} initial={{ opacity: 0, y: reduced ? 0 : -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .18 }}>
     <Lightbulb size={22} aria-hidden="true" /><div><h2>{delayed ? 'Latest hint' : 'Live hint'}</h2><p>{text}</p></div><button onClick={onDismiss} aria-label="Dismiss hint"><X size={20} /></button>
-  </motion.aside>}</AnimatePresence></>;
+  </motion.aside>}</>;
 }
 
 export function SimulatorHint({ evaluation, phase = 'live', status }: { evaluation: TraineeEvaluation | null; phase?: 'connecting' | 'live' | 'ending'; status?: FeedbackStatus }) {

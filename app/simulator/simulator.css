@@ -360,7 +360,7 @@ p.sim-lab-check-details { padding: 12px 0; }
   .sim-hint-toast > button { position: absolute; right: 6px; top: 2px; display: grid; place-items: center; width: 44px; height: 44px; background: transparent; border: 0; color: #cce2f2; border-radius: 5px; }
   .sim-hint-toast.concern { border-color: #f59a80; }
   .sim-hint-toast.concern h2, .sim-hint-toast.concern > svg { color: #f59a80; }
-  .sim-dialog { top: auto; bottom: 0; left: 0; transform: none; translate: none; width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); padding: 16px 18px max(18px, env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0; gap: 12px; }
+  .sim-dialog { top: auto; bottom: 0; left: 0; translate: none; width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); padding: 16px 18px max(18px, env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0; gap: 12px; }
   .sim-dialog-header h2 { font-size: 20px; }
   .sim-brief-body section { padding: 16px 0; }
   .sim-brief-body h3 { font-size: 12px; }

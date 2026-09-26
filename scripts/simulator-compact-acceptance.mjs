@@ -38,7 +38,7 @@ async function runCase(route, width, run) {
     results.push({ route, width, pass: true, observations, dimensions, apiCalls: 0, micCalls: 0, errors: [] });
   } catch (error) {
     await page.screenshot({ path: `${output}/${route}-${width}-failure.png`, fullPage: true }).catch(() => {});
-    results.push({ route, width, pass: false, error: error.message, apiCalls, errors });
+    results.push({ route, width, pass: false, error: error.stack, apiCalls, errors });
   } finally { await context.close(); }
 }
 
@@ -195,6 +195,10 @@ for (const width of [390, 1672]) {
     await briefButton.click();
     const brief = page.getByRole('dialog', { name: 'Session brief' });
     await brief.waitFor();
+    check(await brief.evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight;
+    }), 'session brief extends outside the mobile viewport');
     check(await brief.locator('meter, .sim-traits').count() === 0, 'client stats exposed in session brief');
     await brief.getByRole('button', { name: 'Close session brief' }).click();
     await brief.waitFor({ state: 'hidden' });

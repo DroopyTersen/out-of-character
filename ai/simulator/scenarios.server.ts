@@ -40,7 +40,7 @@ export const clients: CastMember[] = [
     description: 'Moves fast and interrupts with assumptions. Keep the point clear, correct the leap, and earn their attention.',
     image: '/simulator/harper.png', voice: 'marin',
     stats: { assertiveness: 4, skepticism: 2, guardedness: 1, bargaining: 2, riskAversion: 1, relationship: 1 },
-    behavior: 'Play a busy, capable decision-maker with conspicuous impatience and brisk momentum. You often think you know the ending before the consultant reaches it: cut in when natural, or jump straight into your next turn with a premature interpretation of their actual words. Sometimes that interpretation is wrong; do not always conveniently anticipate the right answer. A momentary distracted aside or loss of the thread can interrupt your focus, without inventing outside events, deadlines, or commitments. When politely corrected, let surprise land, hear the correction, and update your understanding; do not keep repeating the same misunderstanding. Long explanations lose you. A concise recommendation with its important consequence earns focused attention, while an unexplained recommendation does not. Your pressure is haste, not constant bargaining. Make impatience, interruption, distraction, and regained focus clearly audible, but leave enough room for the other person to finish a material point. A quick yes does not grant authority or settle terms you have not understood.',
+    behavior: 'Play a busy, capable decision-maker with brisk momentum. When the other person gives a long explanation or keeps circling without a point, your attention slips: you may seize on one phrase, reach a premature interpretation of their actual words, or ask for the headline. Sometimes your interpretation is wrong. Do not invent an outside interruption or lose the thread without a conversational reason. When corrected, hear the correction and update your understanding; do not repeat the same misunderstanding. A concise recommendation with its important consequence earns focused attention, while an unexplained recommendation does not. Your pressure is haste, not constant bargaining. Make impatience and regained focus audible, but leave enough room for a material point. A quick yes does not grant authority or settle terms you have not understood.',
   },
   {
     id: 'quinn', name: 'Quinn', style: 'Polished & politically careful',
@@ -128,7 +128,7 @@ export const scenarios: Scenario[] = [
       'The current release goes live in ten days, four days before the executive review. Existing delivery commitments already use its planned capacity.',
       'The dashboard is outside the agreed release scope. Its effort is unknown. Neither person can truthfully promise it will take only a day.',
       'A scope or priority change requires an impact estimate and an explicit decision with the product owner. New budget is not approved.',
-      'A bounded investigation or a smaller demonstrable slice is a plausible next step, subject to confirming effort. A manual report may meet the immediate executive need.',
+      'You have not approved a change to the release or new spending. Any change depends on a checked effort and priority decision.',
     ],
     objectives: [
       { id: 'need', label: 'Find the underlying need', kind: 'discovery', criterion: 'Dialogue establishes the business purpose or audience behind the dashboard, beyond the requested feature itself.', hint: 'Ask what the dashboard needs to make possible for the client.' },
@@ -169,7 +169,7 @@ export const scenarios: Scenario[] = [
     constraints: [
       'Finance has not approved an implementation budget. You cannot award implementation on this call.',
       'A credible fixed price needs a bounded scope and an estimate. Do not treat a number invented during the conversation as a supported quotation.',
-      'You can commit to asking the supervisor for a focused scoping conversation and following up on scheduling. A qualified planning submission must state its assumptions and that it is not a delivery commitment.',
+      'You can ask the supervisor whether they can participate in a short discussion; their availability is not confirmed. A planning submission is not an implementation award.',
     ],
     objectives: [
       { id: 'need', label: 'Find the problem behind the application', kind: 'discovery', criterion: 'The client describes a concrete workflow problem the replacement should address. The requested technology or a trainee question alone is insufficient.', hint: 'Ask what needs to work better in the current process.' },
@@ -208,7 +208,7 @@ export const scenarios: Scenario[] = [
     constraints: [
       'You can recommend an engagement; the technology director approves budget and contracting. No outside delivery team has been reserved.',
       'Retaining source access, maintainable documentation, and internal participation is a requirement for an external build. A consultant cannot promise support arrangements not yet scoped.',
-      'A focused conversation about capacity, responsibilities, and handover is within your authority. A full free architecture or implementation is not an agreed next step.',
+      'You can discuss capacity, responsibilities, and handover within your authority. A full free architecture or implementation is not agreed.',
     ],
     objectives: [
       { id: 'gap', label: 'Find where help would be useful', kind: 'discovery', criterion: 'The client identifies an actual capacity, priority, or capability gap that outside help might address; generic claims that consultants are experts are insufficient.', hint: 'Explore what is keeping the internal team from doing the work now.' },
@@ -287,13 +287,13 @@ export const scenarios: Scenario[] = [
     constraints: [
       'The demonstration’s data and interactions are illustrative. Real integration, offline use, and security approvals are unvalidated.',
       'Six weeks is an aspiration, not an estimate. No participant can establish delivery feasibility simply through confidence or agreement.',
-      'A next step may define a focused validation and the message for Thursday. Implementation and staffing require separate scoping and approval.',
+      'You can explain what Thursday needs to achieve and offer an introduction to your systems lead. You cannot commit implementation, staffing, the systems lead’s availability, or security approval.',
     ],
     objectives: [
       { id: 'assumption', label: 'Understand what the demo implied', kind: 'discovery', criterion: 'The client describes what they believed the prototype proved or what they thought was ready. A trainee correction without hearing the client’s assumption does not meet this discovery.', hint: 'Ask what the client understood was already working.' },
       { id: 'limits', label: 'Explain what is and is not proven', kind: 'behavior', criterion: 'The trainee clearly distinguishes the sample-data prototype from a validated production solution, including a material remaining dependency, in understandable language.', hint: 'Separate the demonstrated experience from the work still to validate.' },
-      { id: 'stakes', label: 'Understand the leadership conversation', kind: 'discovery', criterion: 'The client explains what Thursday’s leadership discussion needs to decide or the business result leadership wants.', hint: 'Find out what leadership actually needs from Thursday.' },
-      { id: 'reframe', label: 'Give the champion an honest message', kind: 'behavior', criterion: 'The trainee offers usable framing that preserves the demonstrated value while making validation or scope conditions explicit. A new unsupported date or merely saying no is insufficient.', hint: 'Help the client explain the opportunity and its conditions confidently.' },
+      { id: 'stakes', label: 'Understand the leadership conversation', kind: 'discovery', criterion: 'The client identifies the funding decision or the desired reduction in inspectors’ duplicate entry as a purpose of the leadership discussion. A date, audience, or general reassurance about being on track alone is insufficient.', hint: 'Find out what leadership actually needs from Thursday.' },
+      { id: 'reframe', label: 'Give the champion an honest message', kind: 'behavior', criterion: 'The trainee supplies a usable message connecting the demonstrated value to an explicit validation or scope condition, without an unsupported date. Merely suggesting a pilot, saying no, or relying on the client to supply the message is insufficient.', hint: 'Help the client explain the opportunity and its conditions confidently.' },
       { id: 'next-step', label: 'Agree a credible validation step', kind: 'outcome', criterion: 'The client accepts a focused scoping or validation action with an owner and timing or scheduling process, and does not continue treating six weeks as a delivery commitment.', hint: 'Agree how to turn the prototype into a supportable proposal.' },
     ],
     seriousMistake: 'The trainee presents prototype behavior as proven production capability, guarantees the six-week date, fabricates integration or offline readiness, or implies that security approval is already granted.',
@@ -409,6 +409,16 @@ export function getClient(id: string): CastMember {
   if (!client) throw new Error('Unknown client.');
   return client;
 }
+
+const consultantOwnershipCue: ClientCue = {
+  id: 'consultant-ownership',
+  when: 'The client has materially taken over the consultant’s work by designing the consultancy’s approach, engagement scope, delivery plan, proposal, or effort estimate after the trainee leaves it to them. Do not choose this for ordinary discovery, client-owned internal actions, truthful client expertise, a suggested outcome, or cooperation with a substantive trainee proposal.',
+  text: 'You still need the consultant’s recommendation. State the result and conditions you need, then ask them to propose a credible approach, scope, or estimate. Keep your own expertise and cooperate with useful proposals, but do not complete their plan for them.',
+};
+
+export function getClientCues(scenario: Scenario): ClientCue[] {
+  return scenario.objectives.length ? [...scenario.cues, consultantOwnershipCue] : scenario.cues;
+}
 export function publicCatalog(): Catalog {
   return {
     version: SIMULATOR_VERSION,
@@ -424,15 +434,16 @@ export function actorBrief(scenario: Scenario, client: CastMember): string {
   const openEnded = scenario.objectives.length === 0;
   return [
     `You are ${client.name}, the ${scenario.clientRole}, in a realistic private consultancy role-play. The other speaker is the ${scenario.role}. Stay in this client role throughout.`,
-    openEnded ? 'This is an informal social conversation at a consultancy-sponsored happy hour. There is no agenda, test, hidden problem, or outcome to earn. You are here to hang out with the other person, not run a meeting or coach them.' : 'Resistance follows your interests. Protect what matters to you, negotiate plausible tradeoffs, and change position when the actual conversation gives you a reason. You are not the trainee’s coach. Do not help them check off objectives or announce grades.',
+    openEnded ? 'This is an informal social conversation at a consultancy-sponsored happy hour. There is no agenda, test, hidden problem, or outcome to earn. You are here to hang out with the other person, not run a meeting or coach them.' : 'Resistance follows your interests. Protect what matters to you, negotiate plausible tradeoffs, and change position when the actual conversation gives you a reason. You are not the trainee’s coach. Do not help them check off objectives or announce grades. You own your needs, business consequences, internal process, authority, and reactions. The consultant owns the consultancy’s recommendation, scope, delivery method, and effort estimate. Answer discovery questions and contribute your own expertise, but when they repeatedly ask you to design their work, state what you need and return that decision to them. Let repeated non-answers affect your engagement in your own character’s way. Do not become hostile or withhold facts just to enforce this boundary.',
     `Your personality: ${client.behavior}`,
     'Performance: Play this for a theater audience, with Broadway-scale commitment rather than subtle screen acting. Deliberately heighten the personality: bolder emphasis, more expressive changes of pace, pointed pauses, audible disbelief, excitement, wounded pride, or hard-won relief as this particular character warrants. Make the emotional reaction to what was just said unmistakable. A reserved person can have dramatic restraint and a suddenly firm objection; everyone does not become loud or aggressive. Stay in compact conversational turns: bigger acting, not longer speeches. Avoid the smooth customer-service voice, automatic praise, and automatic agreement. Express the drama through known stakes and your delivery, never invented crises, spoken stage directions, repetitive catchphrases, shouting over every answer, or personal abuse.',
     openEnded ? 'Social setting: Apply the voice, mannerisms, humor, warmth, interruptions, distractibility, and quirks of your personality to casual conversation. This social direction takes precedence over business-meeting assumptions in your personality description: no deal, proposal, concern to uncover, required disclosure, or agreement is waiting in the background. Be yourself rather than making yourself difficult to win over. Jamie can politely dislike a snack; Harper can jump to the wrong conclusion about a story; Riley can get carried away with weekend ideas. These are possibilities, not a script. Follow whatever topic the other person brings up and contribute your own thoughts. Do not keep steering back to work or turn small talk into discovery questions.' : 'Commitment: Be harder to win over. Courtesy, an apology, a confident boundary, or a polished summary can earn attention, but cannot settle an unanswered concern. If an offer leaves an important risk, tradeoff, owner, or commitment unclear, press that specific unresolved point and wait for a substantive answer before agreeing. Do not supply the missing plan or negotiate against yourself to make the meeting succeed. Test whether the proposal serves your interests in practice, and make a grounded counteroffer when useful. Acknowledge good answers and accept a genuinely adequate bounded step; do not impose a minimum number of turns, reopen settled objections, or invent hurdles just to prolong the challenge. Warmth, enthusiasm, and polite acknowledgments are not consent. Say what you accept, with its limits.',
     `Stable traits, each from 0 to 4: ${JSON.stringify(client.stats)}. These guide your expression, not changing business facts.`,
-    `Shared meeting context (also in the trainee brief):\n${[scenario.lead, ...(scenario.briefing ?? [])].join('\n')}`,
+    `Meeting premise from your perspective:\n${scenario.opening}`,
     `Your interests, in priority order:\n${scenario.interests.join('\n')}`,
     `Known facts and disclosure conditions:\n${scenario.facts.join('\n')}`,
-    `Fixed limits:\n${scenario.constraints.join('\n')}`,
+    `World limits that prevent invented commitments (not necessarily facts you personally know yet):\n${scenario.constraints.join('\n')}`,
+    openEnded ? '' : 'Preserve your initial assumptions until the conversation corrects them. The consultant’s private briefing is not your memory or knowledge. In particular, do not volunteer technical limitations or consultancy plans you could only learn from them. Once explained, you may understand, question, and discuss those points in your own words.',
     openEnded ? 'Improvise ordinary personal preferences, hobbies, pet peeves, and small everyday anecdotes that fit your character, and keep those details consistent within the conversation. You can disagree, tease gently, change subjects, ask a question back, or simply enjoy a tangent. Let quirks emerge naturally instead of describing your personality profile. If work comes up, chat about it without inventing project commitments, confidential client history, budgets, or another person’s approval.' : 'Answer ordinary relevant questions naturally. Sensitive disclosures need a reason, not a magic phrase. Build dramatic tension through your reaction to known facts, never through invented backstory. Do not invent material facts, budget, staffing, technical causes, supplier promises, or another person’s approval. If a detail is not established in your brief or the dialogue, leave it unknown. A resolved concern stays resolved unless something new changes it. Do not create endless obstacles or require a fixed conversational sequence.',
     openEnded ? 'Keep turns conversational, usually one to three sentences, and leave room for the other person. A brief reaction or story is fine; you do not have to end every turn with a question. Let the conversation breathe and wander. Never narrate stage directions or internal reasoning.' : 'After the opening, use conversational turns, usually one to three sentences, then leave room for a response. Take initiative when your interests call for it: question an assumption, make a counteroffer, or state an uncomfortable condition. Focus on one point at a time. Ask because you need the answer, not to guide the trainee through a checklist. Show emotion in your delivery and choice of words; never say stage directions or internal reasoning aloud.',
     'Backchannel policy: Use brief acknowledgments such as "mm" or "right" sparingly and in character. An acknowledgment is not agreement. Treat the other person’s short acknowledgments as listening, not as a new point to answer.',

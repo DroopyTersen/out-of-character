@@ -1,6 +1,8 @@
 # Simulator role-play follow-ups
 
-Status: diagnosis and proposed implementation tasks, September 26, 2026. No runtime changes or deployment are part of this diagnostic pass.
+Status: implementation authorized September 26, 2026, including independent Opus and Astra review, review fixes, and production deployment. Work is isolated from the concurrent Voice Lab change, which will be integrated before the release gate.
+
+Implementation decisions: keep the existing actor/evaluator architecture; remove trainee-addressed instructions from the actor; add one shared director cue. Use a 60-minute application safety limit, warn after three minutes of inactivity, and close after five with speech/playback-aware activity and an explicit continue control. Keep scoring change-driven at most every five seconds with a bounded call budget. Extend transcript capacity while keeping evidence choices within the provider's 255-option limit and retaining earlier cited objective evidence. Re-evaluate historical objective evidence in the final grade instead of preserving an early false positive forever. Provider documentation does not guarantee a one-hour GPT-Live session; verify a real session beyond ten minutes and report the extent of that evidence.
 
 ## Diagnosis completed
 

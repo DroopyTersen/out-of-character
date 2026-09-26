@@ -22,7 +22,8 @@ describe('simulator boundaries', () => {
       for (const client of catalog.clients) {
         const brief = actorBrief(privateScenario, getClient(client.id));
         for (const constraint of privateScenario.constraints) expect(brief).toContain(constraint);
-        for (const fact of scenario.briefing ?? []) expect(brief).toContain(fact);
+        // A client must not inherit the consultant's preparation or proposed approach.
+        for (const fact of scenario.briefing ?? []) expect(brief).not.toContain(fact);
       }
     }
     // Default voices are shown by Voice Lab, but the general catalog still exposes only public client summaries.

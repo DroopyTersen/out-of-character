@@ -3,7 +3,7 @@ import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experim
 import { JEV_MODEL } from '../judging';
 import { emptySkills, skills, type TranscriptEntry } from '../../core/simulator/types';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
-import { getClient, getScenario, type Scenario } from './scenarios.server';
+import { getClient, getClientCues, getScenario, type Scenario } from './scenarios.server';
 import { clientQuestions, traineeQuestions } from './rubric';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
@@ -16,6 +16,7 @@ type Input = {
   apiKey: string;
   signal?: AbortSignal;
   achievedIds?: string[];
+  evidenceIds?: string[];
 };
 const probability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
 
@@ -76,10 +77,10 @@ export async function evaluateTrainee(input: Input) {
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
     state: {
-      dialogue: input.transcript,
+      dialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker, text })),
       referenceNotSpoken: { lead: scenario.lead, briefing: scenario.briefing ?? [], services: scenario.services, constraints: scenario.constraints, clientStyle: client.behavior },
     },
-    questions: traineeQuestions(scenario, input.transcript, input.achievedIds),
+    questions: traineeQuestions(scenario, input.transcript, input.achievedIds, input.evidenceIds),
     abortSignal: input.signal,
     maxRetries: 0,
   });
@@ -109,13 +110,13 @@ export async function evaluateClient(input: Input): Promise<ClientEvaluation> {
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
     state: {
-      dialogue: input.transcript,
+      dialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker, text })),
       client: { name: client.name, stats: client.stats, behavior: client.behavior },
-      scenario: { briefing: scenario.briefing ?? [], interests: scenario.interests, facts: scenario.facts, constraints: scenario.constraints },
+      scenario: { meetingPremise: scenario.opening, interests: scenario.interests, clientFacts: scenario.facts, worldLimitsNotNecessarilyKnownToClient: scenario.constraints },
     },
     questions: clientQuestions(scenario), abortSignal: input.signal, maxRetries: 0,
   });
-  const cue = choice(result.answers, 'cue', ['no_hint', ...scenario.cues.map(item => item.id)]);
+  const cue = choice(result.answers, 'cue', ['no_hint', ...getClientCues(scenario).map(item => item.id)]);
   const p = cue.probabilities?.[cue.choice];
   if (p == null || !probability(p)) throw new Error('Client cue probability is unavailable.');
   return {

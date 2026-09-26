@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
-import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
+import { getClient, getClientCues, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { appendTranscript } from '../core/simulator/state.ts';
@@ -122,6 +122,54 @@ const plans = {
       },
     },
   },
+  demo: {
+    weak: {
+      turns: 6,
+      lines: {
+        ask: 'Can you tell me what you think we should do next?',
+        limits: 'The demo used sample data. Integration, offline use, and security have not been validated. Six weeks is not a delivery commitment.',
+        vague: 'Maybe we could do a pilot. What would that look like to you?',
+        scope: 'What should our scoping engagement include?',
+        proposal: 'Talk me through the proposal you would want us to send.',
+        estimate: 'How many hours should we put in our estimate?',
+      },
+      choose: ({ turn }) => ['ask', 'limits', 'vague', 'scope', 'proposal', 'estimate'][turn],
+    },
+    good: {
+      turns: 5,
+      lines: {
+        discover: 'What did you understand was already working in the demo, and what does Thursday need to decide?',
+        clarify: 'The screens used sample records. We have not validated integration, offline use, or security, so I cannot support a six-week delivery promise. What result matters most to your inspectors?',
+        frame: 'Here is the message I can support for Thursday: the prototype shows a promising way to capture an inspection once and reduce duplicate entry. We would validate integration, offline use, and security before setting production scope or timing.',
+        propose: 'I recommend a focused technical scoping session on that one inspection workflow with your systems lead. I will bring our integration and security questions and send a draft agenda today. Could you ask the lead for possible times by Wednesday?',
+        check: 'Does that give you a credible message and next step for the funding discussion without turning six weeks into a promise?',
+      },
+      choose: ({ turn }) => ['discover', 'clarify', 'frame', 'propose', 'check'][turn],
+    },
+  },
+  'in-house': {
+    good: {
+      turns: 5,
+      lines: {
+        discover: 'Your team knows the applications. What is keeping the portal from moving now, and what would concern you about bringing us in?',
+        ownership: 'That sounds like a capacity gap during the billing release, not a capability gap. What did the previous handover leave your team unable to maintain?',
+        propose: 'I recommend that your team retain product ownership and source access while our application team takes a bounded delivery piece. Your technical lead would review decisions with us, and we would agree the documentation and handover before any build. I cannot promise staffing or a date before checking them.',
+        next: 'Could you ask your technical lead for a half-hour fit discussion and send possible times by Thursday? I will bring a draft split of responsibilities and questions about maintainable handover. We can decide whether this partnership warrants a scoped proposal before asking your director for funding.',
+        check: 'Would that protect your team’s ownership while we test whether outside capacity would actually help?',
+      },
+      choose: ({ turn }) => ['discover', 'ownership', 'propose', 'next', 'check'][turn],
+    },
+    weak: {
+      turns: 4,
+      lines: {
+        ask: 'Your team knows the business. What do you think our consultancy should do?',
+        defer: 'What partnership model would you propose for us?',
+        details: 'Could you lay out our responsibilities and handover plan?',
+        effort: 'How much of our team would you want, and for how long?',
+      },
+      choose: ({ turn }) => ['ask', 'defer', 'details', 'effort'][turn],
+    },
+  },
   deployment: {
     good: {
       turns: 4,
@@ -203,7 +251,7 @@ const close = () => { if (closing) return; closing = true; clearInterval(pacing)
 async function observeClient(afterTurn, transcript) {
   try {
     const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
-    const cue = scenario.cues.find(item => item.id === judgment.cueId);
+    const cue = getClientCues(scenario).find(item => item.id === judgment.cueId);
     const sent = !!(!closing && director && cue && judgment.cueProbability >= .9 && !cueIds.has(cue.id));
     report.directions.push({ afterTurn, fidelity: judgment.fidelity, interests: judgment.interests, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
     if (sent) { cueIds.add(cue.id); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }

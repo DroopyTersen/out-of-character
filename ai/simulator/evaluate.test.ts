@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
 import { skills } from '../../core/simulator/types';
 import { readTraineeAnswers } from './evaluate.server';
-import { getScenario } from './scenarios.server';
+import { actorBrief, getClient, getClientCues, getScenario, scenarios } from './scenarios.server';
 import { simulatorFixtures } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
+import { clientQuestions, traineeQuestions } from './rubric';
 
 // Only the paid, probabilistic provider result is substituted. Parsing, public
 // evidence projection, and outcome eligibility use the production implementation.
@@ -64,4 +65,40 @@ test('malformed probabilities and invented evidence IDs fail closed', () => {
   raw['objective:stakeholder'] = { type: 'boolean', probability: .9 };
   raw['objective:stakeholder:evidence'] = { type: 'choice', choice: 'invented quote' };
   expect(() => readTraineeAnswers(getScenario('sharepoint'), simulatorFixtures[0]!.transcript, raw)).toThrow();
+});
+test('the actor receives client context without trainee-only briefing or lead', () => {
+  for (const scenario of scenarios) {
+    const brief = actorBrief(scenario, getClient('harper'));
+    expect(brief).toContain(scenario.opening);
+    for (const fact of scenario.facts) expect(brief).toContain(fact);
+    for (const limit of scenario.constraints) expect(brief).toContain(limit);
+    expect(brief).not.toContain(scenario.lead);
+    for (const line of scenario.briefing ?? []) expect(brief).not.toContain(line);
+  }
+});
+test('the shared ownership cue is available to the judge for scored scenes only', () => {
+  for (const scenario of scenarios) {
+    const cues = getClientCues(scenario);
+    const question = clientQuestions(scenario).cue;
+    expect(question?.type).toBe('choice');
+    if (question?.type === 'choice') expect(Object.keys(question.criteria ?? {})).toEqual(['no_hint', ...cues.map(cue => cue.id)]);
+    expect(cues.some(cue => cue.id === 'consultant-ownership')).toBe(scenario.objectives.length > 0);
+  }
+});
+test('long conversations keep evidence choices within provider limits and preserve cited facts', () => {
+  const transcript = Array.from({ length: 800 }, (_, index) => ({
+    id: `p${index + 1}`, speaker: index % 2 ? 'trainee' as const : 'client' as const,
+    text: `Passage ${index + 1}`, startMs: index * 1000, endMs: index * 1000 + 500,
+  }));
+  const questions = traineeQuestions(getScenario('demo'), transcript, [], ['p51']);
+  for (const [id, question] of Object.entries(questions)) {
+    if (!id.endsWith(':evidence') || question.type !== 'choice') continue;
+    expect(Object.keys(question.criteria ?? {}).length).toBeLessThanOrEqual(255);
+  }
+  const stakes = questions['objective:stakes:evidence'];
+  expect(stakes?.type).toBe('choice');
+  if (stakes?.type === 'choice') {
+    expect(Object.keys(stakes.criteria ?? {})).toContain('p51');
+    expect(Object.keys(stakes.criteria ?? {})).toContain('p799');
+  }
 });

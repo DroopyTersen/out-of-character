@@ -3,6 +3,7 @@ import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/sce
 import { BodyError, boundedJson } from '../http';
 
 const uuid = z.string().uuid();
+export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean() }).strict();
 export const startSchema = z.object({
   id: uuid,
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
@@ -31,8 +32,14 @@ export async function handleSimulator(request: Request, env: Env): Promise<Respo
     }
     const match = url.pathname.match(/^\/api\/simulator\/sessions\/([^/]+)\/(poll|ready|end)$/);
     if (!match || !uuid.safeParse(match[1]).success) return simulatorJson({ error: 'Unknown simulator route.' }, 404);
+    let body: string | undefined;
+    if (match[2] === 'poll' && request.body) {
+      const activity = activitySchema.safeParse(await boundedJson(request, 256));
+      if (!activity.success) return simulatorJson({ error: 'Invalid activity report.' }, 400);
+      body = JSON.stringify(activity.data);
+    }
     // Poll/end continue through a kill switch so already-running sessions can close.
-    return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(match[1]!)).fetch(new Request(`https://session/${match[2]}`, { method: 'POST', headers: request.headers }));
+    return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(match[1]!)).fetch(new Request(`https://session/${match[2]}`, { method: 'POST', headers: request.headers, body }));
   } catch (error) {
     return simulatorJson({ error: error instanceof BodyError ? error.message : 'The simulator connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);
   }

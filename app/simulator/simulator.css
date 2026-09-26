@@ -435,3 +435,7 @@ p.sim-lab-check-details { padding: 12px 0; }
 }
 
 .sim-live-grid[data-open-ended] { grid-template-columns: 1fr; max-width: 720px; margin-inline: auto; }
+
+.sim-session-warning { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 0 0 20px; padding: 16px 20px; border: 1px solid #b39251; border-radius: 8px; background: #26302e; color: #f2dbad; }
+.sim-session-warning p { margin: 4px 0 0; font-size: 14px; }
+.sim-session-warning button { flex-shrink: 0; padding: 10px 16px; border: 1px solid #dcc18c; border-radius: 6px; color: #fff0d0; background: #3c4134; }

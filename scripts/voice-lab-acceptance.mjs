@@ -24,7 +24,7 @@ try {
       await page.goto(`${base}/simulator/voice-lab`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: 'Find the right voice for each client' }).waitFor();
       const audio = page.locator('audio');
-      check((await audio.getAttribute('src'))?.endsWith('/morgan/cedar.mp3'), 'wrong initial sample');
+      check((await audio.getAttribute('src'))?.endsWith('/morgan/meridian.mp3'), 'wrong initial sample');
       await audio.evaluate(element => element.play());
       await page.waitForFunction(() => document.querySelector('audio')?.currentTime > .3);
       const first = await audio.elementHandle();
@@ -37,7 +37,7 @@ try {
       await audio.evaluate(element => element.play());
       await page.waitForFunction(() => document.querySelector('audio')?.currentTime > .3);
       await page.getByRole('button', { name: 'Hear current voice' }).click();
-      check((await audio.getAttribute('src'))?.endsWith('/jamie/marin.mp3'), 'current voice shortcut selected the wrong clip');
+      check((await audio.getAttribute('src'))?.endsWith('/jamie/gleam.mp3'), 'current voice shortcut selected the wrong clip');
       await page.waitForFunction(() => document.activeElement?.tagName === 'AUDIO');
       await audio.evaluate(element => element.play());
       await page.waitForFunction(() => document.querySelector('audio')?.currentTime > .3);

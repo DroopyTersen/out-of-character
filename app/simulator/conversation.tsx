@@ -14,10 +14,10 @@ export function SimulatorTranscript({ entries, startAtEnd = false }: { entries: 
 }
 export const formatTime = (seconds: number) => `${Math.floor(Math.max(0, seconds) / 60).toString().padStart(2, '0')}:${Math.floor(Math.max(0, seconds) % 60).toString().padStart(2, '0')}`;
 
-export function SimulatorConversation({ scenario, client, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, error }: {
+export function SimulatorConversation({ scenario, client, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, error }: {
   scenario: ScenarioSummary; client: Client; snapshot: SessionSnapshot | null;
   phase: 'connecting' | 'live' | 'ending'; muted: boolean; levels: AudioLevels; elapsed: number;
-  onEnd: () => void; onMute: () => void; onAudio: () => void; error?: string | null;
+  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue: () => void; error?: string | null;
 }) {
   const openEnded = scenario.objectives.length === 0;
   const [transcriptOpen, setTranscriptOpen] = useState(false);
@@ -27,7 +27,10 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
   const closeTranscript = () => { setTranscriptOpen(false); transcriptButton.current?.focus(); };
   const [dismissedHints, setDismissedHints] = useState<string[]>([]);
   const hintButton = useRef<HTMLButtonElement>(null);
-  const micOff = muted || phase === 'ending';
+  const warning = phase === 'live' ? snapshot?.warning : null;
+  const remaining = warning ? Math.max(0, Math.ceil((warning.endsAt - Date.now()) / 1000)) : 0;
+  const automaticFinish = !!warning && warning.kind !== 'idle' && !remaining;
+  const micOff = muted || phase === 'ending' || automaticFinish;
   const evaluation = openEnded ? null : snapshot?.evaluation ?? null;
   const concern = evaluation?.concern;
   const feedbackStatus = snapshot?.feedbackStatus;
@@ -48,10 +51,15 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
   return <section className="sim-conversation">
     <header className="sim-session-bar">
       <span className="eyebrow">{scenario.category}</span><h1 tabIndex={-1}>{scenario.title}</h1>
-      <time>{formatTime(elapsed)}<small> / {formatTime(snapshot?.limitSeconds ?? 600)}</small></time>
+      <time aria-label={`${formatTime(elapsed)} elapsed`}>{formatTime(elapsed)}<small> elapsed</small></time>
       <button className="sim-end sim-desktop-only" onClick={onEnd} disabled={phase === 'ending'}>{endLabel}</button>
     </header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
+    {warning && <div className="sim-session-warning" role="status">
+      <div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong>
+        <p>{warning.kind === 'idle' ? `Practice will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before practice ends automatically.`}</p></div>
+      {warning.kind === 'idle' && <button onClick={onContinue}>Continue practice</button>}
+    </div>}
     <div className="sim-live-grid" data-open-ended={openEnded || undefined}>
       <section className="sim-client-stage">
         <div className="sim-client-area">
@@ -65,7 +73,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
         </div>
         <div className="sim-caption sim-desktop-only">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Your voice connection is opening.' : phase === 'ending' ? 'Your conversation has ended.' : 'Say hello when you are ready.'}</p>}</div>
         <div className="sim-call-controls" role="group" aria-label="Call controls">
-          <button onClick={onMute} disabled={phase !== 'live'} className={micOff ? 'muted' : ''} aria-pressed={micOff}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button>
+          <button onClick={onMute} disabled={phase !== 'live' || automaticFinish} className={micOff ? 'muted' : ''} aria-pressed={micOff}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button>
           <button className="sim-desktop-only" ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls={transcriptOpen ? 'sim-conversation-transcript' : undefined}><FileText size={18} />Transcript</button>
           <Dialog>
             <DialogTrigger asChild><button className="sim-mobile-only"><FileText size={18} />Transcript</button></DialogTrigger>

@@ -119,6 +119,20 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await controls.getByLabel('Connection').selectOption('connecting');
     check((await page.locator('.sim-speaking').innerText()).includes('Connecting'), 'connection state absent');
     await controls.getByLabel('Connection').selectOption('live');
+    await controls.getByLabel('Session warning').selectOption('idle');
+    check((await page.locator('.sim-session-warning').innerText()).includes('Still there?'), 'inactivity warning absent');
+    await page.getByRole('button', { name: 'Continue practice' }).click();
+    check(await page.locator('.sim-session-warning').count() === 0, 'continue did not clear warning');
+    for (const warning of ['limit', 'capacity']) {
+      await controls.getByLabel('Session warning').selectOption(warning);
+      check(await page.locator('.sim-session-warning').isVisible(), `${warning} warning absent`);
+      check(await page.getByRole('button', { name: 'Mic on', exact: true }).isEnabled(), `${warning} muted before the deadline`);
+      await page.screenshot({ path: `${output}/${warning}-warning-${viewport.width}.png`, fullPage: true });
+    }
+    await controls.getByLabel('Session warning').selectOption('finishing');
+    check(await page.getByRole('button', { name: 'Mic off', exact: true }).isDisabled(), 'automatic finish allows new speech');
+    check(await page.getByRole('button', { name: 'End session', exact: true }).isEnabled(), 'manual End should remain available');
+    await controls.getByLabel('Session warning').selectOption('none');
     await controls.getByLabel('Feedback').selectOption('delayed');
     check((await page.locator('.sim-skills').innerText()).includes('Latest available feedback'), 'delayed feedback absent');
     await controls.getByLabel('Feedback').selectOption('unavailable');

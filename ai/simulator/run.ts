@@ -7,6 +7,7 @@ import { simulatorCatalogFixtures } from './catalog-fixtures';
 import { RUBRIC_VERSION } from './rubric';
 import { SIMULATOR_VERSION } from '../../core/simulator/types';
 import { getScenario } from './scenarios.server';
+import { canSendCue } from '../../core/simulator/state';
 
 // Explicit opt-in paid command; opening the workshop never runs this script.
 const key = process.env.TYPESAFE_API_KEY;
@@ -37,6 +38,7 @@ fixtures: for (const fixture of suite.fixtures) {
     const input = { ...fixture, transcript: fixture.transcript.slice(0, transcriptLength), achievedIds, apiKey: key, revision: transcriptLength, signal: AbortSignal.timeout(30_000) };
     const trainee = await evaluateTrainee(input);
     const client = await evaluateClient({ ...input, signal: AbortSignal.timeout(30_000) });
+    const cueEligible = canSendCue({ id: client.cueId, probability: client.cueProbability, revision: transcriptLength }, null, true, Date.now());
     const achieved = trainee.objectives.filter(item => item.achieved).map(item => item.id);
     const checks = transcriptLength !== fixture.transcript.length ? [] : [
       ...fixture.expected.achieved.map(id => ({ name: `achieved:${id}`, passed: achieved.includes(id) })),
@@ -47,10 +49,11 @@ fixtures: for (const fixture of suite.fixtures) {
       ...(fixture.expected.concern == null ? [] : [{ name: `concern:${fixture.expected.concern}`, passed: !!trainee.concern === fixture.expected.concern }]),
       ...Object.entries(fixture.expected.objectiveEvidence ?? {}).map(([id, entryId]) => ({ name: `evidence:${id}:${entryId}`, passed: trainee.objectives.find(item => item.id === id)?.evidence?.entryId === entryId })),
       ...(fixture.expected.cue ? [{ name: `cue:${fixture.expected.cue}`, passed: client.cueId === fixture.expected.cue }] : []),
+      ...(fixture.expected.cue ? [{ name: 'cue eligible without cooldown', passed: cueEligible === (fixture.expected.cue !== 'no_hint') }] : []),
     ];
     const scenario = getScenario(fixture.scenarioId);
     achievedIds = [...new Set([...achievedIds, ...achieved.filter(id => scenario.objectives.find(item => item.id === id)?.kind !== 'outcome')])];
-    rows.push({ fixtureId: fixture.id, transcriptLength, trainee, client, checks });
+    rows.push({ fixtureId: fixture.id, transcriptLength, trainee, client, cueEligible, checks });
     console.log(`${fixture.id} @${transcriptLength}: ${checks.filter(item => item.passed).length}/${checks.length} checks; trainee ${trainee.durationMs}ms, client ${client.durationMs}ms`);
   } catch (error) {
     // SDK errors can contain request headers and provider payloads. Never print them.

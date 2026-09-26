@@ -22,7 +22,7 @@ function fixture() {
 
 const snapshot: SessionSnapshot = {
   id: 'attempt-1', scenarioId: 'sharepoint', clientId: 'morgan', status: 'live',
-  startedAt: 1000, limitSeconds: 600, revision: 1,
+  startedAt: 1000, limitSeconds: 3600, warning: null, revision: 1,
   transcript: [{ id: 'p1', speaker: 'trainee', text: 'Can we start with your main concern?', startMs: 100, endMs: 2000 }],
   evaluation: null, feedbackStatus: 'waiting', message: null, finalization: 'pending', usageSeconds: null,
 };

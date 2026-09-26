@@ -1,6 +1,6 @@
 # Simulator MVP progress
 
-Pending follow-up: [role-play ownership, scoring and longer sessions](simulator-roleplay-followups.md). A diagnostic review of saved practice sessions identified client takeover of consulting work and the ten-minute cutoff interrupting active conversation. The follow-up tasks are recorded; runtime changes are not yet implemented.
+In implementation review: [role-play ownership, scoring and longer sessions](simulator-roleplay-followups.md). Actor boundaries, attribution, longer active practice and inactivity controls are implemented in isolated checkpoints. Independent review, final combined checks and deployment are in progress; the Voice Lab checkpoint is integrated.
 
 Latest release: [The happy hour](simulator-release.md#happy-hour-release), deployed from `f81f08b` on September 26 at 20:10 UTC. The ninth and last scenario allows free conversation with any of the seven clients, without objectives, coaching or scoring. The full gate passes **131 tests / 4,253 assertions**; production workshop checks pass **12/12**, compact interactions **5/5**, real-provider happy-hour voice acceptance **9/9**, and remote archive comparisons **18/18**. All **67 served assets** match the release build. Cloudflare confirms **100% traffic** on the tagged version. Refresh an already-open simulator tab.
 
@@ -151,3 +151,25 @@ The MVP acceptance follow-up accepted the exact `simulator-design-2-accepted` an
 - Deferred cosmetic suggestions: a different font for the debrief count separator, removing reserved scrollbar gutter when a catalog is short, smoothing the speaking-state threshold, shortening the smallest-phone Start label and further reducing repeated labels. These do not block the MVP; no new state/timer machinery was added for them.
 
 An independent MVP acceptance audit found no missing UI/animation/fixture acceptance requirement. Evidence distinguishes each selected audio state from the replay button's verified first transition, and preserves initial failed runs instead of replacing their history. Human voice realism and physical-phone behavior remain the explicit practical limits documented in [acceptance](simulator-acceptance.md).
+
+
+## Role ownership and longer practice review checkpoint
+
+The role-play follow-up is implemented in the isolated `simulator-role-boundaries` branch and includes the completed prepared-sample Voice Lab. Actor/scenario instructions preserve client knowledge and interests while returning consultancy planning to the trainee. Rubric v5 credits the trainee’s own contribution, preserves ordinary discovery, and rechecks historical evidence in the final grade.
+
+Independent Opus and Astra reviews found startup cleanup and full-history citation gaps. Those are fixed, including late-ready expiry, server-driven microphone shutdown, all-passage evidence batches, explicit cue eligibility in evaluation reports, and bounded parallel question groups for long Jev inputs. Four successful provider boundary shapes cover 128/20k through 800/80k passages/characters, including all-trainee and mixed dialogue, in 425–784 ms. Longer grades cost more because each group includes the full state; no transcript summary or evidence-dropping fallback was added.
+
+Six direct-provider rehearsals now total 924 usage seconds. Weak Harper/Jamie prompts did not elicit consultancy plans; owned proposals earned cooperation. Harper’s rambling/correction rehearsal demonstrated premature interpretation and recovery in text. The active browser attempt remained live for 650.659 wall seconds and ended normally. Its original duration assertion incorrectly compared provider audio time with wall time; the corrected harness records receipt times. The production check below exercises that assertion. The catalog run passes 144/147 expectations, with all three misses confined to conservative director selection/eligibility. These limits and review dispositions are detailed in [role-play follow-ups](simulator-roleplay-followups.md).
+
+Full release checks, final targeted review, deployment, and production/archive verification are complete. No human listening or physical-phone acceptance is claimed.
+
+
+The `ac859af` review-fix checkpoint passes the full 152-test gate. Opus and Astra completed targeted follow-ups with no remaining code blocker. All six real-browser connection cases pass, including microphone shutdown while the server finalizes. The subsequent acceptance-harness change waits for an initialized development page before importing the connection class.
+
+## Role ownership and longer practice deployed
+
+Source `4c6628a` is live at [the simulator](https://outofcharacter.droopy.dev/simulator), tagged on Worker version `b080250e-7692-4355-90e9-a4c46ec7421d` with 100% traffic. The ten-minute application cutoff is replaced by a sixty-minute safety cap; inactivity warns at three minutes and closes at five, with speech, playback and meaningful page activity keeping practice active. The completed Voice Lab is included.
+
+The production browser conversation passes 10/10 checks, including new speech after ten wall-clock minutes, live Jev feedback, confirmed closure and media cleanup. Its final D1 export passes 17/17 checks against the browser and source provenance (672.472 elapsed seconds, 248 provider usage seconds). Workshop 12/12, compact interactions 5/5, prepared-voice playback at two widths, seven HTTP routes and 223 asset hashes pass. The final repository gate passes 152 tests / 5,917 assertions; the only post-deploy source change is a test deadline assertion stabilized against the emitted deadline.
+
+The wider grading replay reports remain mixed: original fixtures 72/73, challenges 50/55, catalog 144/147. There is one borderline stakeholder false positive, two older challenge cases that remain false negatives, and conservative director intervention. Opus verified the older failure history. A wording experiment did not consistently improve these and caused catalog response validation failures, so it was reverted without deployment. Thresholds and expectations remain unchanged. See the [release record](simulator-release.md#role-ownership-and-longer-practice-release) for evidence paths and limits. No branch push or merge was performed.

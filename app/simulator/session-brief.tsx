@@ -12,7 +12,7 @@ export function SessionBrief({ scenario, client }: { scenario: ScenarioSummary; 
         <h3>Client</h3>
         <div className="sim-brief-client"><img src={client.image} alt="" /><div><h4>{client.name}</h4><p className="sim-muted">{scenario.clientRole} · {client.style}</p><p>{client.description}</p></div></div>
       </section>
-      <section><h3>Scenario</h3><h4>{scenario.title}</h4><p>{scenario.summary}</p><div className="sim-brief-meta"><span><UserRound size={16} />{scenario.role}</span><span><Clock size={16} />{scenario.durationMinutes} minutes</span></div></section>
+      <section><h3>Scenario</h3><h4>{scenario.title}</h4><p>{scenario.summary}</p><div className="sim-brief-meta"><span><UserRound size={16} />{scenario.role}</span><span><Clock size={16} />About {scenario.durationMinutes} minutes · Continue up to an hour</span></div></section>
       <section><h3>{openEnded ? 'The setting' : 'Your lead'}</h3><p>{scenario.lead}</p></section>
       {scenario.briefing && <section><h3>What you know going in</h3><ul>{scenario.briefing.map(fact => <li key={fact}>{fact}</li>)}</ul></section>}
       {!openEnded && <><section><h3>Our capabilities</h3><ul>{scenario.services.map(service => <li key={service}>{service}</li>)}</ul></section>

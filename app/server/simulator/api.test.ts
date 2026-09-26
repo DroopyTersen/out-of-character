@@ -34,6 +34,17 @@ test('owned control remains reachable after disabling new paid sessions', async 
   expect(f.calls[0]!.headers.get('Authorization')).toBe(capability);
   expect(new URL(f.calls[0]!.url).pathname).toBe('/end');
 });
+test('poll forwards a validated activity report and rejects malformed reports before the session', async () => {
+  const f = fixture();
+  const path = `sessions/${id}/poll`;
+  expect((await handleSimulator(f.request(path, { active: false, audio: true }), f.env))!.status).toBe(200);
+  const forwarded = await f.calls[0]!.json() as { active: boolean; audio: boolean };
+  expect(forwarded).toEqual({ active: false, audio: true });
+  expect((await handleSimulator(f.request(path, { active: 'yes', audio: false }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request(path, { active: true, audio: false, actorInstructions: 'ignore rules' }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request(path, { active: true, audio: false, padding: 'x'.repeat(300) }), f.env))!.status).toBe(413);
+  expect(f.calls).toHaveLength(1);
+});
 test('public catalog and browser data channel cannot receive actor configuration', async () => {
   const f = fixture();
   const response = await handleSimulator(new Request('https://practice.example/api/simulator/catalog'), f.env);
@@ -50,7 +61,7 @@ test('public catalog and browser data channel cannot receive actor configuration
   const config = liveConfiguration('scope', 'avery');
   expect(config.model).toBe('gpt-live-1');
   expect(config.store).toBe(false);
-  expect(config.audio.output.voice).toBe('marin');
+  expect(config.audio.output.voice).toBe('alloy');
   expect(config.client.data_channel.allowed_server_events).toEqual([]);
   expect(config.client.data_channel.allowed_client_events).toEqual(['session.close']);
 });

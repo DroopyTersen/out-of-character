@@ -26,6 +26,10 @@ export class LiveConnection {
   private controller = new AbortController();
   private requested = false;
   private disposed = false;
+  private activeSincePoll = false;
+  private lastAudioAt = 0;
+  private muted = false;
+  private autoMuted = false;
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
   private ending: Promise<void> | undefined;
 
@@ -77,9 +81,15 @@ export class LiveConnection {
       await this.until(channel, 'open', () => channel.readyState === 'open', 15_000, 'The voice connection timed out.');
       if (this.ending) return;
       this.callbacks.snapshot(await this.request('ready') as SessionSnapshot);
+      window.addEventListener('pointerdown', this.keepActive, { passive: true });
+      window.addEventListener('keydown', this.keepActive);
       this.poll();
       this.meterTimer = setInterval(() => {
         const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
+        if (this.context?.state === 'running' && ((!this.muted && !this.autoMuted && input.level > .08) || (output.level > .03 && !this.audio.paused))) {
+          this.keepActive();
+          this.lastAudioAt = Date.now();
+        }
         this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
       }, 80);
     } catch (error) {
@@ -113,8 +123,12 @@ export class LiveConnection {
     if (this.ending) return;
     this.pollTimer = setTimeout(async () => {
       try {
-        const snapshot = await this.request('poll') as SessionSnapshot;
+        const active = this.activeSincePoll;
+        this.activeSincePoll = false;
+        const snapshot = await this.request('poll', { active, audio: Date.now() - this.lastAudioAt < 1500 }) as SessionSnapshot;
         if (this.ending) return;
+        this.autoMuted = snapshot.status === 'ending' || (!!snapshot.warning && snapshot.warning.kind !== 'idle' && Date.now() >= snapshot.warning.endsAt);
+        this.applyMute();
         this.callbacks.snapshot(snapshot);
         if (snapshot.status === 'ended' || snapshot.status === 'interrupted') { this.release(); return; }
         this.poll();
@@ -127,7 +141,9 @@ export class LiveConnection {
     }, 1000);
   }
 
-  mute(muted: boolean) { this.stream?.getAudioTracks().forEach(track => { track.enabled = !muted; }); }
+  keepActive = () => { this.activeSincePoll = true; };
+  mute(muted: boolean) { this.muted = muted; this.applyMute(); }
+  private applyMute() { this.stream?.getAudioTracks().forEach(track => { track.enabled = !this.muted && !this.autoMuted; }); }
   async playAudio() { await this.context?.resume(); await this.audio.play(); }
 
   private async fail(message: string) {
@@ -181,6 +197,8 @@ export class LiveConnection {
     clearInterval(this.meterTimer);
     clearTimeout(this.pollTimer);
     clearTimeout(this.disconnectTimer);
+    window.removeEventListener('pointerdown', this.keepActive);
+    window.removeEventListener('keydown', this.keepActive);
     this.audio.pause();
     this.audio.srcObject = null;
     void this.context?.close().catch(() => {});

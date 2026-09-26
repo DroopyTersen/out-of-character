@@ -1,14 +1,16 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
-import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
+import { getClient, getClientCues, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
-import { SESSION_LIMIT_SECONDS, type SessionSnapshot } from '../../../core/simulator/types';
+import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, type SessionSnapshot, type SessionWarning } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
-import { simulatorJson, startSchema } from './api';
+import { activitySchema, simulatorJson, startSchema } from './api';
 import { archiveProvenance, writeArchive } from './archive.server';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
 const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
+const GRADE_INTERVAL_MS = 5000;
+const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
 
 /** Owns one transient attempt. Only the closure lease survives a worker restart. */
 export class SimulatorSession extends DurableObject<Env> {
@@ -21,6 +23,9 @@ export class SimulatorSession extends DurableObject<Env> {
   private connecting: Promise<{ sdp: string }> | undefined;
   private closeReceived: (() => void) | undefined;
   private lastSeen = Date.now();
+  private lastActivity = Date.now();
+  private lastAudio = Date.now();
+  private capacityDeadline: number | null = null;
   private passageUpdatedAt = new Map<string, number>();
   private judgedPassages = new Set<string>();
   private lastGrade = 0;
@@ -61,13 +66,21 @@ export class SimulatorSession extends DurableObject<Env> {
       return simulatorJson({ error: 'This practice session was interrupted. Start a new attempt.' }, 410);
     }
     this.lastSeen = Date.now();
+    if (action === '/poll' && request.body) {
+      const activity = activitySchema.parse(await request.json());
+      if (activity.active || activity.audio) this.lastActivity = Date.now();
+      if (activity.audio) this.lastAudio = Date.now();
+    }
     if (action === '/ready' && this.snapshot.status === 'connecting') {
+      if (this.checkLifetime()) return simulatorJson(this.snapshot);
       // The lease makes start single-use, so this transition and its greeting happen once.
       this.snapshot.status = 'live';
       this.reachedLive = true;
+      this.lastActivity = Date.now();
       this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: openingInstruction(getScenario(this.snapshot.scenarioId), getClient(this.snapshot.clientId)) });
     }
     if (action === '/end') await this.end();
+    this.checkLifetime();
     return simulatorJson(this.snapshot);
   }
 
@@ -79,7 +92,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.lease = { capability, deadline: Date.now() + SESSION_LIMIT_SECONDS * 1000, closed: false };
     this.snapshot = {
       id: input.id, scenarioId: input.scenarioId, clientId: input.clientId,
-      status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS,
+      status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS, warning: null,
       revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting',
       message: null, finalization: 'pending', usageSeconds: null,
     };
@@ -91,6 +104,7 @@ export class SimulatorSession extends DurableObject<Env> {
       if (this.snapshot.status === 'ending' || this.lease.closed) {
         return simulatorJson({ error: 'The attempt was cancelled.' }, 409);
       }
+      this.lastSeen = Date.now();
       this.timer = setInterval(() => this.tick(), 500);
       return simulatorJson({ sdp: created.sdp, snapshot: this.snapshot });
     } catch {
@@ -152,12 +166,10 @@ export class SimulatorSession extends DurableObject<Env> {
       const changed = next.find(entry => !snapshot.transcript.includes(entry));
       if (!changed) return;
       this.passageUpdatedAt.set(changed.id, Date.now());
+      this.lastActivity = Date.now();
       snapshot.transcript = next;
       snapshot.revision++;
-      if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries || transcriptCharacters(snapshot.transcript) >= 72_000) {
-        snapshot.message = 'The transcript limit has been reached.';
-        this.ctx.waitUntil(this.end());
-      }
+      if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries * .9 || transcriptCharacters(snapshot.transcript) >= TRANSCRIPT_LIMIT.characters * .9) this.capacityDeadline ??= Date.now() + 30_000;
       return;
     }
     if (snapshot.status === 'ending') return;
@@ -179,17 +191,12 @@ export class SimulatorSession extends DurableObject<Env> {
     const snapshot = this.snapshot;
     if (!snapshot || snapshot.status !== 'live') return;
     const now = Date.now();
-    if (now >= this.lease!.deadline || now - this.lastSeen > 35_000) {
-      snapshot.message = now >= this.lease!.deadline ? 'Practice time is up.' : 'Practice ended after losing contact with this page.';
-      this.ctx.waitUntil(this.end());
-      return;
-    }
+    if (this.checkLifetime()) return;
     if (!getScenario(snapshot.scenarioId).objectives.length) return;
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
     if (snapshot.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
-    const interval = Math.max(2000, (this.lease!.deadline - now) / Math.max(1, 179 - this.gradeCalls));
-    if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < interval || this.gradeCalls >= 179) return;
+    if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < GRADE_INTERVAL_MS || this.gradeCalls >= MAX_LIVE_GRADES) return;
     this.lastGrade = now;
     this.gradedText = text;
     // A quoted source must stay exact, even if more speech arrives during grading.
@@ -202,18 +209,48 @@ export class SimulatorSession extends DurableObject<Env> {
     }
   }
 
+  /** Shared by polls, the live tick and the durable alarm; browser contact is not conversation activity. */
+  private checkLifetime(): boolean {
+    const snapshot = this.snapshot;
+    if (!snapshot || (snapshot.status !== 'live' && snapshot.status !== 'connecting')) return !!this.closing;
+    const now = Date.now();
+    if (now - this.lastSeen > 35_000) {
+      snapshot.message = 'Practice ended after losing contact with this page.';
+      this.ctx.waitUntil(this.end());
+      return true;
+    }
+    if (snapshot.status === 'connecting') {
+      if (now - snapshot.startedAt < 60_000) return false;
+      snapshot.message = 'The voice connection timed out before practice began.';
+      this.ctx.waitUntil(this.end(true));
+      return true;
+    }
+    let warning: SessionWarning | null = null;
+    if (now - this.lastActivity >= SESSION_IDLE_WARNING_MS) warning = { kind: 'idle', endsAt: this.lastActivity + SESSION_IDLE_TIMEOUT_MS };
+    const deadline = this.lease!.deadline;
+    if (now >= deadline - 60_000 && (!warning || deadline < warning.endsAt)) warning = { kind: 'limit', endsAt: deadline };
+    if (this.capacityDeadline && (!warning || this.capacityDeadline < warning.endsAt)) warning = { kind: 'capacity', endsAt: this.capacityDeadline };
+    snapshot.warning = warning;
+    if (!warning || now < warning.endsAt) return false;
+    // Automatic limits give current speech a short bounded drain. Explicit End remains immediate.
+    if (warning.kind !== 'idle' && now < warning.endsAt + 20_000 && (now < warning.endsAt + 3000 || now - this.lastAudio < 2500)) return true;
+    snapshot.message = warning.kind === 'idle' ? 'Practice ended after five minutes without activity.' : warning.kind === 'limit' ? 'Practice reached the 60-minute safety limit.' : 'Practice reached its transcript capacity.';
+    this.ctx.waitUntil(this.end());
+    return true;
+  }
+
   private async grade(transcript: SessionSnapshot['transcript'], revision: number, final: boolean) {
     const snapshot = this.snapshot!;
     const scenario = getScenario(snapshot.scenarioId);
     if (!scenario.objectives.length) return;
     this.gradeCalls++;
     try {
-      const achievedIds = snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
+      const achievedIds = final ? [] : snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
       const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
       if (!final && this.closing) return;
       if (snapshot.evaluation && revision < snapshot.evaluation.revision) return;
       // Explicit public projection: raw client diagnostics and grader questions stay private.
-      snapshot.evaluation = { revision: result.revision, skills: result.skills, hint: result.hint, hintId: result.hintId, concern: result.concern, model: result.model, durationMs: result.durationMs, objectives: reconcileObjectives(scenario, snapshot.evaluation?.objectives ?? [], result.objectives) };
+      snapshot.evaluation = { revision: result.revision, skills: result.skills, hint: result.hint, hintId: result.hintId, concern: result.concern, model: result.model, durationMs: result.durationMs, objectives: final ? result.objectives : reconcileObjectives(scenario, snapshot.evaluation?.objectives ?? [], result.objectives) };
       snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
     } catch {
       if (this.gradeAbort.signal.aborted && !final) return;
@@ -239,7 +276,7 @@ export class SimulatorSession extends DurableObject<Env> {
     const snapshot = this.snapshot!;
     try {
       const result = await this.paid.evaluateClient({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
-      const cue = getScenario(snapshot.scenarioId).cues.find(item => item.id === result.cueId);
+      const cue = getClientCues(getScenario(snapshot.scenarioId)).find(item => item.id === result.cueId);
       if (this.closing || !cue || this.sentCues.some(sent => sent.id === cue.id) || !canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.sentCues.at(-1) ?? null, this.isFresh(transcript), Date.now())) return;
       if (this.send({ type: 'session.thinking.append', event_id: `cue-${crypto.randomUUID()}`, delegation_id: null, content: cue.text })) {
         this.sentCues.push({ id: cue.id, revision, sentAt: Date.now() });
@@ -322,11 +359,10 @@ export class SimulatorSession extends DurableObject<Env> {
       await this.closeOrphan();
       return;
     }
-    if (Date.now() >= this.lease!.deadline || Date.now() - this.lastSeen > 35_000) await this.end();
-    else {
-      await this.ctx.storage.setAlarm(Math.min(this.lease!.deadline, Date.now() + 30_000));
-      if (this.snapshot.status === 'live') this.ctx.waitUntil(this.saveArchive('partial'));
-    }
+    this.checkLifetime();
+    if (this.closing) { await this.closing; return; }
+    await this.ctx.storage.setAlarm(Date.now() + 30_000);
+    if (this.snapshot.status === 'live') this.ctx.waitUntil(this.saveArchive('partial'));
   }
 
   private async saveArchive(state: 'partial' | 'final') {

@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 if (!process.argv.includes('--paid')) throw new Error('This runs one paid Live attempt. Pass --paid explicitly.');
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
 const output = resolve(process.env.ACCEPTANCE_OUTPUT || 'output/simulator-live');
+const durationSeconds = Number(process.env.ACCEPTANCE_DURATION_SECONDS || 0);
+if (!Number.isFinite(durationSeconds) || durationSeconds < 0 || durationSeconds > 900) throw new Error('Keep the paid smoke test within fifteen minutes.');
 await mkdir(output, { recursive: true });
 const audio = await readFile(resolve(process.env.ACCEPTANCE_AUDIO || 'output/simulator-fixture.wav'));
 const browser = await chromium.launch({
@@ -31,8 +33,11 @@ await context.addInitScript(() => {
     const destination = ctx.createMediaStreamDestination();
     const response = await fetch('/__simulator_fixture.wav');
     const buffer = await ctx.decodeAudioData(await response.arrayBuffer());
-    const source = ctx.createBufferSource(); source.buffer = buffer; source.connect(destination);
-    source.start(ctx.currentTime + 8);
+    window.__simulatorSmoke.replay = (delay = 0) => {
+      const source = ctx.createBufferSource(); source.buffer = buffer; source.connect(destination);
+      source.start(ctx.currentTime + delay);
+    };
+    window.__simulatorSmoke.replay(8);
     tracks.push(...destination.stream.getTracks());
     return destination.stream;
   };
@@ -44,8 +49,8 @@ page.on('response', async response => {
   if (response.url().includes('/api/simulator/sessions')) {
     try {
       const value = await response.json();
-      if (value.snapshot) report.snapshots.push(value.snapshot);
-      else if (value.id) report.snapshots.push(value);
+      if (value.snapshot) report.snapshots.push({ ...value.snapshot, observedAt: Date.now() });
+      else if (value.id) report.snapshots.push({ ...value, observedAt: Date.now() });
       else if (value.error) report.errors.push(value.error);
     } catch {}
   }
@@ -58,6 +63,27 @@ try {
   await page.waitForTimeout(24_000);
   await page.waitForFunction(() => [...document.querySelectorAll('.sim-skill strong')].some(node => /^\d\.\d$/.test(node.textContent)), null, { timeout: 25_000 });
   await page.getByText('Jev · live', { exact: true }).waitFor({ timeout: 25_000 });
+  if (durationSeconds) {
+    const startedAt = report.snapshots.find(snapshot => snapshot.status === 'live').startedAt;
+    let lastSpeechAt = startedAt;
+    while (Date.now() - startedAt < durationSeconds * 1000) {
+      if (report.snapshots.at(-1)?.status !== 'live') throw new Error('The attempt ended during the longer-session check.');
+      // Regular synthetic speech exercises the active-conversation path.
+      // Silent abandonment and playback-only activity are covered separately.
+      await page.getByRole('button', { name: 'Enable audio' }).click();
+      if (Date.now() - lastSpeechAt > 60_000) {
+        await page.evaluate(() => window.__simulatorSmoke.replay());
+        lastSpeechAt = Date.now();
+        console.log(`Long-session speech at ${Math.floor((lastSpeechAt - startedAt) / 1000)}s`);
+      }
+      await page.waitForTimeout(20_000);
+    }
+    const latest = report.snapshots.at(-1);
+    const beforeTenMinutes = report.snapshots.filter(snapshot => snapshot.observedAt < startedAt + 600_000).at(-1);
+    const earlierTraineeIds = new Set(beforeTenMinutes?.transcript.filter(item => item.speaker === 'trainee').map(item => item.id));
+    // Provider timestamps/usage measure audio time, not this browser's wall clock.
+    report.longSession = { durationSeconds, elapsedSeconds: (Date.now() - startedAt) / 1000, live: latest?.status === 'live', speechAfterTenMinutes: !!beforeTenMinutes && latest?.transcript.some(item => item.speaker === 'trainee' && !earlierTraineeIds.has(item.id)) };
+  }
   await page.waitForTimeout(800); // Let the visible score transition finish before capturing it.
   await page.screenshot({ path: `${output}/live.png`, fullPage: true });
   await page.getByRole('button', { name: 'End session', exact: true }).click();
@@ -82,6 +108,7 @@ try {
     { name: 'one transient polling failure recovers', passed: retriedPoll && report.snapshots.some(snapshot => snapshot.status === 'live' && snapshot.revision > 0) },
     { name: 'local media cleanup', passed: report.browser.tracksEnded && report.browser.peersClosed },
     { name: 'private data-channel configuration excluded', passed: !report.browser.privateConfigReceived },
+    ...(durationSeconds > 600 ? [{ name: 'active beyond ten minutes with new speech', passed: report.longSession?.elapsedSeconds > 600 && report.longSession.live && report.longSession.speechAfterTenMinutes }] : []),
   ];
   await page.screenshot({ path: `${output}/debrief.png`, fullPage: true });
 } catch (error) {

@@ -15,7 +15,7 @@ export function appendTranscript(entries: TranscriptEntry[], delta: TranscriptDe
 }
 
 /** Evaluator input bound. A live session stops accepting speech beyond it so final grading stays valid. */
-export const TRANSCRIPT_LIMIT = { entries: 240, characters: 80_000 };
+export const TRANSCRIPT_LIMIT = { entries: 800, characters: 80_000 };
 export const transcriptCharacters = (entries: TranscriptEntry[]) => entries.reduce((sum, entry) => sum + entry.text.length, 0);
 
 export function findEvidence(entries: TranscriptEntry[], id: string): Evidence | null {

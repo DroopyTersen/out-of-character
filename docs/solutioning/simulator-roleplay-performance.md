@@ -23,13 +23,13 @@ Andrew's first live test found two problems: the client did not establish enough
 - Real GPT-Live samples: opening explains the meeting and yields; pressure and recovery produce distinct reactions; ordinary questions receive useful answers; progress and authority limits remain credible. Inspect actual transcript and capture audio, with explicit closure and usage evidence. Record subjective audio review separately from transcript checks.
 - Include a greeting-interruption case if the existing harness can support it with a small fixture change. Verify response to the interruption instead of replaying the kickoff.
 - Run `bun run check`, including the existing private-bundle scan. No UI layout or scoring changes are planned.
-- Request pragmatic Opus review through computer use at the plan and implementation checkpoints; record feedback and disposition here. Commit coherent checkpoints. This follow-up is local until a new deployment is requested.
+- Request pragmatic Opus review through computer use at the plan and implementation checkpoints; record feedback and disposition here. Commit coherent checkpoints. Deployment requires Andrew's explicit request, subsequently received for the release below.
 
 Official protocol/prompt references: [Prompting GPT-Live](https://developers.openai.com/api/docs/guides/live-prompting) and [opening the conversation](https://developers.openai.com/api/docs/guides/live-conversations#greet-before-the-caller-speaks). These recommend role/tone/pace instructions and a speak-first append with active input audio, followed by listening. An instruction acknowledgment does not prove the spoken result.
 
 ## Evidence and review disposition
 
-Baseline is commit `443c2a4`; its most recent deployed actor is unchanged from `b0e13ab`. Implementation is committed locally as `3729e9a`. Final provider checks and review disposition are recorded below.
+Baseline was commit `443c2a4`; its deployed actor was unchanged from `b0e13ab`. Implementation is committed as `3729e9a` and is now deployed from `8633f24`. Final provider checks and review disposition are recorded below.
 
 ### Plan review
 
@@ -87,6 +87,10 @@ Opus's final committed-code review found no code blockers, verified the current 
 
 `output/simulator-performance-runs.json` indexes all 20 development runs, including failures (2,435 provider seconds total). Opening excerpts are in `output/simulator-performance-audio/{morgan,avery,casey}-kickoff.wav`; each is an unprocessed initial excerpt of a captured client stream. Morgan is the pre-final performance sample, Avery is the final budget sample, and Casey is the final guard sample. Full `client-audio.wav` and transcripts remain alongside every report.
 
-Audio naturalness and whether the intensity feels right still require human listening. Provider startup variability remains a practical limit: the successful retry does not erase the silent attempt. There is no claim of a human-run conversation, physical-phone check, or deployment in this follow-up.
+Audio naturalness and whether the intensity feels right still require human listening. Provider startup variability remains a practical limit: the successful retry does not erase the silent attempt. These rehearsals do not establish a human-run conversation or physical-phone behavior. Subsequent production verification is recorded below.
 
 Opus's final evidence review verified the 20-run index, failed startup, identical-prompt interruption retry, audio excerpts, and local-only progress record. Verdict: the wording is honest and no blocking work remains for this scoped local implementation. A production prompt for unusually long startup silence is an optional follow-up if observed in user sessions, not part of this change.
+
+### Authorized redeployment
+
+Andrew then requested redeployment. Release `8633f24` is live as Cloudflare version `8b61fc6c-50df-4888-a918-1b9a361d444b` with 100% traffic, verified September 26 at 16:55 UTC. The fresh full gate passes 114 tests / 3,777 assertions. Production WebRTC smoke passes 9/9 at phone width: Morgan completes a roughly 25-second contextual kickoff before the trainee speaks, real Jev feedback appears live, and provider/media cleanup completes. It used 46 provider seconds with no errors. Compact UI checks pass 5/5 and all 63 served assets match. Full receipts and limitations are in the [release record](simulator-release.md#client-performance-release).

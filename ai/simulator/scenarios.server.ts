@@ -1,4 +1,4 @@
-import { SIMULATOR_VERSION, type Catalog, type Client, type ScenarioSummary } from '../../core/simulator/types';
+import { SIMULATOR_VERSION, type Catalog, type Client, type ClientStats, type ScenarioSummary } from '../../core/simulator/types';
 
 export type Objective = ScenarioSummary['objectives'][number] & { criterion: string; hint: string };
 export type ClientCue = { id: string; when: string; text: string };
@@ -11,7 +11,7 @@ export type Scenario = Omit<ScenarioSummary, 'objectives'> & {
   cues: ClientCue[];
   seriousMistake: string;
 };
-type CastMember = Client & { voice: string; behavior: string };
+type CastMember = Client & { voice: string; behavior: string; stats: ClientStats };
 
 export const clients: CastMember[] = [
   {
@@ -132,7 +132,7 @@ export function getClient(id: string): CastMember {
 export function publicCatalog(): Catalog {
   return {
     version: SIMULATOR_VERSION,
-    clients: clients.map(({ id, name, style, description, image, stats }) => ({ id, name, style, description, image, stats })),
+    clients: clients.map(({ id, name, style, description, image }) => ({ id, name, style, description, image })),
     scenarios: scenarios.map(({ id, title, category, summary, lead, role, clientRole, durationMinutes, services, objectives }) => ({
       id, title, category, summary, lead, role, clientRole, durationMinutes, services,
       objectives: objectives.map(({ id, label, kind }) => ({ id, label, kind })),

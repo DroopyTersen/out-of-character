@@ -9,6 +9,10 @@ describe('simulator boundaries', () => {
     expect(catalog.scenarios).toHaveLength(2);
     expect(catalog.clients).toHaveLength(3);
     const json = JSON.stringify(catalog);
+    for (const client of catalog.clients) {
+      expect(Object.keys(client).sort()).toEqual(['description', 'id', 'image', 'name', 'style']);
+      expect(client).not.toHaveProperty('stats');
+    }
     for (const secret of ['8,000', 'took the blame', 'operations analyst', 'overdue-item history', 'seriousMistake', 'criterion', 'behavior', 'voice', 'approval-boundary']) {
       // "behavior" is a public objective kind, not the private character instructions.
       if (secret === 'behavior') expect(catalog.clients[0]).not.toHaveProperty(secret);
@@ -25,6 +29,16 @@ describe('simulator boundaries', () => {
       expect(avery).toContain(constraint);
     }
     expect(morgan).not.toBe(avery);
+    const expectedStats = {
+      morgan: { assertiveness: 4, skepticism: 3, guardedness: 3, bargaining: 4, riskAversion: 3, relationship: 1 },
+      avery: { assertiveness: 1, skepticism: 2, guardedness: 4, bargaining: 2, riskAversion: 4, relationship: 4 },
+      casey: { assertiveness: 3, skepticism: 4, guardedness: 2, bargaining: 2, riskAversion: 3, relationship: 2 },
+    };
+    for (const id of ['morgan', 'avery', 'casey'] as const) {
+      const client = getClient(id);
+      expect(client.stats).toEqual(expectedStats[id]);
+      expect(actorBrief(scenario, client)).toContain(`Stable traits, each from 0 to 4: ${JSON.stringify(expectedStats[id])}.`);
+    }
     for (const objective of scenario.objectives) expect(morgan).not.toContain(objective.criterion);
   });
 });

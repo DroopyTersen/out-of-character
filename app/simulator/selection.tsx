@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Mic, Target, Presentation, FileText } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import type { Catalog, ClientStats } from '../../core/simulator/types';
-
-const traits: [keyof ClientStats, string][] = [['assertiveness', 'Assertiveness'], ['skepticism', 'Skepticism'], ['guardedness', 'Guardedness'], ['bargaining', 'Bargaining'], ['riskAversion', 'Risk aversion'], ['relationship', 'Relationship focus']];
+import type { Catalog } from '../../core/simulator/types';
 
 export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, onClient, onStart, enabled = true, error }: {
   catalog: Catalog; scenarioId: string; clientId: string;
@@ -42,7 +40,7 @@ export function SimulatorSelection({ catalog, scenarioId, clientId, onScenario, 
       </section>
       <section className="sim-panel"><header className="sim-section-heading"><h2>Your client</h2><div className="sim-rail-controls"><span>{catalog.clients.length} clients</span><button className="quiet-button" aria-label="Previous clients" disabled={!canScroll.previous} onClick={() => scroll(-1)}><ArrowLeft size={16} /></button><button className="quiet-button" aria-label="Next clients" disabled={!canScroll.next} onClick={() => scroll(1)}><ArrowRight size={16} /></button></div></header>
         <div className="sim-client-rail" ref={rail} onScroll={updateScroll} role="group" aria-label="Choose a client">{catalog.clients.map(item => <button className={`sim-client-card ${item.id === clientId ? 'selected' : ''}`} aria-pressed={item.id === clientId} key={item.id} onClick={() => onClient(item.id)}><span className="sim-choice-mark">{item.id === clientId && <Check size={17} />}</span><img src={item.image} alt="" draggable={false} /><strong>{item.name}</strong><span>{item.style.split(' & ')[0]}</span></button>)}</div>
-        <AnimatePresence mode="wait" initial={false}><motion.div className="sim-client-brief" key={client.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .15 }}><img className="sim-selected-portrait" src={client.image} alt="" /><div><h3>{client.name}</h3><span>{scenario.clientRole} · {client.style}</span><p>{client.description}</p></div><details className="sim-traits"><summary>Behavior profile</summary><div>{traits.map(([id, label]) => <div key={id}><span>{label}</span><meter min={0} max={4} value={client.stats[id]} aria-label={label} /><small>{client.stats[id]}/4</small></div>)}</div></details></motion.div></AnimatePresence>
+        <AnimatePresence mode="wait" initial={false}><motion.div className="sim-client-brief" key={client.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .15 }}><img className="sim-selected-portrait" src={client.image} alt="" /><div><h3>{client.name}</h3><span>{scenario.clientRole} · {client.style}</span><p>{client.description}</p></div></motion.div></AnimatePresence>
         <p className="sim-panel-foot">Same scenario. Different conversation.</p>
       </section>
     </div>

@@ -1,5 +1,7 @@
 # Simulator MVP progress
 
+Current follow-up: [compact layout implementation](simulator-compact-layout.md) covers the mobile mockup, matching desktop changes, overlay hints, session brief, and private client stats. It supersedes the earlier mockup's public behavior profile.
+
 Plan: [implementation plan](simulator-implementation-plan.md). Product decisions: [proposal](simulator-proposal.md). Scenario content: [framework](simulator-scenario-framework.md).
 
 This document preserves the original MVP checkpoint record. The subsequent three engine rounds and four design iterations per screen are tracked in [critique and improvement rounds](simulator-improvement-rounds.md), including the current v4 classifier measurements.

@@ -15,13 +15,13 @@ The MVP also omits an interruption indicator, extra scenario-specific skill bars
 ## Product contract
 
 - Two authored scenarios: adjacent SharePoint sales and engineering scope negotiation.
-- Three reusable clients with the six agreed behavioral stats, private scenario interests, stable facts, disclosure conditions, authority limits, and plausible concessions.
+- Three reusable clients with six private behavioral stats, private scenario interests, stable facts, disclosure conditions, authority limits, and plausible concessions. The trainee sees the public identity and background, never the stats or actor directions.
 - Seven trainee skills: Credibility, Confidence, Listening, Rapport, Clarity, Guidance, Adaptability. Scores reflect effectiveness with the particular client; unavailable evidence is distinct from poor performance.
 - Every scenario objective visible in stable order and independently achievable in any order. Discoveries, trainee behaviors, and current agreements have distinct evidence requirements. Withdrawn agreements stop counting as achieved.
 - GPT-Live 1 supplies the conversational audio and transcripts. The simulator uses no Flux path.
 - AI SDK supplies Jev evaluation where supported. Use a small direct Live transport adapter where the installed SDK does not cover WebRTC/session control.
 - Separate authored hints for the trainee and client. Client cues respect interests and fixed stats, can recognize earned progress, and never contain trainee scores or grader instructions.
-- Match the calm three-column live mockup: client/conversation, trainee hint/objectives, seven skills. Selection supports scrollable scenario and client collections. Keep the existing game functional and offer clear navigation between modes.
+- Follow the compact mobile mockup: a small client strip opens the public session brief; all objectives and seven skills remain easy to scan; one dismissible overlay hint takes no layout space; transcript opens on demand. Adapt desktop to the same hierarchy with side-by-side objectives and skills. Selection supports scrollable scenario and client collections. Keep the existing game functional and offer clear navigation between modes.
 - Build every simulator screen, important state, and animation in the existing DIY workshop alongside production components. Include replay/pause/reset controls for transitions and transcript playback. Add an isolated Jev analysis lab using authored transcripts, stepwise snapshots, and stored real-provider judgments. New paid runs are explicit CLI actions; workshop stories make no microphone or provider requests.
 - Whole-attempt restart, transient results, and a deterministic debrief with actual dialogue evidence. A generative debrief is unnecessary for the first release.
 - Keep all client/company material fictional or non-identifying. Credentials stay server-side and in ignored local configuration.
@@ -31,7 +31,7 @@ The MVP also omits an interruption indicator, extra scenario-specific skill bars
 1. **Domain and authored content:** scenario/character definitions, public projections, actor brief composition, rubric anchors, objective criteria, hint candidates, transcript/evaluation contracts, and deterministic debrief helpers.
 2. **Provider adapters:** AI SDK Jev evaluations and direct GPT-Live session/sideband commands. Validate provider results at the boundary; keep the provider protocol out of components.
 3. **Session ownership:** one server session owner per attempt coordinates authoritative transcripts, evaluation scheduling, hint eligibility, close, and limits. Protect paid creation/control with existing origin/rate/kill-switch conventions and attempt ownership. Enforce the duration limit server-side and close abandoned sessions.
-4. **Browser experience:** a focused hook owns WebRTC, media cleanup, captions, and connection state; components render selection, the conversation, feedback, and debrief. Do not put private client briefs or evaluation credentials in browser bundles.
+4. **Browser experience:** a focused hook owns WebRTC, media cleanup, transcripts, and connection state; components render selection, the conversation, feedback, and debrief. Do not put private client stats, actor briefs, or evaluation credentials in browser payloads or bundles.
 5. **Verification:** pure behavior fixtures, transport/session tests at narrow external boundaries, real Jev fixture evaluations, real Live lifecycle/audio evidence, fixture UI checks, and visible browser review.
 
 Preserve observation gaps and failed finalization honestly. An append acknowledgment does not prove the actor followed a cue. An asynchronous director cannot undo speech already heard. Provider failures must not fabricate scores, objective completions, or a successful session ending.

@@ -28,7 +28,6 @@ export type Client = {
   style: string;
   description: string;
   image: string;
-  stats: ClientStats;
 };
 export type ScenarioSummary = {
   id: string;

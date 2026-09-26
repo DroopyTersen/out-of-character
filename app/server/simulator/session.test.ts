@@ -143,11 +143,42 @@ test('concurrent starts create only one paid session', async () => {
   expect(f.creations()).toBe(1);
   await f.session.fetch(request('end'));
 });
+test('the meeting kickoff waits for ready and repeated ready requests cannot replay it', async () => {
+  const f = await fixture();
+  const started = await (await f.session.fetch(request('start'))).json();
+  const openings = () => f.socket.sent.filter(event => event.type === 'session.instructions.append');
+  expect(openings()).toHaveLength(0);
+  const ready = await Promise.all([f.session.fetch(request('ready')), f.session.fetch(request('ready'))]);
+  expect(ready.map(response => response.status)).toEqual([200, 200]);
+  expect(openings()).toHaveLength(1);
+  expect(openings()[0]).toMatchObject({ event_id: 'opening', delegation_id: null });
+  const instruction = openings()[0]!.content;
+  expect(typeof instruction).toBe('string');
+  const publicStates = [started, ...await Promise.all(ready.map(response => response.json()))];
+  expect(JSON.stringify(publicStates)).not.toContain(JSON.stringify(instruction));
+  await f.session.fetch(request('end'));
+  await f.session.fetch(request('ready'));
+  expect(openings()).toHaveLength(1);
+});
 test('an end arriving before start prevents any paid creation for that attempt', async () => {
   const f = await fixture();
   await f.session.fetch(request('end'));
   expect((await f.session.fetch(request('start'))).status).toBe(409);
   expect(f.creations()).toBe(0);
+});
+test('an actor delegation receives private role direction instead of starting outside work', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.delegation.created', delegation: { id: 'unexpected-task', target: 'client' } });
+  const direction = f.socket.sent.find(event => event.delegation_id === 'unexpected-task');
+  expect(direction?.type).toBe('session.thinking.append');
+  expect(typeof direction?.content).toBe('string');
+  const state = await (await f.session.fetch(request('poll'))).json() as Record<string, unknown>;
+  expect(state.status).toBe('live');
+  expect(JSON.stringify(state)).not.toContain(JSON.stringify(direction?.content));
+  expect(f.creations()).toBe(1);
+  await f.session.fetch(request('end'));
 });
 test('server alarm closes abandoned practice without browser cooperation', async () => {
   const f = await fixture();

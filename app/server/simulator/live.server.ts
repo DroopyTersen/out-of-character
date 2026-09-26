@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { actorBrief, getClient, getScenario } from '../../../ai/simulator/scenarios.server';
 
 export const LIVE_MODEL = 'gpt-live-1';
+export const NO_EXTERNAL_TASK = 'No external task is available or necessary in this meeting. Continue as the client using your existing facts, interests, and authority limits. Make no claims about work being done outside this conversation.';
 export class LiveSessionGone extends Error {}
 const creation = z.object({ session: z.object({ id: z.string().min(1) }), transport: z.object({ type: z.literal('webrtc'), sdp: z.string().min(1) }) });
 export const transcriptEvent = z.object({

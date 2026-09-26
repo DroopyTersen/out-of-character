@@ -1,9 +1,9 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
-import { getScenario } from '../../../ai/simulator/scenarios.server';
+import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
 import { SESSION_LIMIT_SECONDS, type SessionSnapshot } from '../../../core/simulator/types';
-import { attachLive, createLive, LiveSessionGone, transcriptEvent } from './live.server';
+import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { simulatorJson, startSchema } from './api';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
@@ -63,7 +63,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (action === '/ready' && this.snapshot.status === 'connecting') {
       // The lease makes start single-use, so this transition and its greeting happen once.
       this.snapshot.status = 'live';
-      this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: `Open this meeting now in English, naturally: ${getScenario(this.snapshot.scenarioId).opening} Then pause and listen.` });
+      this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: openingInstruction(getScenario(this.snapshot.scenarioId), getClient(this.snapshot.clientId)) });
     }
     if (action === '/end') await this.end();
     return simulatorJson(this.snapshot);
@@ -162,7 +162,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (event.type === 'session.delegation.created') {
       const delegation = event.delegation as { id?: unknown; target?: unknown } | undefined;
       if (delegation?.target === 'client' && typeof delegation.id === 'string') {
-        this.send({ type: 'session.thinking.append', event_id: crypto.randomUUID(), delegation_id: delegation.id, content: 'No external task is available or necessary in this meeting. Continue as the client using your existing facts, interests, and authority limits. Make no claims about work being done outside this conversation.' });
+        this.send({ type: 'session.thinking.append', event_id: crypto.randomUUID(), delegation_id: delegation.id, content: NO_EXTERNAL_TASK });
       }
     }
     if (event.type === 'error') {

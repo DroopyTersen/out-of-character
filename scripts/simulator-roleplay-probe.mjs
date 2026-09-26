@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { liveConfiguration } from '../app/server/simulator/live.server.ts';
-import { getScenario } from '../ai/simulator/scenarios.server.ts';
+import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
+import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { appendTranscript } from '../core/simulator/state.ts';
@@ -25,6 +25,21 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   sharepoint: {
+    budget: {
+      turns: 3,
+      lines: {
+        symptoms: 'Before talking about solutions, what is actually going wrong with the way people handle documents?',
+        offer,
+        budget: 'To be clear, what budget can you personally authorize, and is any implementation funding approved?',
+      },
+      choose: ({ turn }) => ['symptoms', 'offer', 'budget'][turn],
+    },
+    // Speak during the kickoff, then let the actor answer the actual question.
+    interruption: {
+      turns: 1,
+      lines: { interrupt: 'Sorry to jump in. What is actually going wrong for people using SharePoint day to day?' },
+      choose: () => 'interrupt',
+    },
     good: {
       turns: 4,
       lines: {
@@ -88,6 +103,16 @@ const plans = {
     },
   },
   scope: {
+    mixed: {
+      turns: 4,
+      lines: {
+        promise: 'Sure, we can definitely add the full dashboard in a day, at no extra cost. It will not affect anything else in the release.',
+        recover: 'I got ahead of myself. I have not checked the effort or data, so I cannot promise that. What do you actually need to achieve with the dashboard, and by when?',
+        boundary: 'The release is already full, so I cannot add unknown work without an impact estimate and a priority decision. A smaller report or demonstration might meet the immediate need. We should first check which figures are reliable, then discuss the tradeoff with the product owner.',
+        next: 'I will check the data and estimate the options by Thursday, without committing the dashboard. Could you arrange a decision with the product owner after that so we can agree what, if anything, changes in the release?',
+      },
+      choose: ({ turn }) => ['promise', 'recover', 'boundary', 'next'][turn],
+    },
     good: {
       turns: 5,
       lines: {
@@ -123,34 +148,39 @@ for (const [id, line] of Object.entries(plan.lines)) {
 const { client: _permissions, ...session } = liveConfiguration(scenarioId, clientId);
 // A digest identifies the actor brief version without copying private direction into the report.
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
-const report = { rubricVersion: RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, director, synthetic: true, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], errors: [] };
+const opening = openingInstruction(scenario, getClient(clientId));
+const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
+const report = { rubricVersion: RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, director, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
-let pacing, deadline, closing = false, deciding = false, clip, offset = 0, lastOutput = 0, inputEnded = 0, turn = 0, outputStart = 0;
+let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
+const observations = [];
 const cueIds = new Set();
 const used = new Set();
 const send = event => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
 const close = () => { if (closing) return; closing = true; clearInterval(pacing); send({ type: 'session.close' }); };
+async function observeClient(afterTurn, transcript) {
+  try {
+    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
+    const cue = scenario.cues.find(item => item.id === judgment.cueId);
+    const sent = !!(!closing && director && cue && judgment.cueProbability >= .9 && !cueIds.has(cue.id));
+    report.directions.push({ afterTurn, fidelity: judgment.fidelity, interests: judgment.interests, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
+    if (sent) { cueIds.add(cue.id); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }
+  } catch (error) {
+    report.directions.push({ afterTurn, unavailable: true, error: error.name });
+  }
+}
 async function respond() {
   deciding = true;
   const spoken = report.transcript.filter(entry => entry.speaker === 'client');
   const answer = spoken.slice(outputStart).map(entry => entry.text).join(' ');
-  if (turn) {
-    try {
-      const judgment = await evaluateClient({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
-      const cue = scenario.cues.find(item => item.id === judgment.cueId);
-      const sent = !!(director && cue && judgment.cueProbability >= .9 && !cueIds.has(cue.id));
-      report.directions.push({ afterTurn: turn, fidelity: judgment.fidelity, interests: judgment.interests, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
-      if (sent) { cueIds.add(cue.id); send({ type: 'session.thinking.append', event_id: `direction-${turn}`, delegation_id: null, content: cue.text }); }
-    } catch {
-      // A slow judge should not waste the paid voice session; the gap is recorded.
-      report.directions.push({ afterTurn: turn, unavailable: true });
-    }
-  }
+  // The judge observes a frozen passage without making the trainee wait in silence.
+  if (turn) observations.push(observeClient(turn, report.transcript));
   const id = turn < plan.turns ? plan.choose({ turn, answer, heard: spoken.map(entry => entry.text).join(' '), used }) : null;
   if (!id) { close(); return; }
   used.add(id);
-  report.turns.push({ turn: turn + 1, selected: id, inResponseTo: answer });
+  const clientAudioQuietMs = lastAudibleOutput ? Date.now() - lastAudibleOutput : null;
+  report.turns.push({ turn: turn + 1, selected: id, inResponseTo: answer, inputStartMs: inputBytes / 48, clientAudioQuietMs });
   outputStart = spoken.length;
   clip = clips[id]; offset = 0; turn++; deciding = false;
 }
@@ -162,7 +192,8 @@ const completed = new Promise(resolve => {
     const value = JSON.parse(event.data);
     if (value.type === 'session.started') {
       // Same opening request as the production session owner.
-      send({ type: 'session.instructions.append', delegation_id: null, content: `Open this meeting now in English, naturally: ${scenario.opening} Then pause and listen.` });
+      openingSentAt = Date.now();
+      send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: opening });
       pacing = setInterval(() => {
         let audio = Buffer.alloc(960);
         if (clip) {
@@ -170,18 +201,45 @@ const completed = new Promise(resolve => {
           if (offset >= clip.length) { clip = undefined; inputEnded = Date.now(); }
         }
         send({ type: 'session.input_audio.append', audio: audio.toString('base64') });
-        if (!clip && !deciding && lastOutput > inputEnded && Date.now() - lastOutput > 1500 && Date.now() - inputEnded > 3000) void respond().catch(() => { report.errors.push('Rehearsal step failed.'); close(); });
+        inputBytes += audio.length;
+        const interruptOpening = approach === 'interruption' && turn === 0 && firstAudibleOutput > 0 && Date.now() - firstAudibleOutput >= 6000 && Date.now() - lastAudibleOutput < 250;
+        const yielded = lastAudibleOutput > inputEnded && lastOutput > inputEnded && Date.now() - Math.max(lastOutput, lastAudibleOutput) > 2500 && Date.now() - inputEnded > 3000;
+        const readyForReply = approach === 'interruption' && turn === 0 ? interruptOpening : yielded;
+        if (!clip && !deciding && readyForReply) void respond().catch(() => { report.errors.push('Rehearsal step failed.'); close(); });
       }, 20);
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       if (value.type === 'session.output_transcript.delta') lastOutput = Date.now();
       report.transcript = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
     } else if (value.type === 'session.output_audio.delta') {
-      chunks.push(Buffer.from(value.delta, 'base64'));
+      const audio = Buffer.from(value.delta, 'base64');
+      chunks.push(audio);
+      // Live streams silence too. Wait for quiet PCM as well as settled text,
+      // so a delayed transcript or deliberate pause does not trigger a reply.
+      let energy = 0;
+      for (let i = 0; i + 1 < audio.length; i += 2) energy += audio.readInt16LE(i) ** 2;
+      if (Math.sqrt(energy / (audio.length / 2)) > 200) {
+        lastAudibleOutput = Date.now();
+        if (!firstAudibleOutput) report.openingLatencyMs = lastAudibleOutput - openingSentAt;
+        firstAudibleOutput ||= lastAudibleOutput;
+      }
+    } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
+      report.openingAcknowledged = true;
     } else if (value.type === 'session.thinking.appended') {
       const direction = report.directions.find(item => `direction-${item.afterTurn}` === value.client_event_id);
       if (direction) direction.acknowledged = true;
+      const guard = report.delegations.find(item => item.eventId === value.client_event_id);
+      if (guard) guard.acknowledged = true;
     } else if (value.type === 'session.delegation.created') {
-      report.errors.push('Actor attempted delegation.');
+      if (closing) return;
+      if (value.delegation?.target !== 'client' || typeof value.delegation.id !== 'string') {
+        report.errors.push('Unrecognized actor delegation.');
+      } else {
+        // Exercise the existing production guard; record the attempt separately
+        // so a recovered request is not mistaken for perfect prompt adherence.
+        const eventId = `role-guard-${report.delegations.length}`;
+        report.delegations.push({ eventId, afterTurn: turn, acknowledged: false });
+        send({ type: 'session.thinking.append', event_id: eventId, delegation_id: value.delegation.id, content: NO_EXTERNAL_TASK });
+      }
     } else if (value.type === 'session.closed') {
       report.finalized = true; report.usageSeconds = value.usage?.seconds ?? null; resolve();
     } else if (value.type === 'error') report.errors.push({ code: value.error?.code ?? 'unknown', command: value.error?.client_event_id ?? null });
@@ -192,10 +250,15 @@ const completed = new Promise(resolve => {
 try {
   await completed;
   if (report.finalized) report.trainee = await evaluateTrainee({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
-} catch { report.errors.push('Final evaluation failed.'); }
+} catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
   clearTimeout(deadline); clearInterval(pacing); ws.close();
+  await Promise.all(observations);
+  if (report.delegations.some(item => !item.acknowledged)) report.errors.push('Actor role direction was not acknowledged.');
   await writeFile(`${output}/client-audio.pcm`, Buffer.concat(chunks));
+  // A playable recording makes listening review possible without a PCM import.
+  const wav = Bun.spawn(['ffmpeg', '-y', '-loglevel', 'error', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', `${output}/client-audio.pcm`, `${output}/client-audio.wav`], { stderr: 'ignore' });
+  if (await wav.exited) report.errors.push('Client audio conversion failed.');
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
 }
 console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, fidelity, cueId, unavailable }) => ({ afterTurn, fidelity, cueId, unavailable })), errors: report.errors }));

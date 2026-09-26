@@ -37,8 +37,76 @@ Verification:
 - Focused state tests pass 10/10 with 53 assertions. Typecheck passes. The initial TypeScript control-flow error in the replay accumulation loop was resolved with an explicitly typed fold; its failed log remains alongside the accepted result.
 - Independent read-only review confirmed the previous full-result fallback, checkpoint ordering, latching and next-checkpoint behavior for the shipped corpus.
 
+## Claude pass
+
+Baseline: `586af05`. Claude implemented a second pass using the same skill, followed by an independent diff review and integrated verification. Criteria: delete concepts, give each decision one owner, and add no wrappers or layers beyond what removes duplication.
+
+### Lead changes reviewed
+
+- `simulator-recordings.ts` has one selection path.
+- `buildDebrief` returns grouped takeaways.
+- The formatted stories JSX kept `Playback` focus behavior.
+
+The review found no concrete defect. Replay selection, debrief grouping and playback behavior were not altered by the second pass.
+
+### Applied
+
+| Area | Finding | Change |
+| --- | --- | --- |
+| `live-connection.ts` | Browser closure had two promises (`ending` and `remoteClosure`), with separate end and dispose paths initiating the same memoized request. Every guard had to check `disposed \|\| ending`. | `end()` is the single closure owner. `dispose()` marks the connection disposed, calls `end()`, and still releases media immediately. `remoteClosure`/`closeRemote` are removed, and guards check only `ending`. |
+| `live-connection.ts` | The data channel was a field used only inside `start()`. `pollFailures` was mutable state that belongs to the poll chain. Two abort-aware waits were copied almost verbatim. | The channel is a local. The consecutive failure count is passed through `poll(failures)`, still ending on the third failure. One private `until()` owns both waits. |
+| `session.ts` | `greeted` duplicated a guarantee the `connecting → live` transition already gives, since the lease makes `start` single-use. | The flag is removed and the opening is sent once in the transition. `end()` uses `??=`. |
+| `state.ts`, `session.ts`, `evaluate.server.ts` | The evaluator input bound (240 passages, 80,000 characters) was defined separately in the session's late-delta guard and the evaluator's validation. | Both now use `TRANSCRIPT_LIMIT` and `transcriptCharacters`. |
+| `api.ts` | The four-part live availability condition appeared twice, once negated, so the catalog's `enabled` and the sessions 503 could drift apart. | One `liveAvailable(env)`. |
+| `run.ts` | Five booleans fed two parallel seven-way ternaries: one picked fixtures, the other picked the default output. | One ordered table pairs each flag's collection with its output. `--fixture` still wins, then blind > challenge > validation > holdout > replay. `--replay` still sets checkpoint lengths independently. |
+
+These changes are intended to preserve behavior, and each preserved guarantee was reasoned through case by case:
+
+- **Keepalive `/end`:**
+  - Sent exactly once, including dispose during end and dispose after a poll saw the session end.
+  - No request is sent before `requested`.
+- **Timing:** The 3-second local deadline, healthy-peer drain and immediate silence are unchanged.
+- **Callbacks:** The closure response's snapshot and error callbacks remain suppressed after dispose.
+- **Startup cancellation:** The existing startup and poll guards still exit after end or dispose.
+
+Two small observable differences:
+
+- The ICE wait now rejects at once if the attempt was already aborted, as the channel wait already did. This only lets an abandoned start exit sooner.
+- After dispose, the deadline or the final `release()` can emit an extra silent `levels` callback. The old dispose-during-end path already did this. `use-simulator.ts` drops callbacks from a replaced connection through its generation guard, and after unmount or pagehide nothing consumes them.
+
+### Deferred
+
+- The session's early-stop threshold of 72,000 characters remains a local literal. It is intentional headroom below the shared bound for late deltas, not a second copy of it.
+- The recovery lease, `closeOrphan`, the DO's Bearer re-check and the duplicated DO request forwarding in `api.ts` remain distinct responsibilities.
+- The one documented JSON speaker cast in recordings remains.
+
+### Checks
+
+- `bunx tsc --noEmit` passes.
+- `bun test`: 111/111 tests across 13 files, 3,741 assertions.
+- **Evaluator CLI:**
+  - **Setup:** Stubbed offline copies of `586af05` and the candidate `run.ts` were used. The evaluator and file write were replaced, and each copy ran from the scratchpad with a placeholder key, so no provider calls and no repository writes occurred.
+  - **Baseline:** Both copies reproduce root's `output/simulator-run-cli-baseline.json` for all 320 cases, and their outputs are identical.
+  - **Extra combinations:** Five combinations outside the baseline also match: empty `--fixture=`, empty `--fixture=` with `--blind`, a repeated `--output=`, `--fixture` with `--replay --blind`, and `--output` with `--holdout --replay`.
+  - **Harness bug fixed:** The first harness run misreported 32 missing-fixture errors on the old file. Bun prints surrounding source lines on a throw, so the harness picked up the message from the source listing instead of the actual `error:` line. After the fix, all cases above pass.
+  - **Evidence:** `output/simulator-simplification-cli/` contains the source copies, offline helper, stubs, before/after outputs and comparison reports. The recorded candidate source matches the accepted `run.ts`, and the old/new 320-case outputs are byte-identical.
+- **WebRTC loopback:** Deferred to the independent integrated verification below.
+
+## Final acceptance
+
+The independent review accepted the second pass. The server's soft and hard transcript limits, commit-before-end ordering, authenticated control after the creation kill switch, and recovery lease retain their previous behavior. The closure and retry refactors remove duplicate state without changing the three-failure threshold or local media deadline.
+
+- `bun run check` passes: **111 tests / 3,741 assertions**, type generation/typecheck, production build, privacy verification for **15 client assets**, and the Worker deployment dry run. Log: `output/simulator-simplification-final-check.log`.
+- Real-browser WebRTC loopback passes **4/4**: explicit end, hard failure, dispose and dispose during end. It verifies prompt silence, healthy-peer drain, local cleanup while HTTP closure remains pending, one closure request, and callback suppression after disposal. Report: `output/simulator-simplification-final-connection/report.json`.
+- Startup-failure acceptance passes **3/3**: denied microphone, failed creation and cancellation while microphone access is pending. All tracks close. Report: `output/simulator-simplification-final-failure/report.json`.
+- Workshop acceptance passes **8/8**. Report: `output/simulator-simplification-final-workshop/report.json`.
+- The lead's **132 observable replay/debrief states** remain byte-for-byte identical to baseline, and feedback acceptance passes **3/3**. The second pass did not alter those rendering paths.
+- Responsive capture passes **16/16** across all four screens at 1672, 1024, 390 and 320 pixels. Layout measurements match the previous final-design capture exactly; visual comparison found only tiny glyph/background rendering differences, with no material layout or content change. There are no browser errors, API calls or horizontal overflow. Report: `output/simulator-simplification-design/report.json`.
+
+Verification used saved model results and local browser loopback. Prompts, rubrics, thresholds, scenario data and measured recordings were not changed. The previously documented classifier limitations remain outside this structural pass.
+
 ## Progress
 
-- Lead pass: complete, ready for the Claude handoff.
-- Claude pass: pending the lead checkpoint.
-- Final acceptance: pending.
+- Lead pass: complete, committed as `586af05`.
+- Claude pass: complete and independently reviewed.
+- Final acceptance: complete.

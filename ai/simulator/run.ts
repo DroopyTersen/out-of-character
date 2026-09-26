@@ -12,16 +12,22 @@ const key = process.env.TYPESAFE_API_KEY;
 if (!key) throw new Error('Load TYPESAFE_API_KEY with bun --env-file=.dev.vars.');
 const only = process.argv.find(arg => arg.startsWith('--fixture='))?.slice(10);
 const replay = process.argv.includes('--replay');
-const holdout = process.argv.includes('--holdout');
-const validation = process.argv.includes('--validation');
-const challenge = process.argv.includes('--challenge');
-const blind = process.argv.includes('--blind');
 const outputArg = process.argv.find(arg => arg.startsWith('--output='))?.slice(9);
 if (process.argv.includes('--output=')) throw new Error('Provide a path after --output=.');
-const selected = only ? [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures].filter(item => item.id === only) : blind ? simulatorBlindFixtures : challenge ? simulatorChallenges : validation ? simulatorValidation : holdout ? simulatorHoldouts : replay ? simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)) : simulatorFixtures;
-if (!selected.length) throw new Error('Unknown fixture.');
+// --fixture wins, then the first listed flag present; --replay also sets checkpoint lengths on its own.
+const suites = [
+  { flag: '--blind', fixtures: simulatorBlindFixtures, output: 'output/simulator-blind.json' },
+  { flag: '--challenge', fixtures: simulatorChallenges, output: 'output/simulator-challenges.json' },
+  { flag: '--validation', fixtures: simulatorValidation, output: 'ai/simulator/validation-results.json' },
+  { flag: '--holdout', fixtures: simulatorHoldouts, output: 'ai/simulator/holdout-results.json' },
+  { flag: '--replay', fixtures: simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)), output: 'ai/simulator/replay.json' },
+];
+const suite = only
+  ? { fixtures: [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures].filter(item => item.id === only), output: `output/simulator-${only}.json` }
+  : suites.find(item => process.argv.includes(item.flag)) ?? { fixtures: simulatorFixtures, output: 'ai/simulator/results.json' };
+if (!suite.fixtures.length) throw new Error('Unknown fixture.');
 const rows = [];
-fixtures: for (const fixture of selected) {
+fixtures: for (const fixture of suite.fixtures) {
   const lengths = replay ? (fixture.id === 'earned-discovery' ? [3, 5, 9, 13] : [3, 5, 7]) : [fixture.transcript.length];
   let achievedIds: string[] = [];
   for (const transcriptLength of lengths) {
@@ -52,7 +58,7 @@ fixtures: for (const fixture of selected) {
   }
   }
 }
-const output = outputArg ?? (only ? `output/simulator-${only}.json` : blind ? 'output/simulator-blind.json' : challenge ? 'output/simulator-challenges.json' : validation ? 'ai/simulator/validation-results.json' : holdout ? 'ai/simulator/holdout-results.json' : replay ? 'ai/simulator/replay.json' : 'ai/simulator/results.json');
+const output = outputArg ?? suite.output;
 await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), simulatorVersion: SIMULATOR_VERSION, rubricVersion: RUBRIC_VERSION, rows }, null, 2) + '\n');
 if (rows.some(row => row.checks.some(check => !check.passed))) process.exitCode = 1;
 console.log(`Saved ${rows.length} measured fixture results to ${output}.`);

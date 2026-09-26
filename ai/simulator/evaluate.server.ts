@@ -2,7 +2,7 @@ import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
 import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationQuestion } from 'ai';
 import { JEV_MODEL } from '../judging';
 import { emptySkills, skills, type TranscriptEntry } from '../../core/simulator/types';
-import { findEvidence } from '../../core/simulator/state';
+import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import { getClient, getScenario, type Scenario } from './scenarios.server';
 import { clientQuestions, traineeQuestions } from './rubric';
 
@@ -64,7 +64,7 @@ export function readTraineeAnswers(scenario: Scenario, transcript: TranscriptEnt
 
 function validateInput(input: Input) {
   if (!input.apiKey.trim()) throw new Error('Simulator judging is not configured.');
-  if (!input.transcript.length || input.transcript.length > 240 || input.transcript.reduce((sum, entry) => sum + entry.text.length, 0) > 80000) throw new Error('Transcript is outside the simulator limit.');
+  if (!input.transcript.length || input.transcript.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(input.transcript) > TRANSCRIPT_LIMIT.characters) throw new Error('Transcript is outside the simulator limit.');
   if (new Set(input.transcript.map(entry => entry.id)).size !== input.transcript.length) throw new Error('Transcript passage IDs must be unique.');
 }
 

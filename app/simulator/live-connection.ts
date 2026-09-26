@@ -15,7 +15,6 @@ export class LiveConnection {
   private id = crypto.randomUUID();
   private capability = [...crypto.getRandomValues(new Uint8Array(32))].map(value => value.toString(16).padStart(2, '0')).join('');
   private pc: RTCPeerConnection | undefined;
-  private channel: RTCDataChannel | undefined;
   private stream: MediaStream | undefined;
   private audio = new Audio();
   private context: AudioContext | undefined;
@@ -27,9 +26,8 @@ export class LiveConnection {
   private controller = new AbortController();
   private requested = false;
   private disposed = false;
+  /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
   private ending: Promise<void> | undefined;
-  private remoteClosure: Promise<unknown> | undefined;
-  private pollFailures = 0;
 
   constructor(private callbacks: Callbacks) { this.audio.autoplay = true; }
 
@@ -48,7 +46,7 @@ export class LiveConnection {
   async start(scenarioId: string, clientId: string) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      if (this.disposed || this.ending) { stream.getTracks().forEach(track => track.stop()); return; }
+      if (this.ending) { stream.getTracks().forEach(track => track.stop()); return; }
       this.stream = stream;
       this.pc = new RTCPeerConnection();
       const pc = this.pc;
@@ -56,7 +54,7 @@ export class LiveConnection {
       this.context = new AudioContext();
       this.inputMeter = this.meter(stream);
       pc.addEventListener('track', event => {
-        if (this.disposed || this.ending) return;
+        if (this.ending) return;
         const remote = event.streams[0] ?? new MediaStream([event.track]);
         this.audio.srcObject = remote;
         void this.audio.play().catch(() => this.callbacks.error('Audio playback was blocked. Use Enable audio to listen.'));
@@ -67,27 +65,17 @@ export class LiveConnection {
         if (pc.connectionState === 'failed') void this.fail('The voice connection was interrupted.');
         if (pc.connectionState === 'disconnected') this.disconnectTimer = setTimeout(() => { void this.fail('The voice connection was lost.'); }, 5000);
       });
-      this.channel = pc.createDataChannel('oai-events');
+      const channel = pc.createDataChannel('oai-events');
       await pc.setLocalDescription(await pc.createOffer());
-      if (pc.iceGatheringState !== 'complete') await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Network negotiation timed out.')), 8000);
-        pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(timeout); resolve(); } });
-        this.controller.signal.addEventListener('abort', () => { clearTimeout(timeout); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
-      });
-      if (this.disposed || this.ending) return;
+      await this.until(pc, 'icegatheringstatechange', () => pc.iceGatheringState === 'complete', 8000, 'Network negotiation timed out.');
+      if (this.ending) return;
       this.requested = true;
       const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp: pc.localDescription!.sdp }) as { sdp: string; snapshot: SessionSnapshot };
-      if (this.disposed || this.ending) return;
+      if (this.ending) return;
       this.callbacks.snapshot(created.snapshot);
       await pc.setRemoteDescription({ type: 'answer', sdp: created.sdp });
-      if (this.channel.readyState !== 'open') await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('The voice connection timed out.')), 15_000);
-        this.channel!.addEventListener('open', () => { clearTimeout(timeout); resolve(); }, { once: true });
-        const abort = () => { clearTimeout(timeout); reject(new DOMException('Aborted', 'AbortError')); };
-        this.controller.signal.addEventListener('abort', abort, { once: true });
-        if (this.controller.signal.aborted) abort();
-      });
-      if (this.disposed || this.ending) return;
+      await this.until(channel, 'open', () => channel.readyState === 'open', 15_000, 'The voice connection timed out.');
+      if (this.ending) return;
       this.callbacks.snapshot(await this.request('ready') as SessionSnapshot);
       this.poll();
       this.meterTimer = setInterval(() => {
@@ -95,10 +83,22 @@ export class LiveConnection {
         this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
       }, 80);
     } catch (error) {
-      if (this.disposed || this.ending) return;
+      if (this.ending) return;
       const message = error instanceof DOMException && error.name === 'NotAllowedError' ? 'Microphone access was denied. Allow access in your browser, then try again.' : error instanceof Error ? error.message : 'The voice connection could not be established.';
       await this.fail(message);
     }
+  }
+
+  /** Waits for a negotiation event, rejecting on its timeout or once this attempt is closing. */
+  private async until(target: EventTarget, event: string, ready: () => boolean, ms: number, message: string) {
+    if (ready()) return;
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(message)), ms);
+      target.addEventListener(event, () => { if (ready()) { clearTimeout(timeout); resolve(); } });
+      const abort = () => { clearTimeout(timeout); reject(new DOMException('Aborted', 'AbortError')); };
+      this.controller.signal.addEventListener('abort', abort, { once: true });
+      if (this.controller.signal.aborted) abort();
+    });
   }
 
   private meter(stream: MediaStream) {
@@ -109,22 +109,20 @@ export class LiveConnection {
     return meter;
   }
 
-  private poll() {
-    if (this.disposed || this.ending) return;
+  private poll(failures = 0) {
+    if (this.ending) return;
     this.pollTimer = setTimeout(async () => {
       try {
         const snapshot = await this.request('poll') as SessionSnapshot;
-        if (this.disposed || this.ending) return;
-        this.pollFailures = 0;
+        if (this.ending) return;
         this.callbacks.snapshot(snapshot);
         if (snapshot.status === 'ended' || snapshot.status === 'interrupted') { this.release(); return; }
         this.poll();
       } catch (error) {
-        if (this.disposed || this.ending) return;
-        this.pollFailures++;
+        if (this.ending) return;
         const lostSession = error instanceof SessionRequestError && [401, 403, 404, 410].includes(error.status);
-        if (lostSession || this.pollFailures >= 3) await this.fail('Live feedback lost its connection. This attempt has ended.');
-        else this.poll();
+        if (lostSession || failures + 1 >= 3) await this.fail('Live feedback lost its connection. This attempt has ended.');
+        else this.poll(failures + 1);
       }
     }, 1000);
   }
@@ -133,7 +131,7 @@ export class LiveConnection {
   async playAudio() { await this.context?.resume(); await this.audio.play(); }
 
   private async fail(message: string) {
-    if (this.disposed || this.ending) return;
+    if (this.ending) return;
     const closing = this.end();
     this.callbacks.error(message, true);
     await closing;
@@ -150,7 +148,7 @@ export class LiveConnection {
       const closeDeadline = setTimeout(() => this.release(), 3000);
       try {
         if (this.requested) {
-          const snapshot = await this.closeRemote() as SessionSnapshot;
+          const snapshot = await this.request('end', undefined, true) as SessionSnapshot;
           if (!this.disposed && snapshot.id) this.callbacks.snapshot(snapshot);
         }
       } catch {
@@ -163,13 +161,11 @@ export class LiveConnection {
     return this.ending;
   }
 
-  private closeRemote() { return this.remoteClosure ??= this.request('end', undefined, true); }
-
-  /** Page departure cannot wait for finalization; the server lease remains responsible. */
+  /** Page departure shares end's one closure request but cannot wait to drain; the server lease remains responsible. */
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    if (this.requested) void this.closeRemote().catch(() => {});
+    void this.end();
     this.release();
   }
 

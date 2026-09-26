@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
 import { getScenario } from '../../../ai/simulator/scenarios.server';
-import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, type SentCue } from '../../../core/simulator/state';
+import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
 import { SESSION_LIMIT_SECONDS, type SessionSnapshot } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, transcriptEvent } from './live.server';
 import { simulatorJson, startSchema } from './api';
@@ -33,7 +33,6 @@ export class SimulatorSession extends DurableObject<Env> {
   private lastCue: SentCue | null = null;
   private sentCues = new Set<string>();
   private seenEvents = new Set<string>();
-  private greeted = false;
 
   constructor(ctx: DurableObjectState, env: Env, private readonly paid = services) {
     super(ctx, env);
@@ -62,10 +61,9 @@ export class SimulatorSession extends DurableObject<Env> {
     }
     this.lastSeen = Date.now();
     if (action === '/ready' && this.snapshot.status === 'connecting') {
+      // The lease makes start single-use, so this transition and its greeting happen once.
       this.snapshot.status = 'live';
-      if (!this.greeted) {
-        this.greeted = this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: `Open this meeting now in English, naturally: ${getScenario(this.snapshot.scenarioId).opening} Then pause and listen.` });
-      }
+      this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: `Open this meeting now in English, naturally: ${getScenario(this.snapshot.scenarioId).opening} Then pause and listen.` });
     }
     if (action === '/end') await this.end();
     return simulatorJson(this.snapshot);
@@ -148,13 +146,13 @@ export class SimulatorSession extends DurableObject<Env> {
         speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms,
       }, this.judgedPassages);
       // Late deltas may arrive during close. Keep the final grading input valid.
-      if (next.length > 240 || next.reduce((sum, item) => sum + item.text.length, 0) > 80_000) return;
+      if (next.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(next) > TRANSCRIPT_LIMIT.characters) return;
       const changed = next.find(entry => !snapshot.transcript.includes(entry));
       if (!changed) return;
       this.passageUpdatedAt.set(changed.id, Date.now());
       snapshot.transcript = next;
       snapshot.revision++;
-      if (snapshot.transcript.length >= 240 || snapshot.transcript.reduce((sum, item) => sum + item.text.length, 0) >= 72_000) {
+      if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries || transcriptCharacters(snapshot.transcript) >= 72_000) {
         snapshot.message = 'The transcript limit has been reached.';
         this.ctx.waitUntil(this.end());
       }
@@ -248,9 +246,7 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private end(interrupted = false): Promise<void> {
-    if (this.closing) return this.closing;
-    this.closing = this.finish(interrupted);
-    return this.closing;
+    return this.closing ??= this.finish(interrupted);
   }
 
   private async finish(interrupted: boolean) {

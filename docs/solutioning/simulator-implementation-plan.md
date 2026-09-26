@@ -88,6 +88,10 @@ Give speaking audio a dedicated design treatment consistent with the existing na
 
 Verify screenshot composition, animated changes over time, state labeling, readability, and overflow at both viewport sizes. Preserve a calm live layout with hints above objectives and skills in the right column. Repeat the relevant browser and repository gates after the changes. Ask Opus through computer use to review the visual checkpoints with this plan and the iteration/progress documents. Update the acceptance evidence and commit each coherent checkpoint. The active durable goal already names this plan as its acceptance contract; these criteria are required before it may be marked complete.
 
+## Live-test follow-up: kickoff and performance
+
+The first user rehearsal calls for a spoken meeting setup and much stronger character acting. Follow [the scoped performance plan](simulator-roleplay-performance.md), retaining the existing scenario truth, distinct personalities, and interest-driven resistance. Verify actual GPT-Live output rather than treating stronger prompt wording as proof of a better performance.
+
 ## Goal contract
 
 Implement and verify the complete Simulator MVP in this repository using this plan, the product proposal, and scenario framework. Work through committed checkpoints until the two-scenario/three-client voice practice flow, live Jev skills/objectives, separate trainee/client hints, and evidence-backed debrief work together. Preserve the current game, anonymous public-repository content, and server-only credentials. Use the requested existing local OpenAI credential for bounded development verification. Keep AI SDK usage wherever the installed SDK fits; use direct Live transport only for unsupported protocol operations.

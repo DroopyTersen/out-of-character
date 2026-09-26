@@ -1,5 +1,7 @@
 # Simulator MVP progress
 
+Latest work: [spoken kickoff and stronger performances](simulator-roleplay-performance.md). The first user test needs a self-contained client-led meeting opening and more expressive, reactive roleplay. Implementation and real voice verification are in progress; no new deployment is included.
+
 Current follow-up: [compact layout implementation](simulator-compact-layout.md) implements the mobile mockup with a full-width overlay hint and session brief, preserves the original desktop layout, and exposes client stats only in workshop diagnostics. Two visual iterations and local acceptance are recorded there. [Production release `b0e13ab`](simulator-release.md#mobile-layout-release) is deployed with 112 tests and 5 live compact interaction checks passing. It also fixes production-only toast dismissal and dialog positioning defects found during release verification. This supersedes the earlier mockup's public behavior profile.
 
 Plan: [implementation plan](simulator-implementation-plan.md). Product decisions: [proposal](simulator-proposal.md). Scenario content: [framework](simulator-scenario-framework.md).

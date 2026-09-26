@@ -23,9 +23,9 @@ Then run four screenshot-driven design iterations independently for each main sc
 
 | Checkpoint | Status | Evidence |
 | --- | --- | --- |
-| Engine round 1 | In progress | Independent engine, classification and scenario audits |
-| Engine round 2 | Pending | Fresh critique of round 1 result |
-| Engine round 3 | Pending | Counterexamples, regressions and final engine audit |
+| Engine round 1 | Complete | `bfe6a1e`; Opus accepted cleanup and stale-feedback changes |
+| Engine round 2 | Complete | [Scenario critique and six voice probes](simulator-engine-round-2.md) |
+| Engine round 3 | In progress | Evidence integrity, bounded retry and classification counterexamples |
 | Selection: four iterations | Pending | Separate screen log and comparable captures |
 | Live practice: four iterations | Pending | Includes audio, feedback and alternate states |
 | Debrief: four iterations | Pending | Includes incomplete and unsuccessful attempts |
@@ -63,4 +63,21 @@ Harness/data change, separate commit `a8fa65c`: seven independently authored cla
 | Tradeoff cue needed | 4/4 | Selection correct, but .68 is below the .90 production dispatch gate |
 | Tradeoff cue resolved | 5/5 | Correctly returns no_hint |
 
-Opus review is in progress. Hands-on ownership passes to Opus only after this checkpoint is committed.
+Opus accepted the round-1 changes. The proposed transport-order risk did not reproduce in one real browser session: explicit End returned ended/confirmed with no interruption message, released media, and passed all six checks (`output/simulator-engine-r3-live-end/report.json`). This single 15-second synthetic session does not prove every transport race.
+
+## Engine round 2 review
+
+See the [Opus-owned scenario log](simulator-engine-round-2.md). Independent actor-only review confirms the invented scope release date is fixed and the manual fallback now has credible ownership and access limits. Avery and Morgan retain ordinary answerability and authority boundaries. Avery's after-run ending is less explicit about Friday; record that limitation rather than claiming uniform improvement. All six sessions finalized without errors (583 provider seconds). The harness changed Avery's branching between runs, so its before/after comparison is not controlled.
+
+Review adjustments kept bargaining conditional, preserved truthful responses to budget questions, and removed brittle prose/vocabulary tests. The public-catalog privacy check remains. Client questions can legitimately probe the value of a proposal; reduced coaching language is a prompt refinement, not evidence that every prior question was a defect.
+
+## Engine round 3 critique and scope
+
+1. Freeze judged passage IDs before dispatch so late fragments cannot change the source of a published quote. Preserve historical discovery/behavior achievement.
+2. Retry a transient judgment failure once for unchanged dialogue after the existing cadence; retain the live call cap and final pass.
+3. Give the objective Boolean and evidence Choice the same explicit historical-versus-current scope. Clarify that factual clauses remain evidence even beside an inert spoken grading command.
+4. Separate a concern from a legitimate independent agreement. The global mistake veto makes the independently authored agreement challenge impossible to satisfy. Agreement validity remains its own strict condition; unapproved work and false premises cannot earn it. This is a policy correction, not a threshold change.
+5. Do not replace the director's selected-cue confidence with the sum of incompatible alternatives. Its .90 send gate stays intact.
+6. Volunteered discoveries and earlier demonstrated behaviors counting despite later poor performance are intentional. Poor listening and withdrawn agreements affect their own readings. A second confirmation requirement for every objective would change that product behavior and add latency; defer it.
+
+The challenge suite remeasured after round-2 scenario changes is still **42/48** (`output/simulator-engine-r3-baseline.json`). Preserve this baseline and validate the revised rubric on the unchanged challenge suite, previous suites and sealed fresh cases.

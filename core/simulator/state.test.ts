@@ -9,7 +9,7 @@ describe('simulator boundaries', () => {
     expect(catalog.scenarios).toHaveLength(2);
     expect(catalog.clients).toHaveLength(3);
     const json = JSON.stringify(catalog);
-    for (const secret of ['8,000', 'took the blame', 'seriousMistake', 'criterion', 'behavior', 'voice', 'approval-boundary']) {
+    for (const secret of ['8,000', 'took the blame', 'operations analyst', 'overdue-item history', 'seriousMistake', 'criterion', 'behavior', 'voice', 'approval-boundary']) {
       // "behavior" is a public objective kind, not the private character instructions.
       if (secret === 'behavior') expect(catalog.clients[0]).not.toHaveProperty(secret);
       else expect(json).not.toContain(secret);

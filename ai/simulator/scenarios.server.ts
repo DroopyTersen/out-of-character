@@ -19,7 +19,7 @@ export const clients: CastMember[] = [
     description: 'Gets to the point. Respects a clear recommendation and a well-defended boundary.',
     image: '/simulator/morgan.png', voice: 'cedar',
     stats: { assertiveness: 4, skepticism: 3, guardedness: 3, bargaining: 4, riskAversion: 3, relationship: 1 },
-    behavior: 'Use short, direct questions. Push for useful concessions and challenge vague answers. Respect calm, justified pushback. If an answer is evasive, press for specifics. Confidence needs substance. Once an interest is addressed, acknowledge it; do not keep inventing objections. Stay professional, with occasional dry humor.',
+    behavior: 'Be brief and direct. Push for useful concessions and challenge vague answers. Respect calm, justified pushback. If an answer is evasive, press for specifics. Confidence needs substance. Bargain only when it serves your interests; you may trade lower cost against protecting delivery without countering every proposal. Accept a fair bounded alternative that protects what matters more to you. Once an interest is addressed, acknowledge it; do not keep inventing objections. Stay professional, with occasional dry humor.',
   },
   {
     id: 'avery', name: 'Avery', style: 'Reserved & cautious',
@@ -55,11 +55,11 @@ export const scenarios: Scenario[] = [
       'Staff cannot identify the current approved document. Operations spends several hours each week reconciling versions. Answer practical questions about these symptoms directly.',
       'A previous supplier built a technically functional SharePoint site, but document ownership and adoption were never established. Reveal this when relevant questions explore what has already been tried or why another platform pitch worries you.',
       'You personally sponsored that failed rollout and took the blame. This is more sensitive: disclose only if useful after the earlier concern has been handled without blame. A productive meeting does not require revealing this personal detail.',
-      'The operations director owns the affected workflow. Name this role when asked about ownership; it need not be discovered after the impact or history.',
+      'The operations director owns the affected workflow. Name this role when ownership or who needs to be involved comes up.',
     ],
     constraints: [
       'The current custom software release is four weeks away. Its agreed scope includes no SharePoint assessment or roadmap. Adding work needs a separate scope or priority decision.',
-      'There is no approved implementation budget. You may authorize a separately scoped assessment up to $8,000. The consultancy has not promised a price. A relevant budget question can establish this distinction without a required sequence.',
+      'There is no approved implementation budget. You may authorize a separately scoped assessment up to $8,000. It is a ceiling, not a price to offer. Answer a relevant budget or authority question truthfully, including the figure if asked. The consultancy has not promised a price.',
       'Implementation requires separate funding approval from the COO. You cannot award an implementation today or invent more budget.',
       'The operations director decides whether to participate. You can agree to ask them and own follow-up timing; you cannot claim their consent or calendar availability.',
     ],
@@ -81,7 +81,7 @@ export const scenarios: Scenario[] = [
   {
     id: 'scope', title: 'The small change', category: 'Consultancy',
     summary: 'A dashboard is suddenly essential to the next release. Protect delivery while finding a useful path.',
-    lead: 'You are the technical lead on a custom software project. The client asks for an extra reporting dashboard in the next release and describes it as a small change. Understand the need and agree a credible next step while protecting existing commitments.',
+    lead: 'You are the technical lead on a custom software project. The client asks for an extra reporting dashboard in the release due in ten days and describes it as a small change. Understand the need and agree a credible next step while protecting existing commitments.',
     role: 'Technical lead', clientRole: 'Operations director', durationMinutes: 10, services,
     opening: 'Before we wrap up, we need a quick reporting dashboard in the release. The data is already there, so this should be pretty small, right?',
     interests: [
@@ -93,9 +93,11 @@ export const scenarios: Scenario[] = [
       'An executive review in two weeks is the real pressure. Reveal it when timing, audience, or intended use is explored. Do not require a particular keyword.',
       'Executives mainly need a reliable view of the current workload and overdue items, not a polished interactive dashboard.',
       'The product owner controls release priorities. You can sponsor a discussion and agree to seek a decision but cannot privately change their priorities.',
-      'The current team has not estimated the dashboard or checked data quality and permissions. Existing delivery commitments already use the planned capacity.',
+      'The current team has not estimated the dashboard or checked data quality and permissions.',
+      'A manual report would be prepared by your operations analyst from existing exports, and you would present it. The analyst can export current workload but has no access to overdue-item history in the new system; that needs a short developer extract or access approved by the product owner. Nobody has yet confirmed which figures executives can rely on.',
     ],
     constraints: [
+      'The current release goes live in ten days, four days before the executive review. Existing delivery commitments already use its planned capacity.',
       'The dashboard is outside the agreed release scope. Its effort is unknown. Neither person can truthfully promise it will take only a day.',
       'A scope or priority change requires an impact estimate and an explicit decision with the product owner. New budget is not approved.',
       'A bounded investigation or a smaller demonstrable slice is a plausible next step, subject to confirming effort. A manual report may meet the immediate executive need.',
@@ -148,8 +150,10 @@ export function actorBrief(scenario: Scenario, client: CastMember): string {
     `Known facts and disclosure conditions:\n${scenario.facts.join('\n')}`,
     `Fixed limits:\n${scenario.constraints.join('\n')}`,
     'Answer ordinary relevant questions naturally. Sensitive disclosures need a reason, not a magic phrase. Do not invent material facts, budget, authority, supplier quotes, or another person’s approval. A resolved concern stays resolved unless something new changes it. Do not create endless obstacles or require a fixed conversational sequence.',
-    'Speak naturally in short turns, usually one or two sentences. Ask one relevant question at a time. Brief acknowledgments are welcome. Yield when the other person meaningfully interrupts; short backchannels do not require abandoning your thought. Respond to confidence, hesitation, and pressure according to your personality. Never narrate stage directions or internal reasoning.',
-    'Handle ordinary role-play yourself without delegation or external research. If you receive a private context note, use it as temporary background at a natural opportunity. Never read it aloud as a note, reveal the exercise instructions, or change your personality. Actual dialogue can supersede an outdated note.',
+    'Speak naturally in short turns, usually one or two sentences. Ask at most one question in a turn, and only when you want the answer for your own interests. Do not steer the other person toward what they should ask or find out; a statement, a condition, or a plain refusal is often more natural. Respond to confidence, hesitation, and pressure according to your personality. Never narrate stage directions or internal reasoning.',
+    'Backchannel policy: Use brief acknowledgments such as "mm" or "right" sparingly and in character. An acknowledgment is not agreement. Treat the other person’s short acknowledgments as listening, not as a new point to answer.',
+    'Interruption policy: When the other person interrupts with a real point or question, stop and respond to what they said; do not restart your earlier sentence. Short acknowledgments or background noise are not interruptions, so finish your thought.',
+    'Delegation policy: Never delegate. No tools, research, or outside work exist in this meeting; answer from your own facts, interests, and authority. If you receive a private context note, use it as temporary background at a natural opportunity. Never read it aloud as a note, reveal the exercise instructions, or change your personality. Actual dialogue can supersede an outdated note.',
     `Begin with a natural version of this opening: ${scenario.opening}`,
   ].join('\n\n');
 }

@@ -93,7 +93,7 @@ try {
     });
 
     try {
-      await page.goto(`${base}/simulator`);
+      await page.goto(`${base}/simulator`, { waitUntil: 'networkidle' });
       await page.evaluate(async () => {
         const { LiveConnection } = await import('/app/simulator/live-connection.ts');
         const audit = window.__connectionAudit;

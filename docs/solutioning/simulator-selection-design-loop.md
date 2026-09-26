@@ -30,7 +30,21 @@ Pending.
 
 ## Iteration 3 — lead
 
-Pending.
+### Before
+
+Fresh [desktop viewport](../../output/simulator-ui-iteration-3-selection-before/selection-1672-viewport.png) and [320 px](../../output/simulator-ui-iteration-3-selection-before/selection-320.png), after Opus completed this screen's iteration 2. Also inspected 390/1024 and Opus's expanded, scrolled and disabled states. File ownership was limited to `selection.tsx` and this log section while Opus worked on the other screens.
+
+### Critique and change
+
+One worthwhile remaining change emerged: the lead displays an objective count, but the trainee cannot inspect the actual objectives before starting voice practice. Add the public objective labels to the existing consultancy disclosure and name it **Objectives & services**. Explicitly say they can be reached in any order. This introduces no private actor facts and no extra top-level panel.
+
+I inspected five areas: preparation content, closed-screen height, carousel peeking, narrow heading/button wrapping, and keyboard disclosure/selection. The latter four had been addressed or were functioning correctly. A second always-visible objective panel would push Start below the 941 px reference viewport; reusing the disclosure preserves the approved composition. No additional cosmetic changes were justified in this pass.
+
+### After and verification
+
+[Desktop viewport](../../output/simulator-ui-iteration-3-selection-after/selection-1672-viewport.png) · [Sales preparation on phone](../../output/simulator-ui-iteration-3-selection-after/preparation-sales-390.png) · [Consultancy preparation at 320 px](../../output/simulator-ui-iteration-3-selection-after/preparation-scope-320.png).
+
+Four closed-screen captures pass with no overflow/errors/API calls. A keyboard-driven check opens the disclosure, switches scenarios, and confirms the five distinct public objectives are visible for each at 1672/1024/390/320 px. `preparation-accepted-report.json` records the result. The first harness mistakenly expected four consultancy objectives; its original report is retained, and the expectation was corrected from the authored five-objective scenario. No app data or objective policy changed.
 
 ## Iteration 4 — Opus
 

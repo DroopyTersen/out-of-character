@@ -7,10 +7,10 @@ export type SimulatorFixture = {
   clientId: string;
   description: string;
   transcript: TranscriptEntry[];
-  expected: { achieved: string[]; absent: string[]; lowSkills?: SkillId[]; highSkills?: SkillId[]; unavailable?: SkillId[]; cue?: string };
+  expected: { achieved: string[]; absent: string[]; lowSkills?: SkillId[]; highSkills?: SkillId[]; unavailable?: SkillId[]; cue?: string; concern?: boolean; objectiveEvidence?: Record<string, string> };
 };
 
-function dialogue(lines: [TranscriptEntry['speaker'], string][]): TranscriptEntry[] {
+export function dialogue(lines: readonly (readonly [TranscriptEntry['speaker'], string])[]): TranscriptEntry[] {
   return lines.map(([speaker, text], index) => ({ id: `p${index + 1}`, speaker, text, startMs: index * 12_000, endMs: index * 12_000 + 10_000 }));
 }
 

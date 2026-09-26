@@ -87,9 +87,13 @@
 .sim-voice-lab-select select { width: 100%; min-height: 48px; padding: 8px 12px; color: #eef9ff; background: #102f41; border: 1px solid #4b90ab; border-radius: 4px; font: 18px 'Chakra Petch', sans-serif; }
 .sim-voice-lab-description { margin-top: 12px; min-height: 45px; color: #c5d7e4; line-height: 1.5; }
 .sim-voice-lab-description strong { color: #44efcd; margin-right: 8px; }
-.sim-voice-lab-source, .sim-voice-lab-default, .sim-voice-lab-note, .sim-voice-lab-now { margin-top: 9px; color: #92b1c7; font-size: 13px; line-height: 1.5; }
-.sim-voice-lab-note { margin-top: 16px; }
-.sim-voice-lab-now { font-family: Silkscreen, monospace; text-transform: uppercase; }
+.sim-voice-lab-source, .sim-voice-lab-default { margin-top: 9px; color: #92b1c7; font-size: 13px; line-height: 1.5; }
+.sim-voice-lab-default button { margin-left: 8px; padding: 4px 8px; font-size: 12px; }
+.sim-voice-lab-sample { margin-top: 18px; padding: 18px; border: 1px solid #32768b; background: #0a2332; }
+.sim-voice-lab-sample h3 { color: #44efcd; font-size: 18px; }
+.sim-voice-lab-sample blockquote { margin: 16px 0 0; color: #eef9ff; font-size: 18px; line-height: 1.6; }
+.sim-voice-lab-sample audio { display: block; width: 100%; margin-top: 12px; }
+.sim-voice-lab-sample small { display: block; margin-top: 9px; color: #92b1c7; line-height: 1.5; }
 .sim-notice { max-width: 900px; margin: 14px auto; background: #152f40; border-left: 3px solid #f1bf64; color: #e5d7b7; padding: 12px 17px; font-size: 14px; line-height: 1.5; }
 .sim-notice.error { border-color: #fb7786; color: #f6b3bc; }
 .sim-notice a { text-decoration: underline; }
@@ -280,6 +284,14 @@ p.sim-lab-check-details { padding: 12px 0; }
   .simulator-title { font-size: 14px; letter-spacing: 0; }.simulator-header nav { flex-wrap: nowrap; gap: 12px; }.simulator-header .workshop-link { min-height: 44px; display: inline-flex; align-items: center; }.simulator-header .workshop-link span { display: none; }.simulator-header .workshop-return { padding: 0; }
   .sim-debrief .sim-heading h1 { font-size: clamp(23px, 6.4vw, 28px); text-wrap: balance; }
   .sim-director-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .sim-voice-lab-clients { gap: 8px; }
+  .sim-voice-lab-client { gap: 6px; padding: 6px; }
+  .sim-voice-lab-client img { width: 48px; height: 52px; }
+  .sim-voice-lab-client strong { font-size: 14px; }
+  .sim-voice-lab-client small { font-size: 10px; line-height: 1.3; }
 }
 
 @media (max-width: 360px) {

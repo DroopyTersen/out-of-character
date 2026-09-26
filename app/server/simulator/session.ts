@@ -90,7 +90,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (this.lease) return simulatorJson({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
     this.lease = { capability, deadline: Date.now() + SESSION_LIMIT_SECONDS * 1000, closed: false };
     this.snapshot = {
-      id: input.id, scenarioId: input.scenarioId, clientId: input.clientId, voice: input.voice ?? getClient(input.clientId).voice,
+      id: input.id, scenarioId: input.scenarioId, clientId: input.clientId,
       status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS, warning: null,
       revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting',
       message: null, finalization: 'pending', usageSeconds: null,
@@ -112,7 +112,7 @@ export class SimulatorSession extends DurableObject<Env> {
     }
   }
 
-  private async openLive(input: { scenarioId: string; clientId: string; voice?: string; sdp: string }) {
+  private async openLive(input: { scenarioId: string; clientId: string; sdp: string }) {
     const created = await this.paid.createLive(input, this.env.OPENAI_API_KEY!);
     this.lease!.providerId = created.session.id;
     await this.ctx.storage.put('lease', this.lease);

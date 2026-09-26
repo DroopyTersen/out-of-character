@@ -79,7 +79,6 @@ export type SessionSnapshot = {
   id: string;
   scenarioId: string;
   clientId: string;
-  voice?: string;
   status: SessionStatus;
   startedAt: number;
   limitSeconds: number;

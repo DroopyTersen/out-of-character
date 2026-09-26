@@ -28,7 +28,7 @@ export async function archiveProvenance(env: Env, snapshot: SessionSnapshot): Pr
   };
   const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
   return {
-    model: LIVE_MODEL, voice: snapshot.voice ?? client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
+    model: LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
     directorEnabled: env.SIMULATOR_DIRECTOR_ENABLED === 'true',
   };

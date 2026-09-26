@@ -17,7 +17,7 @@ export function useSimulator() {
     return () => { window.removeEventListener('pagehide', leave); leave(); };
   }, []);
 
-  function start(scenarioId: string, clientId: string, voice?: string) {
+  function start(scenarioId: string, clientId: string) {
     connection.current?.dispose();
     const attempt = ++generation.current;
     let reachedLive = false;
@@ -34,7 +34,7 @@ export function useSimulator() {
       error: (message, fatal) => { if (active()) { setError(message); if (fatal) setPhase(reachedLive ? 'debrief' : 'selection'); } },
     });
     connection.current = live;
-    void live.start(scenarioId, clientId, voice);
+    void live.start(scenarioId, clientId);
   }
 
   async function end() {

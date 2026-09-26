@@ -1,6 +1,6 @@
 # The simulator: product and architecture proposal
 
-Status: MVP design, updated September 25, 2026 with the product decisions below. This document is based on the current local application, anonymized consultancy context, and current provider documentation. No simulator code or live voice experiment has been run.
+Status: MVP design, updated September 25, 2026 with the product decisions below. This document is based on the current local application, anonymized consultancy context, and current provider documentation. The MVP now implements this design; current verification and remaining limits are recorded in the progress log.
 
 Implementation is now authorized under the [MVP implementation plan](simulator-implementation-plan.md), which is the acceptance contract. This proposal provides design rationale and includes optional extensions beyond that contract. The [progress log](simulator-progress.md) owns current completion and verification status.
 

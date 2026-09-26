@@ -19,6 +19,23 @@ For local paid services, copy `.dev.vars.example` to the ignored `.dev.vars` and
 
 The workshop lets you replay the draw and reel, inspect the flat cast, backstories, and active judge-facing descriptions, adjust the gauge and score streak, expand the character race, replay performance and silence, preview the final top 10 and highlighted transcript, and compare saved Noul/Score readings. Its fixtures use the real presentation components without microphone access or paid requests.
 
+## The Simulator
+
+`/simulator` adds serious sales and consultancy practice. Choose one of two scenarios and three reusable client personalities, then talk to GPT-Live 1. Jev updates seven skills, ordered objectives that can be achieved in any sequence, and an authored coaching hint. The client pursues its own interests and respects hidden budget, scope, and approval constraints. A separate Jev assessment can select private reminders without changing the client's personality. The debrief uses the actual dialogue as evidence.
+
+For local voice practice, add `OPENAI_API_KEY` to the ignored `.dev.vars` alongside `TYPESAFE_API_KEY`, and set `SIMULATOR_ENABLED=true` and `PAID_SERVICES_ENABLED=true`. Set `SIMULATOR_DIRECTOR_ENABLED=true` to enable private client cues. The committed deployment flags remain off. Attempts last at most ten minutes, close after page abandonment, and keep no conversation history. Muting does not stop the paid session; use **End session**.
+
+The DIY workshop has four simulator stories:
+
+- `/storybook/simulator-selection`: scrollable collections, character changes, connection availability, and microphone errors.
+- `/storybook/simulator-live`: replay, pause, seek, and reset recorded dialogue, animated objectives, hints, skill bars, and connection states.
+- `/storybook/simulator-debrief`: successful, unsuccessful, and unconfirmed endings with source quotations.
+- `/storybook/simulator-judging`: authored transcripts, stored real Jev judgments, source evidence, client diagnostics, and raw distributions. Opening any story uses no microphone or paid API.
+
+Explicit paid recordings use `bun run eval:simulator`, `bun run eval:simulator --replay`, or `bun run eval:simulator --holdout`. The last command runs independently authored challenge cases and exits nonzero when an expectation is missed; retain those results when assessing rubric changes. These are synthetic examples, not validated personnel assessments.
+
+See [simulator acceptance](docs/solutioning/simulator-acceptance.md) for reproducible browser/audio commands and evidence, [the implementation plan](docs/solutioning/simulator-implementation-plan.md) for architecture, and [the scenario framework](docs/solutioning/simulator-scenario-framework.md) for authoring more exercises.
+
 - [Product requirements](docs/solutioning/consultancy-party-game-prd.md)
 - [Technical design](docs/solutioning/out-of-character-tech-design.md)
 - [Measured Jev spike](docs/solutioning/jev-spike.md)

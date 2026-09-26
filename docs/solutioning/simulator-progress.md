@@ -4,7 +4,7 @@ Plan: [implementation plan](simulator-implementation-plan.md). Product decisions
 
 ## Current status
 
-Checkpoints 0–3 reviewed on `simulator-mvp`. The goal is active. Live ownership, audio, and scoring work together; the production UI and workshop are implemented and reviewed. Final acceptance is in progress. The branch starts from the current local `main`; no merge or deployment is authorized.
+Checkpoints 0–4 reviewed on `simulator-mvp`. The goal is active. Live ownership, audio, and scoring work together; the production UI and workshop are implemented and reviewed. Core acceptance passed review. The goal now also requires a distinctive audio display and repeated screenshot-driven design passes before completion. The branch starts from the current local `main`; no merge or deployment is authorized.
 
 ## Decisions
 
@@ -24,13 +24,15 @@ Checkpoints 0–3 reviewed on `simulator-mvp`. The goal is active. Live ownershi
 | 1 — Scenario and judging foundations | Reviewed | Reviewed by Opus 5.5. Eight real Jev fixtures pass all 65 expectations, including unavailable skills and appropriate no-hint cases. Source evidence matches authored passages. Review fixes and verification below. |
 | 2 — Live session | Reviewed | Opus 5.5 review passed with conditions, addressed below. Nine session lifecycle tests and four API tests pass. Real WebRTC audio/transcripts, live Jev updates, provider closure, and local media cleanup pass. |
 | 3 — Complete simulator | Reviewed | Production selection/live/debrief components and four DIY workshop stories implemented. Seven recorded prefix evaluations support replay. Workshop browser acceptance passes 8/8 flows at desktop and phone widths, with no microphone/API requests or page errors. |
-| 4 — MVP acceptance | In progress | Final full checks, reproducible evidence, and read-only review are next. |
+| 4 — Core acceptance | Reviewed | Final gate passed: 103 tests / 3,709 assertions, typecheck, builds, bundle scan, Wrangler dry run. Accepted browser runs pass 8/8 workshop and 3/3 failures. Opus review passed; disposition below. |
+| 5 — Visual iteration one | Pending | Selection, live/audio/coaching, debrief, and lab before/after capture; expressive actual-audio display and replayable states. |
+| 6 — Visual iteration two and final acceptance | Pending | Reinspect all major elements on desktop/phone, refine, capture motion and reduced motion, repeat relevant checks and Opus review. |
 
 ## Verification and remaining gaps
 
 Typecheck and focused simulator tests pass. Rubric v3 passes all 65 development expectations and 19 replay final checks. The first independent holdout run (v2) was 20/22; it exposed outcome wording applied to historical behaviors. After a kind-specific wording fix, v3 is 21/22 on those now-known cases. The remaining capability miss is borderline because a later line promises an unverified solution; it remains visible. Two new cases authored after v3 was frozen pass 11/11. Thresholds did not change. Archived v2 failures are retained in `ai/simulator/holdout-rubric-v2.json`.
 
-The final synthetic WebRTC smoke passes 9/9, including a current live assessment after passage settling, recovery from a transient poll failure, safe data-channel notice shape, provider-confirmed closure, and local media cleanup (28 billed seconds). Workshop acceptance passes 8/8; failure flows pass 3/3; the original game selection passes at 1440 and 390 pixels. The prior full repository gate passed 99 tests before the final settling/concurrency tests were added; run it again for final acceptance.
+The final synthetic WebRTC smoke passes 9/9, including a current live assessment after passage settling, recovery from a transient poll failure, safe data-channel notice shape, provider-confirmed closure, and local media cleanup (28 billed seconds). Workshop acceptance passes 8/8; failure flows pass 3/3; the original game selection passes at 1440 and 390 pixels. The final repository gate passed 103 tests / 3,709 assertions, typecheck, production builds, client bundle scan, and Wrangler dry run. The Jev lab exposes all 13 fixture cases with their actual recording provenance and no API or microphone calls.
 
 Four responsive synthetic roleplays (good/poor approach, director on/off) all finalized cleanly: 91/93 seconds for the good approach and 68/53 for the poor approach. Good approaches earned a bounded next step after resistance; poor approaches earned no agreement. All director judgments chose `no_hint`, appropriately leaving the actor alone. Separate forced-cue probes acknowledged private direction and closed cleanly. These establish protocol delivery and a small role-play proxy, not human realism or causal cue effectiveness.
 
@@ -90,3 +92,20 @@ Opus 5.5 reviewed the complete UI, workshop, recorded analyses, scripts, and pre
 - Additional owner audit: concurrent starts now claim the lease after reading the request, preventing double paid creation. Tests also cover the hard deadline despite continued polling and explicitly unconfirmed provider finalization.
 
 No deployment, merge, public enablement, or infrastructure change has been performed.
+
+## Final acceptance evidence
+
+[Acceptance instructions and limitations](simulator-acceptance.md) and [redacted provider evidence](simulator-evidence.json) are part of the handoff. UI/workshop checkpoint commit: `44c74b9`; Live session checkpoint: `c3f56ee`.
+
+- Final `bun run check`: 103 passed, 0 failed, 3,709 assertions across 13 files; types, production builds, bundle boundary scan, and deployment dry run passed.
+- Local Playwright is now a development dependency, so the committed scripts run after `bun install` with installed Chrome. No external workspace runtime path is required.
+- Final workshop: 8/8, desktop and phone, no provider/microphone requests or page errors. All 13 transcript cases and correct source-file/rubric provenance were inspected.
+- Browser failures: 3/3, tracks closed and selection restored. Original game selection: desktop and phone passed.
+- Final live run: 9/9 with current feedback, 28 provider usage seconds, confirmed closure. Four responsive voice trials and two forced-cue protocol probes also finalized cleanly.
+- Recorded Jev v3: development 65/65, replay 19/19, now-known holdouts 21/22, fresh blind validation 11/11. The one borderline failure and v2 failures remain inspectable. No broad calibration or human-voice realism claim is made.
+
+## Checkpoint 4 review disposition
+
+Opus 5.5 passed the core acceptance review with no blocking code findings. Accepted documentation clarifications: the direct role-play/cue probes bypass the production session owner and its freshness/cooldown scheduler; the final fixed-audio smoke did not contain a client filler during trainee speech, so the backchannel case is covered by the unit regression. All paid probes have finite deadlines and cleanup. Core evidence/scripts are committed in this checkpoint.
+
+The user subsequently expanded acceptance to require two visual iteration rounds and a dedicated speaking display. Those are checkpoints 5–6; core approval does not complete the active goal. The approved selection/live mockups are now the fidelity target for typography, proportions, portrait identities, spacing and colors, adapted to screen size.

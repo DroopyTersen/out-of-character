@@ -1,6 +1,6 @@
 # Simulator scenario framework
 
-Status: agreed authoring direction, September 25, 2026. Character stats, private scenario agendas, and independent learner objectives build on the [simulator proposal](simulator-proposal.md). The numeric profiles, behavioral anchors, and fictional example remain seed content to tune through voice testing; the framework is not yet implemented or validated.
+Status: implemented in the Simulator MVP, September 25, 2026. Character stats, private scenario agendas, and independent learner objectives build on the [simulator proposal](simulator-proposal.md). See [acceptance evidence](simulator-acceptance.md) for synthetic voice and judging verification. Practitioner calibration and human-perceived realism remain to be assessed.
 
 **Governing principle: resistance follows the client's interests.**
 
@@ -208,3 +208,13 @@ Test actor behavior separately from trainee scoring:
 | Private cues recognize both unresolved and resolved concerns | The actor preserves justified resistance and permits earned progress while retaining its character and fixed limits |
 
 Run these probes with the actual voice model and the different characters. Prompt wording alone does not prove realism. If the actor invents authority or grants an unsupported agreement, that is a simulation defect to record and fix; it is not evidence that the trainee negotiated well. No such voice verification has been performed for this design yet.
+
+## Adding an exercise to the MVP
+
+The current authoring source is `ai/simulator/scenarios.server.ts`. Add a scenario with a stable ID, public lead and role, private opening, ranked interests, facts with disclosure conditions, fixed constraints, objectives, a material-mistake definition, and a small set of optional cues. The actor receives its interests and constraints, not the trainee's objective checklist or grading criteria.
+
+Give each objective a kind: `discovery` requires client evidence, `behavior` requires trainee evidence, and `outcome` requires a current client agreement. Discoveries and demonstrated behaviors remain recorded; an outcome can be withdrawn. Use a concrete criterion and an authored hint that invites the trainee to discover the answer. A cue needs a specific actor drift condition and brief direction consistent with the fixed facts. Always allow `no_hint`.
+
+Characters live in the same server module. Add the six fixed traits, public style description, reaction rules, image, and supported voice. Do not put scenario-specific authority or budget into the character. `publicCatalog()` is an explicit allowlist; new private fields must stay out of it.
+
+Add positive, negative, and partial transcripts in `ai/simulator/fixtures.ts`, then record Jev results with the explicit CLI. Use the workshop to inspect exact evidence, unobserved skills, withdrawn outcomes, and whether the client needs any cue. Include ordinary questions and earned concessions as well as tough resistance. Run `bun run check`; its client-bundle scan guards private actor and rubric text. A synthetic passing transcript is a useful check, not a substitute for listening to a real rehearsal.

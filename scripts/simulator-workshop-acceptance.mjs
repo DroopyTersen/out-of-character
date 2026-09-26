@@ -77,6 +77,13 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     for (let i=0; i<9; i++) await controls.getByRole('button', { name: 'Next turn' }).click();
     check((await page.locator('.sim-objectives').innerText()).includes('4/5'), 'objective progress did not update at recorded checkpoint');
     check((await page.locator('.sim-skill strong').allTextContents()).some(value => /^\d\.\d$/.test(value)), 'skill score did not update at recorded checkpoint');
+    await page.waitForFunction(() => {
+      const skill = document.querySelector('.sim-skill');
+      const reading = Number(skill.querySelector('strong').textContent);
+      const track = skill.querySelector('.sim-skill-track').getBoundingClientRect().width;
+      const fill = skill.querySelector('.sim-skill-track > span').getBoundingClientRect().width;
+      return Math.abs(fill / track - reading / 4) < .03;
+    });
     await page.getByRole('button', { name: 'Transcript', exact: true }).click();
     check(await page.locator('.sim-transcript-panel article').count() === 9, 'transcript did not open with nine turns');
     await page.getByRole('button', { name: 'Close transcript' }).click();

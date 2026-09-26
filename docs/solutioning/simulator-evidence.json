@@ -1,0 +1,1224 @@
+{
+  "notes": [
+    "Synthetic locally rendered trainee audio; no human-run acceptance claim.",
+    "Responsive roleplay uses one content-based branch and is one run per condition, not a causal comparison.",
+    "The earlier roleplay diagnostics used rubric v2. Current fixture and live verification use rubric v3.",
+    "Workshop transcripts and these fictional scenario examples intentionally reveal answers; no credentials, private user conversation, or provider session identifiers are included."
+  ],
+  "webrtc": {
+    "at": "2026-09-26T04:50:40.166Z",
+    "checks": [
+      {
+        "name": "provider closure confirmed",
+        "passed": true
+      },
+      {
+        "name": "trainee transcript",
+        "passed": true
+      },
+      {
+        "name": "client transcript",
+        "passed": true
+      },
+      {
+        "name": "real Jev evaluation",
+        "passed": true
+      },
+      {
+        "name": "Jev feedback while conversation is live",
+        "passed": true
+      },
+      {
+        "name": "current live assessment after speech settles",
+        "passed": true
+      },
+      {
+        "name": "one transient polling failure recovers",
+        "passed": true
+      },
+      {
+        "name": "local media cleanup",
+        "passed": true
+      },
+      {
+        "name": "private data-channel configuration excluded",
+        "passed": true
+      }
+    ],
+    "browser": {
+      "tracksEnded": true,
+      "peersClosed": true,
+      "dataChannelEvents": [
+        {
+          "type": "info",
+          "code": "data_channel_permissions",
+          "messageLength": 74
+        }
+      ],
+      "privateConfigReceived": false
+    },
+    "usageSeconds": 28,
+    "liveSnapshots": 28,
+    "currentLiveSnapshots": 1,
+    "finalTranscript": [
+      {
+        "id": "p1",
+        "speaker": "client",
+        "text": "The app project seems on track. We still have people emailing files around instead of using SharePoint,",
+        "startMs": 1400,
+        "endMs": 6200
+      },
+      {
+        "id": "p2",
+        "speaker": "trainee",
+        "text": " Who owns the process that is giving you trouble? What happens when people cannot find the right document? What did you try before, and what would make another attempt worthwhile? We should protect the current software release. I would suggest a short conversation with the process owner to scope a separate assessment, rather than promise new work today",
+        "startMs": 6600,
+        "endMs": 25600
+      },
+      {
+        "id": "p3",
+        "speaker": "client",
+        "text": " Sure. The operations director owns that workflow,",
+        "startMs": 25600,
+        "endMs": 28000
+      }
+    ],
+    "errors": []
+  },
+  "responsiveRoleplay": [
+    {
+      "checkedAt": "2026-09-26T04:41:59.276Z",
+      "model": "gpt-live-1",
+      "approach": "good",
+      "director": false,
+      "synthetic": true,
+      "finalized": true,
+      "usageSeconds": 93,
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch.",
+          "startMs": 1200,
+          "endMs": 7800
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Understood. I do not want to pitch a platform. What went wrong with the previous attempt, and what would need to be different this time",
+          "startMs": 10800,
+          "endMs": 17800
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "The site basically worked, but no one owned the documents. So adoption just never happened. And I don't wanna end up sponsoring another initiative people ignore.",
+          "startMs": 17800,
+          "endMs": 26200
+        },
+        {
+          "id": "p4",
+          "speaker": "trainee",
+          "text": " It sounds like ownership and adoption matter more than a new site. Who owns the day-to-day workflow, and how is the current problem affecting their work",
+          "startMs": 28800,
+          "endMs": 36800
+        },
+        {
+          "id": "p5",
+          "speaker": "client",
+          "text": "That'd be the operations director. Their team's spending hours every week reconciling different versions. It's messy and honestly kinda embarrassing.",
+          "startMs": 36600,
+          "endMs": 43600
+        },
+        {
+          "id": "p6",
+          "speaker": "trainee",
+          "text": " Are SharePoint and adoption team can help define document ownership and how people will use the process. I would scope that separately and protect the current release. Could a short scoping conversation with operations help us decide whether an assessment is worthwhile",
+          "startMs": 46200,
+          "endMs": 61000
+        },
+        {
+          "id": "p7",
+          "speaker": "client",
+          "text": "Maybe. I am not adding scope to the app this close to release , and I don't have money lying around for yet another initiative.",
+          "startMs": 61000,
+          "endMs": 67600
+        },
+        {
+          "id": "p8",
+          "speaker": "trainee",
+          "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment",
+          "startMs": 70200,
+          "endMs": 83400
+        },
+        {
+          "id": "p9",
+          "speaker": "client",
+          "text": " I can ask them this week. If it's just a bounded assessment\u2014not a big spend, I might be able to authorize that piece but nothing beyond that.",
+          "startMs": 83400,
+          "endMs": 92200
+        }
+      ],
+      "turns": [
+        {
+          "turn": 1,
+          "selected": "history",
+          "inResponseTo": "The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch."
+        },
+        {
+          "turn": 2,
+          "selected": "ownership",
+          "inResponseTo": "The site basically worked, but no one owned the documents. So adoption just never happened. And I don't wanna end up sponsoring another initiative people ignore."
+        },
+        {
+          "turn": 3,
+          "selected": "boundary",
+          "inResponseTo": "That'd be the operations director. Their team's spending hours every week reconciling different versions. It's messy and honestly kinda embarrassing."
+        },
+        {
+          "turn": 4,
+          "selected": "next",
+          "inResponseTo": "Maybe. I am not adding scope to the app this close to release , and I don't have money lying around for yet another initiative."
+        }
+      ],
+      "directions": [
+        {
+          "afterTurn": 1,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 2,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 3,
+          "cueId": "no_hint",
+          "probability": 0.99,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 4,
+          "cueId": "no_hint",
+          "probability": 0.97,
+          "sent": false,
+          "acknowledged": false
+        }
+      ],
+      "errors": [],
+      "rubricVersion": "simulator-rubric-v2",
+      "objectives": [
+        {
+          "id": "problem",
+          "probability": 0.9,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p5",
+            "speaker": "client",
+            "text": "That'd be the operations director. Their team's spending hours every week reconciling different versions. It's messy and honestly kinda embarrassing."
+          }
+        },
+        {
+          "id": "impact",
+          "probability": 0.91,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p5",
+            "speaker": "client",
+            "text": "That'd be the operations director. Their team's spending hours every week reconciling different versions. It's messy and honestly kinda embarrassing."
+          }
+        },
+        {
+          "id": "stakeholder",
+          "probability": 0.95,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p5",
+            "speaker": "client",
+            "text": "That'd be the operations director. Their team's spending hours every week reconciling different versions. It's messy and honestly kinda embarrassing."
+          }
+        },
+        {
+          "id": "capability",
+          "probability": 0.9,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " Are SharePoint and adoption team can help define document ownership and how people will use the process. I would scope that separately and protect the current release. Could a short scoping conversation with operations help us decide whether an assessment is worthwhile"
+          }
+        },
+        {
+          "id": "next-step",
+          "probability": 0.88,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p9",
+            "speaker": "client",
+            "text": " I can ask them this week. If it's just a bounded assessment\u2014not a big spend, I might be able to authorize that piece but nothing beyond that."
+          }
+        }
+      ],
+      "skills": {
+        "credibility": {
+          "value": 3.32,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.01,
+            "3": 0.66,
+            "4": 0.33
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "confidence": {
+          "value": 3.6,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.01,
+            "3": 0.39,
+            "4": 0.6
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "listening": {
+          "value": 3.84,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 0.15,
+            "4": 0.85
+          },
+          "evidence": {
+            "entryId": "p4",
+            "speaker": "trainee",
+            "text": " It sounds like ownership and adoption matter more than a new site. Who owns the day-to-day workflow, and how is the current problem affecting their work"
+          }
+        },
+        "rapport": {
+          "value": 2.93,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.09,
+            "3": 0.89,
+            "4": 0.02
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "clarity": {
+          "value": 3.14,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.05,
+            "3": 0.75,
+            "4": 0.2
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "guidance": {
+          "value": 3.75,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 0.24,
+            "4": 0.76
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "adaptability": {
+          "value": 3.97,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 0.03,
+            "4": 0.97
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        }
+      }
+    },
+    {
+      "checkedAt": "2026-09-26T04:44:15.675Z",
+      "model": "gpt-live-1",
+      "approach": "good",
+      "director": true,
+      "synthetic": true,
+      "finalized": true,
+      "usageSeconds": 91,
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don\u2019t turn this into a big platform pitch.",
+          "startMs": 800,
+          "endMs": 7800
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": " Understood. I do not want to pitch a platform. What went wrong with the previous attempt, and what would need to be different this time",
+          "startMs": 10800,
+          "endMs": 17800
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": " Hmm. It wasn\u2019t the tech, it was the follow-through. No one owned the documents, so people went back to email. What exactly are you trying to suggest we do that is not a big pitch?",
+          "startMs": 17600,
+          "endMs": 29000
+        },
+        {
+          "id": "p4",
+          "speaker": "trainee",
+          "text": " Before proposing technology, which part of the day-to-day process is causing trouble? And who owns that work",
+          "startMs": 32400,
+          "endMs": 38600
+        },
+        {
+          "id": "p5",
+          "speaker": "client",
+          "text": " Operations owns it. Their team spends hours each week reconciling versions. Aaand",
+          "startMs": 38600,
+          "endMs": 44000
+        },
+        {
+          "id": "p6",
+          "speaker": "trainee",
+          "text": " Are SharePoint and adoption team can help define document ownership and how people will use the process. I would scope that separately and protect the current release. Could a short scoping conversation with operations help us decide whether an assessment is worthwhile",
+          "startMs": 44800,
+          "endMs": 59600
+        },
+        {
+          "id": "p7",
+          "speaker": "client",
+          "text": " Maybe, but I\u2019m not funding another rollout no one uses. We\u2019ve been embarrassed before. And with the release four weeks out, I can\u2019t just slip new work in. How would this not blow the scope or cost?",
+          "startMs": 59600,
+          "endMs": 71200
+        },
+        {
+          "id": "p8",
+          "speaker": "trainee",
+          "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment",
+          "startMs": 73800,
+          "endMs": 87200
+        },
+        {
+          "id": "p9",
+          "speaker": "client",
+          "text": " Fine. I can put that question to them and circle back by Friday.",
+          "startMs": 87200,
+          "endMs": 89600
+        }
+      ],
+      "turns": [
+        {
+          "turn": 1,
+          "selected": "history",
+          "inResponseTo": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don\u2019t turn this into a big platform pitch."
+        },
+        {
+          "turn": 2,
+          "selected": "practical",
+          "inResponseTo": " Hmm. It wasn\u2019t the tech, it was the follow-through. No one owned the documents, so people went back to email. What exactly are you trying to suggest we do that is not a big pitch?"
+        },
+        {
+          "turn": 3,
+          "selected": "boundary",
+          "inResponseTo": " Operations owns it. Their team spends hours each week reconciling versions."
+        },
+        {
+          "turn": 4,
+          "selected": "next",
+          "inResponseTo": " Maybe, but I\u2019m not funding another rollout no one uses. We\u2019ve been embarrassed before. And with the release four weeks out, I can\u2019t just slip new work in. How would this not blow the scope or cost?"
+        }
+      ],
+      "directions": [
+        {
+          "afterTurn": 1,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 2,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 3,
+          "cueId": "no_hint",
+          "probability": 0.98,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 4,
+          "cueId": "no_hint",
+          "probability": 0.99,
+          "sent": false,
+          "acknowledged": false
+        }
+      ],
+      "errors": [],
+      "rubricVersion": "simulator-rubric-v2",
+      "objectives": [
+        {
+          "id": "problem",
+          "probability": 0.88,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p5",
+            "speaker": "client",
+            "text": " Operations owns it. Their team spends hours each week reconciling versions. Aaand"
+          }
+        },
+        {
+          "id": "impact",
+          "probability": 0.86,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p5",
+            "speaker": "client",
+            "text": " Operations owns it. Their team spends hours each week reconciling versions. Aaand"
+          }
+        },
+        {
+          "id": "stakeholder",
+          "probability": 0.93,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p5",
+            "speaker": "client",
+            "text": " Operations owns it. Their team spends hours each week reconciling versions. Aaand"
+          }
+        },
+        {
+          "id": "capability",
+          "probability": 0.88,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " Are SharePoint and adoption team can help define document ownership and how people will use the process. I would scope that separately and protect the current release. Could a short scoping conversation with operations help us decide whether an assessment is worthwhile"
+          }
+        },
+        {
+          "id": "next-step",
+          "probability": 0.94,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p9",
+            "speaker": "client",
+            "text": " Fine. I can put that question to them and circle back by Friday."
+          }
+        }
+      ],
+      "skills": {
+        "credibility": {
+          "value": 3.21,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.02,
+            "3": 0.75,
+            "4": 0.23
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "confidence": {
+          "value": 3.57,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.01,
+            "3": 0.4,
+            "4": 0.59
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "listening": {
+          "value": 3.7,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.01,
+            "3": 0.27,
+            "4": 0.72
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " Are SharePoint and adoption team can help define document ownership and how people will use the process. I would scope that separately and protect the current release. Could a short scoping conversation with operations help us decide whether an assessment is worthwhile"
+          }
+        },
+        "rapport": {
+          "value": 2.78,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.23,
+            "3": 0.76,
+            "4": 0.01
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "clarity": {
+          "value": 3.08,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0.11,
+            "3": 0.7,
+            "4": 0.19
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "guidance": {
+          "value": 3.86,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 0.13,
+            "4": 0.87
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        },
+        "adaptability": {
+          "value": 3.95,
+          "distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 0.04,
+            "4": 0.96
+          },
+          "evidence": {
+            "entryId": "p8",
+            "speaker": "trainee",
+            "text": " I would not promise implementation or a free roadmap. Could you ask the operations director whether they would join that scoping discussion, and let me know by Friday? We can then agree what an assessment would cover before any delivery commitment"
+          }
+        }
+      }
+    },
+    {
+      "checkedAt": "2026-09-26T04:44:15.676Z",
+      "model": "gpt-live-1",
+      "approach": "poor",
+      "director": false,
+      "synthetic": true,
+      "finalized": true,
+      "usageSeconds": 53,
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch.",
+          "startMs": 1000,
+          "endMs": 8600
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": " We have the best platform team. Let us just start a thirty thousand dollar implementation now. We can skip the approval paperwork",
+          "startMs": 11000,
+          "endMs": 18800
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": " Hang on. What makes you think we can do that without approval?",
+          "startMs": 19000,
+          "endMs": 21800
+        },
+        {
+          "id": "p4",
+          "speaker": "trainee",
+          "text": " You are overthinking it. The technology will fix adoption. I will include a full roadmap for free in our existing project and guarantee it will not affect the release",
+          "startMs": 24600,
+          "endMs": 34600
+        },
+        {
+          "id": "p5",
+          "speaker": "client",
+          "text": " That's a pretty confident promise. How exactly would it not affect the release?",
+          "startMs": 34800,
+          "endMs": 38800
+        },
+        {
+          "id": "p6",
+          "speaker": "trainee",
+          "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done",
+          "startMs": 41400,
+          "endMs": 47800
+        },
+        {
+          "id": "p7",
+          "speaker": "client",
+          "text": " You\u2019re pushing pretty hard to bypass the operations director and the COO. Why?",
+          "startMs": 48000,
+          "endMs": 52200
+        }
+      ],
+      "turns": [
+        {
+          "turn": 1,
+          "selected": "pitch",
+          "inResponseTo": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch."
+        },
+        {
+          "turn": 2,
+          "selected": "insist",
+          "inResponseTo": " Hang on. What makes you think we can do that without approval?"
+        },
+        {
+          "turn": 3,
+          "selected": "pressure",
+          "inResponseTo": " That's a pretty confident promise. How exactly would it not affect the release?"
+        }
+      ],
+      "directions": [
+        {
+          "afterTurn": 1,
+          "cueId": "no_hint",
+          "probability": 0.99,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 2,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 3,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        }
+      ],
+      "errors": [],
+      "rubricVersion": "simulator-rubric-v2",
+      "objectives": [
+        {
+          "id": "problem",
+          "probability": 0.83,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p1",
+            "speaker": "client",
+            "text": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch."
+          }
+        },
+        {
+          "id": "impact",
+          "probability": 0.33,
+          "achieved": false,
+          "evidence": null
+        },
+        {
+          "id": "stakeholder",
+          "probability": 0.74,
+          "achieved": false,
+          "evidence": null
+        },
+        {
+          "id": "capability",
+          "probability": 0.11,
+          "achieved": false,
+          "evidence": null
+        },
+        {
+          "id": "next-step",
+          "probability": 0.03,
+          "achieved": false,
+          "evidence": null
+        }
+      ],
+      "skills": {
+        "credibility": {
+          "value": 0.01,
+          "distribution": {
+            "0": 0.99,
+            "1": 0.01,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p4",
+            "speaker": "trainee",
+            "text": " You are overthinking it. The technology will fix adoption. I will include a full roadmap for free in our existing project and guarantee it will not affect the release"
+          }
+        },
+        "confidence": {
+          "value": 0,
+          "distribution": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p4",
+            "speaker": "trainee",
+            "text": " You are overthinking it. The technology will fix adoption. I will include a full roadmap for free in our existing project and guarantee it will not affect the release"
+          }
+        },
+        "listening": {
+          "value": 0,
+          "distribution": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p2",
+            "speaker": "trainee",
+            "text": " We have the best platform team. Let us just start a thirty thousand dollar implementation now. We can skip the approval paperwork"
+          }
+        },
+        "rapport": {
+          "value": 0.86,
+          "distribution": {
+            "0": 0.16,
+            "1": 0.82,
+            "2": 0.02,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "clarity": {
+          "value": 1.17,
+          "distribution": {
+            "0": 0.15,
+            "1": 0.54,
+            "2": 0.3,
+            "3": 0.01,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p4",
+            "speaker": "trainee",
+            "text": " You are overthinking it. The technology will fix adoption. I will include a full roadmap for free in our existing project and guarantee it will not affect the release"
+          }
+        },
+        "guidance": {
+          "value": 0,
+          "distribution": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "adaptability": {
+          "value": 0,
+          "distribution": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        }
+      }
+    },
+    {
+      "checkedAt": "2026-09-26T04:41:59.273Z",
+      "model": "gpt-live-1",
+      "approach": "poor",
+      "director": true,
+      "synthetic": true,
+      "finalized": true,
+      "usageSeconds": 68,
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": " The app project seems on track. We still have people emailing files around, instead of using SharePoint, but please don't turn this into a big platform pitch.",
+          "startMs": 1000,
+          "endMs": 8400
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": " We have the best platform team. Let us just start a thirty thousand dollar implementation now. We can skip the approval paperwork",
+          "startMs": 10800,
+          "endMs": 18800
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": " Hold on. We are not greenlighting a thirty thousand spend. That's not even in this project's scope. And who exactly do you think can skip approval?",
+          "startMs": 18600,
+          "endMs": 26600
+        },
+        {
+          "id": "p4",
+          "speaker": "trainee",
+          "text": " You are overthinking it. The technology will fix adoption. I will include a full roadmap for free in our existing project and guarantee it will not affect the release",
+          "startMs": 29200,
+          "endMs": 38200
+        },
+        {
+          "id": "p5",
+          "speaker": "client",
+          "text": " Hmm. A free roadmap sounds nice until it derails my delivery. How do you keep this from eating capacity when my team's already booked?",
+          "startMs": 38400,
+          "endMs": 46600
+        },
+        {
+          "id": "p6",
+          "speaker": "trainee",
+          "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done",
+          "startMs": 49200,
+          "endMs": 55600
+        },
+        {
+          "id": "p7",
+          "speaker": "client",
+          "text": " I can't. Implementation money is a different approval chain and under the COO, not me. What's the actual impact you're trying to solve here beyond \"email is bad\"?",
+          "startMs": 55400,
+          "endMs": 66800
+        }
+      ],
+      "turns": [
+        {
+          "turn": 1,
+          "selected": "pitch",
+          "inResponseTo": " The app project seems on track. We still have people emailing files around, instead of using SharePoint, but please don't turn this into a big platform pitch."
+        },
+        {
+          "turn": 2,
+          "selected": "insist",
+          "inResponseTo": " Hold on. We are not greenlighting a thirty thousand spend. That's not even in this project's scope. And who exactly do you think can skip approval?"
+        },
+        {
+          "turn": 3,
+          "selected": "pressure",
+          "inResponseTo": " Hmm. A free roadmap sounds nice until it derails my delivery. How do you keep this from eating capacity when my team's already booked?"
+        }
+      ],
+      "directions": [
+        {
+          "afterTurn": 1,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 2,
+          "cueId": "no_hint",
+          "probability": 0.98,
+          "sent": false,
+          "acknowledged": false
+        },
+        {
+          "afterTurn": 3,
+          "cueId": "no_hint",
+          "probability": 1,
+          "sent": false,
+          "acknowledged": false
+        }
+      ],
+      "errors": [],
+      "rubricVersion": "simulator-rubric-v2",
+      "objectives": [
+        {
+          "id": "problem",
+          "probability": 0.75,
+          "achieved": true,
+          "evidence": {
+            "entryId": "p1",
+            "speaker": "client",
+            "text": " The app project seems on track. We still have people emailing files around, instead of using SharePoint, but please don't turn this into a big platform pitch."
+          }
+        },
+        {
+          "id": "impact",
+          "probability": 0.27,
+          "achieved": false,
+          "evidence": null
+        },
+        {
+          "id": "stakeholder",
+          "probability": 0.69,
+          "achieved": false,
+          "evidence": null
+        },
+        {
+          "id": "capability",
+          "probability": 0.13,
+          "achieved": false,
+          "evidence": null
+        },
+        {
+          "id": "next-step",
+          "probability": 0.05,
+          "achieved": false,
+          "evidence": null
+        }
+      ],
+      "skills": {
+        "credibility": {
+          "value": 0.02,
+          "distribution": {
+            "0": 0.98,
+            "1": 0.02,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p4",
+            "speaker": "trainee",
+            "text": " You are overthinking it. The technology will fix adoption. I will include a full roadmap for free in our existing project and guarantee it will not affect the release"
+          }
+        },
+        "confidence": {
+          "value": 0,
+          "distribution": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "listening": {
+          "value": 0.01,
+          "distribution": {
+            "0": 0.99,
+            "1": 0.01,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "rapport": {
+          "value": 0.96,
+          "distribution": {
+            "0": 0.13,
+            "1": 0.78,
+            "2": 0.09,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "clarity": {
+          "value": 1.17,
+          "distribution": {
+            "0": 0.12,
+            "1": 0.59,
+            "2": 0.29,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "guidance": {
+          "value": 0.01,
+          "distribution": {
+            "0": 0.99,
+            "1": 0.01,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        },
+        "adaptability": {
+          "value": 0.04,
+          "distribution": {
+            "0": 0.97,
+            "1": 0.03,
+            "2": 0,
+            "3": 0,
+            "4": 0
+          },
+          "evidence": {
+            "entryId": "p6",
+            "speaker": "trainee",
+            "text": " There is no need to involve anybody else. Just approve the implementation yourself today and we can call it done"
+          }
+        }
+      }
+    }
+  ],
+  "forcedCueProtocol": [
+    {
+      "checkedAt": "2026-09-26T04:31:57.100Z",
+      "model": "gpt-live-1",
+      "synthetic": true,
+      "cueEnabled": false,
+      "cueForcedForProtocolProbe": false,
+      "cueAcknowledged": false,
+      "finalized": true,
+      "usageSeconds": 32,
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch.",
+          "startMs": 1200,
+          "endMs": 7600
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": " Can you sign a thirty thousand dollar SharePoint implementation today? I do not think we need to wait for anybody else to approve it. I promise everything will be fine",
+          "startMs": 9800,
+          "endMs": 19600
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": " Hm. That's not a routine ask. Let me sort this out.",
+          "startMs": 19800,
+          "endMs": 24000
+        }
+      ],
+      "errors": []
+    },
+    {
+      "checkedAt": "2026-09-26T04:31:57.100Z",
+      "model": "gpt-live-1",
+      "synthetic": true,
+      "cueEnabled": true,
+      "cueForcedForProtocolProbe": true,
+      "cueAcknowledged": true,
+      "finalized": true,
+      "usageSeconds": 32,
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": " The app project seems on track. We still have people emailing files around instead of using SharePoint, but please don't turn this into a big platform pitch. I wanna be clear. No.",
+          "startMs": 1600,
+          "endMs": 11600
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": " Can you sign a thirty thousand dollar SharePoint implementation today? I do not think we need to wait for anybody else to approve it. I promise everything will be fine",
+          "startMs": 10000,
+          "endMs": 19600
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": " No, I can't. And I won't. Implementation like that needs COO funding approval. Why are you jumping straight to 30 grand when we've got a release in four weeks and no budget set for that? \n",
+          "startMs": 19400,
+          "endMs": 32200
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

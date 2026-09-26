@@ -1,6 +1,6 @@
 # Character pace and private practice archives
 
-Status: implemented and verified locally; production setup and deployment await restored Cloudflare authentication. Andrew simplified archive reliability after the initial Opus-approved plan. The implementation uses best-effort saves with no durable staging or retries. Character pace and bargaining are committed in `f582815`.
+Status: deployed and verified in production from `d59c5ef` on September 26, 2026 at 19:35 UTC; see [the release record](simulator-release.md#expanded-catalog-and-archive-release). Andrew simplified archive reliability after the initial Opus-approved plan. The implementation uses best-effort saves with no durable staging or retries. Character pace and bargaining are committed in `f582815`.
 
 ## Current behavior
 
@@ -39,7 +39,7 @@ Use the existing D1 binding API and parameterized SQL, with no ORM. References: 
 4. Run focused paid character rehearsals with explicit closure. After deployment, run one real browser attempt and retrieve its D1 archive, confirming both speakers, selected client/scenario, scoring and finalization agree with the public debrief. Retain evidence of any failure.
 5. Request Opus review at the implementation checkpoint, commit coherent changes, and publish the follow-up under Andrew's existing redeploy instruction once release checks pass. Delivery order: restore Cloudflare auth, create/reuse the scoped D1 database, apply its remote migration, then deploy. Verify the active Worker version and actual D1 record, not just an upload receipt.
 
-Cloudflare readiness: read-only D1 inventory and `wrangler whoami` currently fail because the existing OAuth token expired and refresh failed. Restore the existing authenticated session before any D1 creation, migration or deployment. Local implementation and verification are complete; no cloud resource or deployment has been changed for this follow-up.
+Cloudflare delivery: the expired session was refreshed through the browser. The scoped database was created and its migration applied before deployment. Production voice acceptance passes 9/9, and the corresponding remote D1 export passes all 16 comparisons with the browser debrief, including exact Worker provenance. Database and version receipts are in the release record.
 
 Plan pointers: [implementation plan](simulator-implementation-plan.md), [progress](simulator-progress.md), [earlier performance evidence](simulator-roleplay-performance.md), [current release](simulator-release.md).
 
@@ -62,6 +62,6 @@ Verification ran from a managed isolated checkout because a separate task was ex
 - Compact interaction checks: 5/5 at the frozen build. Report: `output/simulator-archive-isolated-compact/report.json`. The Start disclosure was also inspected at 320-pixel and desktop widths.
 - Earlier shared-development failures remain under `output/simulator-best-effort-local-*`: catalog edits reloaded active sessions, and one run ended before the current live-feedback state. The harness now waits for the visible current live state before ending. The final isolated run passes that stronger check.
 
-All evidence above is local or synthetic. Character pace measurements and their limits are in [the rehearsal record](simulator-pace-evidence.md). Cloudflare OAuth remains expired; restore authentication, add the real D1 database ID, apply the remote migration, deploy, then verify production voice and its archive before claiming cloud availability.
+The checkpoint evidence above is local or synthetic. Character pace measurements and their limits are in [the rehearsal record](simulator-pace-evidence.md). The later combined production deployment and voice/archive checks are documented in [the release record](simulator-release.md#expanded-catalog-and-archive-release).
 
 The subsequent [parallel quality review](simulator-simplification.md#archive-and-pace-follow-up-review) removes duplicate archive serialization, centralizes provenance and simplifies the test setup, while preserving best-effort saves and the existing provider closure lifecycle.

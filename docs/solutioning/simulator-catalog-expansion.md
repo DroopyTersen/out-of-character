@@ -1,6 +1,6 @@
 # Simulator catalog and performance expansion
 
-Status: accepted for release, September 26, 2026. Deployment results are recorded in [the release record](simulator-release.md). The existing pace, bargaining, and private-archive work is preserved.
+Status: deployed from `d59c5ef`, September 26, 2026 at 19:35 UTC. Production verification is recorded in [the release record](simulator-release.md#expanded-catalog-and-archive-release). The existing pace, bargaining, and private-archive work is preserved.
 
 ## Accepted catalog
 

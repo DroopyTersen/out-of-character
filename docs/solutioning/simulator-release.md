@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Current release: **`8633f24`**, deployed September 26, 2026 at 16:55 UTC. The new spoken meeting kickoffs and stronger client performances are recorded under [Client performance release](#client-performance-release). The existing compact mobile and original desktop layouts remain in this release.
+Current release: **`d59c5ef`**, deployed September 26, 2026 at 19:35 UTC. The expanded catalog, theatrical clients, pace tuning and private transcript archive are recorded under [Expanded catalog and archive release](#expanded-catalog-and-archive-release).
 
 Initial source baseline: `6415f0a` on `simulator-mvp`. Andrew requested deployment and a readiness check for trying the simulator on a phone.
 
@@ -95,3 +95,22 @@ bun scripts/simulator-compact-acceptance.mjs
 The synthetic trainee fixture has 30 seconds of leading silence, allowing the longer kickoff to finish before the question. Opus 5.5 reviewed the release through computer use and found no deployment blocker. Its documentation feedback is addressed by recording the explicit browser target and citing the version receipt for preserved bindings. Having the scripts include their target URL in future reports remains a small harness follow-up.
 
 The browser smoke adds production WebRTC and scoring evidence to the earlier direct-provider rehearsals. It does not establish physical-phone audio behavior or subjective acting quality. The earlier silent provider startup remains documented in the performance follow-up; this release smoke succeeded on its first attempt. No branch push or merge was performed.
+
+## Expanded catalog and archive release
+
+Andrew requested deployment of the accepted [catalog expansion](simulator-catalog-expansion.md) and [pace and archive follow-up](simulator-pace-and-archive.md). Source **`d59c5efd3c935b5e99d40df4856f92956ff29371`** contains eight scenarios and seven clients, including Harper, Quinn, Riley and Jamie, public preparation notes for the six new scenarios, stronger theatrical performances, existing pace/bargaining tuning and best-effort private transcript saves.
+
+Deployed **2026-09-26 at 19:35 UTC** to [the simulator](https://outofcharacter.droopy.dev/simulator). Cloudflare version **`dd3f26cb-88f7-4eeb-91b3-840eea060689`**, tagged **`d59c5ef`**, receives **100% traffic** in the fresh deployment lookup. The existing enabled flags and three provider secrets remain configured; deployment used `--keep-vars`.
+
+Cloudflare sign-in was restored through the browser using the existing account. The scoped D1 database **`out-of-character-simulator`** (`e91a81f6-2058-4223-b10a-52f00dc2219f`) was created, bound as `SIMULATOR_ARCHIVE`, and migration `0001_simulator_attempts.sql` was applied **before** deployment. A subsequent remote migration listing reports no pending migrations. No other database was changed.
+
+Accepted production evidence:
+
+- Full `bun run check` passed: **130 tests / 4,230 assertions**, types, production build, privacy scan of **15 client assets**, and Worker dry run. After adding the real D1 ID, the production build and deployment dry run passed again. Receipts: `output/simulator-expanded-release-check.log`, `-build.log`, and `-dry-run.log`.
+- All six checked HTTPS routes return 200. The enabled public catalog contains **eight scenarios / seven clients**, without private actor fields or client stats. All **67 public served assets** match the production build byte-for-byte. Report: `output/simulator-expanded-release-http.json`.
+- Production workshop checks pass **8/8**, covering each added scenario's preparation notes, all four new portraits, and live/debrief/lab screens at desktop and phone widths. Compact interactions pass **5/5** at 320, 390 and 1672 pixels. No browser errors, unexpected microphone calls or API calls. Reports: `output/simulator-expanded-release-workshop/` and `output/simulator-expanded-release-compact/`.
+- Real-provider voice acceptance passes **9/9** at 390 × 844 with prerecorded synthetic trainee speech. Both speakers were transcribed; current Jev feedback appeared during the live conversation; one injected polling failure recovered; provider closure and local-media cleanup were confirmed. **47 provider seconds**, zero test/browser errors. Report: `output/simulator-expanded-release-live/report.json`.
+- The same attempt's actual remote D1 export passes **16/16 comparisons** against its browser debrief: full transcript, both speakers, selection, final scores at revision **94**, timestamps, current feedback, confirmed closure, usage and exact actor/opening hashes. Its saved provenance identifies this Worker version and source tag. The final archive superseded the observed 30-second partial checkpoint. Report: `output/simulator-expanded-release-live/archive-verification.json`. The transcript export remains ignored with mode 0600.
+- Cloud receipts: `output/simulator-expanded-release-deploy.log`, `-deployments.json`, `-version.json`, `-d1-create.log`, `-d1-migrate.log`, and `-d1-migrations.log`.
+
+All production acceptance commands used `ACCEPTANCE_URL=https://outofcharacter.droopy.dev`; browser reports record the target. The voice smoke establishes deployed WebRTC, feedback, shutdown and archival behavior with synthetic speech, not physical-phone audio acceptance or a quantified increase in human difficulty. Archive writes remain best effort, and no audio is archived. Refresh an already-open tab to load the expanded catalog. No branch push or merge was performed.

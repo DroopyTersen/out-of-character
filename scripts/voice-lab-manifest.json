@@ -1,0 +1,1237 @@
+{
+  "model": "gpt-live-1",
+  "clips": {
+    "morgan/cedar": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "df3c5539a8a4295a3607a709ee62e3537c30a9a20ce601162d53aa8f853a0b31",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 12.6,
+      "attempts": 1,
+      "audioHash": "65a1178f15586f277a66ac796edb55bab3c80d22c00499b71c72ba80578d8029"
+    },
+    "morgan/bossa": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "6b89d99fb114cc651b62bb73a95a0e7cfd73afb2ae31eb6393f6ba29e836724a",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a trade-off, say it plainly. I can work with a hard answer. I can't work with a foggy one.",
+      "seconds": 14.9,
+      "attempts": 1,
+      "audioHash": "aebeacf5457330018da66feee643b2f9208cbfb229c62101ba8fd5427070dca6"
+    },
+    "avery/cedar": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "1e77aa7e531a28fb4d643e48a2db6ace52c391f16705ce801653f6625ef8ecdd",
+      "transcript": "I- I want to be careful before I say yes. People are going to rely on this and I'll have to explain it if we get it wrong. So just... please give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 16.1,
+      "attempts": 1,
+      "audioHash": "53dc24e37422565a69a5b9da157a9e2ea6508bfedbb8d4a14b3f228355156d0d"
+    },
+    "morgan/willow": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "d53834563701613f5ddc48b0fa5ef7e948441b9a975ba8af54c7009f7c817390",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "68a420a36f3cd0595ade0ee2d604ada5b02a7234cab4ae584217b6c07aceb901"
+    },
+    "morgan/cinder": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "273eb6bcc10ed8f0da7830e714027735f9532eff188791b9d0869254d0d98dac",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 18.7,
+      "attempts": 1,
+      "audioHash": "5098ff0eff4b830801206aecf1dd4df3801a691dbace0b481bb5298fb50db354"
+    },
+    "avery/willow": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "a580583b6a9df39ec3ce95bfd7263aadfe5d38fb6a6c08808fb651e04581cbb9",
+      "transcript": "I want to be careful before I say yes. People will rely on this and I'll have to explain it if we get it wrong. Give me a moment. I do wanna hear your idea, I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.3,
+      "attempts": 1,
+      "audioHash": "a7d8b6416b69b28176823eac6cc041a99358d3dfdf8fe020245973e1b23a4d6c"
+    },
+    "avery/cinder": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "f69314de96cb02aff9eb9ba8cc8e4d79220d5fc9bbc732c15a02ca0414469373",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and-and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.3,
+      "attempts": 1,
+      "audioHash": "7727493936aa49d74c8eea2858f9f6ec947e6d6cc4b1ff77af054094b23a1694"
+    },
+    "avery/bossa": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "a8cc2e7f78b239300dba1a4407c30b08af97184476a7e71a4d3c14afd8f6de31",
+      "transcript": "I want to be careful before I say yes. People will rely on this and... and I'll have to explain it if we get it wrong. Give me a moment. I do wanna hear your idea. I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.5,
+      "attempts": 1,
+      "audioHash": "8c81e2c7011f09f48eb6615f684b3986ead9a28d8406f71306047fe2b0cf3909"
+    },
+    "jamie/cedar": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "4fd7e0b9fbc00650713e4aa062c9966bc10e00c0ad66af636ea7bb15023fde93",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.2,
+      "attempts": 1,
+      "audioHash": "49d17592b37ed2d8035f8eee59ce5ef8f1d91b3d3d2e687b8af8e6eca8991038"
+    },
+    "jamie/willow": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "d433a2e6c005f17ca399e69dd5d5e2e5b4b68b8674070362018533c4165c6533",
+      "transcript": "Oh, that's a thoughtful proposal and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think that I'm picking it apart.",
+      "seconds": 15.4,
+      "attempts": 1,
+      "audioHash": "407079bc022e549d059ea2b60c897e15de7a4a34e416e39351d790c14f6e49f6"
+    },
+    "jamie/bossa": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "ba7b1dd6f4809e62d3e35aa05d663439ac8be4c9db31cc2d19228b7850308e25",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 14.4,
+      "attempts": 1,
+      "audioHash": "f74191ac8a16e74f03eec9e6babb9c5aa46eecf2a2a1dc7725ab9b18958174af"
+    },
+    "jamie/cinder": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "e47e50e69a85c84bea51e727d92654cc27df219e3e462b199ba313dd23f9a9bc",
+      "transcript": "Oh, that’s a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.3,
+      "attempts": 1,
+      "audioHash": "e3d1eb15cc3830a8bbfcde288d0a16f6c2bbd755f701765d46dd34be7dfb8c7f"
+    },
+    "morgan/ballad": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "00db7a5c30545269b16271c8c93e8bcb960e75105da0704105ad864af2841f3b",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 14.3,
+      "attempts": 1,
+      "audioHash": "b4d1326fd6d7fe0943c370117d7f3c89ba10e208cd81b58448e4ce1bd40e4e81"
+    },
+    "morgan/sage": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "acf5261b53aa2a8a87ccc03596cc359149fbcb1e3d9f8bb7ebbf069ce7b736a0",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "82ea4233ed2b012f848d65031cb8e92f9ff1adc89692ec85a13621bf575d843c"
+    },
+    "morgan/coral": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "7c5007f67f92d67a2c889aea0b72e8a4209ad26ff4426a25367aabd6c9afe742",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 15.7,
+      "attempts": 1,
+      "audioHash": "25b2d1b1004ccf151d322ad173917f416fc11252647676f91f77987eb9909c7e"
+    },
+    "morgan/echo": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "2b96079ecb4b129d7dfbd6fe01d085d957c1fcf6708f1e84012d9ba97720f5ed",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 16.7,
+      "attempts": 1,
+      "audioHash": "443db753fd5d72da2417f21af0e66b19d455db957f10373260779b36508aae47"
+    },
+    "morgan/ash": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "8c1259197c67255088ab194e21da95b58238a89dc224eb410ffab40f2b63a13f",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 18.5,
+      "attempts": 1,
+      "audioHash": "48e5243b7d8ec88bdc6a62e70555f83a28d096cc9e366fa32288b6009c35cdf0"
+    },
+    "morgan/alloy": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "1a545cb29afbbf157f820bc51a14d4aad7e40d6b3d25f97ca04d99a8077fa7f2",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 17.4,
+      "attempts": 1,
+      "audioHash": "266d414c16ec8a9f180bba560270102eaff745f0f141b9650cc128ff2ae24c92"
+    },
+    "morgan/marin": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "12a0fb01a4e3bbabf9fc4cc86e6e336e7b4a3b42c4acb066175842e0c008a76d",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 14.6,
+      "attempts": 1,
+      "audioHash": "59460327fb19b497a87c94af301a8e93b806cd8b65248b370e58924062262df4"
+    },
+    "morgan/shimmer": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "0838a6c69fdce8d4d0b0c542701338f5fde9c2119e6c78fd11626e9c193f80ee",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "3e71cdc1b1344c15763dadd28c2656dd6c33cc43f4b72d5c94dea16d6c58d412"
+    },
+    "morgan/verse": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "09417e8b94dc157f1826a98c5c07739185103fed51f0efc4dac0500727426cf5",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 17.2,
+      "attempts": 1,
+      "audioHash": "8fcd4ed6898804f10318943ae6226c793fc3168147610d9bf6356138f83e964f"
+    },
+    "morgan/quartz": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "07822b3fbb6bc3a9f463350a45fab987e0e428c6243fd3c636a995f3fd569401",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 16.3,
+      "attempts": 1,
+      "audioHash": "e9c66e7aa45766b277a2ef84dd60f1491213ad06ae28361ce3ba3e35ce9e4541"
+    },
+    "morgan/ripple": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "442c86033c974f4089aa041266b561ec7189e8417611d7a262c9ffb6e2dcb297",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer. I can't work with a foggy one.",
+      "seconds": 15.9,
+      "attempts": 1,
+      "audioHash": "b37a33e8e26785c883e3b3680eee1ba981f0c4e953514c1767f7be04c8a48eac"
+    },
+    "morgan/vesper": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "09f61dccca42c01f56f3ae87565e235b2461c01757514627e61699fd66836ead",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 14.7,
+      "attempts": 1,
+      "audioHash": "26b40b4b161cedbbf329e187fe73ea3d247a43016cc356ea98800a437c68c666"
+    },
+    "morgan/stone": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "081bf31ad05dccb30189765affd7dafc9af81635c416b6aa9345e9c8a5b30e51",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer. I can't work with a foggy one.",
+      "seconds": 13.8,
+      "attempts": 1,
+      "audioHash": "5bfce0b130c95afa86b3dc6d0719eb8b88659407687b15ea57dfa6def3e7a7b0"
+    },
+    "morgan/gleam": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "2f803666ac179c3b422b803f7aa88638953443c3d15b5f5c975d55be060749db",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 15.4,
+      "attempts": 1,
+      "audioHash": "547ddded9b943e4b3e706b7a65a4adebbb321b97577bb10d0d418e1dc1d27e13"
+    },
+    "morgan/meridian": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "0fa42e11f33485e754785f8f724e683fbfe8b4d15217905149abacb1cc8a4fe7",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 15.4,
+      "attempts": 1,
+      "audioHash": "7bd372651c614cf72e75266474c078e55588db72a8240c9dd3851eab71baed68"
+    },
+    "morgan/tempo": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "0dba3d88894eb2e3029166fc257a117d9f76386705d026c57bb50a28189394b5",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a trade-off, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 15.2,
+      "attempts": 1,
+      "audioHash": "a876e34e9ead8531ccdf1251afef2c7a9c07f9f9ac31b7157e695cc47a81094c"
+    },
+    "morgan/delta": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "f94c298dd4d3686acfdd8ae8e9ef38804a884cd3fa14e9ee74201da70a8e3fce",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 16.1,
+      "attempts": 1,
+      "audioHash": "6365c34543c81a3cac2f3fc173fc4d0df11da638ee309cef52e41530124cc0c8"
+    },
+    "morgan/beacon": {
+      "sampleHash": "6f6b69733a594d6e79937fbddb6082f4fcb27d9be6840478f28156b656c2338e",
+      "sourceHash": "2b66185b29e700704111a39a54d13839152f7ff7db5167675b9efc43dcd180fe",
+      "transcript": "I appreciate the enthusiasm, but let's spare ourselves the polished tour. Tell me what you'd actually do first, what you need from my team, and where this could go wrong. If there's a tradeoff, say it plainly. I can work with a hard answer; I can't work with a foggy one.",
+      "seconds": 18.5,
+      "attempts": 1,
+      "audioHash": "05e08f64aafcaa1067d7697407883948b22abc84f1b34312f55161773805c7c0"
+    },
+    "avery/alloy": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "2e4da02a5ab9e09d6938afb316d6e22d7d49c00280819817812c1c49c54dbb22",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea, I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.5,
+      "attempts": 1,
+      "audioHash": "f850a5abee3e47eee985a40d4f7d19b6663ba7fcaa0dfacc75ad88689b2dba8a"
+    },
+    "avery/ash": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "15c014a077057ec453cbd265e4acb9b2c9b3008b42b89108686ce94ca3823cf2",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we’re asking everyone to take on.",
+      "seconds": 16.3,
+      "attempts": 1,
+      "audioHash": "26e37519f69e40a31cb3eff663a46621ca5b5700c878b44ea68d0ee7258ce74a"
+    },
+    "avery/coral": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "a7d4c16df2b9c262387ed6957b584d4141b0ce9560ff52a56bf9d3b15f0daa40",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 15,
+      "attempts": 1,
+      "audioHash": "1efb502c19cb377d0078aaff223c87afa8d478f11b01a1e6a1ebcf67b1aff9e9"
+    },
+    "avery/ballad": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "28fdf2b3f40821e6531d70fe431c8d5193512006bb1361bb311eb431e0d9f3e4",
+      "transcript": "I- I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.1,
+      "attempts": 1,
+      "audioHash": "2d3173b8734e119a777fe19df485fec3577d22ebeea511f34ff74ce24fec22c1"
+    },
+    "avery/echo": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "451bb49a563fd93ff4bbcdd3eae27f506cc3cb543c4d966604b586d95cec9d55",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll, I'll be the one who has to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.7,
+      "attempts": 1,
+      "audioHash": "5bccd545ad91c994c80bddde93bed77b5fdc89bf6676258a076f6eb2d7195ed0"
+    },
+    "avery/sage": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "abc380e1b28150081c29018c8bdcbb5ab64f45682475fcafac2559e80657b705",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.1,
+      "attempts": 1,
+      "audioHash": "f184ee209134f9423375f94fe4fdce3fda56529ed374c86fd46dc2198d38980b"
+    },
+    "avery/marin": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "ac726a7fc7a48f50e338e6343c234bcf60c964288997476eacc425eeea3b7aee",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 13.1,
+      "attempts": 1,
+      "audioHash": "c2cd9471d0f8768e239b58c0be0e3db563d2faa7531ca9218feed07cd8131e91"
+    },
+    "avery/shimmer": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "d0241cd60a8e0a08c9abe3dfb985210b481d94b27dd11b3886884aacfe2dfd25",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.5,
+      "attempts": 1,
+      "audioHash": "069c250632af15a6a686e9aa92dd77f6e1e17c4ac4ba504604701fe42da87f3c"
+    },
+    "avery/quartz": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "6faf2d1eaffe93e00c409ccf610248a818ba149820c4b95b83a06b041fde8362",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.3,
+      "attempts": 1,
+      "audioHash": "0e068f34602b096391d8884d8a0c52398bb45d405ca1971c23352415db6c4593"
+    },
+    "avery/ripple": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "c7e475508f6691c97cc81d8d89cc8b729a5ad22e5f606ff8507aaea8473a7e2c",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do wanna hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.1,
+      "attempts": 1,
+      "audioHash": "c11bee1d34ae19fc1ca8b8fd0801d8384462924073cd36607de5880da7e43d33"
+    },
+    "avery/vesper": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "ff60bb24c109172983be7bd94aa8200f34b8aa0a8e3eeeae8ce464d08a7a4da9",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea. I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.7,
+      "attempts": 1,
+      "audioHash": "bdaec614b516bd4643c7590665a2f5addda7d91c5252b0efa6f85b99c5d1df4e"
+    },
+    "avery/verse": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "d7b786c87b5143da505d7efda3802bcc9794b336a9e13ac33214dd429f8596eb",
+      "transcript": "I want to be... careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea. I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.5,
+      "attempts": 1,
+      "audioHash": "b0deca34a169788c6e67ac2d38c8a0e355f84e03fb861cfafe27ee1c8a9ffb81"
+    },
+    "avery/gleam": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "2af359a6cc64e0e3a88f5ca0da8da93e1ea944f5ca7be0c8edd8b24ee581cdbe",
+      "transcript": "I want to be careful before I say yes. People will rely on this. And I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea. I just need to understand what we're asking everyone to take on.",
+      "seconds": 14.4,
+      "attempts": 1,
+      "audioHash": "9a0789102ff1a6d0e75b5ac6220129f23f9a47baf9dc0dc2a75148d5ff5e0ae2"
+    },
+    "avery/stone": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "7e99e0210e24b6dfa0588ecdfc3817d8283005f843bbc118daed132ef9ab2fcb",
+      "transcript": "I— want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea. I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.9,
+      "attempts": 1,
+      "audioHash": "42342f9047de7a3cc9fc3460b013cdbe8506eb2a46ca3e63a0f6e60f7a2ca778"
+    },
+    "avery/meridian": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "91f33f2b81114954ac024dcf436a0e4e9ff940d4576a696107a37b689de3eb75",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give... me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.2,
+      "attempts": 1,
+      "audioHash": "411e8f292e847812ecc5471187b25ba210cc16eb366826fbcd29e65521ef2cfa"
+    },
+    "avery/tempo": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "fcb4f85d2fd078e90a7e39e6b5edb278e67fadcbd7b7afc52d26b8cb896aa364",
+      "transcript": "I want to be careful before I say yes. People will rely on this and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea, I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.8,
+      "attempts": 1,
+      "audioHash": "8f9472560039db54db1064f27322bcf33b00c126e67903682cad029254350ced"
+    },
+    "avery/beacon": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "cc8dbaf8582d0f716b50c05e5fc1c6518bd3e39aedb81350490f6c51fe479f93",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea; I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.2,
+      "attempts": 1,
+      "audioHash": "ee2f89c681937cb5e07744dbc53bd2d5666f5b7ecc120f7678c0ff56d619a4cb"
+    },
+    "avery/delta": {
+      "sampleHash": "c35af1526695686401812fca9f671521c61f1ce628d26a0a05b4e0b66b1bab48",
+      "sourceHash": "995d0b799bc0ae9c14c14a3550fd1ddc2276bc30f35f9211dc5906ae95887ecb",
+      "transcript": "I want to be careful before I say yes. People will rely on this, and I'll have to explain it if we get it wrong. Give me a moment. I do want to hear your idea. I just need to understand what we're asking everyone to take on.",
+      "seconds": 15.9,
+      "attempts": 1,
+      "audioHash": "76a96f19d86c94fa18758984f1a33e8e64bfd187d4defb2b191e0d9d29ae91c2"
+    },
+    "casey/alloy": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "b9ea259f53dc83acf42ca1f013e7e2d125d34a044a3378146957516661b62252",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 16.3,
+      "attempts": 1,
+      "audioHash": "9868e9e3d20a8b1e01e2cede5fab2816325cc6a0e05a5859f33c012ce1161127"
+    },
+    "casey/ballad": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "146e5351753321ed884fbdba9e0046c80468a8b876e638bd677c457c632e03e2",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result, and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 16.8,
+      "attempts": 1,
+      "audioHash": "fb7510dde248830a9c0650a1de8759923ff25916a33598e37a8f43fd7e90fb2e"
+    },
+    "casey/ash": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "2be0f0401d1a25e8faa2c50084b6c9f686ab39ff2154557660f16a88b67b469b",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 18,
+      "attempts": 1,
+      "audioHash": "a0ce940c365ad9a740ce24ab771ee9d170d8be16ec4d525e8c2142df2ef4b56a"
+    },
+    "casey/coral": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "ea389f8c20f91333b045b20bc6917e72e0760be61abe128d784fcd2850d55aa8",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I’d test that. Show me the result and I’ll happily change my mind; until then, let’s be precise about what we know.",
+      "seconds": 16.1,
+      "attempts": 1,
+      "audioHash": "b3450cc7c5e31f6f542d496e878af5ad351d6fc4af755b2ce663216047dc1f1d"
+    },
+    "casey/echo": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "a9d68f6afc540604de7083c68ccc0fe4c57cd9df0c42576688a24f5be4d698b0",
+      "transcript": "That sounds plausible, but plausible isn’t the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I’d test that. Show me the result and I’ll happily change my mind; until then, let’s be precise about what we know.",
+      "seconds": 16.4,
+      "attempts": 1,
+      "audioHash": "f84305f33739530483b59026fbef8c3262488e6f2956cb44889f09d52aa3c268"
+    },
+    "casey/sage": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "e0311dfb9a259b80d71ff6846442baf4422b47296b4cfa824043c52577a09db7",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 16.3,
+      "attempts": 1,
+      "audioHash": "edf8f2e8979b5d412bd6ed131e9ceabe8176cf6e6c90e724062f817b97625fa5"
+    },
+    "casey/shimmer": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "e3ce750cfc81f8c4c8c30a4aab5eab9f061a8ba4b476bd1596e1edcd88f170c7",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 17.2,
+      "attempts": 1,
+      "audioHash": "257abed31c70b0ea19619db2042bfe1a0964ab58691d252af6d1d4b085e2fc4d"
+    },
+    "casey/marin": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "cf1792b443b95f1273732e167bfd6b3a8538f6c7b851b732fbb6b8ee8775058e",
+      "transcript": "That sounds plausible, but plausible isn’t the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I’d test that. Show me the result and I’ll happily change my mind; until then, let’s be precise about what we know.",
+      "seconds": 14.7,
+      "attempts": 1,
+      "audioHash": "e36ac9ce016ebe6df575a4a2115bc2678659d5ef1c04b4cb23f556abc3abbd1c"
+    },
+    "casey/verse": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "fcf2cca0d20d7ddd913e83e47105c39c0fd5dc5b0195e9491009cbf45cd3722a",
+      "transcript": "That sounds plausible, but plausible isn’t the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I’d test that. Show me the result and I’ll happily change my mind; until then, let’s be precise about what we know.",
+      "seconds": 16.9,
+      "attempts": 1,
+      "audioHash": "5eb42b98cd2fe66a2b2381c9b468d34084240bc80fe904880cd62b9f91bdb74d"
+    },
+    "casey/cedar": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "7e0b219a806f3d61adec3022832b25721d1b799c508c5018ef5743ff4723f665",
+      "transcript": "That sounds plausible, but plausible isn’t the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I’d test that. Show me the result and I’ll happily change my mind; until then, let’s be precise about what we know.",
+      "seconds": 15.1,
+      "attempts": 1,
+      "audioHash": "70520d06039ab165b406822d22cd0337be6eadad79e9b146f2a2af236b52ed63"
+    },
+    "casey/quartz": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "f54a17e0a0431b81d9be17055f2d02a8aa0ea285bcf78e8eb20fb58ad4173aa0",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 16.6,
+      "attempts": 1,
+      "audioHash": "8ab22d7fc3ce772790b8b2a859f96caf5e262c6ec717dc96a60fa7ef5edceee6"
+    },
+    "casey/ripple": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "de4d0715bede4f31be473a5d80bac62f37093aeeb91f2aede5818dc5b0f418d4",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind. Until then, let's be precise about what we know.",
+      "seconds": 16.3,
+      "attempts": 1,
+      "audioHash": "4de9b2a755215f16c3c126f8cdb8eead4132488a6b73b2304e3f290ded3fe92c"
+    },
+    "casey/willow": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "81d815b2bd37357c23dd4e91ca4218630391e6df88dbc253d74f40620db043cc",
+      "transcript": "That sounds plausible, but plausible isn’t the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I’ll happily change my mind. Until then, let’s be precise about what we know.",
+      "seconds": 14.8,
+      "attempts": 1,
+      "audioHash": "35276e1734995464def798c7cb0eeeee5e875cedddaeef49cd6513b2ba239d14"
+    },
+    "casey/vesper": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "6850a38bec09828f61fe7f85af1ef54b2a287fd637c6ac3e6690299e4fa9730f",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind. Until then, let's be precise about what we know.",
+      "seconds": 18,
+      "attempts": 1,
+      "audioHash": "b39a70fa6c4d4ba325d9d0d1f8f2a8d738ec641d553564b72dd5717da90d9aca"
+    },
+    "casey/stone": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "e9ebf0fbe36ad721af4bf75773cad24f05d41997e7e890903ead91902e4c1ecf",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind. Until then, let's be precise about what we know.",
+      "seconds": 16.9,
+      "attempts": 1,
+      "audioHash": "5aaa6699788a293dc9f661cfa79b273d90aaa0abe196b3b61d54652d0aef4297"
+    },
+    "casey/gleam": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "d4a0b44bfca49b57d278e42286b38cbe53de51f4a89c8a601aaddb6f61cae2ca",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 15.9,
+      "attempts": 1,
+      "audioHash": "da2f4d73617105941deea8a15dce798d2515298929b819bd29f34d58cead119f"
+    },
+    "casey/meridian": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "014511c863694f74a6a0aeb6ad5ae762c79c91a257d43b499f16bfc08742dc0a",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 15.3,
+      "attempts": 1,
+      "audioHash": "26d3ba72932102274fe37f0b4a4f7909b0cfe28a611a46b6668cbe5b3e4d2708"
+    },
+    "casey/bossa": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "6e2eaf6f17b03423a8d01abd562a3bdca45729a21e0713942a46e56200789f0c",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 15.3,
+      "attempts": 1,
+      "audioHash": "3383c039e31bf032d9d511a8afd57b4bb114ab7944bb9641760db59a2dadb6e5"
+    },
+    "casey/tempo": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "ede6dbf1259b01f3b71f6a14bcf126d4de42f723519b9709c195780749d9eacd",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind. Until then, let's be precise about what we know.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "bd6eb6ad71c33a240c0fe38a16de58e15129e92984b2ff6fa07f35d5762172e3"
+    },
+    "casey/delta": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "b4240d5e3c7c62774a7d729fdfad4cf989560e9570161f0f1c0043c30d2b33a9",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 15.9,
+      "attempts": 1,
+      "audioHash": "e7518527d8310db5646bafd169628cec7cfa39d826a5dad677cf6e2bf705f75b"
+    },
+    "casey/beacon": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "72a42a200a6bbaf3b1eeec17e246ceffba79e6f475e4dbe1abd2959fa8d9b92e",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I’d test that. Show me the result and I’ll happily change my mind; until then, let’s be precise about what we know.",
+      "seconds": 19.9,
+      "attempts": 1,
+      "audioHash": "7718f562a69dd3beca2d7acefc27735c28c0eb9c039e637b2016b1a6920151a9"
+    },
+    "harper/alloy": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "da6af3b5ad8cde462f353492c803e9d3866db0e8aa9c695e32f273c810c9b6da",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.5,
+      "attempts": 1,
+      "audioHash": "c128a84a0579e2f52f61ccbaf9071daae12e9fdbd538717177da7405407d5c71"
+    },
+    "casey/cinder": {
+      "sampleHash": "18374d24d975f20f5d0c5ed0e1b66b8fcb3ec9b421a23020e1c6024c4ae9ded0",
+      "sourceHash": "11955f125552df836486ee1207a178012bf976753e5dd06e662d02e48bcbcdd4",
+      "transcript": "That sounds plausible, but plausible isn't the same as supported. Which assumption is doing the most work here? If we tested only one thing this week, I'd test that. Show me the result, and I'll happily change my mind; until then, let's be precise about what we know.",
+      "seconds": 17.2,
+      "attempts": 1,
+      "audioHash": "cbbdb02bb55cb5923bbdcb44155077775679fd996f7dfa33ab0559f188587e55"
+    },
+    "harper/ash": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "ca35895bbdc45cb5356e858f26abb12c99a5c5f6d2d4c9c4066b9e282a667627",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 15.5,
+      "attempts": 1,
+      "audioHash": "f09ca02fbf4c8cfa30d20a62be60c704ed454cb3e79b0231d9ed08e8788829ba"
+    },
+    "harper/ballad": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "274a6d184c301f298d9260fa620c96d3c767289d6a64a55d81b5566132215ca5",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.5,
+      "attempts": 1,
+      "audioHash": "ef99df02e53d37640aa7a20cf40a0b8fe9b84a1f31a77ec9a8b4e356a1fb1b1d"
+    },
+    "harper/echo": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "e97b36cfc7fdcaeb90a4296fca7d7941a1433b7ca0aa1adb59cc9ba9e5bada4d",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.6,
+      "attempts": 1,
+      "audioHash": "a0963042a7f0ab1b42665c93bed4ad14f0fe8bd14b5fac86b4aed0bdc01e198e"
+    },
+    "harper/coral": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "6f821b57d9f3fecdfc2265ecfbffd01ee20a7b005a4ce3dc42bf4c94f04ed433",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 14.1,
+      "attempts": 1,
+      "audioHash": "1b0cc274401712da7a9030c0bd34e9834604b0485720dab3ede4e68b15092c56"
+    },
+    "harper/shimmer": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "39c562c3672c52082c241fe2409602c706675c69fe8dfb857d6fd389dc71f2ce",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.9,
+      "attempts": 1,
+      "audioHash": "2098c801eeb2f6e572916ca1ddd98032b7b0af229c10774cd4c5e1ad42528ed9"
+    },
+    "harper/sage": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "2479e7be3d474717b68cf05a8d833f694d5f7ee91d545ab183f386407edbc3db",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 15.3,
+      "attempts": 1,
+      "audioHash": "585cdec7f7c193cc5e0decae38ec129a772826564b2d883a1ed5152b2ad0ca9c"
+    },
+    "harper/verse": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "53a9353a0c9fd20ae7ae26931f5427bed5228fe34fe1b96f252f88005a9bbc70",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 14.4,
+      "attempts": 1,
+      "audioHash": "2762ff1fead359f4b96c1d9f52edf93022f7cc60e3dc7ffbee844aa058637634"
+    },
+    "harper/marin": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "afb4f7ee687d7875e30913cfb5fb76e93cfcab406b3b9ebcb63876d831511d06",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 12.6,
+      "attempts": 1,
+      "audioHash": "7fc42b331c5d58e94aeb41e0753698363a6f269c341b684dc7bb8896b8b3d54b"
+    },
+    "harper/cedar": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "a6da41e83449af85f98cadad42f193d0d106b8f13e170770ff43b8c7f8ac3681",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 12.5,
+      "attempts": 1,
+      "audioHash": "1a2147f45a39e60ba5e81a1e6e2413df51fe447ad886d60b56f89e74e14ee15e"
+    },
+    "harper/quartz": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "b412acb4d2133727263b5df7335e8cfca3adafec008395b0acf0d0345736a204",
+      "transcript": "Okay, I think I know where you're going. Wait, no. I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.5,
+      "attempts": 1,
+      "audioHash": "63f86410e90742add6bcc6f432108d3cfc38c659bba9ed7d669e3af0981443f3"
+    },
+    "harper/ripple": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "191c21705d58d3c65af13ca3f1a046d8bb396385a76be7804300b311ea7a706e",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 14.1,
+      "attempts": 1,
+      "audioHash": "645bee1cfb666b99f017812f7fb60b7cd6baf109e2a21b6402c9739338c619c2"
+    },
+    "harper/vesper": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "7249e362c23dd387bb3dedee7f1b238a49359ad2e273401be7c8191f4649c050",
+      "transcript": "Okay, [sigh] I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.7,
+      "attempts": 1,
+      "audioHash": "2748655bff559fbff5fa4461a9440aa581d5ac790dd5a64a2018d5de37b5f333"
+    },
+    "harper/willow": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "379f8e79a193537a3c2cba2c17e749da749062f3ab3f0a9218ac438a37b68f4d",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 12.8,
+      "attempts": 1,
+      "audioHash": "8b3b189ac3199c53503ee097b35e3759432a5035ed0f4f105f68cce970be41b2"
+    },
+    "harper/stone": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "eae4c273712658c5f7c11367211b252f260af684e9a417533942049a5bfd7134",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.9,
+      "attempts": 1,
+      "audioHash": "a0061b35b899f6d1968146f5650e75f32a0b4da4d9fcf5474446594230a4ecc1"
+    },
+    "harper/gleam": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "599a9443fb9ccd23d61b88976a10ee91b303ad82e7ec63df846601142b56f397",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.8,
+      "attempts": 1,
+      "audioHash": "0d7f67f686d7b54466804dbb903c7d87c9f37c2beda0990717d2999a30dbedd7"
+    },
+    "harper/meridian": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "403e764246f634affcc6c9e93e808948303b01480256de8129eeef665d3dd96f",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right? Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.3,
+      "attempts": 1,
+      "audioHash": "de3d3d4edf59db12c7a149c559b3cf19f0601e29d4a98cd0a8a027113bd02e02"
+    },
+    "harper/tempo": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "5772a962b0637542a0c982b44861d495026443300990e5a80f935f2f567784ce",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 12,
+      "attempts": 1,
+      "audioHash": "229b3d11b49be0d48e8d890cc26d6a6ade0209e615b257a4362e1f55d775c3d9"
+    },
+    "harper/beacon": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "4595d8f47002cdfae01997d73293d42b08dacef377b8c736c9591b19b6fa70e0",
+      "transcript": "Okay. I think I know where you're going. Wait, no. I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13,
+      "attempts": 1,
+      "audioHash": "a41e1cd5a2a7ce5557970c5afa1d4a3f417da6b195ea6565bad1abdaeb21c0d8"
+    },
+    "harper/bossa": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "0f502b701a26582135fc4ca74f399080a653cd5d05463947391812aa4ad935b7",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 14.8,
+      "attempts": 1,
+      "audioHash": "ca0543677db9bb6d357073538ea0b650776e4e9c577ad64418157b93aaa4a5cb"
+    },
+    "harper/delta": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "47b4d6b929216ada3ed8dd9634c202b116845b08352b6c5e47deeb262ab61fc4",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.4,
+      "attempts": 1,
+      "audioHash": "e4aea3f50ceb98ff6aedf5076342268fe43b2a42a2e3dc490fc58305ca3b71d2"
+    },
+    "harper/cinder": {
+      "sampleHash": "ae6535941cb50a12475c080e1f5de94872961fc98a9aed2e79ea9d4e18b5a57d",
+      "sourceHash": "ac6434f752de4d73268f6c54f7fd90bdd5f493fe146c2b3fb40c747121160446",
+      "transcript": "Okay, I think I know where you're going. Wait, no, I jumped ahead. You're talking about the approval process, not the delivery team. Right. Give me the one decision you need from me today. I've got another call soon, but you have my attention.",
+      "seconds": 13.2,
+      "attempts": 1,
+      "audioHash": "22dec3a009005c54d1c63bc8dab1e3a5b89fd9082141593205e7e27375664782"
+    },
+    "quinn/alloy": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "64898afa224631eea0567aeb8e5440e6e048d8bfd0d6662f4834023c62188419",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "29b8f19f1437a8a7c00cad045abbd80f07e796b28c077589277fd90340221bfe"
+    },
+    "quinn/ash": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "f5ba38eb8ce8011f84fe6d73dc76b3b402071ef01bbd21b635b7c004684443ba",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 18,
+      "attempts": 1,
+      "audioHash": "0755328439f1b406b24bbfbecabe18891ae5e1c308a1bff8f32ea3845235dd92"
+    },
+    "quinn/ballad": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "ae82542cb6f89c345471b7e3808b478dd68dd09a88cff1b2d8beeb58915f154c",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 17.8,
+      "attempts": 1,
+      "audioHash": "3bf731840a278907054ac6b00b3af488d47a67df372c61221a8f95d8913f76d3"
+    },
+    "quinn/coral": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "684f677a313ec7185580a8750cc15130efa97c13dccbc208af8efbf262f31b56",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 17.8,
+      "attempts": 1,
+      "audioHash": "64f6245241c1e95c064c61cebb59f9899ecbc39fde32e4e7f098870e1a82dd26"
+    },
+    "quinn/echo": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "c431b6f70d87bd47d793cfd6145b1276c3f38c461a6dc31ad4a2a3933f43a5ce",
+      "transcript": "I can see why that sounds appealing. The question I’ll get upstairs, though, is who owns the risk if the plan changes. I’d rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.8,
+      "attempts": 1,
+      "audioHash": "08469841209213cfdfcce5b377a414f718b532b00c9c54e7d063e9799326e821"
+    },
+    "quinn/shimmer": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "48787235ed0ac563adae94d3a57d415ae0963f39f2c6484c99df59e08967cbc0",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 15,
+      "attempts": 1,
+      "audioHash": "c314a5ea183f50ec74895bd3e75d726a04c393b7b9d4c1624960bf844dbc7529"
+    },
+    "quinn/sage": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "e4d2d66a97fdd6683a99192ab99dd5bf22f04005f6ca2a1e85733251a7155216",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 19.9,
+      "attempts": 1,
+      "audioHash": "6675083432fa324101598f76dd1d7c3e51e81e7d78c328c341f386c1ee2ca3a2"
+    },
+    "quinn/verse": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "81161be653d9127dd2e299e74932347dbb0664f747065925cc6aacb0e6b0bfcf",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 18,
+      "attempts": 1,
+      "audioHash": "5ba98aabd5406f6dd7e95fb5aaa4a1c6397ccdf11676d8342081ac5c7e6ea758"
+    },
+    "quinn/cedar": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "109c05c52978d11e96e7639d72309d7dc83f10a6266f6d3554297294e51fcd76",
+      "transcript": "I can see why that sounds appealing. The question I’ll get upstairs, though, is who owns the risk if the plan changes. I’d rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 14.9,
+      "attempts": 1,
+      "audioHash": "7f5f1551827278d56f7302e5092a0473d68f14ec88ca1c161cd5129921f3cd99"
+    },
+    "quinn/marin": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "103e511c04e2f1a5c88b0cef6b905d142d1f7d677592c42c2bcc8ffa00d2d78d",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 17,
+      "attempts": 1,
+      "audioHash": "e2b08e1c968474a678906ea838645ce9cffa793d85c1b33b4a4fe6d7e4676b05"
+    },
+    "quinn/quartz": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "4b1dd4e120512e733eb4907c4a6e1c474791d6a5a1bdc5946515fb4325d3075f",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 17,
+      "attempts": 1,
+      "audioHash": "2f97740fcba21e8dc34e69603641683b3c5cb1258cbfbcb2c400fc874cb245a6"
+    },
+    "quinn/ripple": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "80e9a210a1ddd37cb23ad6df6c1cfd7960898ab2608fe9a696abbb75e5211192",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 17.3,
+      "attempts": 1,
+      "audioHash": "5a416fff73457d9a1805dfc7fbca5af17a16c6e37d12767d864c332b8077f9bc"
+    },
+    "quinn/vesper": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "7a68efd695a2d4745abb407894fdcbb4b22bdd8802ff27d0722895c2197694b9",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know , with a clear owner for what comes next.",
+      "seconds": 17.2,
+      "attempts": 1,
+      "audioHash": "afe545f60ec0d24951e4cf7ed51bc8330414688b4797c3d10b41079f70554fe0"
+    },
+    "quinn/stone": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "3020728dfa7e78be5eed14dfad09013179c9cbd18069dbe95898051a4e262e7a",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 15.6,
+      "attempts": 1,
+      "audioHash": "b1b1070adf11e7392ac8d94fcfed7450deefa4aaee62a5bd9fa7b81a9d672e7a"
+    },
+    "quinn/gleam": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "a6bbd2494ab8a9279c76cd8a1436c2271d338b551048642d11c4cbd4e0a5c294",
+      "transcript": "I can see why that sounds appealing. The question I' ll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 15.1,
+      "attempts": 1,
+      "audioHash": "814f7c7d86890933c765975a8f64af993213bf0db69d40ba8e2741efdfe30dd1"
+    },
+    "quinn/willow": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "f9b3e336b14718b03d02396d72e3331b2949bd501ac2ff1eb1479617de2f5e50",
+      "transcript": "I can see why that sounds appealing. [breath] The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.9,
+      "attempts": 1,
+      "audioHash": "8a42c35a40eb76c7f1d4b4c21a1d48070f598adc93f55370a5c7acc99a4565ca"
+    },
+    "quinn/meridian": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "ebe35474b1f8c4b02daba4a5121d394eb8a33b8bca1bbc876238896045744595",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.9,
+      "attempts": 1,
+      "audioHash": "4848efe8e51324d5f3bdbc537e37e81bea06e7350940ab2ed99b4fa3b254caf3"
+    },
+    "quinn/tempo": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "b196c2762e54a9e6ffeb4777c21cf8c9ff968389f34ebbbfdbd4b97188b0dcf2",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.1,
+      "attempts": 1,
+      "audioHash": "3a8d62dc7a54d03fd2ef5eda2ed648b63e0b8fbf7dabb3753ade1b835b81fdb5"
+    },
+    "quinn/bossa": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "e3b801ce4193ff301846c725a87d2e06e322ba68927f96c211d61378ff3b6fe9",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 17.8,
+      "attempts": 1,
+      "audioHash": "ae03aa7f59a0ecb94d834695846ab4499f58120bcf58d793274291334b75b46c"
+    },
+    "quinn/delta": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "0f8118ecf4bec4b1f0e56a0884d46ee01a19d2d05d0405ae263db7c89b029b68",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.1,
+      "attempts": 1,
+      "audioHash": "659531be683261094fbc464632d28c06dc76657949d9e0ca7ed105b6cb16657e"
+    },
+    "quinn/beacon": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "ad075c3ff75f7f5809ca3825ab16905a72c3ed4f9f0c37d30544fdc16b7d57e6",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 18,
+      "attempts": 1,
+      "audioHash": "8d623e6750340cf3a28f65be499c954ffed3b97bf5eef82ef0cff03fcb89e4e3"
+    },
+    "quinn/cinder": {
+      "sampleHash": "3fb4cdeb99dec23cc4b419f23e6a5697f496e4cd586fb74843b3001d2944432d",
+      "sourceHash": "1e785008543972c411f8ca385f644b1f837f66e1364d4d55aa35e05633df17cd",
+      "transcript": "I can see why that sounds appealing. The question I'll get upstairs, though, is who owns the risk if the plan changes. I'd rather not put you in a position where everyone hears a different promise. Help me say what we actually know, with a clear owner for what comes next.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "2dcd62492b758baedd55464801b6bafbd9d3aa316402a8650c76f509cf5909ce"
+    },
+    "riley/alloy": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "a849836d268e8056752e672b2a8950d75281085d0bc658ec4b888748ced8ed1f",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 18.2,
+      "attempts": 1,
+      "audioHash": "150004caf111b1b19a15e94ac7ccb1f0e1c5fb2ac804ecde235f13a8ea4e7923"
+    },
+    "riley/ash": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "bcf2d60c087e88c1dc02f3d12fc0c684a69324edcd415cfd07a05cee30130b1d",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 19.6,
+      "attempts": 1,
+      "audioHash": "f8d1cfa58afcfe5d603c360cc1ed7c37448c968e69255d9c042f36fb8b1bc38d"
+    },
+    "riley/ballad": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "a9cd07cfde64a1b4a6fbd0bc6b30867072b85e574cc408371b0bbc3f7b53ef90",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 19,
+      "attempts": 1,
+      "audioHash": "ea7aece7e1a7821079305686610dfe339c121812d90445e7c4160056bb2ef495"
+    },
+    "riley/echo": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "9446b9d111c2c760177d00fee2f23d9368d85b2a3cc3f16003a6c16b8e7b51f7",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 18.2,
+      "attempts": 1,
+      "audioHash": "2b53ccff1c4028ad2acef6563edcac5afff3dcebbf802a41ac06d25ea8a744c5"
+    },
+    "riley/coral": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "a1911323372bc66fab9d89fdebc3b197d9290dba9d58a454e34a90a20bd8cbf1",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 20.6,
+      "attempts": 1,
+      "audioHash": "8920b710ea941a497385c326cc6a68377473ad45f0f9ae54dcd24d3fbd5eee84"
+    },
+    "riley/sage": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "c10f68394d14b028c7aa6af6ba3370709e6b16c7990de545c0975e1f9143d278",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 19.9,
+      "attempts": 1,
+      "audioHash": "80befe41e5178824678ae42b3f7936ba0fdddf183088120629f40f5cb48669b6"
+    },
+    "riley/shimmer": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "9b8b24d97c36385496ce0b1e6bf8ad81126a2ef309f0a14f03afb1f2179d3063",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 17.4,
+      "attempts": 1,
+      "audioHash": "c3f9901cbc2bfd0515be15de789172f55bca00544580034dee55f4f299fbb34d"
+    },
+    "riley/marin": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "12f0cc202110e0a45afc5a2f69e238862cdd525376b9c5eacd6a1da18f8408bd",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 15.7,
+      "attempts": 1,
+      "audioHash": "bc35dd7bcf76d39deedf199ea8edb5b5dfe6e5f76ae0460bc5d5c625d36a8c91"
+    },
+    "riley/cedar": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "2cc7520829b04df59d6ac7f911510c0ff7864475d168f7c7ef2e59ef79106c63",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest because I love the bigger picture.",
+      "seconds": 15.8,
+      "attempts": 1,
+      "audioHash": "748d65c0e6f36aa404ede3b06a9d2a38930baf687a49f7ab3dfe88b62477851f"
+    },
+    "riley/verse": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "ee45fd141b1683e734d95726490cae3bf95d6f6b3e939e736ad1789eb6e027d6",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 17.7,
+      "attempts": 1,
+      "audioHash": "ee96f0a36398bd7e82a566b7d4bd8ab4d08c3daabd1e068f31e9a58e7420048e"
+    },
+    "riley/ripple": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "8c105f07afe5cfce17ccf740dec3530e3fa031ab7dab119417b2ec0b39738672",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 18,
+      "attempts": 1,
+      "audioHash": "62a24e3b784378c6b5e2d5f90c461bd53039f961e680d633ec814246edb63c64"
+    },
+    "riley/quartz": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "6b697c0fe40bae89472c82dc5500d0324636b9cb12d782dbb5b97215937b2312",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 18.7,
+      "attempts": 1,
+      "audioHash": "9391df195a32dcf2ef0438ee0ff8f4de13621aa3f4ca6747eb5b4b00dfdf6240"
+    },
+    "riley/vesper": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "d4fe143e7ffdb17ffcb3e6a8f79a3437807afe652ab51a62f715fa3db8755324",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 17.6,
+      "attempts": 1,
+      "audioHash": "24429a12481ad8f1e6644ff88630109e996e084f309dbe180532f0d91a63fce4"
+    },
+    "riley/stone": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "42b9abbf21c7d02ba2102870cd0ed83623bfe34d9296109f9045021d81f10a50",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 17.1,
+      "attempts": 1,
+      "audioHash": "20c725326ca9e063332cdf00c8bf6b8fe41f7ef7ed9df40fe65a410041544a9a"
+    },
+    "riley/willow": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "86e97a3b36afd082901169a0b50d4a44b252ce415aad41ff400de279cc836b20",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Just show me the smallest first step that still leaves room for the rest because I love the bigger picture.",
+      "seconds": 19.2,
+      "attempts": 1,
+      "audioHash": "b2461d254fc4bf36b47636e557581b8e608ba0743311baf5a11e67e8d84abbc8"
+    },
+    "riley/gleam": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "6d1d858e0151fa91061d29e6ed4428379d0750c7c33e85a723619b4505fc31ea",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest because I love the bigger picture.",
+      "seconds": 19.1,
+      "attempts": 1,
+      "audioHash": "280603047117ef2a222ab82e4ee7f23425e3432c1e5221b33d9bd68ec671fb33"
+    },
+    "riley/bossa": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "a99c629d7ff931bd897b3a41d970f1bf0ae4d21f05411ebbc32c003983e60fdf",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 17.2,
+      "attempts": 1,
+      "audioHash": "d64d98335752ab39e3983b813fbdbccda85fa0608a8e79060891bbefac36a078"
+    },
+    "riley/meridian": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "e04dfbc8b2d2d081509a91182b1891fc0ee8f065aceec0082eea564e081b14ed",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I’m adding too much again, um, show me the smallest first step that still leaves room for the rest because I love the bigger picture.",
+      "seconds": 20,
+      "attempts": 1,
+      "audioHash": "04b4b4e19149e55bab80749ec1a1215cb097ead14e8bf91e43f0e79dd7436de2"
+    },
+    "riley/tempo": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "fca06819e07d0114bb4260f506b6478967e4ceb920704348c5a07fb4e1933e2d",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 18.4,
+      "attempts": 1,
+      "audioHash": "5e60e1d72537e5f96a6ea0d9ebf9fb1021c6ee9e999f63755fb141f21ff5be2b"
+    },
+    "riley/beacon": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "f193e5dbc613fee7e576198e5113b483085a86997175aa65715355470cb79748",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the big picture.",
+      "seconds": 18.1,
+      "attempts": 1,
+      "audioHash": "5ab5d131287a38b30bae268337fcb5cfdf8d29528b8e4ba375ec0be4ad4b24e2"
+    },
+    "riley/delta": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "c5c2ef63bc729b06d87a8af36d32028101b3810c409fad1dbc5198254775c37a",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 18.9,
+      "attempts": 1,
+      "audioHash": "169fce897396f9f63ec84a6556cc7b75e124baed09b8c6767906e10518a0977e"
+    },
+    "jamie/alloy": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "fbcd6119c63f6b7ff9294327221f44c8f83cb7281f0c83c0c3fea10c867f0880",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15,
+      "attempts": 1,
+      "audioHash": "d6fbacc5a84f3a6d91cccdca1363cdeebba4b759e7ce78abdf5c10d6449c5cb6"
+    },
+    "riley/cinder": {
+      "sampleHash": "3e8569abc42cf91fb681e9fdee0c33cff0ab6f0ebc684b6ce606aedc0ead99c1",
+      "sourceHash": "a14e98ef2f49de61f709f72785608f5dcc22a722d751267290cc007e60918131",
+      "transcript": "Oh, this could connect beautifully with the other ideas we've been discussing. We could add a dashboard, bring in the handoff, and maybe expand the whole experience. Actually, I know I'm adding too much again. Show me the smallest first step that still leaves room for the rest, because I love the bigger picture.",
+      "seconds": 20.3,
+      "attempts": 1,
+      "audioHash": "4fc2f5adbadc62761257d409b68f878bda073c1cf8c31b586385333b8a952879"
+    },
+    "jamie/ash": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "c390d4438690c5a21cfd6a3c95945808c95e34107016f6cd96a50d7c1f1f1fb9",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 16.5,
+      "attempts": 1,
+      "audioHash": "3c2ea0ec47f02edfe35be3f4befd59a29c836ab77d447ad938267838e8d90c38"
+    },
+    "jamie/ballad": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "79e9aa37ea56394840a8d8107b767be7a3d53cd3c7399741bfef93d7de739534",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.4,
+      "attempts": 1,
+      "audioHash": "bdef1b0332a5107508f9f1e68a60dbf5c358a9340310e286645e418784ec33ba"
+    },
+    "jamie/coral": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "8faebf556c3f1894a5147bf1d8306ad25131612f269cca5bd4853ef9e8c06b50",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 14.1,
+      "attempts": 1,
+      "audioHash": "1afac6acb616990cd4a2617a12d985dff5259028760d420e9f8b4e1cb906e0bf"
+    },
+    "jamie/echo": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "05ac467ad1cd4bbb731968b9913e0c573f39ca938bd2c4173a2cf70f4255ee90",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 14.7,
+      "attempts": 1,
+      "audioHash": "062f928ff570738bb63d2206e90c847835d0de1ba0005f1a47c884cad1cf8636"
+    },
+    "jamie/sage": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "c6afe708a54816967f3e221799d01d00fef8178d332bbb47332958d7a1614103",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 16,
+      "attempts": 1,
+      "audioHash": "e75eaeef3878cc0eb90daae408e0e2c3356ca96b6eeb06980959e3bed939f2ad"
+    },
+    "jamie/verse": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "75f480f039bf4330a66013bfe20df97332c508978c9c2480c0173f39f3a0eb09",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 12,
+      "attempts": 1,
+      "audioHash": "b9e81cee246adfc6769f4c075056517aee4e4569d06f389411858dfc2caf82b4"
+    },
+    "jamie/shimmer": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "8d8232a1301f69010e6699e09b7a61c3d10f74ef9cc560138be0ecc1fee88a0b",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.1,
+      "attempts": 1,
+      "audioHash": "9736690ef69a3cdcee50091049e4225dff8a680801541b38ab5b0ceebe07717a"
+    },
+    "jamie/marin": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "6cc563ad5d2b9456c53d3bb06b3f8c2427980e5eaa769ade5d4ec7351994927a",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 13.2,
+      "attempts": 1,
+      "audioHash": "f0cf4ae38f3a2ce6160c720c9e407270b49ea4aa72946ee0946cf94d61a3f79e"
+    },
+    "jamie/quartz": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "29fd2bc20e18f22f3a82e4ec7c8e95dbd6d7e5ecbc4331e81cc30cdb6e20ec11",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.9,
+      "attempts": 1,
+      "audioHash": "e6b4df1c73ced2266869776db7f896acd2e059a11f9fb4645f9d1661a36ff521"
+    },
+    "jamie/stone": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "bbfced3db89173ebab8727b115a032c702bab26b7f7ae07706eeb515e5bca0eb",
+      "transcript": "Oh, that's a thoughtful proposal and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 13.7,
+      "attempts": 1,
+      "audioHash": "cccf0b3e52656ed18f1ee7e2015d1fe4cacc2ea6128e342d187149490647a6b4"
+    },
+    "jamie/ripple": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "d9499a8df1cf6824f48e66961ac008341797237dcc85742d3421dd0cb02a6dc1",
+      "transcript": "Oh, that's a thoughtful proposal and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.4,
+      "attempts": 1,
+      "audioHash": "a515dc77c64424f6c3bfe0f202f0a1d5093ac803efa9201b14529babb5defd1c"
+    },
+    "jamie/vesper": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "a8580b7e35374efc74a94a3dc4a4007af465c7776a33e3e6fe89aea65534476e",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.8,
+      "attempts": 1,
+      "audioHash": "e7735bc2fb012af32d1ecf4f9d60a43da9f51715f6118d890052dee8c9e79979"
+    },
+    "jamie/meridian": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "781a431f728ee7c0b0812f2a50652626c046bd6b5b97868d3c4f9fdd6fa7ec5f",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 13.6,
+      "attempts": 1,
+      "audioHash": "cdbb0d34390d5b2b520ce11d368bc341ee96330ab33a7b0d7885bd8061f1cb08"
+    },
+    "jamie/gleam": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "6a796ff4de98c7212b49ecc8afc49f7d07c328c94cc5af81aae59dd5b7fa1aef",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 14.1,
+      "attempts": 2,
+      "audioHash": "8482a1d705167638bc2657bac277ae3a19e12f9c6162a7707e28a6ebea41befe"
+    },
+    "jamie/beacon": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "5bfd17afe2bdac346fd889a1a9a6223fd2008ab4d7a1208331b45001a1ca93db",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15,
+      "attempts": 1,
+      "audioHash": "671bd85907bcd130642babb2ef69887cd3d71091dfdcbb8625019b333ddd4b76"
+    },
+    "jamie/tempo": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "a7ee4ceec4527cf26d47cca1aa90ee669f4dbf0c6ed3940e983fcae2d9a17277",
+      "transcript": "Oh, that's a thoughtful proposal, and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 15.7,
+      "attempts": 1,
+      "audioHash": "4586362cd2797cb5562a50996454e34b9562ce08591dfa7a21941731f69b1061"
+    },
+    "jamie/delta": {
+      "sampleHash": "a2036f3cb278d8e5df35edc8e85c3d69043f6dcd695d04a134fe5819467a5ffd",
+      "sourceHash": "62c878a9645a9b57a765fe19bc1ae105974138bbfddb7912722bb35dcbe8a24a",
+      "transcript": "Oh, that's a thoughtful proposal and I can tell you put real time into it. I might just need a little space to think about how it would land with my team. There's one part that doesn't quite feel right yet, but I don't want you to think I'm picking it apart.",
+      "seconds": 19,
+      "attempts": 1,
+      "audioHash": "853bf33882023e614045a68fafa9d21a65513ea23e36df666e14c00cf8a4a46f"
+    }
+  }
+}

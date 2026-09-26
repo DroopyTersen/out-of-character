@@ -108,7 +108,6 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   f.socket.emit(speech); f.socket.emit(speech);
   const result = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
   expect(result.status).toBe('ended');
-  expect(result.voice).toBe('cedar');
   expect(result.finalization).toBe('confirmed');
   expect(result.usageSeconds).toBe(12);
   expect(result.transcript).toHaveLength(1);
@@ -119,17 +118,14 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(f.socket.readyState).toBe(3);
 });
 
-test('happy hour uses the chosen voice and archives it without live or final judging', async () => {
+test('happy hour archives the client voice without live or final judging', async () => {
   let directed = 0;
-  let createdVoice: string | undefined;
   const f = await fixture({ overrides: {
-    createLive: async input => { createdVoice = input.voice; return { session: { id: 'provider-private-id' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } }; },
     evaluateClient: async () => { directed++; throw new Error('Unexpected social director'); },
   } });
   await f.session.fetch(new Request('https://session/start', {
-    method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ ...attempt, scenarioId: 'happy-hour', clientId: 'jamie', voice: 'willow' }),
+    method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ ...attempt, scenarioId: 'happy-hour', clientId: 'jamie' }),
   }));
-  expect(createdVoice).toBe('willow');
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Hi, I’m Jamie. How is your evening?', start_ms: 100, end_ms: 900 });
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Great. What do you do for fun?', start_ms: 1000, end_ms: 2000 });
@@ -144,7 +140,6 @@ test('happy hour uses the chosen voice and archives it without live or final jud
   const ended = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
   await Promise.all(f.pending);
   expect(ended.status).toBe('ended');
-  expect(ended.voice).toBe('willow');
   expect(ended.finalization).toBe('confirmed');
   expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['client', 'trainee']);
   expect(ended.evaluation).toBeNull();
@@ -154,7 +149,7 @@ test('happy hour uses the chosen voice and archives it without live or final jud
   expect(f.row()?.archive_state).toBe('final');
   expect(f.row()?.scenario_id).toBe('happy-hour');
   expect(f.row()?.evaluation_json).toBeNull();
-  expect(JSON.parse(f.row()!.provenance_json).voice).toBe('willow');
+  expect(JSON.parse(f.row()!.provenance_json).voice).toBe('marin');
   expect(JSON.parse(f.row()!.transcript_json)).toEqual(ended.transcript);
 });
 test('normal End keeps a late trainee tail but excludes an unheard client agreement', async () => {

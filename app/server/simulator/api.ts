@@ -1,14 +1,12 @@
 import { z } from 'zod';
 import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/scenarios.server';
 import { BodyError, boundedJson } from '../http';
-import { isLiveVoice } from '../../../core/simulator/voices';
 
 const uuid = z.string().uuid();
 export const startSchema = z.object({
   id: uuid,
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
-  voice: z.string().refine(isLiveVoice).optional(),
   sdp: z.string().min(20).max(60_000).startsWith('v=0'),
 }).strict();
 const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && !!env.OPENAI_API_KEY && !!env.TYPESAFE_API_KEY;

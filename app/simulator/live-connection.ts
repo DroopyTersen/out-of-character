@@ -43,7 +43,7 @@ export class LiveConnection {
     return result;
   }
 
-  async start(scenarioId: string, clientId: string, voice?: string) {
+  async start(scenarioId: string, clientId: string) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (this.ending) { stream.getTracks().forEach(track => track.stop()); return; }
@@ -70,7 +70,7 @@ export class LiveConnection {
       await this.until(pc, 'icegatheringstatechange', () => pc.iceGatheringState === 'complete', 8000, 'Network negotiation timed out.');
       if (this.ending) return;
       this.requested = true;
-      const created = await this.request('start', { id: this.id, scenarioId, clientId, voice, sdp: pc.localDescription!.sdp }) as { sdp: string; snapshot: SessionSnapshot };
+      const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp: pc.localDescription!.sdp }) as { sdp: string; snapshot: SessionSnapshot };
       if (this.ending) return;
       this.callbacks.snapshot(created.snapshot);
       await pc.setRemoteDescription({ type: 'answer', sdp: created.sdp });

@@ -6,15 +6,18 @@ import { GaugeStory, JudgingStory, RaceStory } from '../storybook/reading-storie
 import { PerformanceStory, ResultStory } from '../storybook/performance-stories';
 import '../storybook/workshop.css';
 import { SimulatorVoiceStory } from '../storybook/simulator-voice-story';
-import { publicCatalog } from '../../ai/simulator/scenarios.server';
+import { clients, publicCatalog } from '../../ai/simulator/scenarios.server';
 import { SimulatorDebriefStory, SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
 
-export const loader = () => ({ simulatorCatalog: publicCatalog() });
+export const loader = () => ({
+  simulatorCatalog: publicCatalog(),
+  workshopClientStats: clients.map(({ id, name, stats }) => ({ id, name, stats })),
+});
 
 export const meta = () => [{ title: 'The Workshop — Out of Character' }];
 const stories = [
   { id: 'simulator-selection', label: 'Simulator selection', description: 'Scenario scrolling, client rail, selection transitions, availability, and microphone errors.', component: SimulatorSelectionStory },
-  { id: 'simulator-live', label: 'Simulator conversation', description: 'The production screen with replayable hints, objective completions, skill bars, captions, and connection states.', component: SimulatorLiveStory },
+  { id: 'simulator-live', label: 'Simulator conversation', description: 'The production screen with overlay hints, session brief, transcript, objective completions, skill bars, and connection states.', component: SimulatorLiveStory },
   { id: 'simulator-voice', label: 'Simulator audio', description: 'Replay every speaking, listening, overlap, muted, and connection state. Adjust intensity without a microphone.', component: SimulatorVoiceStory },
   { id: 'simulator-debrief', label: 'Simulator debrief', description: 'Successful and difficult attempts, real evidence, skill gaps, and unconfirmed finalization.', component: SimulatorDebriefStory },
   { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, measured trainee judgments, client interests and fidelity, cue selection, and raw probabilities.', component: SimulatorJudgingStory },

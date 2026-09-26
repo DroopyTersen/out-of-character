@@ -12,6 +12,7 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion });
     const page = await context.newPage();
     const errors = [], api = [];
+    let audio;
     await context.addInitScript(() => {
       window.__micCalls = 0;
       navigator.mediaDevices.getUserMedia = () => { window.__micCalls++; return Promise.reject(new Error('No microphone in workshop')); };
@@ -23,7 +24,7 @@ try {
       await page.goto(`${base}/storybook/simulator-voice`, { waitUntil: 'networkidle' });
       if (width === 1440 && reducedMotion === 'no-preference') {
         // Exercise the production reader with real browser audio, without speakers or a microphone.
-        const audio = await page.evaluate(async () => {
+        audio = await page.evaluate(async () => {
           const { readAudio } = await import('/app/simulator/audio-levels.ts');
           const context = new AudioContext();
           const oscillator = context.createOscillator();
@@ -85,7 +86,7 @@ try {
       check(dimensions.document <= width + 1, 'horizontal overflow');
       check(!dimensions.mic && !api.length && !errors.length, 'unexpected microphone, API, or page error');
       results.push({ width, reducedMotion, pass: true, states: 7, dimensions });
-    } catch (error) { results.push({ width, reducedMotion, pass: false, error: error.message, errors, api }); }
+    } catch (error) { results.push({ width, reducedMotion, pass: false, error: error.message, errors, api, audio }); }
     finally { await context.close(); }
   }
 } finally { await browser.close(); }

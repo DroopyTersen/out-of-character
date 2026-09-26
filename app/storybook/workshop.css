@@ -94,5 +94,11 @@
 .workshop-judge-description h3 { color: #8fe3ca; font-size: 15px; margin: 0 0 10px; }
 
 .workshop-return { background: transparent; border: 0; color: #9ebbd0; padding: 8px 0; font-size: 11px; min-height: 44px; }
+.workshop-client-stats { margin: 14px 0; padding: 12px 16px; border: 1px dashed #39718d; color: #b4cbdd; font-size: 13px; }
+.workshop-client-stats summary { cursor: pointer; min-height: 24px; }
+.workshop-client-stats dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 14px 0 0; }
+.workshop-client-stats dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.workshop-client-stats dd { margin: 0; color: #44efcd; }
+.screen-only .workshop-client-stats { display: none; }
 .screen-only { padding: 0 30px; }.screen-only .workshop-layout { display: block; max-width: 1620px; }.screen-only .workshop-sidebar, .screen-only .workshop-heading, .screen-only .workshop-controls, .screen-only .sim-collection-note { display: none; }.screen-only .workshop-main { padding: 0; }.screen-only .workshop-preview-scroll { overflow: visible; }.screen-only .workshop-preview { width: 100% !important; padding: 0; }.screen-only > .game-header { padding-inline: 0; }
 @media (max-width: 720px) { .screen-only { padding: 0 16px; } }

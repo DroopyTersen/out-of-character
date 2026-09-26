@@ -50,9 +50,9 @@ for (const width of [390, 1024]) {
     const toggle = page.getByRole('button', { name: 'Transcript', exact: true });
     await toggle.focus();
     await toggle.click();
-    const panel = page.locator('.sim-transcript-panel');
+    const panel = page.getByRole(width <= 720 ? 'dialog' : 'region', { name: /Conversation transcript/i });
+    await panel.waitFor();
     check(await panel.locator('article').count() === 9, 'turn 9 transcript did not open');
-    await page.waitForTimeout(500);
     const opened = await panel.evaluate(node => {
       const box = node.getBoundingClientRect();
       return {
@@ -63,9 +63,11 @@ for (const width of [390, 1024]) {
       };
     });
     await page.screenshot({ path: `${output}/transcript-${width}-open.png`, fullPage: true });
-    await page.getByRole('button', { name: 'Close transcript' }).click();
+    await panel.getByRole('button', { name: 'Close transcript' }).click();
+    await panel.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === 'Transcript');
     const closed = {
-      hidden: await panel.count() === 0,
+      hidden: !await panel.isVisible(),
       focusReturned: await toggle.evaluate(node => document.activeElement === node),
     };
     const observations = { opened, closed };

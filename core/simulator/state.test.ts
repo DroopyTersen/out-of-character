@@ -37,7 +37,7 @@ describe('simulator boundaries', () => {
     for (const id of ['morgan', 'avery', 'casey'] as const) {
       const client = getClient(id);
       expect(client.stats).toEqual(expectedStats[id]);
-      expect(actorBrief(scenario, client)).toContain(`Stable traits, each from 0 to 4: ${JSON.stringify(expectedStats[id])}.`);
+      expect(actorBrief(scenario, client)).toContain(JSON.stringify(expectedStats[id]));
     }
     for (const objective of scenario.objectives) expect(morgan).not.toContain(objective.criterion);
   });

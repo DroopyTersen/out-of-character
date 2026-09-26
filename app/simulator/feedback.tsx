@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Lightbulb } from 'lucide-react';
+import { Check, ChevronDown, Lightbulb, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { skills, type Evidence, type FeedbackStatus, type ScenarioSummary, type TraineeEvaluation } from '../../core/simulator/types';
 
@@ -14,6 +14,13 @@ export function SimulatorObjectives({ scenario, evaluation }: { scenario: Scenar
   })}</ol></section>;
 }
 
+export function SimulatorHintToast({ text, concern, delayed, onDismiss }: { text: string | null | undefined; concern: boolean; delayed: boolean; onDismiss: () => void }) {
+  const reduced = useReducedMotion();
+  return <><div className="sim-announcement" role="status" aria-atomic="true">{text}</div><AnimatePresence mode="wait">{text && <motion.aside className={`sim-hint-toast ${concern ? 'concern' : ''}`} key={text} initial={{ opacity: 0, y: reduced ? 0 : -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .18 }}>
+    <Lightbulb size={22} aria-hidden="true" /><div><h2>{delayed ? 'Latest hint' : 'Live hint'}</h2><p>{text}</p></div><button onClick={onDismiss} aria-label="Dismiss hint"><X size={20} /></button>
+  </motion.aside>}</AnimatePresence></>;
+}
+
 export function SimulatorHint({ evaluation, phase = 'live', status }: { evaluation: TraineeEvaluation | null; phase?: 'connecting' | 'live' | 'ending'; status?: FeedbackStatus }) {
   const reduced = useReducedMotion();
   const text = evaluation?.concern ?? (phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : evaluation?.hint ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : status === 'unavailable' ? 'Live feedback is unavailable right now. Keep going; hints and objectives will update if it returns.' : 'Listen for what matters to the client. Your next hint will appear here.'));
@@ -21,11 +28,11 @@ export function SimulatorHint({ evaluation, phase = 'live', status }: { evaluati
 }
 
 const feedbackLabels: Record<FeedbackStatus, string> = { waiting: 'Listening for evidence', current: 'Jev · live', delayed: 'Latest available feedback', unavailable: 'Feedback unavailable' };
-export function SimulatorSkills({ evaluation, status, final = false, recorded = false }: { evaluation: TraineeEvaluation | null; status: FeedbackStatus; final?: boolean; recorded?: boolean }) {
+export function SimulatorSkills({ evaluation, status, final = false, recorded = false, compact = false }: { evaluation: TraineeEvaluation | null; status: FeedbackStatus; final?: boolean; recorded?: boolean; compact?: boolean }) {
   const reduced = useReducedMotion();
-  return <section className="sim-skills" data-status={status}><header className="sim-section-heading"><h2>Your skills</h2><span className={`sim-feedback-status ${status}`}><i />{recorded ? evaluation ? 'Recorded reading' : 'No recording yet' : final && status === 'current' ? 'Final reading' : feedbackLabels[status]}</span></header><p className="sim-scale">0–4 · How your approach is landing</p><div className="sim-skill-list">{skills.map(skill => {
+  return <section className={`sim-skills ${compact ? 'sim-mobile-compact' : ''}`} data-status={status}><header className="sim-section-heading"><h2>Your skills</h2><span className={`sim-feedback-status ${status}`}><i />{recorded ? evaluation ? 'Recorded reading' : 'No recording yet' : final && status === 'current' ? 'Final reading' : feedbackLabels[status]}</span>{compact && <span className="sim-scale sim-mobile-only">0–4</span>}</header><p className={`sim-scale ${compact ? 'sim-desktop-only' : ''}`}>0–4 · How your approach is landing</p><div className="sim-skill-list">{skills.map(skill => {
     const reading = evaluation?.skills[skill.id];
     const value = reading?.value;
     return <details className="sim-skill" key={skill.id} data-unobserved={value == null}><summary><span>{skill.label}</span><strong>{value == null ? '—' : value.toFixed(1)}</strong><ChevronDown className="sim-disclosure" size={16} aria-hidden="true" /><span className="sim-skill-track"><motion.span initial={false} animate={{ width: `${value == null ? 0 : value / 4 * 100}%` }} transition={{ duration: reduced ? 0 : .65, ease: 'easeOut' }} /></span></summary><p>{skill.description}</p>{reading?.evidence ? <EvidenceQuote evidence={reading.evidence} /> : <p className="sim-muted">{!final ? 'Not enough relevant evidence yet.' : evaluation ? 'No relevant evidence was found for this skill.' : 'No assessment was available for this attempt.'}</p>}</details>;
-  })}</div><p className="sim-feedback-note">Based on the conversation transcript. Open a skill to see the evidence.</p></section>;
+  })}{compact && <p className="sim-feedback-note sim-mobile-only">Tap a skill for evidence.</p>}</div><p className={`sim-feedback-note ${compact ? 'sim-desktop-only' : ''}`}>Based on the conversation transcript. Open a skill to see the evidence.</p></section>;
 }

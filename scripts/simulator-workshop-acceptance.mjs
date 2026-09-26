@@ -66,7 +66,11 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
   await test('simulator-live', viewport, async page => {
     const controls = page.locator('.workshop-controls');
     await controls.getByRole('button', { name: 'Next turn' }).click();
-    check(await page.locator('.sim-caption p').innerText() !== 'Say hello when you are ready.', 'next turn did not update caption');
+    await page.getByRole('button', { name: 'Transcript', exact: true }).click();
+    const transcript = page.getByRole(viewport.width <= 720 ? 'dialog' : 'region', { name: /Conversation transcript/i });
+    check(await transcript.locator('article').count() === 1, 'next turn did not enter the transcript');
+    await transcript.getByRole('button', { name: 'Close transcript' }).click();
+    await transcript.waitFor({ state: 'hidden' });
     await controls.getByRole('button', { name: 'Play', exact: true }).click();
     check(await controls.getByRole('button', { name: 'Pause', exact: true }).isVisible(), 'play did not change to pause');
     await page.waitForTimeout(1900);
@@ -85,9 +89,9 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       return Math.abs(fill / track - reading / 4) < .03;
     });
     await page.getByRole('button', { name: 'Transcript', exact: true }).click();
-    check(await page.locator('.sim-transcript-panel article').count() === 9, 'transcript did not open with nine turns');
-    await page.getByRole('button', { name: 'Close transcript' }).click();
-    check(await page.locator('.sim-transcript-panel').count() === 0, 'transcript did not close');
+    check(await transcript.locator('article').count() === 9, 'transcript did not open with nine turns');
+    await transcript.getByRole('button', { name: 'Close transcript' }).click();
+    await transcript.waitFor({ state: 'hidden' });
     await controls.getByLabel('Connection').selectOption('connecting');
     check((await page.locator('.sim-speaking').innerText()).includes('Connecting'), 'connection state absent');
     await controls.getByLabel('Connection').selectOption('live');

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLoaderData } from 'react-router';
-import type { Catalog } from '../../core/simulator/types';
+import { emptySkills, type Catalog } from '../../core/simulator/types';
 import { recordedAttempt, simulatorFixtures } from './simulator-recordings';
 import { SimulatorSelection } from '../simulator/selection';
 import { SimulatorConversation, SimulatorTranscript } from '../simulator/conversation';
@@ -8,6 +8,7 @@ import { SimulatorDebrief } from '../simulator/debrief';
 import { SimulatorObjectives, SimulatorSkills } from '../simulator/feedback';
 import '../simulator/simulator.css';
 import { illustrativeLevels } from './simulator-voice-story';
+import { SimulatorClientStats } from './simulator-client-stats';
 
 const useCatalog = () => (useLoaderData() as { simulatorCatalog: Catalog }).simulatorCatalog;
 
@@ -144,6 +145,7 @@ export function SimulatorSelectionStory() {
           Toggle microphone error
         </button>
       </div>
+      <SimulatorClientStats clientId={clientId} />
       <SimulatorSelection
         catalog={catalog}
         scenarioId={scenarioId}
@@ -166,7 +168,18 @@ export function SimulatorLiveStory() {
   const [phase, setPhase] = useState<'connecting' | 'live' | 'ending'>('live');
   const [feedback, setFeedback] = useState<'recorded' | 'delayed' | 'unavailable'>('recorded');
   const [muted, setMuted] = useState(false);
+  const [hintPreview, setHintPreview] = useState('recorded');
   const { snapshot, scenario, client } = recordedAttempt(catalog, fixture, playback.step);
+  if (hintPreview !== 'recorded') {
+    const hints: Record<string, string> = { sample: 'Ask how the document problems affect Priya’s team.', another: 'Find out who else needs to be involved in the next step.' };
+    snapshot.evaluation = {
+      revision: playback.step, skills: emptySkills(), objectives: [], model: 'illustrative', durationMs: 0,
+      ...snapshot.evaluation,
+      hint: hints[hintPreview] ?? null, hintId: hints[hintPreview] ? `preview-${hintPreview}` : null,
+      concern: hintPreview === 'concern' ? 'You made a commitment before checking the delivery impact. Clarify the boundary with the client.' : null,
+    };
+    snapshot.feedbackStatus = 'current';
+  }
   if (feedback !== 'recorded') snapshot.feedbackStatus = feedback;
   if (feedback === 'unavailable') snapshot.evaluation = null;
   const speaker = snapshot.transcript.at(-1)?.speaker;
@@ -206,9 +219,12 @@ export function SimulatorLiveStory() {
           </select>
         </label>
         <Playback playback={playback} max={fixture.transcript.length} />
+        <label>Hint preview<select value={hintPreview} onChange={event => setHintPreview(event.target.value)}><option value="recorded">Recorded coaching</option><option value="sample">Sample hint</option><option value="another">Another hint</option><option value="concern">Concern</option><option value="none">No hint</option></select></label>
       </div>
-      <p className="sim-collection-note">Recorded Jev checkpoints; illustrative audio activity. No live connection.</p>
+      <p className="sim-collection-note">Recorded Jev checkpoints; illustrative audio activity{hintPreview !== 'recorded' ? ' and coaching preview' : ''}. No live connection.</p>
+      <SimulatorClientStats clientId={client.id} />
       <SimulatorConversation
+        key={fixtureId}
         scenario={scenario}
         client={client}
         snapshot={phase === 'connecting' ? null : snapshot}

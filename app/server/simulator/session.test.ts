@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
-import { emptySkills } from '../../../core/simulator/types';
+import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
 import { LiveSessionGone } from './live.server';
 
 // Bun cannot load the Workers runtime. Substitute only its base-class/storage
@@ -21,6 +21,7 @@ async function waitFor(check: () => boolean) {
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
 const request = (action: string, cap = capability) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(attempt) : undefined });
+const activityPoll = (active: boolean, audio = false) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio }) });
 
 function archiveDatabase() {
   const sqlite = new Database(':memory:');
@@ -182,7 +183,7 @@ test('normal End keeps a late trainee tail but excludes an unheard client agreem
     expect(result.finalization).toBe('confirmed');
     expect(result.transcript.map((item: { speaker: string }) => item.speaker)).toEqual(['trainee']);
     expect(graded.map(item => item.speaker)).toEqual(['trainee']);
-    expect(result.evaluation.objectives.find((item: { id: string }) => item.id === 'next-step').achieved).toBe(false);
+    expect(result.evaluation.objectives.some((item: { id: string; achieved: boolean }) => item.id === 'next-step' && item.achieved)).toBe(false);
   } finally {
     f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
     await ending;
@@ -277,16 +278,88 @@ test('server alarm closes abandoned practice without browser cooperation', async
   expect(result.finalization).toBe('confirmed');
   expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(true);
 });
+test('regular conversation activity keeps a practice live beyond ten minutes', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  const startedAt = Date.now();
+  try {
+    for (let step = 1; step <= 22; step++) {
+      setSystemTime(startedAt + step * 30_000);
+      const snapshot = await (await f.session.fetch(activityPoll(true))).json() as Record<string, any>;
+      expect(snapshot.status).toBe('live');
+      expect(snapshot.warning).toBeNull();
+    }
+    expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(false);
+  } finally { await f.session.fetch(request('end')); }
+});
+test('quiet polls warn after three minutes and close after five', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  const startedAt = Date.now();
+  for (let step = 1; step <= SESSION_IDLE_TIMEOUT_MS / 30_000; step++) {
+    setSystemTime(startedAt + step * 30_000);
+    const snapshot = await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>;
+    if (step * 30_000 < SESSION_IDLE_WARNING_MS) expect(snapshot.warning).toBeNull();
+    if (step * 30_000 === SESSION_IDLE_WARNING_MS) {
+      expect(snapshot.warning?.kind).toBe('idle');
+      expect(Math.abs(snapshot.warning.endsAt - (startedAt + SESSION_IDLE_TIMEOUT_MS))).toBeLessThan(10);
+    }
+  }
+  await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+  await Promise.all(f.pending);
+  const ended = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(ended.status).toBe('ended');
+  expect(ended.finalization).toBe('confirmed');
+});
+test('Continue and playing audio each clear an idle warning', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  const startedAt = Date.now();
+  try {
+    setSystemTime(startedAt + SESSION_IDLE_WARNING_MS);
+    expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).warning?.kind).toBe('idle');
+    expect((await (await f.session.fetch(activityPoll(true))).json() as Record<string, any>).warning).toBeNull();
+    setSystemTime(startedAt + 2 * SESSION_IDLE_WARNING_MS);
+    expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).warning?.kind).toBe('idle');
+    expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).warning).toBeNull();
+    setSystemTime(startedAt + 2 * SESSION_IDLE_WARNING_MS + SESSION_IDLE_WARNING_MS - 1000);
+    expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).status).toBe('live');
+  } finally { await f.session.fetch(request('end')); }
+});
 test('a browser that keeps polling still cannot outlive the attempt deadline', async () => {
   const f = await fixture();
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
-  setSystemTime(Date.now() + 601_000);
-  await f.session.fetch(request('poll'));
+  setSystemTime(Date.now() + (SESSION_LIMIT_SECONDS * 1000) + 20_001);
+  await f.session.fetch(activityPoll(true, true));
   await f.session.alarm();
   const result = await (await f.session.fetch(request('poll'))).json() as Record<string, unknown>;
   expect(result.status).toBe('ended');
   expect(result.finalization).toBe('confirmed');
+});
+test('the 60-minute warning and automatic audio drain stay bounded by twenty seconds', async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  const startedAt = Date.now();
+  for (let step = 1; step <= (SESSION_LIMIT_SECONDS - 60) / 30; step++) {
+    setSystemTime(startedAt + step * 30_000);
+    const snapshot = await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>;
+    expect(snapshot.status).toBe('live');
+  }
+  expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).warning).toMatchObject({ kind: 'limit', endsAt: startedAt + SESSION_LIMIT_SECONDS * 1000 });
+  setSystemTime(startedAt + SESSION_LIMIT_SECONDS * 1000);
+  expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).status).toBe('live');
+  setSystemTime(startedAt + SESSION_LIMIT_SECONDS * 1000 + 19_000);
+  expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).status).toBe('live');
+  setSystemTime(startedAt + SESSION_LIMIT_SECONDS * 1000 + 20_001);
+  await f.session.fetch(activityPoll(false, true));
+  await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+  await Promise.all(f.pending);
+  expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ended');
 });
 test('failed provider finalization remains explicit and retains a closure lease', async () => {
   const f = await fixture();
@@ -368,6 +441,47 @@ test('a late same-speaker delta cannot change the passage cited by an objective'
   }
 }, 10_000);
 
+test('the final grade can revoke an earlier historical objective', async () => {
+  let calls = 0;
+  const f = await fixture({ overrides: {
+    evaluateTrainee: async input => {
+      const passage = input.transcript[0]!;
+      return {
+        revision: input.revision, skills: emptySkills(),
+        objectives: [{ id: 'capability', achieved: ++calls === 1, probability: calls === 1 ? .99 : .12, evidence: calls === 1 ? { entryId: passage.id, speaker: passage.speaker, text: passage.text } : null }],
+        hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1,
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {},
+      };
+    },
+  } });
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We could assess document ownership.', start_ms: 0, end_ms: 900 });
+  await waitFor(() => calls === 1);
+  await Promise.all(f.pending);
+  const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(live.evaluation.objectives.find((item: { id: string }) => item.id === 'capability').achieved).toBe(true);
+  const ended = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(calls).toBe(2);
+  expect(ended.evaluation.objectives.find((item: { id: string }) => item.id === 'capability').achieved).toBe(false);
+});
+
+test('the shared consultant ownership correction reaches only the actor', async () => {
+  const f = await fixture({ overrides: {
+    evaluateClient: async input => ({ revision: input.revision, cueId: 'consultant-ownership', cueProbability: .99, fidelity: 1, interests: [1], model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} }),
+  } });
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Please design the consultancy plan for me.', start_ms: 0, end_ms: 900 });
+  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('cue-')));
+  await Promise.all(f.pending);
+  const cue = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))!;
+  expect(cue).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, unknown>;
+  expect(JSON.stringify(snapshot)).not.toContain(String(cue.content));
+  await f.session.fetch(request('end'));
+});
+
 test('one transient judging failure retries unchanged dialogue and stops after success', async () => {
   let calls = 0;
   const f = await fixture({ overrides: {
@@ -384,13 +498,13 @@ test('one transient judging failure retries unchanged dialogue and stops after s
     await waitFor(() => calls === 1);
     await Promise.all(f.pending);
     expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).feedbackStatus).toBe('unavailable');
-    setSystemTime(Date.now() + 4000);
+    setSystemTime(Date.now() + 5000);
     await waitFor(() => calls === 2);
     await Promise.all(f.pending);
     const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     expect(snapshot.feedbackStatus).toBe('current');
     expect(snapshot.evaluation.revision).toBe(snapshot.revision);
-    setSystemTime(Date.now() + 4000);
+    setSystemTime(Date.now() + 5000);
     await new Promise(resolve => setTimeout(resolve, 800));
     expect(calls).toBe(2);
   } finally { await f.session.fetch(request('end')); }
@@ -411,17 +525,17 @@ test('two failed judgments stop retrying until new dialogue earns its own retry'
     setSystemTime(Date.now() + 2000);
     await waitFor(() => calls === 1);
     await Promise.all(f.pending);
-    setSystemTime(Date.now() + 4000);
+    setSystemTime(Date.now() + 5000);
     await waitFor(() => calls === 2);
     await Promise.all(f.pending);
-    setSystemTime(Date.now() + 4000);
+    setSystemTime(Date.now() + 5000);
     await new Promise(resolve => setTimeout(resolve, 800));
     expect(calls).toBe(2);
     f.socket.emit({ type: 'session.input_transcript.delta', delta: 'How much time does it cost?', start_ms: 4000, end_ms: 4800 });
     setSystemTime(Date.now() + 2000);
     await waitFor(() => calls === 3);
     await Promise.all(f.pending);
-    setSystemTime(Date.now() + 4000);
+    setSystemTime(Date.now() + 5000);
     await waitFor(() => calls === 4);
     await Promise.all(f.pending);
     expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).feedbackStatus).toBe('current');

@@ -1,5 +1,8 @@
 export const SIMULATOR_VERSION = 'simulator-v1';
-export const SESSION_LIMIT_SECONDS = 600;
+export const SESSION_LIMIT_SECONDS = 3600;
+export const SESSION_IDLE_WARNING_MS = 3 * 60_000;
+export const SESSION_IDLE_TIMEOUT_MS = 5 * 60_000;
+export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity'; endsAt: number };
 
 export const skills = [
   { id: 'credibility', label: 'Credibility', description: 'Gives this client a reason to trust the advice.' },
@@ -80,6 +83,7 @@ export type SessionSnapshot = {
   status: SessionStatus;
   startedAt: number;
   limitSeconds: number;
+  warning: SessionWarning | null;
   revision: number;
   transcript: TranscriptEntry[];
   evaluation: TraineeEvaluation | null;

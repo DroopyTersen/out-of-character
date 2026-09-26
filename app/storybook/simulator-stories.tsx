@@ -170,7 +170,12 @@ export function SimulatorLiveStory() {
   const [feedback, setFeedback] = useState<'recorded' | 'delayed' | 'unavailable'>('recorded');
   const [muted, setMuted] = useState(false);
   const [hintPreview, setHintPreview] = useState('recorded');
+  const [warningPreview, setWarningPreview] = useState('none');
   const { snapshot, scenario, client } = recordedAttempt(catalog, fixture, playback.step);
+  snapshot.warning = warningPreview === 'none' ? null : {
+    kind: warningPreview === 'finishing' ? 'limit' : warningPreview as 'idle' | 'limit' | 'capacity',
+    endsAt: Date.now() + (warningPreview === 'finishing' ? -1000 : 60_000),
+  };
   if (hintPreview !== 'recorded') {
     const hints: Record<string, string> = { sample: 'Ask how the document problems affect Priya’s team.', another: 'Find out who else needs to be involved in the next step.' };
     snapshot.evaluation = {
@@ -221,6 +226,7 @@ export function SimulatorLiveStory() {
         </label>
         <Playback playback={playback} max={fixture.transcript.length} />
         <label>Hint preview<select value={hintPreview} onChange={event => setHintPreview(event.target.value)}><option value="recorded">Recorded coaching</option><option value="sample">Sample hint</option><option value="another">Another hint</option><option value="concern">Concern</option><option value="none">No hint</option></select></label>
+        <label>Session warning<select aria-label="Session warning" value={warningPreview} onChange={event => setWarningPreview(event.target.value)}><option value="none">None</option><option value="idle">Inactivity</option><option value="limit">One-hour limit</option><option value="capacity">Conversation capacity</option><option value="finishing">Finishing current reply</option></select></label>
       </div>
       <p className="sim-collection-note">{scenario.objectives.length ? `Recorded Jev checkpoints; illustrative audio activity${hintPreview !== 'recorded' ? ' and coaching preview' : ''}.` : 'Illustrative happy-hour conversation; no scoring.'} No live connection.</p>
       <SimulatorClientStats clientId={client.id} />
@@ -236,6 +242,7 @@ export function SimulatorLiveStory() {
         onEnd={() => setPhase(phase === 'ending' ? 'live' : 'ending')}
         onMute={() => setMuted((value) => !value)}
         onAudio={() => {}}
+        onContinue={() => setWarningPreview('none')}
       />
     </>
   );

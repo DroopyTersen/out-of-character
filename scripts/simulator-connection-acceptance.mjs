@@ -5,12 +5,12 @@ const output = process.env.ACCEPTANCE_OUTPUT || 'output/simulator-engine-r1-befo
 const base = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173';
 await mkdir(output, { recursive: true });
 
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 const results = [];
-const snapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 600, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
+const snapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 3600, warning: null, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
 
 try {
-  for (const mode of ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end']) {
+  for (const mode of ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity']) {
     const context = await browser.newContext();
     const page = await context.newPage();
     const pageErrors = [];
@@ -18,7 +18,9 @@ try {
     await context.addInitScript(() => {
       const NativePeer = RTCPeerConnection;
       const NativeAudioContext = AudioContext;
-      const audit = { peers: [], contexts: [], tracks: [], remotes: [], snapshots: [], errors: [] };
+      const audit = { peers: [], contexts: [], tracks: [], remotes: [], snapshots: [], errors: [], players: [] };
+      const NativeAudio = Audio;
+      window.Audio = class extends NativeAudio { constructor(...args) { super(...args); audit.players.push(this); } };
       window.__connectionAudit = audit;
       window.RTCPeerConnection = class extends NativePeer {
         constructor(...args) { super(...args); audit.peers.push(this); }
@@ -30,6 +32,11 @@ try {
         // A real browser audio track without device permission or a paid provider.
         audit.sourceContext = new NativeAudioContext();
         const destination = audit.sourceContext.createMediaStreamDestination();
+        audit.inputGain = audit.sourceContext.createGain();
+        audit.inputGain.gain.value = 0;
+        const input = audit.sourceContext.createOscillator();
+        input.connect(audit.inputGain).connect(destination);
+        input.start();
         audit.tracks.push(...destination.stream.getTracks());
         return destination.stream;
       };
@@ -37,6 +44,13 @@ try {
         const remote = new NativePeer();
         audit.remotes.push(remote);
         await remote.setRemoteDescription({ type: 'offer', sdp: offer });
+        const output = audit.sourceContext.createMediaStreamDestination();
+        audit.outputGain = audit.sourceContext.createGain();
+        audit.outputGain.gain.value = 0;
+        const oscillator = audit.sourceContext.createOscillator();
+        oscillator.connect(audit.outputGain).connect(output);
+        oscillator.start();
+        for (const track of output.stream.getTracks()) remote.addTrack(track, output.stream);
         await remote.setLocalDescription(await remote.createAnswer());
         if (remote.iceGatheringState !== 'complete') await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Loopback ICE timed out.')), 8000);
@@ -49,6 +63,8 @@ try {
     });
 
     let id;
+    let automaticFinish = false, automaticEnded = false;
+    const activityPolls = [];
     let releaseEnd;
     let endRequests = 0;
     let endSeen;
@@ -65,10 +81,14 @@ try {
       if (action === 'end') {
         endRequests++;
         endSeen();
+        if (mode === 'activity') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
         await new Promise(resolve => { releaseEnd = resolve; });
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
       }
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'live')) });
+      if (action === 'poll') activityPolls.push(route.request().postDataJSON());
+      const value = snapshot(id, automaticEnded ? 'ended' : 'live');
+      if (automaticFinish) value.warning = { kind: 'limit', endsAt: Date.now() - 1000 };
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) });
     });
 
     try {
@@ -80,6 +100,48 @@ try {
         void audit.connection.start('sharepoint', 'morgan');
       });
       await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'live'), null, { timeout: 20_000 });
+      if (mode === 'activity') {
+        const waitPoll = async predicate => {
+          const expires = Date.now() + 8000;
+          while (!predicate(activityPolls.at(-1))) {
+            if (Date.now() > expires) throw new Error('Activity poll did not match expected audible state.');
+            await page.waitForTimeout(100);
+          }
+        };
+        await waitPoll(value => value?.active === false && value.audio === false);
+        const quiet = activityPolls.at(-1);
+        await page.mouse.click(5, 5);
+        await waitPoll(value => value?.active === true && value.audio === false);
+        await page.evaluate(async () => {
+          const audit = window.__connectionAudit;
+          await audit.sourceContext.resume();
+          await audit.connection.playAudio();
+          audit.inputGain.gain.value = .2;
+        });
+        await waitPoll(value => value?.audio === true);
+        await page.evaluate(() => window.__connectionAudit.connection.mute(true));
+        await waitPoll(value => value?.audio === false);
+        await page.evaluate(() => { window.__connectionAudit.outputGain.gain.value = .2; });
+        await waitPoll(value => value?.audio === true);
+        await page.evaluate(() => window.__connectionAudit.players[0].pause());
+        await waitPoll(value => value?.audio === false);
+        await page.evaluate(async () => {
+          const audit = window.__connectionAudit;
+          await audit.connection.playAudio();
+          audit.connection.mute(false);
+        });
+        await waitPoll(value => value?.audio === true);
+        automaticFinish = true;
+        await page.waitForFunction(() => window.__connectionAudit.tracks.every(track => !track.enabled));
+        const drain = await page.evaluate(() => {
+          const audit = window.__connectionAudit;
+          return audit.players.every(player => !player.paused) && audit.peers.every(peer => peer.signalingState !== 'closed');
+        });
+        automaticEnded = true;
+        await page.waitForFunction(() => window.__connectionAudit.tracks.every(track => track.readyState === 'ended') && window.__connectionAudit.peers.every(peer => peer.signalingState === 'closed'));
+        results.push({ mode, pass: drain && pageErrors.length === 0, quiet, checks: { interactionResetsIdle: true, speechCountsAsActivity: true, mutedMicStopsActivity: true, audiblePlaybackCountsAsActivity: true, pausedPlaybackDoesNotCount: true, automaticDrainKeepsReplyAudible: drain, automaticEndReleasesMedia: true }, pageErrors });
+        continue;
+      }
       if (mode === 'explicit-end' || mode === 'dispose-during-end') {
         await page.evaluate(() => { void window.__connectionAudit.connection.end(); });
       } else if (mode === 'dispose') {

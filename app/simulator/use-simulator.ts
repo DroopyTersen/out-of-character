@@ -50,5 +50,5 @@ export function useSimulator() {
     setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels(silentLevels);
   }
   function toggleMute() { setMuted(value => { connection.current?.mute(!value); return !value; }); }
-  return { phase, snapshot, error, muted, levels, start, end, reset, toggleMute, playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
+  return { phase, snapshot, error, muted, levels, start, end, reset, toggleMute, keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
 }

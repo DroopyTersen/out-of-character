@@ -30,7 +30,7 @@ Then run four screenshot-driven design iterations independently for each main sc
 | Live practice: four iterations | Complete | [Live practice log](simulator-live-design-loop.md) |
 | Debrief: four iterations | Complete | [Debrief log](simulator-debrief-design-loop.md) |
 | Jev lab: four iterations | Complete | [Lab log](simulator-judging-design-loop.md) |
-| Final acceptance | Pending | Full gate, browser regressions, review dispositions and clean committed tree |
+| Final acceptance | Complete | Full gate, browser regressions, review dispositions and clean committed tree; results below |
 
 ## Engine round 1
 
@@ -91,18 +91,23 @@ The four screen logs retain separate before/critique/change/after records. Itera
 - Selection keeps the approved scenario/client composition and adds preparation inside the existing disclosure. Narrow layouts, client scrolling and keyboard outlines are verified. The neutral scroll hint avoids extra scroll-tracking state.
 - Live practice keeps the client, hints/objectives and seven skills in their approved columns. Unavailable and ending states are truthful, transcript focus returns to its trigger, and mute no longer shifts the audio spectrum for shorter client names. Reduced motion remains supported.
 - Debrief preserves the original scores and evidence while avoiding advice to repeat a harmful guarantee. Shared evidence is quoted once, missing assessment has distinct copy, and one route-level focus rule covers screen transitions without interrupting live updates.
-- The lab exposes recorded provenance, failures and the complete transcript. Completed replay controls are explicit. Its longer phone page is an accepted tradeoff for reading the evidence without a nested transcript scroller.
+- The lab exposes recorded provenance, failures and the complete transcript. Completed replay controls are explicit and retain keyboard focus on the turn slider. Its longer phone page is an accepted tradeoff for reading the evidence without a nested transcript scroller.
 
 ## Final acceptance
 
-Final verification is in progress. Reports are local artifacts under `output/`; the screen logs link the per-iteration evidence.
+Final source checkpoint: `62d19ee`. The repository gate, audio checks, workshop, feedback/failure regressions and all-screen captures passed on this completed source. Connection and original-game checks passed earlier in final acceptance; the subsequent edits only affected simulator focus, lab replay controls and presentation. Reports are local artifacts under `output/`; the screen logs link the per-iteration evidence.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Connection lifecycle | 4/4 modes | `simulator-improvement-final-connection/report.json`; real browser media and WebRTC loopback, controlled HTTP/provider boundary |
 | Original game selection | 2/2 desktop/phone | `simulator-improvement-final-game/report.json` |
 | Repository gate | Pass: 110 tests, 3,739 assertions | `simulator-improvement-final-check.log`; typecheck, tests, build, 15 client assets checked and deployment dry-run |
-| Final simulator browser checks | Pending | Workshop, feedback, failure and audio regressions |
-| Final responsive captures | Pending | Four screens at 1672, 1024, 390 and 320 px |
+| Audio display | 5/5 | `simulator-improvement-final-voice/report.json`; seven states at desktop/phone with both motion settings, plus real oscillator/analyser checks |
+| Simulator workshop | 8/8 | `simulator-improvement-final-workshop/report.json`; four stories at desktop/phone, no API or microphone calls |
+| Feedback regressions | 3/3 | `simulator-improvement-final-feedback/report.json`; transcript focus and corrective debrief |
+| Failure handling | 3/3 | `simulator-improvement-final-failure/report.json`; denied microphone, failed creation and cancellation during pending permission |
+| Final responsive captures | 16/16 | `simulator-improvement-final-design/report.json`; four screens at 1672, 1024, 390 and 320 px, no horizontal overflow, script errors or API calls |
+
+The final visual review retained the approved mockup composition and verified the lab divider, corrective debrief, narrow layouts and voice states. All three engine rounds and all sixteen screen iterations have their own recorded critique and verification. The final read-only Opus review found no substantive code or evidence inconsistency. No further source changes were needed after final acceptance.
 
 Remaining limits are explicit: the final classifier recordings still under-credit some objectives; one challenge has a disputed director expectation; and the single same-WAV immediate-End probe does not establish every timing race. Browser focus, responsive captures and synthetic voice/transcript probes are not physical-device, screen-reader or human-naturalness studies. No deployment or public paid enablement is part of this follow-up.

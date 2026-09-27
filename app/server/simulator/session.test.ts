@@ -151,7 +151,7 @@ test('happy hour archives the client voice without live or final judging', async
   expect(f.row()?.archive_state).toBe('final');
   expect(f.row()?.scenario_id).toBe('happy-hour');
   expect(f.row()?.evaluation_json).toBeNull();
-  expect(JSON.parse(f.row()!.provenance_json).voice).toBe('gleam');
+  expect(JSON.parse(f.row()!.provenance_json).voice).toBe('coral');
   expect(JSON.parse(f.row()!.transcript_json)).toEqual(ended.transcript);
 });
 test('normal End keeps a late trainee tail but excludes an unheard client agreement', async () => {

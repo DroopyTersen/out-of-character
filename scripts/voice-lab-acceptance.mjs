@@ -37,7 +37,7 @@ try {
       await audio.evaluate(element => element.play());
       await page.waitForFunction(() => document.querySelector('audio')?.currentTime > .3);
       await page.getByRole('button', { name: 'Hear current voice' }).click();
-      check((await audio.getAttribute('src'))?.endsWith('/jamie/gleam.mp3'), 'current voice shortcut selected the wrong clip');
+      check((await audio.getAttribute('src'))?.endsWith('/jamie/coral.mp3'), 'current voice shortcut selected the wrong clip');
       await page.waitForFunction(() => document.activeElement?.tagName === 'AUDIO');
       await audio.evaluate(element => element.play());
       await page.waitForFunction(() => document.querySelector('audio')?.currentTime > .3);

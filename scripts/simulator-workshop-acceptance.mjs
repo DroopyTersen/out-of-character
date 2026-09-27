@@ -146,8 +146,8 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await audio.evaluate(element => element.play());
     await page.waitForFunction(() => document.querySelector('.sim-voice-lab audio')?.currentTime > .3);
     await page.getByRole('button', { name: 'Jamie' }).click();
-    await page.getByLabel('GPT-Live voice').selectOption('gleam');
-    check((await audio.getAttribute('src'))?.endsWith('/jamie/gleam.mp3'), 'client or voice selection did not load the matching clip');
+    await page.getByRole('button', { name: 'Hear current voice' }).click();
+    check((await audio.getAttribute('src'))?.endsWith('/jamie/coral.mp3'), 'client voice shortcut did not load the current clip');
     check((await page.locator('.sim-voice-lab-profile').innerText()).includes('Midwestern'), 'selected profile did not appear');
   });
   await test('simulator-debrief', viewport, async page => {

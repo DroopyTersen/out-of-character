@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Latest recorded release: [**`d55033c`**](#ash-briefings-and-quinn-voice-release), deployed September 27, 2026 at 04:43 UTC. All nine scenario intros use Ash and give factual context without tactic coaching; Quinn's default voice is Beacon. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) also remains a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab).
+Latest recorded release: [**`32475bd`**](#shared-practice-links-release), deployed September 27, 2026 at 13:17 UTC. Share a scenario and client directly to their prerecorded intro with Copy link. All nine intros still use Ash; Quinn's default voice remains Beacon.
 
 ## Voice Lab release
 
@@ -222,3 +222,26 @@ This release verifies voice configuration and prepared playback. No new live Qui
 Both browser suites were invoked with `ACCEPTANCE_URL=https://outofcharacter.droopy.dev`. The briefing suite used `ACCEPTANCE_OUTPUT=output/simulator-ash-production-ui bun scripts/simulator-briefing-acceptance.mjs`; its result JSON does not embed the base URL. The Voice Lab result includes the production URL in every case. The deploy command above records the executed invocation; the CLI log contains its output. Opus's read-only release review found no material issue and prompted these evidence clarifications.
 
 Receipts: `output/simulator-ash-release-deploy.log`, `-deployments.json`, `-final-deployments.json`, `-version.json`, `-migrations.log` and `-before.json`. The final fresh deployment lookup again confirms the release at 100% traffic. Only release documentation changed after the deployed source. No branch push or merge was performed. Refresh an already-open simulator tab to load the new recordings and voice default.
+
+## Shared practice links release
+
+Andrew requested deployment of the [shareable practice links](simulator-practice-links.md). A valid scenario/client URL opens the corresponding prerecorded intro directly; the briefing's Copy link action shares the displayed pair. Invalid links return to selection with a notice. Opening a link or finishing its recording does not start a live call; Start conversation remains explicit and respects live availability.
+
+Source **`32475bde66138e3205ca204dce6a2b6bc09273f3`** deployed **September 27, 2026 at 13:17 UTC**. Worker version **`63c038b2-c3ec-4623-ac81-cf910328508c`**, tagged **`32475bd`**, receives **100% traffic**. The executed command was `bunx wrangler deploy --keep-vars --tag 32475bd --message 'Add shareable simulator practice links'`. Existing enabled flags, provider secret names and bindings remain configured. Remote D1 reports no pending migrations.
+
+Try [Morgan's scope scenario](https://outofcharacter.droopy.dev/simulator?scenario=scope&client=morgan). Copy link is the chain icon on mobile. Browser autoplay policy may require pressing Play for the intro.
+
+Accepted production evidence:
+
+- Fresh `bun run check` passes **157 tests / 6,041 assertions**, types, production builds, the privacy scan of **19 client assets**, and Worker dry run. Log: `output/simulator-links-release-check.log`.
+- All **11 HTTPS routes** return 200, including three link URLs (two valid, one unknown) that return HTML. Rendered intros and invalid-link fallback are verified by the browser checks below. The public catalog remains enabled with nine scenarios and seven clients and no private actor fields. All **234 served assets** match the release build byte-for-byte. Report: `output/simulator-links-release-http.json`.
+- Practice-link acceptance passes **5/5 groups** on the first run: direct entry/reload, correct intro and client, blocked autoplay with working replay, actual clipboard round trips, changed selections, invalid links, ordinary and Workshop sharing, disabled Workshop Start and denied-clipboard fallback. Desktop **1440px** and mobile **390/320px** have no overflow, page errors, microphone calls or API calls. Start is above the fold at 390×844. Report and screenshots: `output/simulator-links-production-ui/`.
+- Briefing regression passes **5/5 groups**, including all nine clips at **1440, 390 and 320 pixels**, failure fallback, replay/back and full playback without starting a call. Explicit Start from the shared deployment/Quinn link makes exactly one intercepted microphone request and one session creation carrying that pair. Report and screenshots: `output/simulator-links-production-briefing/`.
+
+Both browser suites ran with `ACCEPTANCE_URL=https://outofcharacter.droopy.dev` and the output paths above. Link results embed the production URL in every case; the briefing result embeds it in the explicit-start case. Ordinary copy uses the real browser clipboard. The denied-clipboard case substitutes only a permission rejection, and microphone/session creation is intercepted. Mobile evidence uses desktop Chromium viewports. No paid voice call or physical-phone test was run for this release.
+
+Opus's read-only release review found no deployment blocker or material overclaim. Applied its clarification separating HTTP reachability from the browser's rendered fallback check, and recorded the initial authentication failure below. The plan and implementation also passed review before deployment. Production checks required no runtime fix or repeat deployment.
+
+The first non-interactive migration check failed because the saved Cloudflare login had expired; this is retained in `output/simulator-links-release-migrations-auth-error.log`. After renewing the existing login, the remote check succeeded with no migrations to apply. No new credential scope or infrastructure change was introduced.
+
+Receipts: `output/simulator-links-release-deploy.log`, `-deployments.json`, `-final-deployments.json`, `-version.json`, `-migrations.log` and `-before.json`. The command above records the executed invocation; the version receipt corroborates its tag and message. Only release documentation changed after the deployed source. No branch push or merge was performed. Refresh an already-open simulator tab to see Copy link.

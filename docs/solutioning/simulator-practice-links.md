@@ -20,7 +20,7 @@ Andrew wants to share a specific scenario and client so the recipient opens dire
 
 ## Scope and checkpoints
 
-Continue in `simulator-role-boundaries` from `ad029bb`, preserving the deployed Ash and Quinn changes. Plan review precedes implementation. No deployment, push or merge is part of this request.
+Continue in `simulator-role-boundaries` from `ad029bb`, preserving the deployed Ash and Quinn changes. Plan review precedes implementation. The original implementation request excluded deployment, push and merge. Andrew subsequently requested deployment; the release is recorded below.
 
 Opus reviewed the plan before implementation and found no blocker. Adopted the simpler initial-load-only state, exact public-ID parsing, SSR-safe clipboard access, selectable fallback URL, explicit disabled Start, blocked-autoplay verification and mobile placement that preserves the primary action. The Workshop now includes an availability toggle for isolated verification. Invalid-link notice uses the existing selection error slot only when there is no session error.
 
@@ -41,4 +41,4 @@ Accepted evidence:
 
 Browser microphone/session boundaries are intercepted, and the clipboard-failure case substitutes only a permission rejection. Ordinary copy uses the real browser clipboard. No paid voice call or physical-phone test was run; mobile evidence uses desktop Chromium viewports. Direct-link audio may require pressing Play because of browser autoplay policy.
 
-Status: implemented locally; not deployed, pushed or merged. Production remains the separately recorded Ash/Beacon release.
+Status: [deployed from `32475bd`](simulator-release.md#shared-practice-links-release) on September 27, 2026 at 13:17 UTC. The local evidence above remains separate from the production acceptance recorded in the release document. No branch push or merge was performed.

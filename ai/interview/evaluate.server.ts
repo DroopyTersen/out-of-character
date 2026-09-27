@@ -4,8 +4,9 @@ import { JEV_MODEL } from '../judging';
 import { emptyInterviewReadings, interviewReadings, type InterviewEvaluation } from '../../core/interview';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import type { TranscriptEntry } from '../../core/simulator/types';
+import { INTERVIEW_CONDITIONS, type DirectorSignal } from '../../core/simulator/director';
 import { evidenceBatches } from '../simulator/rubric';
-import { interviewCues, interviewScenario, interviewers } from './scenario.server';
+import { interviewScenario, interviewers } from './scenario.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
@@ -111,6 +112,10 @@ export async function evaluateInterview(input: Input) {
   };
 }
 
+export function readInterviewerSignals(answers: InterviewAnswers): DirectorSignal[] {
+  return INTERVIEW_CONDITIONS.map(condition => ({ condition, probability: booleanProbability(answers, `director:${condition}`) }));
+}
+
 export async function evaluateInterviewer(input: Input) {
   validate(input);
   const started = performance.now();
@@ -119,9 +124,6 @@ export async function evaluateInterviewer(input: Input) {
     state: state(recentTranscript(input.transcript, 12_000)), questions: interviewerQuestions(),
     abortSignal: input.signal, maxRetries: 0,
   });
-  const selected = choice(result.answers, 'cue', ['no_hint', ...interviewCues.map(cue => cue.id)]);
-  const cueProbability = selected.probabilities?.[selected.choice];
-  if (cueProbability == null || !validProbability(cueProbability)) throw new Error('Interview cue probability is unavailable.');
-  return { cueId: selected.choice, cueProbability, revision: input.revision, model: result.response.modelId,
+  return { signals: readInterviewerSignals(result.answers), revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers };
 }

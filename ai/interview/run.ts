@@ -6,6 +6,7 @@ import { interviewFixtures } from './fixtures';
 import { INTERVIEW_RUBRIC_VERSION } from './rubric';
 
 // Explicit opt-in paid replay. All fixtures are synthetic; this is never called by the app.
+if (!process.argv.includes('--paid')) throw new Error('Pass --paid to run a bounded provider replay.');
 const apiKey = process.env.TYPESAFE_API_KEY;
 if (!apiKey) throw new Error('Load TYPESAFE_API_KEY with bun --env-file=.dev.vars.');
 const only = process.argv.find(arg => arg.startsWith('--fixture='))?.slice('--fixture='.length);
@@ -21,6 +22,10 @@ for (const fixture of fixtures) {
       revision: fixture.transcript.length, apiKey, signal: AbortSignal.timeout(30_000) };
     const participant = await evaluateInterview(input);
     const interviewer = await evaluateInterviewer({ ...input, signal: AbortSignal.timeout(30_000) });
+    const signalProbability = (id: string) => {
+      const signal = interviewer.signals.find(item => item.condition === id);
+      return signal && 'probability' in signal ? signal.probability : null;
+    };
     const heard = participant.objectives.filter(item => item.achieved).map(item => item.id);
     const checks = [
       ...fixture.expected.heard.map(id => ({ name: `heard:${id}`, passed: heard.includes(id) })),
@@ -28,7 +33,8 @@ for (const fixture of fixtures) {
       ...(fixture.expected.highReadings?.map(id => ({ name: `high:${id}`, passed: (participant.readings[id].value ?? -1) >= 2.5 })) ?? []),
       ...(fixture.expected.lowReadings?.map(id => ({ name: `low:${id}`, passed: (participant.readings[id].value ?? 5) < 2 })) ?? []),
       ...(fixture.expected.blankReadings?.map(id => ({ name: `blank:${id}`, passed: participant.readings[id].value == null })) ?? []),
-      ...(fixture.expected.cue ? [{ name: `cue:${String(fixture.expected.cue)}`, passed: (Array.isArray(fixture.expected.cue) ? fixture.expected.cue : [fixture.expected.cue]).includes(interviewer.cueId) }] : []),
+      ...(fixture.expected.present?.map(id => ({ name: `present:${id}`, passed: (signalProbability(id) ?? 0) >= .6 })) ?? []),
+      ...(fixture.expected.absent?.map(id => ({ name: `absent:${id}`, passed: (signalProbability(id) ?? 1) < .5 })) ?? []),
       ...participant.objectives.filter(item => item.achieved).map(item => ({ name: `source:${item.id}`, passed: item.evidence?.speaker === 'trainee' && fixture.transcript.some(entry => entry.id === item.evidence?.entryId && entry.text === item.evidence.text) })),
     ];
     rows.push({ fixtureId: fixture.id, participant, interviewer, checks });
@@ -40,7 +46,7 @@ for (const fixture of fixtures) {
     break;
   }
 }
-await mkdir(dirname(output), { recursive: true });
-await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), rubricVersion: INTERVIEW_RUBRIC_VERSION, rows }, null, 2) + '\n');
+await mkdir(dirname(output), { recursive: true, mode: 0o700 });
+await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), rubricVersion: INTERVIEW_RUBRIC_VERSION, rows }, null, 2) + '\n', { mode: 0o600 });
 if (rows.some(row => row.checks.some(check => !check.passed))) process.exitCode = 1;
 console.log(`Saved ${rows.length} measured synthetic fixture results to ${output}.`);

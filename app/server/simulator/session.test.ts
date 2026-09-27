@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
+import type { DirectorInput } from '../../../ai/simulator/director.server';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
@@ -14,6 +15,7 @@ mock.module('cloudflare:workers', () => ({ DurableObject: class {
 const { SimulatorSession } = await import('./session');
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
 const interviewMigration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
+const interviewInterventionsMigration = await Bun.file(new URL('../../../migrations/0003_interview_interventions.sql', import.meta.url)).text();
 const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_simulator_interventions.sql', import.meta.url)).text();
 afterEach(() => setSystemTime());
 async function waitFor(check: () => boolean) {
@@ -148,6 +150,7 @@ function archiveDatabase() {
   sqlite.exec(migration);
   sqlite.exec(interviewMigration);
   sqlite.exec(interventionsMigration);
+  sqlite.exec(interviewInterventionsMigration);
   let failNext = false;
   let held: { entered: () => void; wait: Promise<void> } | undefined;
   const d1 = {
@@ -210,7 +213,6 @@ async function fixture({ pendingCreation, values = new Map<string, unknown>(), o
   } as unknown as DurableObjectState;
   const session = new SimulatorSession(ctx, {
     OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture', OPENROUTER_API_KEY: 'fixture',
-    SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient || overrides.evaluateInterviewer ? 'true' : 'false',
     SIMULATOR_ARCHIVE: archive.d1,
     ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
@@ -221,7 +223,7 @@ async function fixture({ pendingCreation, values = new Map<string, unknown>(), o
     generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
     recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
     evaluateInterview: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    evaluateInterviewer: async () => { throw new Error('Interview director should be disabled.'); },
+    evaluateInterviewer: async input => ({ revision: input.revision, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     ...overrides,
   });
   await ready;
@@ -333,54 +335,76 @@ test('a failed interview summary remains unavailable while the participant trans
   expect(f.row()).toBeNull();
 });
 
-test('interview director repeats a useful cue only after fresh evidence and its cooldown', async () => {
-  let directed = 0;
-  let simulatorDirected = 0;
-  let generated = 0;
+test.each(['intervene', 'none'] as const)('interview producer %s stays private and uses only the actor lane', async action => {
+  const inputs: DirectorInput[] = [];
+  let summarized = '';
   const f = await fixture({ overrides: {
-    generateDirector: async () => { generated++; throw new Error('Interview producer is not implemented yet.'); },
-    evaluateClient: async () => { simulatorDirected++; throw new Error('Wrong director.'); },
-    evaluateInterviewer: async input => {
-      directed++;
-      return { revision: input.revision, cueId: 'follow-thread', cueProbability: .99, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} };
+    evaluateInterviewer: async input => ({ revision: input.revision, signals: [{ condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateDirector: async input => {
+      inputs.push(input);
+      const result = action === 'none' ? { action, text: null, evidenceIds: [] as [] } : { action, text: 'PRIVATE: Return to the missing access owner.', evidenceIds: [input.transcript[0]!.id] };
+      return { ...result, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
-    summarizeInterview: async () => 'The participant discussed the project.',
+    summarizeInterview: async input => { summarized = JSON.stringify(input); return 'The participant described an access delay.'; },
   } });
-  const cues = () => f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
-  try {
-    await f.session.fetch(request('start', capability, interviewAttempt));
-    await f.session.fetch(request('ready'));
-    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
-    setSystemTime(Date.now() + 2000);
-    await f.session.fetch(activityPoll(true));
-    await waitFor(() => cues().length === 1);
-
-    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen eventually found the owner.', start_ms: 2000, end_ms: 2900 });
-    setSystemTime(Date.now() + 30_000);
-    await f.session.fetch(activityPoll(true));
-    await waitFor(() => directed >= 2);
-    expect(cues()).toHaveLength(1);
-
-    setSystemTime(Date.now() + 91_000);
-    await f.session.fetch(activityPoll(true));
-    await new Promise(resolve => setTimeout(resolve, 600));
-    expect(cues()).toHaveLength(1);
-    expect(directed).toBe(2);
-    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We made the ownership clear for the next team.', start_ms: 4000, end_ms: 4900 });
-    setSystemTime(Date.now() + 2000);
-    await f.session.fetch(activityPoll(true));
-    await waitFor(() => cues().length === 2);
-    expect(simulatorDirected).toBe(0);
-    expect(generated).toBe(0);
-    const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
-    expect(snapshot.coaching).toBeNull();
-    expect(JSON.stringify(snapshot)).not.toContain(String(cues()[0]!.content));
-  } finally {
-    await f.session.fetch(request('end'));
-  }
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start', capability, interviewAttempt));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => inputs.length === 1);
   await Promise.all(f.pending);
-  expect(JSON.parse(f.interviewRow()!.cues_json)).toHaveLength(2);
-  expect(JSON.parse(f.interviewRow()!.provenance_json).directorEnabled).toBe(true);
+  expect(inputs[0]!.audience).toBe('actor');
+  expect(inputs[0]!.objectives).toEqual([]);
+  const cues = f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
+  expect(cues).toHaveLength(action === 'none' ? 0 : 1);
+  if (cues[0]) f.socket.emit({ type: 'session.thinking.appended', client_event_id: cues[0].event_id });
+  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(snapshot.coaching).toBeNull();
+  expect(snapshot.evaluation).toBeNull();
+  expect(snapshot.interview.evaluation).toBeDefined();
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE:');
+  expect(JSON.stringify(snapshot)).not.toContain('signals');
+  expect(f.judged).toHaveLength(0);
+  await f.session.fetch(request('end'));
+  await Promise.all(f.pending);
+  const row = f.interviewRow()!;
+  const records = JSON.parse(row.interventions_json);
+  expect(records).toHaveLength(2);
+  expect(records.every((record: { audience: string }) => record.audience === 'actor')).toBe(true);
+  expect(records.find((record: { source: string }) => record.source === 'director').outcome).toBe(action === 'none' ? 'none' : 'sent');
+  if (action === 'intervene') expect(records.find((record: { source: string }) => record.source === 'director').delivery.status).toBe('accepted');
+  expect(JSON.parse(row.cues_json)).toEqual([]);
+  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ callsByAudience: { actor: 1, trainee: 0 } });
+  expect(summarized).not.toContain('PRIVATE:');
+  expect(summarized).not.toContain('interventions');
+  expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
+  expect(f.row()).toBeNull();
+}, 10_000);
+
+test('End freezes an unfinished interview direction without delaying its summary', async () => {
+  let release!: () => void;
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateDirector: async input => {
+      await new Promise<void>(resolve => { release = resolve; });
+      return { action: 'intervene', text: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+    },
+    summarizeInterview: async () => 'An access delay was reported.',
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => !!release);
+  await f.session.fetch(request('end'));
+  await waitFor(() => f.interviewRow()?.summary_status === 'ready');
+  const archived = f.interviewRow()!;
+  expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'director').outcome).toBe('aborted');
+  release(); await Promise.all(f.pending);
+  expect(f.interviewRow()).toEqual(archived);
+  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'))).toHaveLength(0);
 }, 10_000);
 
 test('happy hour archives the client voice without live or final judging', async () => {

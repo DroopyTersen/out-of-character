@@ -1,14 +1,13 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
 import { evaluateInterview, evaluateInterviewer } from '../ai/interview/evaluate.server.ts';
-import { interviewCues } from '../ai/interview/scenario.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
-import { appendTranscript, canSendCue } from '../core/simulator/state.ts';
+import { appendTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
@@ -21,7 +20,6 @@ if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Erro
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const scenarioId = option('scenario') ?? 'sharepoint';
 const isInterview = scenarioId === INTERVIEW_SCENARIO_ID;
-const interviewDirector = process.argv.includes('--director');
 const clientId = option('client') ?? 'morgan';
 const approach = option('plan') ?? (process.argv.includes('--poor') ? 'poor' : 'good');
 const label = option('label');
@@ -270,12 +268,15 @@ const plan = approach === 'opening' ? { turns: 0, lines: {}, choose: () => null 
 if (!plan) throw new Error(`No rehearsal plan for ${scenarioId}/${approach}.`);
 const scenario = getScenario(scenarioId);
 const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-roleplay-${scenarioId}-${clientId}-${approach}${label ? `-${label}` : ''}`;
-await mkdir(output, { recursive: true });
+process.umask(0o077);
+await mkdir(output, { recursive: true, mode: 0o700 });
+await chmod(output, 0o700);
 const clips = {};
 for (const [id, line] of Object.entries(plan.lines)) {
   const aiff = `${output}/${id}.aiff`;
   const speech = Bun.spawn(['say', '-v', 'Samantha', '-r', '185', '-o', aiff, line], { stderr: 'ignore' });
   if (await speech.exited) throw new Error('Local speech synthesis failed before provider creation.');
+  await chmod(aiff, 0o600);
   const conversion = Bun.spawn(['ffmpeg', '-loglevel', 'error', '-i', aiff, '-f', 's16le', '-ar', '24000', '-ac', '1', '-'], { stdout: 'pipe', stderr: 'ignore' });
   clips[id] = Buffer.from(await new Response(conversion.stdout).arrayBuffer());
   if (await conversion.exited || !clips[id].length) throw new Error('Audio fixture conversion failed.');
@@ -290,29 +291,17 @@ const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { A
 let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
 const observations = [];
-const sentCues = [];
 const used = new Set();
 const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
-const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
+const contextual = new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
 report.interventions = contextual?.records ?? [];
 const close = () => { if (closing) return; closing = true; contextual?.close(); clearInterval(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
-  if (isInterview) {
-    try {
-      const judgment = await evaluateInterviewer({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
-      const cue = interviewCues.find(item => item.id === judgment.cueId);
-      const now = Date.now();
-      const lastSame = sentCues.findLast(item => item.id === cue?.id);
-      const sent = !!(!closing && interviewDirector && cue && (!lastSame || now - lastSame.sentAt >= 90_000) && canSendCue({ id: cue.id, probability: judgment.cueProbability, revision: transcript.length }, sentCues.at(-1) ?? null, true, now, 90_000));
-      report.directions.push({ afterTurn, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
-      if (sent) { sentCues.push({ id: cue.id, revision: transcript.length, sentAt: now }); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }
-    } catch (error) { report.directions.push({ afterTurn, unavailable: true, error: error.name }); }
-    return;
-  }
   if (!contextual.canObserveActor) return;
   const observation = contextual.beginObservation({ audience: 'actor', transcript, revision: transcript.length, capturedAt: Date.now() });
   try {
-    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
+    const evaluate = isInterview ? evaluateInterviewer : evaluateClient;
+    const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
     report.directions.push({ afterTurn, signals: judgment.signals });
     await contextual.observe(observation, { signals: judgment.signals, model: judgment.model });
   } catch (error) {
@@ -324,10 +313,25 @@ async function respond() {
   deciding = true;
   const spoken = report.transcript.filter(entry => entry.speaker === 'client');
   const answer = spoken.slice(outputStart).map(entry => entry.text).join(' ');
-  // The judge observes a frozen passage without making the trainee wait in silence.
-  if (turn) observations.push(observeClient(turn, report.transcript));
   const id = turn < plan.turns ? plan.choose({ turn, answer, heard: spoken.map(entry => entry.text).join(' '), used }) : null;
-  if (!id) { close(); return; }
+  // For interviews, finish a private review before the next participant line.
+  // The final Sam reply is left unprompted so an earlier note has a fair response window.
+  if (turn && (!isInterview || id)) {
+    const observation = observeClient(turn, [...report.transcript]);
+    observations.push(observation);
+    if (isInterview) await observation;
+  }
+  if (!id) {
+    if (isInterview && turn) {
+      // Measure Sam's reply after the last possible note without proposing an
+      // unobservable new note at the moment the rehearsal closes.
+      try {
+        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
+        report.finalObservation = { signals: result.signals, model: result.model, durationMs: result.durationMs };
+      } catch (error) { report.finalObservation = { unavailable: true, error: error.name }; }
+    }
+    close(); return;
+  }
   used.add(id);
   const clientAudioQuietMs = lastAudibleOutput ? Date.now() - lastAudibleOutput : null;
   report.turns.push({ turn: turn + 1, selected: id, inResponseTo: answer, inputStartMs: inputBytes / 48, clientAudioQuietMs });
@@ -376,8 +380,6 @@ const completed = new Promise(resolve => {
       report.openingAcknowledged = true;
     } else if (value.type === 'session.thinking.appended') {
       contextual?.providerEvent(value.client_event_id, true);
-      const direction = report.directions.find(item => `direction-${item.afterTurn}` === value.client_event_id);
-      if (direction) direction.acknowledged = true;
       const guard = report.delegations.find(item => item.eventId === value.client_event_id);
       if (guard) guard.acknowledged = true;
     } else if (value.type === 'session.delegation.created') {
@@ -414,10 +416,13 @@ finally {
   await Promise.all(observations);
   if (report.delegations.some(item => !item.acknowledged)) report.errors.push('Actor role direction was not acknowledged.');
   await writeFile(`${output}/client-audio.pcm`, Buffer.concat(chunks));
+  await chmod(`${output}/client-audio.pcm`, 0o600);
   // A playable recording makes listening review possible without a PCM import.
   const wav = Bun.spawn(['ffmpeg', '-y', '-loglevel', 'error', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', `${output}/client-audio.pcm`, `${output}/client-audio.wav`], { stderr: 'ignore' });
   if (await wav.exited) report.errors.push('Client audio conversion failed.');
+  else await chmod(`${output}/client-audio.wav`, 0o600);
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
+  await chmod(`${output}/report.json`, 0o600);
 }
 console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), errors: report.errors }));
 if (!report.finalized || report.errors.length) process.exitCode = 1;

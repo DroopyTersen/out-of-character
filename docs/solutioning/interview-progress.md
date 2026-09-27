@@ -107,3 +107,12 @@ Limitations: synthetic provider runs are short rehearsals, not proof of every re
 - Reconciled the interview plan with the final main architecture. Preserve the shared history fields and serialization. Judge cue uptake from Sam's response, not the participant's talkativeness or willingness to disclose; continued boundary pressure calls for another respectful angle, never a stronger probe.
 - A bounded follow-up in the existing Opus review supported keeping the six interview concerns. Keep their condition list separate from the simulator's seven conditions, preserve stable passage IDs when relabeling speakers, and allow personality direction within a relevant interview review. No extra style detector is justified before rehearsals reveal a need.
 - The interview producer remains a reviewed proposal. No new producer implementation, paid rehearsal, database migration, or deployment was performed in this follow-up.
+
+## Interview producer implementation — checkpoint 1
+
+- Replaced authored interviewer cues with six independent Jev concerns and the existing actor-only contextual director. Participant grading is unchanged; there are no participant coaching observations or Sol calls.
+- Sam receives a private producer brief with participant/Sam speaker labels, source limits, boundary precedence, and the existing cue history. The interview freshness recheck permits a useful return to a missed detail, but rejects declined topics, corrected problems, and competing productive stories.
+- Added the private `interventions_json` archive column with an additive migration, retained the required empty legacy `cues_json` value, and preserved the summary finalization guard. End aborts pending direction before archiving; summaries receive only the actual transcript.
+- Removed the old cue catalog, sender, repeat state, and director-enabled flag. Migrated fixtures, the Workshop readout, and rehearsal tools to measured signals and contextual direction. Synthetic provider results are being collected; no new results are claimed until inspected.
+- Focused tests cover actor-only observations, private cue receipt, a Sol decision to do nothing, aborted generation at End, historical archive migration, and the public/summary boundaries. A read-only desktop checkpoint review follows this commit.
+- No database migration or deployment has been performed against Cloudflare.

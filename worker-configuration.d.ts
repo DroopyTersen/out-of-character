@@ -15,7 +15,6 @@ interface __BaseEnv_Env {
 	OPENROUTER_API_KEY: string;
 	OPENAI_API_KEY: string;
 	SIMULATOR_ENABLED: string;
-	SIMULATOR_DIRECTOR_ENABLED?: string;
 	SIMULATOR_SESSIONS: DurableObjectNamespace<import("./app/workers/app").SimulatorSession>;
 }
 declare namespace Cloudflare {

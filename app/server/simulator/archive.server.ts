@@ -15,7 +15,6 @@ export type ArchiveProvenance = {
   workerId: string | null;
   workerTag: string | null;
   contextualDirector: DirectorSummary | null;
-  directorEnabled?: boolean;
 };
 
 export type ArchiveWrite = {
@@ -34,7 +33,6 @@ export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, con
     model: LIVE_MODEL, voice: client.voice, rubricVersion: snapshot.interview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
     contextualDirector,
-    ...(snapshot.interview ? { directorEnabled: String(env.SIMULATOR_DIRECTOR_ENABLED) === 'true' } : {}),
   };
 }
 

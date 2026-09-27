@@ -1,6 +1,6 @@
 # Contextual direction for The Debrief
 
-Status: reviewed proposal reconciled with main through `18827cd`, including the freshness serialization fix and actor cue-history improvements. The integration preserves the interview's existing authored cues. The changes below are not implemented or deployed.
+Status: implementation in progress on main through `18827cd`. The shared actor lane, interview-specific judgments and prompts, private archive migration, and legacy cue removal are implemented locally. Focused tests and paid synthetic rehearsals are underway. Not deployed.
 
 ## Recommendation
 

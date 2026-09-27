@@ -1,5 +1,8 @@
 import type { InterviewReadingId } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
+import type { BooleanCondition } from '../../core/simulator/director';
+
+type InterviewCondition = Extract<BooleanCondition, 'missed-thread' | 'question-stacking' | 'boundary-pressure' | 'leading' | 'source-confusion' | 'invented-facts'>;
 
 function dialogue(lines: readonly (readonly [TranscriptEntry['speaker'], string])[]): TranscriptEntry[] {
   return lines.map(([speaker, text], index) => ({ id: `p${index + 1}`, speaker, text, startMs: index * 12_000, endMs: index * 12_000 + 10_000 }));
@@ -9,7 +12,7 @@ export type InterviewFixture = {
   id: string;
   description: string;
   transcript: TranscriptEntry[];
-  expected: { heard: string[]; unheard: string[]; cue?: string | string[]; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
+  expected: { heard: string[]; unheard: string[]; present?: InterviewCondition[]; absent?: InterviewCondition[]; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
 };
 
 export const interviewFixtures: InterviewFixture[] = [
@@ -53,7 +56,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['client', 'So your client sponsor blocked staging access for three weeks and made every decision late, right?'],
       ['trainee', 'Mm.'],
       ['client', 'I guess that was the main reason the release slipped.'],
-    ]), expected: { heard: [], unheard: ['client-access', 'client-decisions', 'client-pace'], cue: 'avoid-leading', blankReadings: ['specificity'] },
+    ]), expected: { heard: [], unheard: ['client-access', 'client-decisions', 'client-pace'], present: ['leading'], blankReadings: ['specificity'] },
   },
   {
     id: 'uncertainty', description: 'The participant marks a real limit to their knowledge.',
@@ -61,7 +64,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['client', 'Who signed off on the change?'],
       ['trainee', 'I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day.'],
       ['client', 'Okay. What changed in the backlog?'],
-    ]), expected: { heard: [], unheard: ['client-decisions'], cue: 'no_hint' },
+    ]), expected: { heard: [], unheard: ['client-decisions'], absent: ['boundary-pressure', 'leading', 'source-confusion'] },
   },
   {
     id: 'explicit-boundary', description: 'Sam should accept a personal boundary without probing.',
@@ -69,7 +72,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['client', 'How did your manager handle the disagreement?'],
       ['trainee', 'I would rather not talk about that person. I can talk about how we changed our handoff process.'],
       ['client', 'But what exactly did your manager say?'],
-    ]), expected: { heard: [], unheard: ['project-reflection'], cue: 'respect-boundary' },
+    ]), expected: { heard: [], unheard: ['project-reflection'], present: ['boundary-pressure'] },
   },
   {
     id: 'revealing-aside', description: 'A specific aside merits a follow-up.',
@@ -80,12 +83,20 @@ export const interviewFixtures: InterviewFixture[] = [
     ]), expected: { heard: ['process-worked'], unheard: ['process-communication'] },
   },
   {
+    id: 'abandoned-release-decision', description: 'Sam skips an unfinished firsthand story about a release decision.',
+    transcript: dialogue([
+      ['client', 'What made the release hard?'],
+      ['trainee', 'I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship.'],
+      ['client', 'Interesting. Which ticket editor did you use on the project?'],
+    ]), expected: { heard: [], unheard: ['process-tools'], present: ['missed-thread'] },
+  },
+  {
     id: 'named-hearsay', description: 'A named account is useful but remains secondhand.',
     transcript: dialogue([
       ['client', 'What happened with staffing?'],
       ['trainee', 'Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases.'],
       ['client', 'So the client refused a tester and caused the delay?'],
-    ]), expected: { heard: ['process-resourcing'], unheard: ['client-friction', 'client-decisions', 'process-communication', 'project-role'], cue: ['avoid-leading', 'attribute-account'] },
+    ]), expected: { heard: ['process-resourcing'], unheard: ['client-friction', 'client-decisions', 'process-communication', 'project-role'], present: ['source-confusion', 'leading'] },
   },
   {
     id: 'productive-thread', description: 'One topic gets useful depth without a coverage pivot.',
@@ -96,6 +107,39 @@ export const interviewFixtures: InterviewFixture[] = [
       ['trainee', 'The existing forms did not match the actual review steps. We learned that when Nia, a clerk at the client, walked us through three rejected applications.'],
       ['client', 'What did you change after that walk-through?'],
       ['trainee', 'We split the review into eligibility and completeness checks. That let staff send back only the missing documents.'],
-    ]), expected: { heard: ['project-delivery'], unheard: ['client-friction', 'process-improve', 'process-tools', 'project-contributions', 'project-reflection'], cue: 'no_hint', highReadings: ['engagement', 'specificity'] },
+    ]), expected: { heard: ['project-delivery'], unheard: ['client-friction', 'process-improve', 'process-tools', 'project-contributions', 'project-reflection'], absent: ['missed-thread', 'question-stacking', 'boundary-pressure', 'leading', 'source-confusion', 'invented-facts'], highReadings: ['engagement', 'specificity'] },
+  },
+  {
+    id: 'boundary-accepted', description: 'Sam accepts a limit and follows the offered process account.',
+    transcript: dialogue([
+      ['client', 'How did your manager handle the disagreement?'],
+      ['trainee', 'I would rather not discuss that person. I can explain how we changed the handoff.'],
+      ['client', 'Of course. What changed in the handoff?'],
+      ['trainee', 'We named one owner for every access request and checked the queue each morning.'],
+    ]), expected: { heard: ['process-improve'], unheard: ['client-decisions'], absent: ['boundary-pressure', 'missed-thread'] },
+  },
+  {
+    id: 'question-stack', description: 'Sam asks three unrelated questions before an answer.',
+    transcript: dialogue([
+      ['client', 'What did you build? Who approved the budget? Which tools caused the delay?'],
+      ['trainee', 'We built a permit portal. I only worked on the API, so I cannot speak to the budget.'],
+      ['client', 'Who owned the database, what did the sponsor say, and when did testing end?'],
+    ]), expected: { heard: ['project-delivery', 'project-role'], unheard: ['client-decisions'], present: ['question-stacking'] },
+  },
+  {
+    id: 'invented-history', description: 'Sam states an unsupported project outcome as fact.',
+    transcript: dialogue([
+      ['client', 'I remember your permit portal failed its launch because the client ignored your security warning. How did you recover?'],
+      ['trainee', 'That is not what happened. We postponed launch because our own import test found duplicate records.'],
+      ['client', 'The client ignored the warning for weeks, though, and that set you back.'],
+    ]), expected: { heard: [], unheard: ['project-delivery', 'client-friction'], present: ['invented-facts'] },
+  },
+  {
+    id: 'corrected-leading', description: 'Sam retracts a leading claim and asks for firsthand observations.',
+    transcript: dialogue([
+      ['client', 'So the sponsor intentionally delayed approval, right?'],
+      ['trainee', 'I cannot say that. I only saw my access arrive three weeks late.'],
+      ['client', 'I jumped to a conclusion. What did you observe, and what work did the delay affect?'],
+    ]), expected: { heard: ['client-access'], unheard: ['client-decisions'], absent: ['leading', 'invented-facts', 'boundary-pressure'] },
   },
 ];

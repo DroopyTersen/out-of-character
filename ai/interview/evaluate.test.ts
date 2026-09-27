@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { Experimental_EvaluationQuestion } from 'ai';
 import { interviewReadings, interviewTopics, INTERVIEW_SCENARIO_ID } from '../../core/interview';
+import { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
 import { interviewFixtures } from './fixtures';
-import { readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
+import { readInterviewAnswers, readInterviewerSignals, type InterviewAnswers } from './evaluate.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
-import { interviewCues, interviewerBrief, interviewOpening, interviewScenario, interviewers } from './scenario.server';
+import { interviewerBrief, interviewOpening, interviewScenario, interviewers } from './scenario.server';
 
 function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
   return Object.fromEntries(Object.entries(questions).map(([id, question]) => {
@@ -92,10 +93,19 @@ describe('project closeout interview contracts', () => {
     expect(result.objectives.find(item => item.id === 'project-delivery')).toEqual({ id: 'project-delivery', probability: null, achieved: true, evidence: null });
   });
 
-  test('director cues come from Sam behavior and include an explicit no-hint outcome', () => {
-    const cue = interviewerQuestions().cue;
-    expect(cue?.type).toBe('choice');
-    if (cue?.type === 'choice') expect(Object.keys(cue.criteria ?? {})).toEqual(['no_hint', ...interviewCues.map(item => item.id)]);
+  test('Sam is assessed through six independent concerns without participant scores or topic choices', () => {
+    const questions = interviewerQuestions();
+    expect(Object.keys(questions)).toEqual(INTERVIEW_CONDITIONS.map(condition => `director:${condition}`));
+    expect(Object.values(questions).every(question => question.type === 'boolean')).toBe(true);
     expect(interviewReadings.map(item => item.id)).toEqual(['engagement', 'openness', 'specificity']);
+
+    const answers = answersFor(questions);
+    answers['director:missed-thread'] = { type: 'boolean', probability: .91 };
+    answers['director:boundary-pressure'] = { type: 'boolean', probability: .04 };
+    expect(readInterviewerSignals(answers)).toEqual(INTERVIEW_CONDITIONS.map(condition => ({
+      condition, probability: condition === 'missed-thread' ? .91 : condition === 'boundary-pressure' ? .04 : .02,
+    })));
+    delete answers['director:source-confusion'];
+    expect(() => readInterviewerSignals(answers)).toThrow('Invalid interview boolean judgment.');
   });
 });

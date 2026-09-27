@@ -4,12 +4,14 @@ import type { InterviewArchiveWrite } from './archive.server';
 import { writeInterviewArchive } from './archive.server';
 
 const migration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
+const interventionsMigration = await Bun.file(new URL('../../../migrations/0003_interview_interventions.sql', import.meta.url)).text();
 const simulatorMigration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
 
 function fixture() {
   const sqlite = new Database(':memory:');
   sqlite.exec(simulatorMigration);
   sqlite.exec(migration);
+  sqlite.exec(interventionsMigration);
   const d1 = {
     prepare: (sql: string) => ({ bind: (...values: (string | number | null)[]) => ({
       run: async () => { sqlite.prepare(sql).run(...values); return { success: true }; },
@@ -33,7 +35,7 @@ const base: InterviewArchiveWrite = {
     actorDigest: 'actor-digest', openingDigest: 'opening-digest', workerId: 'worker-id',
     workerTag: 'tag', contextualDirector: null,
   },
-  cues: [],
+  interventions: [],
 };
 
 function write(capturedAt: number, state: InterviewArchiveWrite['state'], status: 'pending' | 'ready' | 'unavailable', text: string | null = null): InterviewArchiveWrite {
@@ -72,6 +74,22 @@ test('a late partial cannot replace final transcript, and an unavailable summary
     await writeInterviewArchive(f.d1, write(6000, 'partial', 'pending'));
     expect(f.row()).toMatchObject({ archive_state: 'final', updated_at: 3000, summary_status: 'unavailable', summary_text: null });
   } finally { f.sqlite.close(); }
+});
+
+test('the migration preserves historical cues and adds an empty intervention history', () => {
+  const sqlite = new Database(':memory:');
+  try {
+    sqlite.exec(migration);
+    sqlite.prepare(`INSERT INTO interview_attempts
+      (id, scenario_id, interviewer_id, started_at, updated_at, archive_state, session_status,
+       finalization, feedback_status, transcript_json, summary_status, provenance_json, cues_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run('old', 'project-closeout', 'sam-cedar', 1, 2, 'final', 'ended', 'confirmed', 'current', '[]', 'ready', '{}', '[{"id":"follow-thread"}]');
+    sqlite.exec(interventionsMigration);
+    expect(sqlite.query('SELECT cues_json, interventions_json FROM interview_attempts').get()).toEqual({
+      cues_json: '[{"id":"follow-thread"}]', interventions_json: '[]',
+    });
+  } finally { sqlite.close(); }
 });
 
 test('an unsuccessful D1 write is reported without transcript data in the error', async () => {

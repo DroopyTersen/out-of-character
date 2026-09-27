@@ -1,9 +1,22 @@
 import { useState } from 'react';
 import { interviewFixtures } from '../../ai/interview/fixtures';
 import recordings from '../../ai/interview/recordings.json';
-import { interviewReadings, interviewTopics } from '../../core/interview';
+import { interviewReadings, interviewTopics, type InterviewReadingId } from '../../core/interview';
+import type { DirectorResult, DirectorSignal } from '../../core/simulator/director';
 import { formatTime } from '../simulator/conversation';
 import '../simulator/simulator.css';
+
+type Recording = {
+  collectedAt: string; rubricVersion: string; source: string;
+  rows: {
+    fixtureId: string;
+    participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: { id: string; achieved: boolean; evidence: { entryId: string; speaker: string; text: string } | null }[] };
+    interviewer: { model: string; durationMs: number; signals?: DirectorSignal[]; cueId?: string };
+    director?: { decision: string; issueId?: string | null; result?: (DirectorResult & { model?: string; durationMs?: number }) | null };
+  }[];
+};
+const recorded = recordings as unknown as Recording;
+const availableFixtures = interviewFixtures.filter(item => recorded.rows.some(row => row.fixtureId === item.id));
 
 function ParticipantEvidence({ evidence }: { evidence: { entryId: string; speaker: string; text: string } | null }) {
   return evidence?.speaker === 'trainee'
@@ -12,23 +25,23 @@ function ParticipantEvidence({ evidence }: { evidence: { entryId: string; speake
 }
 
 export function InterviewJudgingStory() {
-  const [id, setId] = useState(interviewFixtures[0]!.id);
+  const [id, setId] = useState(availableFixtures[0]!.id);
   const fixture = interviewFixtures.find(item => item.id === id)!;
-  const row = recordings.rows.find(item => item.fixtureId === id)!;
+  const row = recorded.rows.find(item => item.fixtureId === id)!;
   const heard = row.participant.objectives.filter(item => item.achieved && item.evidence?.speaker === 'trainee');
   return <>
     <div className="workshop-controls">
       <label>Synthetic interview<select value={id} onChange={event => setId(event.target.value)}>
-        {interviewFixtures.map(item => <option key={item.id} value={item.id}>{item.id.replaceAll('-', ' ')}</option>)}
+        {availableFixtures.map(item => <option key={item.id} value={item.id}>{item.id.replaceAll('-', ' ')}</option>)}
       </select></label>
     </div>
     <div className="sim-lab">
       <header className="sim-lab-heading">
-        <span className="eyebrow">RECORDED JEV ANALYSIS · SYNTHETIC INTERVIEW</span>
+        <span className="eyebrow">RECORDED ANALYSIS · SYNTHETIC INTERVIEW</span>
         <h1>{fixture.id.replaceAll('-', ' ')}</h1>
         <p>{fixture.description}</p>
       </header>
-      <p className="sim-lab-provenance">Synthetic fixture · {recordings.rubricVersion} · measured {recordings.collectedAt.slice(0, 10)}<br />Participant {row.participant.model} · {row.participant.durationMs} ms · Interviewer {row.interviewer.model} · {row.interviewer.durationMs} ms. Opening this view makes no provider request.</p>
+      <p className="sim-lab-provenance">Synthetic fixture · {recorded.rubricVersion} · measured {recorded.collectedAt.slice(0, 10)}<br />Participant {row.participant.model} · {row.participant.durationMs} ms · Interviewer {row.interviewer.model} · {row.interviewer.durationMs} ms. Opening this view makes no provider request.</p>
       <div className="sim-lab-grid">
         <div>
           <h2 className="sim-lab-column-title">Conversation evidence</h2>
@@ -40,8 +53,17 @@ export function InterviewJudgingStory() {
           )}</div>
           <section className="sim-director-readout">
             <h3>Private interviewer direction</h3>
-            <p>Recorded decision: <strong>{row.interviewer.cueId === 'no_hint' ? 'No cue selected' : row.interviewer.cueId}</strong> · {(row.interviewer.cueProbability * 100).toFixed(0)}% model probability</p>
-            <p>{row.interviewer.cueId === 'no_hint' ? 'No private direction was proposed in this recording.' : 'A live session also checks freshness and cooldown before using this candidate.'}</p>
+            {row.interviewer.signals ? <>
+              <p>Jev observations: {row.interviewer.signals.map(signal => 'probability' in signal ? `${signal.condition.replaceAll('-', ' ')} ${(signal.probability * 100).toFixed(0)}%` : null).filter(Boolean).join(' · ')}</p>
+              <p>Producer gate: <strong>{row.director?.decision ?? 'Not replayed'}</strong>{row.director?.issueId ? ` · ${row.director.issueId}` : ''}</p>
+              {row.director?.result?.action === 'intervene' ? <>
+                <blockquote className="sim-evidence"><span>Recorded Sol direction{row.director.result.model ? ` · ${row.director.result.model}` : ''}</span><p>“{row.director.result.text}”</p></blockquote>
+                {row.director.result.evidenceIds.map(entryId => {
+                  const entry = fixture.transcript.find(item => item.id === entryId);
+                  return entry ? <blockquote className="sim-evidence" key={entryId}><span>{entry.speaker === 'trainee' ? 'Participant' : 'Sam'} · {entryId}</span><p>“{entry.text}”</p></blockquote> : null;
+                })}
+              </> : <p>{row.director?.result?.action === 'none' ? 'Sol chose no direction for this review.' : 'No Sol direction was generated for this recording.'}</p>}
+            </> : <p>Historical authored-cue recording. Contextual signals and Sol direction have not been measured for this fixture yet.</p>}
           </section>
         </div>
         <div>
@@ -70,7 +92,7 @@ export function InterviewJudgingStory() {
         </div>
       </div>
       <details className="sim-lab-source"><summary>Recording source</summary>
-        <p className="sim-lab-provenance">{recordings.source} · synthetic transcript and reduced typed results only</p>
+        <p className="sim-lab-provenance">{recorded.source} · synthetic transcript and reduced typed results only</p>
       </details>
     </div>
   </>;

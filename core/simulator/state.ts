@@ -91,14 +91,3 @@ export function buildDebrief(scenario: ScenarioSummary, evaluation: TraineeEvalu
     completed, total: scenario.objectives.length,
   };
 }
-
-export type CueDecision = { id: string; probability: number; revision: number };
-export type SentCue = { id: string; revision: number; sentAt: number };
-
-/** Scores never modify character stats. A cue needs fresh evidence and a reason to intervene. */
-export function canSendCue(candidate: CueDecision, last: SentCue | null, fresh: boolean, now: number, repeatAfterMs = Infinity): boolean {
-  if (candidate.id === 'no_hint' || candidate.probability < .9 || candidate.probability > 1 || !Number.isFinite(candidate.probability)) return false;
-  if (!fresh) return false;
-  if (last && (now - last.sentAt < 20_000 || (candidate.id === last.id && now - last.sentAt < repeatAfterMs))) return false;
-  return true;
-}

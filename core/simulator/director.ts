@@ -2,7 +2,8 @@ import type { LiveHint } from './types';
 
 export type DirectorAudience = 'trainee' | 'actor';
 export const ACTOR_CONDITIONS = ['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const;
-export type BooleanCondition = 'mistake' | 'stalled' | (typeof ACTOR_CONDITIONS)[number];
+export const INTERVIEW_CONDITIONS = ['missed-thread', 'question-stacking', 'boundary-pressure', 'leading', 'source-confusion', 'invented-facts'] as const;
+export type BooleanCondition = 'mistake' | 'stalled' | (typeof ACTOR_CONDITIONS)[number] | (typeof INTERVIEW_CONDITIONS)[number];
 export type DirectorSignal = { condition: BooleanCondition; probability: number } | { condition: `objective:${string}`; selected: boolean };
 export type DirectorCondition = DirectorSignal['condition'];
 export const DIRECTOR_VERSION = 'contextual-director-v2';

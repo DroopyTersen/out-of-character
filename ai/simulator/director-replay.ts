@@ -1,6 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { evaluateClient, evaluateTrainee } from './evaluate.server';
+import { evaluateInterviewer } from '../interview/evaluate.server';
+import { interviewFixtures } from '../interview/fixtures';
+import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
 import { DIRECTOR_MODEL, generateDirector } from './director.server';
 import { simulatorFixtures, simulatorHoldouts, simulatorValidation } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
@@ -13,33 +16,42 @@ import { JEV_MODEL } from '../judging';
 // latency/actor-compliance test or a substitute for the held-out release gates.
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid and --fixture=<id> to run a bounded provider replay.');
 const id = process.argv.find(arg => arg.startsWith('--fixture='))?.slice(10);
-const fixture = [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures, ...simulatorCatalogFixtures].find(item => item.id === id);
+const interviewFixture = interviewFixtures.find(item => item.id === id);
+const simulatorFixture = [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures, ...simulatorCatalogFixtures].find(item => item.id === id);
+const fixture = interviewFixture ?? simulatorFixture;
 if (!fixture) throw new Error('Select a known synthetic fixture with --fixture=<id>.');
 if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load the existing server credentials with --env-file=.dev.vars.');
 const compare = process.argv.includes('--compare');
 const turns = process.argv.includes('--every-turn') ? fixture.transcript.map((_, index) => index + 1).filter(length => fixture.transcript.slice(0, length).some(entry => entry.speaker === 'trainee')) : [fixture.transcript.length];
 if (turns.length > 24) throw new Error('Replay is limited to 24 snapshots; choose a shorter fixture.');
 const output = process.argv.find(arg => arg.startsWith('--output='))?.slice(9) || `output/director-replay-${fixture.id}.json`;
-const report = { synthetic: true, fixture: fixture.id, collectedAt: new Date().toISOString(), version: DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: DIRECTOR_MODEL }, compare, rows: [] as Record<string, unknown>[] };
+const report = { synthetic: true, fixture: fixture.id, kind: interviewFixture ? 'interview' : 'simulator', collectedAt: new Date().toISOString(), version: DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: DIRECTOR_MODEL }, compare, rows: [] as Record<string, unknown>[] };
 const gate = new DirectorGate();
 try {
   for (const turn of turns) {
     const transcript = fixture.transcript.slice(0, turn);
-    const input = { scenarioId: fixture.scenarioId, clientId: fixture.clientId, transcript, revision: turn, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(30_000) };
-    const [trainee, actor] = await Promise.all([evaluateTrainee(input), evaluateClient(input)]);
-    for (const [audience, signals] of [['trainee', trainee.signals], ['actor', actor.signals]] as [DirectorAudience, DirectorSignal[]][]) {
+    const scenarioId = interviewFixture ? INTERVIEW_SCENARIO_ID : simulatorFixture!.scenarioId;
+    const clientId = interviewFixture ? 'sam-cedar' : simulatorFixture!.clientId;
+    const input = { scenarioId, clientId, transcript, revision: turn, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(30_000) };
+    const [trainee, actor] = interviewFixture
+      ? [null, await evaluateInterviewer(input)]
+      : await Promise.all([evaluateTrainee(input), evaluateClient(input)]);
+    const audiences: { audience: DirectorAudience; signals: DirectorSignal[]; durationMs: number; usage: unknown }[] = interviewFixture
+      ? [{ audience: 'actor', signals: actor.signals, durationMs: actor.durationMs, usage: actor.usage }]
+      : [{ audience: 'trainee', signals: trainee!.signals, durationMs: trainee!.durationMs, usage: trainee!.usage }, { audience: 'actor', signals: actor.signals, durationMs: actor.durationMs, usage: actor.usage }];
+    for (const { audience, signals, durationMs, usage } of audiences) {
       gate.observe(audience, signals);
       const now = transcript.at(-1)!.endMs;
       // Keep negative and suppressed windows: reviewing only generated output
       // conceals gate false negatives. Human labels belong in a separate report.
-      const row: Record<string, unknown> = { turn, audience, signals, eligible: false, issueId: null, detectorDurationMs: audience === 'trainee' ? trainee.durationMs : actor.durationMs, detectorUsage: audience === 'trainee' ? trainee.usage : actor.usage, generation: [] };
+      const row: Record<string, unknown> = { turn, audience, signals, eligible: false, issueId: null, detectorDurationMs: durationMs, detectorUsage: usage, generation: [] };
       report.rows.push(row);
       const review = gate.review(audience, now, turn, async issue => {
         row.eligible = true;
         row.issueId = issue.id;
         for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
           const started = performance.now();
-          const result = await generateDirector({ audience, reason: issue.signal, scenarioId: fixture.scenarioId, clientId: fixture.clientId, transcript, objectives: trainee.objectives, history: [], apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
+          const result = await generateDirector({ audience, reason: issue.signal, scenarioId, clientId, transcript, objectives: trainee?.objectives ?? [], history: [], apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
           (row.generation as unknown[]).push({ effort, durationMs: Math.round(performance.now() - started), ...result });
         }
       });

@@ -1,5 +1,6 @@
 {
   "synthetic": true,
+  "historical": true,
   "collectedAt": "2026-09-27T15:23:15.475Z",
   "rubricVersion": "interview-rubric-v1",
   "source": "output/interview/results-calibrated.json",

@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import { directorContext, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
 import { getScenario, getClient } from './scenarios.server';
-import type { DirectorRecord, DetectorRecord } from '../../core/simulator/director';
+import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
+import type { DirectorRecord, DetectorRecord, ObservationRecord } from '../../core/simulator/director';
 
 const input: DirectorInput = {
   audience: 'trainee', reason: { condition: 'objective:decision', selected: true }, scenarioId: 'proposal', clientId: 'morgan',
@@ -33,12 +34,48 @@ test('actor context excludes consultant plans, scoring, and hint history', () =>
   const scenario = getScenario(input.scenarioId);
   const context = directorContext({ ...input, audience: 'actor', reason: { condition: 'role', probability: .99 }, history: [previous('PRIVATE COACH NOTE')] });
   const text = JSON.stringify(context);
-  expect(context.context.client.role).toBe('Customer service director');
+  expect(context.context).toMatchObject({ client: { role: 'Customer service director' } });
   expect(text).toContain(scenario.facts[0]!);
   expect(text).not.toContain(scenario.lead);
   expect(text).not.toContain(scenario.seriousMistake);
   expect(text).not.toContain('PRIVATE COACH NOTE');
   expect(Object.keys(context.context)).not.toContain('progress');
+});
+
+test('Sam receives private interview context with stable passage IDs and delivered cue history', () => {
+  const signals = [{ condition: 'missed-thread' as const, probability: .91 }, { condition: 'boundary-pressure' as const, probability: .04 }];
+  const observation: ObservationRecord = {
+    source: 'observation', id: 'observation-prior', audience: 'actor', revision: 1, snapshotAt: 1000,
+    completedAt: 1100, model: 'jev', signals, inputCount: 2, lastInputId: 'p2', outcome: 'started',
+  };
+  const history = [observation, previous('Return to the access delay.', {
+    audience: 'actor', signal: signals[0]!, outcome: 'sent', deliveredAt: 1200,
+    delivery: { eventId: 'cue-prior', afterPassageId: 'p2', status: 'accepted' },
+  })];
+  const transcript = [
+    { id: 'p1', speaker: 'client' as const, text: 'What slowed the project?', startMs: 0, endMs: 1000 },
+    { id: 'p2', speaker: 'trainee' as const, text: 'Access took three weeks.', startMs: 1000, endMs: 2000 },
+    { id: 'p3', speaker: 'client' as const, text: 'What tools did you use?', startMs: 2000, endMs: 3000 },
+  ];
+  const interviewInput = { ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor' as const,
+    reason: signals[0]!, transcript, history };
+  const context = directorContext(interviewInput);
+
+  expect(context.context).toEqual({ interviewer: { name: 'Sam', brief: expect.any(String) } });
+  expect(context.dialogue).toEqual([
+    { id: 'p1', speaker: 'sam', text: transcript[0]!.text },
+    { id: 'p2', speaker: 'participant', text: transcript[1]!.text },
+    { id: 'p3', speaker: 'sam', text: transcript[2]!.text },
+  ]);
+  expect(context.previousInterventions).toEqual([{
+    condition: 'missed-thread', text: 'Return to the access delay.', sentAt: 1200,
+    afterPassageId: 'p2', deliveryStatus: 'accepted', reviewSignals: signals,
+  }]);
+  expect(context.recentAssessments).toEqual([{ observedAt: 1000, throughPassageId: 'p2', signals }]);
+  expect(context.context).not.toHaveProperty('progress');
+  expect(context.context).not.toHaveProperty('client');
+  expect(context.context).not.toHaveProperty('scenario');
+  expect(() => directorContext({ ...interviewInput, audience: 'trainee' })).toThrow('Interview direction is private.');
 });
 
 test('only delivered generated advice suppresses repetition; failed drafts and fixed alerts do not', () => {

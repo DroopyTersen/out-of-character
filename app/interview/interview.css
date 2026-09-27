@@ -1,5 +1,4 @@
 .interview-shell .game-main { max-width: 1500px; }
-.interview-shell .simulator-title { display: none; }
 .interview-setup, .interview-conversation, .interview-summary { width: 100%; margin: 0 auto 45px; }
 .interview-title-dot { color: #44efcd; }
 .interview-setup { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(390px, .85fr); gap: clamp(28px, 5vw, 86px); align-items: center; min-height: min(790px, calc(100svh - 110px)); padding: 52px clamp(8px, 2vw, 30px); }
@@ -66,7 +65,7 @@
 .interview-reading > div:first-child { display: grid; gap: 6px; font-size: 14px; }
 .interview-reading strong { color: #e0eef4; font-weight: 600; }
 .interview-reading > div:first-child span { color: #acd5d2; font-size: 12px; }
-.interview-reading small { display: block; color: #8cacbd; font-size: 11px; line-height: 1.45; margin-top: 9px; }
+.interview-reading small { display: block; color: #8cacbd; font-size: 12px; line-height: 1.45; margin-top: 9px; }
 .interview-reading-evidence { border-top: 1px solid #285269; margin-top: 18px; padding-top: 12px; color: #a6cbd8; font-size: 12px; }
 .interview-reading-evidence summary { cursor: pointer; min-height: 28px; }
 .interview-reading-evidence > div { margin-top: 13px; }
@@ -143,7 +142,7 @@
   .interview-readings, .interview-topics { padding: 17px; }
   .interview-readings > header { display: block; }
   .interview-readings h2, .interview-topics h2 { font-size: 18px; }
-  .interview-feedback-state { display: block; text-align: left; margin-top: 6px; }
+  .interview-feedback-state { display: block; text-align: left; margin: 6px 0 12px; }
   .interview-reading-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .interview-reading > div:first-child { font-size: 12px; }
   .interview-reading > div:first-child span { min-height: 2.8em; font-size: 11px; }

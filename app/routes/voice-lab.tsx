@@ -1,4 +1,4 @@
-import { Link, useLoaderData } from 'react-router';
+import { useLoaderData } from 'react-router';
 import type { Route } from './+types/voice-lab';
 import { clients, publicCatalog } from '../../ai/simulator/scenarios.server';
 import { VoiceLabContent } from '../simulator/voice-lab';
@@ -15,5 +15,5 @@ export function loader(_: Route.LoaderArgs) {
 
 export default function VoiceLab() {
   const { clients, defaultVoices } = useLoaderData<typeof loader>();
-  return <div className="app-shell simulator-shell"><GameHeader simulator><Link className="workshop-link" to="/simulator">Simulator</Link></GameHeader><main className="game-main"><VoiceLabContent clients={clients} defaultVoices={defaultVoices} /></main></div>;
+  return <div className="app-shell simulator-shell"><GameHeader simulator /><main className="game-main"><VoiceLabContent clients={clients} defaultVoices={defaultVoices} /></main></div>;
 }

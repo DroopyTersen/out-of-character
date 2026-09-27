@@ -33,7 +33,7 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
       <span className="eyebrow">PROJECT CLOSEOUT · A CONVERSATION WITH SAM</span>
       <h1 tabIndex={-1}>The Debrief<span className="interview-title-dot">.</span></h1>
       <p className="interview-lede">Talk through a real project: what you built, how it went, and what the next team should know.</p>
-      <div className="interview-intro"><span className="interview-intro-mark" aria-hidden="true">“</span><p>We can start wherever it makes sense to you. What was this project about?</p><small>Sam · your buddy with a journalist’s ear</small></div>
+      <div className="interview-intro"><span className="interview-intro-mark" aria-hidden="true">“</span><p>What were you building on this project?</p><small>Sam</small></div>
     </div>
     <div className="interview-setup-side">
       <div className="interview-voice-choice sim-panel">
@@ -46,7 +46,7 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
         {error && <p className="sim-notice error" role="alert">{error}</p>}
         {!enabled && <p className="sim-notice" role="status">Live interviews are currently unavailable. You can explore the <a href="/storybook/interview-live">Workshop preview</a>.</p>}
         <button className="arcade-button primary" onClick={onStart} disabled={!enabled}>Start interview <Mic size={21} aria-hidden="true" /></button>
-        <p>Your conversation is transcribed for a private internal summary. Audio is not saved.</p>
+        <p>Your words are transcribed and saved privately with an internal summary. Audio is not saved.</p>
       </div>
     </div>
   </section>;

@@ -128,11 +128,21 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(f.socket.readyState).toBe(3);
 });
 
-test('interview End closes voice and returns pending before one summary completes', async () => {
+test('interview End preserves covered topics and returns pending before one summary completes', async () => {
   let releaseSummary!: (text: string) => void;
   const summaryResult = new Promise<string>(resolve => { releaseSummary = resolve; });
   const summarized: { speaker: string; text: string }[][] = [];
+  const interviewJudged: { achievedIds: string[]; transcript: { speaker: string; text: string }[] }[] = [];
   const f = await fixture({ overrides: {
+    evaluateInterview: async input => {
+      interviewJudged.push({ achievedIds: [...(input.achievedIds ?? [])], transcript: input.transcript });
+      const passage = input.transcript[0]!;
+      return {
+        revision: input.revision, readings: emptyInterviewReadings(),
+        objectives: input.achievedIds?.includes('project-delivery') ? [] : [{ id: 'project-delivery', achieved: true, probability: .99, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }],
+        model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {},
+      };
+    },
     summarizeInterview: async input => { summarized.push(input.transcript); return summaryResult; },
   } });
   f.socket.holdClose = true;
@@ -140,9 +150,16 @@ test('interview End closes voice and returns pending before one summary complete
   try {
     await f.session.fetch(request('start', capability, interviewAttempt));
     await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We built a permit intake portal.', start_ms: 100, end_ms: 900 });
+    await waitFor(() => interviewJudged.length === 1);
+    await Promise.all(f.pending);
+    const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    const covered = live.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
+    expect(covered).toMatchObject({ achieved: true, evidence: { speaker: 'trainee', text: 'We built a permit intake portal.' } });
+    expect(interviewJudged[0]!.achievedIds).toEqual([]);
     ending = f.session.fetch(request('end'));
     expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
-    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen resolved our access issue.', start_ms: 100, end_ms: 900 });
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen resolved our access issue.', start_ms: 2000, end_ms: 2900 });
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'I heard that no one helped.', start_ms: 1000, end_ms: 1600 });
     await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
     f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
@@ -152,13 +169,16 @@ test('interview End closes voice and returns pending before one summary complete
     expect(ended.finalization).toBe('confirmed');
     expect(ended.interview.summary).toEqual({ status: 'pending', text: null });
     expect(ended.evaluation).toBeNull();
-    expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['trainee']);
+    expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.judged).toHaveLength(0);
-    expect(f.interviewJudged).toHaveLength(1);
-    expect((f.interviewJudged[0] as { speaker: string }[]).map(entry => entry.speaker)).toEqual(['trainee']);
+    expect(interviewJudged).toHaveLength(2);
+    expect(interviewJudged[1]!.achievedIds).toEqual(['project-delivery']);
+    expect(interviewJudged[1]!.transcript.map(entry => entry.text)).toEqual(['We built a permit intake portal.', 'Jen resolved our access issue.']);
+    expect(ended.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(covered);
     await waitFor(() => summarized.length === 1);
-    expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee']);
+    expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
+    expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(covered);
     expect(f.row()).toBeNull();
     expect((await f.session.fetch(request('poll', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
     expect((await f.session.fetch(request('poll', ''))).status).toBe(401);

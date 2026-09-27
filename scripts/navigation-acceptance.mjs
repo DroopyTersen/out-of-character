@@ -85,8 +85,7 @@ try {
       assert.equal(new URL(page.url()).pathname, '/interview');
       assert.equal(await page.locator('.site-menu-dialog').evaluate(dialog => dialog.open), false);
     }
-    await page.goto(new URL('/storybook/interview-live', base).toString(), { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(300);
+    await page.goto(new URL('/storybook/interview-live', base).toString(), { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Screen only' }).click();
     await page.getByRole('button', { name: 'Back to workshop controls' }).waitFor({ state: 'visible' });
     await page.getByRole('button', { name: 'Back to workshop controls' }).click();

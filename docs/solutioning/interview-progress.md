@@ -53,6 +53,15 @@ No deployment has been performed.
 - Replaced the first portrait pair after visual feedback: the final pair uses the actual cast’s large heads, chunky pixels and waist-up framing. Setup now shows only Male voice/Female voice, with the repeated explanation and Before you begin eyebrow removed.
 - Final setup/live/summary previews passed at 1440, 390 and 320 px, including actual pending/unavailable summary variants. Shared navigation passed twelve route/viewport checks plus keyboard and drawer interactions. The per-screen critique and fixes are recorded in `interview-design-review.md`.
 - Simplified the summary to one reading column, placed transcript access before New interview, added an Audio label, and tightened the mobile live layout. Source quotes remain available for the three neutral observations.
-- The final read-only review is checking these changes and screenshots. The full repository gate passed again: 174 tests and 6,122 assertions, type checking, production build, browser privacy boundary check (including interview instructions), and a Worker dry run. Log: `output/interview/final-check.log`.
+- The full repository gate passed again: 174 tests and 6,122 assertions, type checking, production build, browser privacy boundary check (including interview instructions), and a Worker dry run. Log: `output/interview/final-check.log`. Behavior and presentation were committed as `22b4dac`.
+
+Final review dispositions:
+
+- The read-only code and visual review found no remaining material backend defect. Its test gap is now covered: a live topic survives the final assessment with its exact participant evidence in both the public snapshot and private archive. All 43 session tests passed after that addition.
+- Clarified that the full transcript is saved privately alongside the summary. Replaced the decorative opening quote with Sam’s actual project question and removed its extra tagline.
+- Removed the redundant Voice Lab header child, pathname special case, unused Workshop prop, and nine obsolete navigation CSS rules. The drawer now uses one shared set of styles. All twelve route/viewport navigation checks pass again (`output/interview-ui/navigation-reviewed`).
+- Added breathing room between the mobile observation status and reading dividers, and made desktop reading descriptions larger. All nine screen/viewport checks pass again (`output/interview-ui/final-review`).
+- Kept the compact mobile voice panel and one-tap transcript rather than restoring the last-transcript caption, consistent with the earlier mobile direction. Desktop retains the caption. The final summary layouts and failure states needed no further changes.
+- The full repository gate passed after these follow-ups: 174 tests, 6,127 assertions, type checking, production build, privacy boundary check and Worker dry run (`output/interview/reviewed-check.log`). Implementation and local acceptance are complete.
 
 Limitations: synthetic provider runs are short rehearsals, not proof of every real interview. Mobile screenshots use browser emulation, not a physical-phone microphone session. This implementation has not been deployed, and the new D1 migration has only been applied locally.

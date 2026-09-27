@@ -1,31 +1,29 @@
 .sim-briefing { width: min(100%, 680px); margin: 18px auto 50px; }
 .sim-briefing-back.quiet-button { min-height: 44px; border-color: transparent; padding-inline: 0; }
-.sim-briefing-heading { padding: 10px 0 20px; }
-.sim-briefing-heading h1 { margin: 0 0 14px; font-size: clamp(28px, 4vw, 38px); line-height: 1.25; text-wrap: balance; }
+.sim-briefing-heading { padding: 10px 0 28px; }
+.sim-briefing-heading h1 { margin: 0 0 20px; font-size: clamp(28px, 4vw, 38px); line-height: 1.25; text-wrap: balance; }
 .sim-briefing-heading h1:focus { outline: none; }
-.sim-briefing-context { display: grid; gap: 6px; }
+.sim-briefing-context { display: grid; gap: 10px; }
 .sim-briefing-context strong { color: #eef9ff; font-size: 20px; }
-.sim-briefing-roles { display: flex; flex-wrap: wrap; gap: 2px 16px; color: #8fb3c8; font-size: 14px; line-height: 1.6; }
-.sim-briefing-steps { border: 1px solid #32768b; border-radius: 6px; background: #071e2ce6; }
-.sim-briefing-card { padding: 24px 24px 16px; }
-.sim-briefing-step-heading { display: flex; align-items: center; gap: 12px; margin: -24px -24px 20px; padding: 16px 24px; background: linear-gradient(100deg, #175b6860, #0a2b3b20 85%); }
+.sim-briefing-roles { display: flex; flex-wrap: wrap; gap: 6px 16px; color: #8fb3c8; font-size: 14px; line-height: 1.6; }
+.sim-briefing-steps { display: grid; gap: 24px; }
+.sim-briefing-card, .sim-briefing-bottom { padding: 24px; border: 1px solid #32768b; border-radius: 6px; background: #071e2ce6; }
+.sim-briefing-step-heading { display: flex; align-items: center; gap: 12px; margin: -24px -24px 24px; padding: 16px 24px; border-radius: 5px 5px 0 0; background: linear-gradient(100deg, #175b6860, #0a2b3b20 85%); }
 .sim-briefing-step-heading > svg { flex-shrink: 0; color: #44efcd; }
 .sim-briefing-step-heading[data-unavailable] > svg { color: #f2d66d; }
-.sim-briefing-card .sim-briefing-step-heading { border-radius: 5px 5px 0 0; }
 .sim-briefing-step-heading h2 { margin: 0; font-family: 'Chakra Petch', sans-serif; font-size: 20px; font-weight: 600; letter-spacing: 0; }
 .sim-briefing .arcade-button { width: 100%; min-width: 0; min-height: 56px; padding: 14px 20px; font-size: 20px; gap: 12px; }
 .sim-briefing .arcade-button.secondary { background: transparent; border: 1px solid #32768b; color: #b9d9e8; box-shadow: none; }
 .sim-briefing .arcade-button.secondary:hover:not(:disabled) { background: #12354c; border-color: #51a7d4; }
-.sim-briefing audio { width: 100%; margin-top: 12px; color-scheme: dark; }
-.sim-briefing-bottom { padding: 24px; border-top: 1px solid #28536e; }
+.sim-briefing audio { display: block; width: 100%; margin-top: 20px; color-scheme: dark; }
+.sim-briefing audio[hidden] { display: none; }
 .sim-briefing button:focus-visible { outline: 2px solid #eef9ff; outline-offset: 4px; }
 .sim-briefing .arcade-button:disabled { background: #122f40; border-color: #28536e; color: #698b9d; box-shadow: none; }
 .sim-briefing-error { color: #f2d66d; line-height: 1.5; }
 @media (max-width: 700px) {
   .sim-briefing { margin-top: 4px; }
-  .sim-briefing-card { padding: 20px 20px 12px; }
-  .sim-briefing-bottom { padding: 20px; }
-  .sim-briefing-step-heading { margin: -20px -20px 20px; padding: 16px 20px; }
+  .sim-briefing-card, .sim-briefing-bottom { padding: 20px 20px 24px; }
+  .sim-briefing-step-heading { margin: -20px -20px 24px; padding: 16px 20px; }
   .sim-briefing-step-heading h2 { font-size: 18px; }
   .sim-briefing .arcade-button { font-size: 18px; padding-inline: 12px; }
 }

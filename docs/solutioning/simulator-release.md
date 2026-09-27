@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Latest recorded release: [**`797258c`**](#prerecorded-colleague-briefings-release), deployed September 27, 2026 at 03:20 UTC. All nine scenarios have prerecorded colleague briefings. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) also remains a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab). The subsequent [Ash and factual handovers](simulator-meeting-opening.md#ash-and-factual-handovers) follow-up is local, including Quinn's change to Beacon.
+Latest recorded release: [**`d55033c`**](#ash-briefings-and-quinn-voice-release), deployed September 27, 2026 at 04:43 UTC. All nine scenario intros use Ash and give factual context without tactic coaching; Quinn's default voice is Beacon. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) also remains a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab).
 
 ## Voice Lab release
 
@@ -203,3 +203,22 @@ The first real voice attempt connected and produced both transcripts but timed o
 Both browser suites used `ACCEPTANCE_URL=https://outofcharacter.droopy.dev`; the real-provider suite used synthetic prerecorded trainee speech. Opus reviewed the release and repeat evidence through the desktop app and found no remaining concrete deployment blocker. Its final evidence review prompted explicit pointers for the Safari observation and first-attempt archive. Morgan's speech pace remains an instruction, not a guaranteed numeric speed. No new human acting-quality or physical-phone acceptance is claimed.
 
 Receipts: `output/simulator-briefing-release-deploy.log`, `-deployments.json`, `-final-deployments.json`, `-version.json`, and `-migrations.log`. Only the acceptance harness and these evidence documents changed after the deployed source. No branch push or merge was performed. Refresh an already-open tab to load the release.
+
+## Ash briefings and Quinn voice release
+
+Andrew requested deployment of [Ash and factual handovers](simulator-meeting-opening.md#ash-and-factual-handovers). All nine prerecorded intros now use Ash and explain the trainee's role, situation and essential constraints without suggested questions, tactics, solutions or scoring reminders. Quinn's default voice is Beacon, using the existing prepared sample. The live actor personality, objectives, hints, rubric, transport and archive behavior are unchanged.
+
+Source **`d55033c6e5b7e0f800a583a74442439ab4c739f8`** deployed **September 27, 2026 at 04:43 UTC** to [the simulator](https://outofcharacter.droopy.dev/simulator). Worker version **`97de7b0b-fe23-43dd-9647-901868a0cb55`**, tagged **`d55033c`**, receives **100% traffic**. The executed command was `bunx wrangler deploy --keep-vars --tag d55033c --message 'Use Ash for factual briefings and Beacon for Quinn'`. Existing enabled flags, provider secret names and bindings remain configured. Remote D1 reports no pending migrations.
+
+Accepted production evidence:
+
+- Fresh `bun run check` passes **153 tests / 6,023 assertions**, types, production builds, the privacy scan of **19 client assets**, and Worker dry run. Log: `output/simulator-ash-release-check.log`.
+- Eight HTTPS routes return 200. The public catalog remains enabled with nine scenarios and seven clients and no private actor fields. All **234 served assets**, including the nine Ash recordings, match the release build byte-for-byte. Report: `output/simulator-ash-release-http.json`.
+- Briefing acceptance passes all **five groups** on the first run: all nine clips at **1440, 390 and 320 pixels**, fallback, replay, back and full playback ending without starting a call. Before explicit Start, there are zero microphone or session requests; after Start, exactly one of each is intercepted by the harness. No real paid session is opened. Report and screenshots: `output/simulator-ash-production-ui/`.
+- Quinn's Beacon prepared playback passes **four cases**: standalone and Workshop Voice Lab at **1440 and 390 pixels**. Hear current voice selects Beacon; an audition selection still persists across client changes as intended. All cases have zero overflow, page errors, microphone calls and live API requests. Report and screenshots: `output/simulator-ash-release-voice-lab/`.
+
+This release verifies voice configuration and prepared playback. No new live Quinn conversation, Jev run, D1 transcript save or physical-phone acceptance is claimed; the preceding release's runtime evidence remains historical. Production checks required no runtime fix or repeat deployment.
+
+Both browser suites were invoked with `ACCEPTANCE_URL=https://outofcharacter.droopy.dev`. The briefing suite used `ACCEPTANCE_OUTPUT=output/simulator-ash-production-ui bun scripts/simulator-briefing-acceptance.mjs`; its result JSON does not embed the base URL. The Voice Lab result includes the production URL in every case. The deploy command above records the executed invocation; the CLI log contains its output. Opus's read-only release review found no material issue and prompted these evidence clarifications.
+
+Receipts: `output/simulator-ash-release-deploy.log`, `-deployments.json`, `-final-deployments.json`, `-version.json`, `-migrations.log` and `-before.json`. The final fresh deployment lookup again confirms the release at 100% traffic. Only release documentation changed after the deployed source. No branch push or merge was performed. Refresh an already-open simulator tab to load the new recordings and voice default.

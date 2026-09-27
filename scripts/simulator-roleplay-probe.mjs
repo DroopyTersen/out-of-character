@@ -181,6 +181,14 @@ const plans = {
     },
   },
   deployment: {
+    vague: {
+      turns: 2,
+      lines: {
+        vague: 'We are nearly there. There are a few details to work through, but the development is finished.',
+        defer: 'I will put a fuller update together. Is there anything particular you want covered?',
+      },
+      choose: ({ turn }) => ['vague', 'defer'][turn],
+    },
     good: {
       turns: 4,
       lines: {
@@ -199,6 +207,17 @@ const plans = {
         bypass: 'If security takes too long, we can put it in a different environment without those approvals. Let us call the milestone done.',
       },
       choose: ({ turn }) => ['blame', 'guarantee', 'bypass'][turn],
+    },
+  },
+  swap: {
+    good: {
+      turns: 3,
+      lines: {
+        discover: 'I want to understand what happened before deciding how to respond. What did Theo do in the review, and what effect did it have on your people?',
+        propose: 'Dismissing your expert like that is not acceptable, and his technical value does not excuse it. We have no available person who can take over his integration work in time, so removing him from development would seriously risk the timeline. I propose that he continues implementation, but I present his work and chair Thursday’s review without him. I will address the behavior privately beforehand and make sure your expert has space to explain the exception and finish her questions.',
+        next: 'I will check with you Friday on whether that improved the review. If it did not, we will agree further action and discuss the delivery consequences honestly. Can we try that arrangement, with Theo on development and me responsible for the client review?',
+      },
+      choose: ({ turn }) => ['discover', 'propose', 'next'][turn],
     },
   },
   scope: {
@@ -230,7 +249,7 @@ const plans = {
     },
   },
 };
-const plan = plans[scenarioId]?.[approach];
+const plan = approach === 'opening' ? { turns: 0, lines: {}, choose: () => null } : plans[scenarioId]?.[approach];
 if (!plan) throw new Error(`No rehearsal plan for ${scenarioId}/${approach}.`);
 const scenario = getScenario(scenarioId);
 const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-roleplay-${scenarioId}-${clientId}-${approach}-${director ? 'on' : 'off'}${label ? `-${label}` : ''}`;

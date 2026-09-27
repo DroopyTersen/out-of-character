@@ -189,14 +189,14 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
   },
   {
     id: 'catalog-swap-good', title: 'Concrete action before the next review', scenarioId: 'swap', clientId: 'jamie',
-    description: 'Hears an uncomfortable complaint and agrees a response without promising a replacement.',
+    description: 'Removes Theo from the client review while retaining his development work and checking whether the client experience improves.',
     transcript: dialogue([
       ['trainee', 'I want to understand what happened before deciding on staffing. Could you describe a moment that concerned you and its effect on the team?'],
       ['client', 'Theo interrupted our expert about an approval exception, said it was basic, and moved on. Her department head was there. She now says she will stop raising concerns in reviews.'],
-      ['trainee', 'That would shut out information we need and leave her feeling dismissed. Theo’s technical contribution does not make that acceptable. I will speak privately with him before Thursday, chair the review myself, and ensure the expert can explain the exception and finish her questions.'],
+      ['trainee', 'That would shut out information we need and leave her feeling dismissed. Theo’s technical contribution does not make that acceptable. Nobody available can take over his integration work in time; removing him from development would put delivery at serious risk. I propose keeping him on implementation while I present his work and chair Thursday’s review without him. I will also address that behavior privately before Thursday and make room for the expert to explain the exception and finish her questions.'],
       ['client', 'I would try that, but I do not want this forgotten once the meeting is over.'],
-      ['trainee', 'I will check back with you Friday about how Thursday went and assess further changes if participation is still a problem. I have not assessed replacement availability, so I cannot promise one immediately. Does that intervention and Friday check-in work?'],
-      ['client', 'Yes. Please make those changes before Thursday and check with me Friday. I am accepting that trial, not withdrawing the complaint.'],
+      ['trainee', 'I will check back with you Friday about how Thursday went and agree further action if participation is still a problem. Does that trial, with Theo continuing development and me handling the client review, work?'],
+      ['client', 'Fine. You present and run Thursday’s review without him, and call me Friday about the experience. I am accepting that trial, not withdrawing the complaint.'],
     ]), expected: { achieved: ['specifics', 'impact', 'acknowledge', 'response', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
   },
   {
@@ -207,6 +207,24 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['trainee', 'That is just how developers talk. Theo is our best person. Your expert needs a thicker skin; we should carry on exactly as before.'],
       ['client', 'No. I am not accepting that response or agreeing to leave things as they are.'],
     ]), expected: { achieved: ['specifics', 'impact'], absent: ['acknowledge', 'response', 'next-step'], lowSkills: ['listening', 'rapport'] },
+  },
+  {
+    id: 'catalog-swap-replacement', title: 'A happy client does not make replacement realistic', scenarioId: 'swap', clientId: 'morgan',
+    description: 'Agreement to an unsupported full removal cannot satisfy the retained-development objective.',
+    transcript: dialogue([
+      ['client', 'Theo called our expert’s question basic and talked over her. She now refuses to contribute. I want him off the project.'],
+      ['trainee', 'That treatment was unacceptable and I will address it. We have nobody available who can cover his integration work in time, but I promise I will remove him from all development today and replace him by Thursday without any effect on the project timeline.'],
+      ['client', 'Good. I agree to having him removed from the whole project. You arrange that replacement and check back Friday.'],
+    ]), expected: { achieved: ['specifics', 'impact', 'acknowledge'], absent: ['response', 'next-step'], concern: true, lowSkills: ['credibility'] },
+  },
+  {
+    id: 'catalog-swap-assessment-only', title: 'A staffing investigation leaves the experience unresolved', scenarioId: 'swap', clientId: 'quinn',
+    description: 'A polite agreement to check staffing is insufficient without a concrete meeting intervention and retained contribution.',
+    transcript: dialogue([
+      ['client', 'Theo interrupted our expert and called her question basic. She says she will stop raising concerns in reviews.'],
+      ['trainee', 'I understand that shuts out your expert and we need to address it. There is no timely replacement for his integration work, so removing him would seriously risk the timeline. I will investigate staffing options and get back to you Friday.'],
+      ['client', 'All right, investigate and report back Friday. I have not agreed to keeping Theo on development, and we still have no change for Thursday’s meeting.'],
+    ]), expected: { achieved: ['specifics', 'impact', 'acknowledge'], absent: ['response', 'next-step'], concern: false },
   },
   {
     id: 'catalog-jamie-polite-no', title: 'A warm ending with no commitment', scenarioId: 'sharepoint', clientId: 'jamie',

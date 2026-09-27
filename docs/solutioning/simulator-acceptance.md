@@ -4,7 +4,7 @@ Implementation: `simulator-mvp`. Checkpoint commits: `5804582` (plan), `e7f1602`
 
 This document preserves the original MVP acceptance evidence. Subsequent engine and design work is tracked separately in [critique and improvement rounds](simulator-improvement-rounds.md). The [third engine round](simulator-engine-round-3.md) records the current v4 rubric measurements, 110-test gate, and same-audio immediate-End regression. The standard workshop recording files now contain those v4 results; the earlier v3 counts below are historical measurements, not the current recording totals.
 
-The subsequent [prerecorded briefing follow-up](simulator-meeting-opening.md) covers the nine scenario introductions, Morgan's pace direction, and the revised Theo constraint. Its evidence is local; this follow-up has not been deployed.
+The subsequent [prerecorded briefing follow-up](simulator-meeting-opening.md) covers the nine scenario introductions, Morgan's pace direction, and the revised Theo constraint. It was [deployed from `797258c`](simulator-release.md#prerecorded-colleague-briefings-release) on September 27 at 03:20 UTC. That release record separates local acceptance from production playback, voice/scoring, retry and archive evidence.
 
 ## Delivered behavior
 

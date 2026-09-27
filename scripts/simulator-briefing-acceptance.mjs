@@ -112,8 +112,9 @@ try {
   await livePage.waitForTimeout(100);
   check(await livePage.locator('.sim-briefing audio').evaluate(node => !node.hidden), 'rapid Replay then pause incorrectly marked the clip unavailable');
   await livePage.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration));
-  await livePage.locator('.sim-briefing audio').evaluate(async node => { node.currentTime = node.duration - .15; await node.play(); });
-  await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio')?.ended);
+  // Let playback finish: a hosted asset may not support seeking to an unloaded tail.
+  await livePage.locator('.sim-briefing audio').evaluate(node => node.play());
+  await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio')?.ended, null, { timeout: 60_000 });
   check(apiCalls.length === 0, `finishing briefing called API: ${apiCalls.join(', ')}`);
   check(await livePage.evaluate(() => window.__micCalls) === 0, 'finishing briefing requested microphone');
   check(await livePage.getByRole('button', { name: 'Start conversation' }).isEnabled(), 'finished briefing hid start control');

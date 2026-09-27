@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { directorContext, generateDirector, validateDirectorResult, type DirectorInput } from './director.server';
+import { directorContext, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
 import { getScenario, getClient } from './scenarios.server';
 import type { DirectorRecord, DetectorRecord } from '../../core/simulator/director';
 
@@ -78,4 +78,24 @@ test('incomplete, refused, non-JSON, and HTTP failures never become hints', asyn
     await expect(generateDirector(input, (async () => Response.json(value)))).rejects.toThrow('Director output was invalid.');
   }
   await expect(generateDirector(input, (async () => new Response('private provider detail', { status: 429 })))).rejects.toThrow('Director request failed (429).');
+});
+
+test('freshness checks reach Jev for both audiences with and without an optional briefing', async () => {
+  // Substitute paid HTTP only; the real SDK validates and serializes the context.
+  const transcript = [...input.transcript, { id: 'p2', speaker: 'trainee' as const, text: 'What decision will this support?', startMs: 1000, endMs: 2000 }];
+  for (const audience of ['trainee', 'actor'] as const) for (const scenarioId of ['sharepoint', 'proposal']) {
+    let requests = 0;
+    const request = Object.assign(async (url: string | URL | Request, options?: RequestInit) => {
+      requests++;
+      expect(url).toBe('https://api.typesafe.ai/v1/systemone');
+      expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer fixture-key');
+      const body = JSON.parse(String(options?.body));
+      const state = typeof body.state === 'string' ? JSON.parse(body.state) : body.state;
+      expect(state).toMatchObject({ audience, proposedIntervention: intervention, dialogue: [{ id: 'p1', text: input.transcript[0]!.text }, { id: 'p2', text: transcript[1]!.text }] });
+      return Response.json({ model: 'jev-1.13.0', answers: { applicable: { type: 'noul', noul: .08 } }, usage: { input_tokens: 120, output_tokens: 8 } });
+    }, { preconnect: fetch.preconnect });
+    const result = await recheckDirector({ ...input, audience, scenarioId, transcript, intervention: { ...intervention, action: 'intervene' } }, request);
+    expect(requests).toBe(1);
+    expect(result).toEqual({ probability: .08, usage: { inputTokens: 120, outputTokens: 8 } });
+  }
 });

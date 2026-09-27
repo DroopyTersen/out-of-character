@@ -1,10 +1,11 @@
 import type { LiveHint } from './types';
 
 export type DirectorAudience = 'trainee' | 'actor';
-export type BooleanCondition = 'mistake' | 'stalled' | 'knowledge' | 'authority' | 'role' | 'interests';
+export const ACTOR_CONDITIONS = ['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const;
+export type BooleanCondition = 'mistake' | 'stalled' | (typeof ACTOR_CONDITIONS)[number];
 export type DirectorSignal = { condition: BooleanCondition; probability: number } | { condition: `objective:${string}`; selected: boolean };
 export type DirectorCondition = DirectorSignal['condition'];
-export const DIRECTOR_VERSION = 'contextual-director-v1';
+export const DIRECTOR_VERSION = 'contextual-director-v2';
 export const DIRECTOR_LIMITS = { calls: { trainee: 40, actor: 20 }, rechecks: 60, notes: 6, cooldown: 20_000, reconsider: 60_000, age: 20_000, generation: 15_000, recheck: 3000, hint: 30_000 };
 export const MATERIAL_CONCERN = 'A commitment or claim may go beyond what has been established. Review it before proceeding.';
 
@@ -111,7 +112,7 @@ export type DirectorRecord = RecordBase & {
   source: 'director'; effort: 'none'; inputCount: number; lastInputId: string | null; result?: DirectorResult; readyAt?: number; deliveredAt?: number; completedAt?: number;
   outcome: 'pending' | 'published' | 'sent' | 'none' | 'stale' | 'invalid' | 'timeout' | 'error' | 'aborted';
   usage?: DirectorUsage; recheck?: { inputCount: number; lastInputId: string | null; startedAt: number; probability: number | null; durationMs: number | null; usage?: DirectorUsage };
-  delivery?: { eventId: string; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number };
+  delivery?: { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number };
 };
 export type ObservationRecord = {
   source: 'observation'; id: string; audience: DirectorAudience; revision: number; snapshotAt: number; completedAt?: number;

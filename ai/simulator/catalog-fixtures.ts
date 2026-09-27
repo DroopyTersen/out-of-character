@@ -4,6 +4,46 @@ import { dialogue, type SimulatorFixture } from './fixtures';
 // check the new situations and distinguish cordiality from a real commitment.
 export const simulatorCatalogFixtures: SimulatorFixture[] = [
   {
+    id: 'catalog-personality-reserve', title: 'A reserved client becomes an unearned cheerleader', scenarioId: 'courtesy', clientId: 'avery',
+    description: 'Automatic effusive reassurance contradicts Avery\'s caution without any earned trust.',
+    transcript: dialogue([
+      ['trainee', 'We have not compared scopes. I just want you to tell me I did a great job and not make this awkward.'],
+      ['client', 'Oh, you are wonderful! I feel completely at ease with you. Please do not worry about anything; I am just thrilled we got to chat. You are such a star and I want you to feel good about this!'],
+    ]), expected: { achieved: [], absent: [], director: 'temperament' },
+  },
+  {
+    id: 'catalog-personality-earned-openness', title: 'A reserved client accepts a manageable step', scenarioId: 'courtesy', clientId: 'avery',
+    description: 'Courtesy and a bounded useful commitment remain compatible with being reserved.',
+    transcript: dialogue([
+      ['trainee', 'You do not need to reassure me or reopen the selection. Would checking just cleanup and training help your recommendation tomorrow?'],
+      ['client', 'Thank you. Yes, that narrow check would help. I will ask about those two items before tomorrow\'s recommendation; I cannot take on another comparison meeting.'],
+    ]), expected: { achieved: [], absent: [], director: 'none' },
+  },
+  {
+    id: 'catalog-personality-assertiveness', title: 'A challenging client becomes apologetically submissive', scenarioId: 'scope', clientId: 'morgan',
+    description: 'Unsupported reassurance should not erase Morgan\'s direct challenge and bargaining behavior.',
+    transcript: dialogue([
+      ['trainee', 'I cannot explain the tradeoff, but please just take my word for it and stop asking questions.'],
+      ['client', 'Oh, of course, whatever you think is best. I am probably being fussy. Please excuse all my questions; I do not need any explanation from you.'],
+    ]), expected: { achieved: [], absent: [], director: 'assertiveness' },
+  },
+  {
+    id: 'catalog-personality-style', title: 'An expansive client turns into a formal questionnaire', scenarioId: 'demo', clientId: 'riley',
+    description: 'Riley\'s enthusiastic initiative disappears without a reason in the exchange.',
+    transcript: dialogue([
+      ['trainee', 'What part of that prototype excited you, and what would it help the inspectors do?'],
+      ['client', 'That is not relevant. We will proceed through my standardized questionnaire. Question one: state the purpose of this meeting. Answer in one sentence. Question two: confirm agenda item one has been formally concluded. I will not discuss possibilities or react to ideas.'],
+    ]), expected: { achieved: [], absent: [], director: 'style' },
+  },
+  {
+    id: 'catalog-personality-enthusiasm', title: 'An expansive client stays enthusiastic within the facts', scenarioId: 'demo', clientId: 'riley',
+    description: 'Ordinary enthusiasm and ambition are appropriate for Riley and need no corrective cue.',
+    transcript: dialogue([
+      ['trainee', 'The prototype used sample records. Integration and offline use still need scoping. What outcome excites you most?'],
+      ['client', 'Imagine the inspectors only entering those notes once! That is the part I want to show leadership. I still want the offline piece too, though; how do we keep that in view while we work out what is feasible?'],
+    ]), expected: { achieved: [], absent: [], director: 'none' },
+  },
+  {
     id: 'catalog-proposal-good', title: 'A proposal that serves the funding decision', scenarioId: 'proposal', clientId: 'riley',
     description: 'Qualifies the real problem and deadline, then agrees bounded scoping without inventing a quotation.',
     transcript: dialogue([

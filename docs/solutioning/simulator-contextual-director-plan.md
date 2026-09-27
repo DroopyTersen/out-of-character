@@ -21,8 +21,8 @@ sequenceDiagram
         S->>J: Trainee rubric and context
         J-->>S: Scores, objectives, coaching signals
     and Actor detection
-        S->>J: Actor context and four questions
-        J-->>S: Knowledge, authority, role, interests
+        S->>J: Actor context and seven questions
+        J-->>S: Facts, authority, role, interests, personality drift
     end
     alt No trigger or gate suppresses work
         Note over S: Log the decision and continue
@@ -46,9 +46,9 @@ sequenceDiagram
 
 The trainee director receives public scenario information, client name/role, objective progress, observed dialogue, and previously published trainee hints. It receives no private client facts, interests, grading criteria, or actor directions.
 
-The actor director receives the client's role, personality, facts, interests, world limits, observed dialogue, and previously submitted actor cues. It receives no trainee objectives, scores, briefing, or hints. World limits constrain behavior without becoming facts the client can claim to know. Discarded drafts and rejected cues do not enter repetition history.
+The actor director receives the client's role, personality, facts, interests, world limits, observed dialogue, and previously submitted actor cues. Each cue includes its submission time, the last settled passage when sent, provider receipt status, and the Jev signals that prompted its review. The six latest completed assessments for the same audience supply recent probability trends, including the current assessment. Sol compares subsequent dialogue with the earlier direction: improvement or no opportunity to respond warrants silence; a confirmed cue that did not help may warrant a more concrete instruction. Receipt is not compliance, and Jev probabilities are advisory evidence. It receives no trainee objectives, scores, briefing, or hints. World limits constrain behavior without becoming facts the client can claim to know. Discarded drafts and rejected cues do not enter repetition history.
 
-The actor has four independent Jev probabilities in one actor-only request:
+The actor has seven independent Jev probabilities in one actor-only request:
 
 | Question | Concrete concern |
 | --- | --- |
@@ -56,6 +56,11 @@ The actor has four independent Jev probabilities in one actor-only request:
 | Authority | Making commitments outside the character's remit |
 | Role | Doing the consultant's work or narrating the simulation |
 | Interests | Contradicting the character's goals and priorities |
+| Temperament | Unearned confidence, reassurance, warmth, or openness inconsistent with the assigned character |
+| Assertiveness | Challenging or yielding in a way that contradicts the character's specified approach |
+| Style | Losing the assigned manner of conversation, such as thoughtful brevity or expansive initiative |
+
+Personality questions assess wording and interaction choices in recent substantive responses. They do not infer loudness, pitch, or other acoustic performance from text, and ordinary courtesy and earned adjustments remain appropriate. These three questions share the existing actor request and 0.60 referral threshold; no extra polling or separate personality service is added.
 
 Real expertise and earned cooperation remain appropriate. The strongest eligible actor signal is reviewed first. Trainee and actor use separate Jev requests and separate Sol instructions, contexts, histories, and Responses calls. Authored objective hint examples remain only as Jev classification inputs; delivered hints are generated from the conversation. Authored actor cues and their old selector are removed.
 
@@ -84,7 +89,7 @@ The server sends the text through `session.thinking.append`, `delegation_id: nul
 
 The existing transcript archive stores observations, immediate detector alerts, and generated work in `interventions_json` (migration `0002_simulator_interventions.sql`). Each live Jev assessment starts a pending observation before its paid call. The record retains all returned signals and the gate outcome, including quiet, suppressed, stale, failed, timed-out, and aborted work.
 
-Generated records link to their observation and issue IDs. They retain the exact cue or `none`, evidence IDs, model/effort, usage, timing, and outcome. Rechecks retain probability, duration, and usage; actor delivery retains its event ID, status, and acknowledgment time. Transcript revision, passage count, and last passage ID locate each assessment/call without repeating large input-ID arrays. These positions support review but cannot reconstruct an exact settled set during overlapping speech.
+Generated records link to their observation and issue IDs. They retain the exact cue or `none`, evidence IDs, model/effort, usage, timing, and outcome. Rechecks retain probability, duration, and usage; actor delivery retains its event ID, last settled passage at submission, status, and acknowledgment time. Transcript revision, passage count, and last passage ID locate each assessment/call without repeating large input-ID arrays. These positions support review but cannot reconstruct an exact settled set during overlapping speech.
 
 Per-audience call counts and note/recheck counters remain for budget enforcement. Other totals can be derived from the records. Public session snapshots contain only the current trainee hint; private actor cues and raw observations remain in the server archive. See [the transcript review guide](simulator-transcript-review.md) for export commands and evidence semantics.
 

@@ -1,4 +1,5 @@
 import type { TranscriptEntry, SkillId } from '../../core/simulator/types';
+import type { ACTOR_CONDITIONS } from '../../core/simulator/director';
 
 export type SimulatorFixture = {
   id: string;
@@ -7,7 +8,7 @@ export type SimulatorFixture = {
   clientId: string;
   description: string;
   transcript: TranscriptEntry[];
-  expected: { achieved: string[]; absent: string[]; lowSkills?: SkillId[]; highSkills?: SkillId[]; unavailable?: SkillId[]; director?: 'none' | 'knowledge' | 'authority' | 'role' | 'interests'; concern?: boolean; objectiveEvidence?: Record<string, string> };
+  expected: { achieved: string[]; absent: string[]; lowSkills?: SkillId[]; highSkills?: SkillId[]; unavailable?: SkillId[]; director?: 'none' | (typeof ACTOR_CONDITIONS)[number]; concern?: boolean; objectiveEvidence?: Record<string, string> };
 };
 
 export function dialogue(lines: readonly (readonly [TranscriptEntry['speaker'], string])[]): TranscriptEntry[] {

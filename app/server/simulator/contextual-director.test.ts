@@ -1,5 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { ContextualDirector, directorServices } from './contextual-director';
+import { directorContext } from '../../../ai/simulator/director.server';
 import type { DirectorSignal } from '../../../core/simulator/director';
 import { emptySkills, type SessionSnapshot, type TranscriptEntry } from '../../../core/simulator/types';
 
@@ -213,6 +214,48 @@ test('actor directions remain private and record provider rejection without chan
   expect(f.snapshot.message).toBeNull();
 });
 
+test('a repeated actor review receives cue delivery position and before-and-after Jev signals', async () => {
+  const contexts: ReturnType<typeof directorContext>[] = [];
+  const f = fixture({ generateDirector: async input => {
+    contexts.push(directorContext(input));
+    return contexts.length === 1 ? { ...result, text: 'Stay reserved; keep reassurance brief.' } : { ...result, action: 'none', text: null, evidenceIds: [] };
+  } });
+  const first: DirectorSignal[] = [{ condition: 'temperament', probability: .92 }, { condition: 'assertiveness', probability: .25 }, { condition: 'style', probability: .71 }];
+  await f.observe(first, 'actor');
+  f.director.providerEvent(String(f.sent[0]?.event_id), true);
+  setSystemTime(epoch + 30_000);
+  f.snapshot.transcript.push(passage('p3', 'client', 'I need a moment to consider that.'));
+  f.snapshot.revision++;
+  await f.observe([{ condition: 'temperament', probability: .55 }], 'actor');
+  setSystemTime(epoch + 61_000);
+  f.snapshot.transcript.push(passage('p4', 'client', 'You are absolutely brilliant, please do not worry about me at all!'));
+  f.snapshot.revision++;
+  await f.observe([{ condition: 'temperament', probability: .84 }], 'actor');
+  expect(contexts).toHaveLength(2);
+  expect(contexts[0]!.recentAssessments).toEqual([{ observedAt: epoch, throughPassageId: 'p2', signals: first }]);
+  expect(contexts[1]!.previousInterventions).toEqual([{ condition: 'temperament', text: 'Stay reserved; keep reassurance brief.', sentAt: epoch, afterPassageId: 'p2', deliveryStatus: 'accepted', reviewSignals: first }]);
+  expect(contexts[1]!.recentAssessments).toEqual([
+    { observedAt: epoch, throughPassageId: 'p2', signals: first },
+    { observedAt: epoch + 30_000, throughPassageId: 'p3', signals: [{ condition: 'temperament', probability: .55 }] },
+    { observedAt: epoch + 61_000, throughPassageId: 'p4', signals: [{ condition: 'temperament', probability: .84 }] },
+  ]);
+  expect(f.sent).toHaveLength(1); // Sol's decline does not repeat the earlier cue.
+  const trainee = directorContext({ audience: 'trainee', reason: { condition: 'stalled', probability: .9 }, scenarioId: 'proposal', clientId: 'morgan', transcript: f.snapshot.transcript, objectives: [], history: f.director.records });
+  expect(trainee.recentAssessments).toBeUndefined();
+  expect(trainee.previousInterventions).toEqual([]);
+});
+
+test('actor cue history marks delivery after newer dialogue, not the older generation input', async () => {
+  const pending = deferred<typeof result>();
+  const f = fixture({ generateDirector: () => pending.promise });
+  const work = f.observe([{ condition: 'temperament', probability: .9 }], 'actor');
+  f.snapshot.transcript.push(passage('p3', 'client', 'Yes, absolutely, whatever you prefer.'));
+  setSystemTime(epoch + 1000);
+  pending.resolve(result);
+  await work;
+  expect(f.director.records.find(row => row.source === 'director')).toMatchObject({ lastInputId: 'p2', deliveredAt: epoch + 1000, recheck: { lastInputId: 'p3' }, delivery: { afterPassageId: 'p3' } });
+});
+
 test('closing aborts generation and freezes terminal records despite a late completion', async () => {
   const pending = deferred<typeof result>();
   let signal: AbortSignal | undefined;
@@ -273,7 +316,7 @@ test('private review history preserves quiet, admitted, and suppressed judgments
   expect(observations.map(row => row.outcome)).toEqual(['no_trigger', 'started', 'busy']);
   expect(observations[1]).toMatchObject({ audience: 'actor', signals, revision: 1, snapshotAt: epoch, completedAt: epoch, inputCount: 2, lastInputId: 'p2' });
   const generated = f.director.records.find(row => row.source === 'director')!;
-  expect(generated).toMatchObject({ observationId: observations[1]!.id, signal: { condition: 'authority', probability: .92 }, result: { action: 'intervene', text: result.text, evidenceIds: ['p1'] }, completedAt: epoch, delivery: { status: 'accepted', acknowledgedAt: epoch } });
+  expect(generated).toMatchObject({ observationId: observations[1]!.id, signal: { condition: 'authority', probability: .92 }, result: { action: 'intervene', text: result.text, evidenceIds: ['p1'] }, completedAt: epoch, delivery: { afterPassageId: 'p2', status: 'accepted', acknowledgedAt: epoch } });
   expect(JSON.stringify(f.snapshot)).not.toContain(observations[1]!.id);
 });
 

@@ -42,10 +42,13 @@ test('actor signals use typed conditions without requiring an authored cue', () 
     'director:authority': { type: 'boolean', probability: .13 },
     'director:role': { type: 'boolean', probability: .95 },
     'director:interests': { type: 'boolean', probability: .81 },
+    'director:temperament': { type: 'boolean', probability: .84 },
+    'director:assertiveness': { type: 'boolean', probability: .32 },
+    'director:style': { type: 'boolean', probability: .61 },
   };
-  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'role', probability: .95 }, { condition: 'interests', probability: .81 }]);
+  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'role', probability: .95 }, { condition: 'interests', probability: .81 }, { condition: 'temperament', probability: .84 }, { condition: 'assertiveness', probability: .32 }, { condition: 'style', probability: .61 }]);
   raw['director:role'] = { type: 'boolean', probability: -1 };
-  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'interests', probability: .81 }]);
+  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'interests', probability: .81 }, { condition: 'temperament', probability: .84 }, { condition: 'assertiveness', probability: .32 }, { condition: 'style', probability: .61 }]);
 });
 test('feedback quotes source text and leaves unavailable or uncited evidence unscored', () => {
   const transcript = simulatorFixtures[0]!.transcript;

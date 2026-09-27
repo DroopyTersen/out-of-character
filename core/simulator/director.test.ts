@@ -68,7 +68,7 @@ test('invalid signals cannot trigger reviews and scores are not signals', () => 
 });
 
 test('actor concerns earn a second opinion at .60 without lowering trainee thresholds', async () => {
-  for (const condition of ['knowledge', 'authority', 'role', 'interests'] as const) {
+  for (const condition of ['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const) {
     const gate = new DirectorGate();
     gate.observe('actor', [{ condition, probability: .59 }]);
     expect(gate.review('actor', 1000, 1, complete).decision).toBe('no_trigger');

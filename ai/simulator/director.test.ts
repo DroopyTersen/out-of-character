@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { directorContext, generateDirector, validateDirectorResult, type DirectorInput } from './director.server';
+import { directorContext, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
 import { getScenario, getClient } from './scenarios.server';
 import type { DirectorRecord, DetectorRecord } from '../../core/simulator/director';
 
@@ -45,8 +45,8 @@ test('only delivered generated advice suppresses repetition; failed drafts and f
   const alert: DetectorRecord = { source: 'detector', id: 'alert', observationId: 'observation-alert', issueId: 'trainee:mistake:1', audience: 'trainee', signal: { condition: 'mistake', probability: .99 }, revision: 1, snapshotAt: 1000, gateAt: 1100, readyAt: 1100, deliveredAt: 1100, model: 'jev', result: { action: 'intervene', text: 'Generic alert', evidenceIds: [] }, outcome: 'published' };
   const history = [previous('Already shown'), previous('Never shown', { outcome: 'stale' }), alert, previous('Failed to send', { outcome: 'error' })];
   expect(directorContext({ ...input, history }).previousInterventions).toEqual([{ condition: 'objective:decision', text: 'Already shown' }]);
-  const actorHistory = [previous('Rejected', { audience: 'actor', signal: { condition: 'role', probability: .99 }, outcome: 'sent', delivery: { eventId: 'cue-rejected', status: 'rejected' } }), previous('Submitted', { audience: 'actor', signal: { condition: 'role', probability: .99 }, outcome: 'sent', delivery: { eventId: 'cue-submitted', status: 'unknown' } })];
-  expect(directorContext({ ...input, audience: 'actor', reason: { condition: 'role', probability: .99 }, history: actorHistory }).previousInterventions).toEqual([{ condition: 'role', text: 'Submitted' }]);
+  const actorHistory = [previous('Rejected', { audience: 'actor', signal: { condition: 'role', probability: .99 }, deliveredAt: 1200, outcome: 'sent', delivery: { eventId: 'cue-rejected', afterPassageId: 'p1', status: 'rejected' } }), previous('Submitted', { audience: 'actor', signal: { condition: 'role', probability: .99 }, deliveredAt: 1200, outcome: 'sent', delivery: { eventId: 'cue-submitted', afterPassageId: 'p1', status: 'unknown' } })];
+  expect(directorContext({ ...input, audience: 'actor', reason: { condition: 'role', probability: .99 }, history: actorHistory }).previousInterventions).toEqual([{ condition: 'role', text: 'Submitted', sentAt: 1200, afterPassageId: 'p1', deliveryStatus: 'unknown', reviewSignals: [] }]);
 });
 
 test('output contract rejects fabricated evidence, unsolicited fields, empty hints, and malformed none', () => {
@@ -78,4 +78,24 @@ test('incomplete, refused, non-JSON, and HTTP failures never become hints', asyn
     await expect(generateDirector(input, (async () => Response.json(value)))).rejects.toThrow('Director output was invalid.');
   }
   await expect(generateDirector(input, (async () => new Response('private provider detail', { status: 429 })))).rejects.toThrow('Director request failed (429).');
+});
+
+test('freshness checks reach Jev for both audiences with and without an optional briefing', async () => {
+  // Substitute paid HTTP only; the real SDK validates and serializes the context.
+  const transcript = [...input.transcript, { id: 'p2', speaker: 'trainee' as const, text: 'What decision will this support?', startMs: 1000, endMs: 2000 }];
+  for (const audience of ['trainee', 'actor'] as const) for (const scenarioId of ['sharepoint', 'proposal']) {
+    let requests = 0;
+    const request = Object.assign(async (url: string | URL | Request, options?: RequestInit) => {
+      requests++;
+      expect(url).toBe('https://api.typesafe.ai/v1/systemone');
+      expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer fixture-key');
+      const body = JSON.parse(String(options?.body));
+      const state = typeof body.state === 'string' ? JSON.parse(body.state) : body.state;
+      expect(state).toMatchObject({ audience, proposedIntervention: intervention, dialogue: [{ id: 'p1', text: input.transcript[0]!.text }, { id: 'p2', text: transcript[1]!.text }] });
+      return Response.json({ model: 'jev-1.13.0', answers: { applicable: { type: 'noul', noul: .08 } }, usage: { input_tokens: 120, output_tokens: 8 } });
+    }, { preconnect: fetch.preconnect });
+    const result = await recheckDirector({ ...input, audience, scenarioId, transcript, intervention: { ...intervention, action: 'intervene' } }, request);
+    expect(requests).toBe(1);
+    expect(result).toEqual({ probability: .08, usage: { inputTokens: 120, outputTokens: 8 } });
+  }
 });

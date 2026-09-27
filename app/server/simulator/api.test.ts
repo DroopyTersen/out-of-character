@@ -63,7 +63,7 @@ test('public catalog and browser data channel cannot receive actor configuration
   expect(config.store).toBe(false);
   expect(config.audio.output.voice).toBe('marin');
   expect(liveConfiguration('scope', 'harper').audio.output.voice).toBe('gleam');
-  expect(liveConfiguration('scope', 'quinn').audio.output.voice).toBe('cinder');
+  expect(liveConfiguration('scope', 'quinn').audio.output.voice).toBe('beacon');
   expect(liveConfiguration('scope', 'jamie').audio.output.voice).toBe('coral');
   expect(config.client.data_channel.allowed_server_events).toEqual([]);
   expect(config.client.data_channel.allowed_client_events).toEqual(['session.close']);

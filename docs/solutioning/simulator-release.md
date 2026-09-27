@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Current release: **`f696fbb`**, deployed September 27, 2026 at 00:07 UTC. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) plays prepared samples for each client and voice while showing the selected portrait; it is also a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab). The nine simulator scenarios and private archive remain included.
+Latest recorded release: [**`797258c`**](#prerecorded-colleague-briefings-release), deployed September 27, 2026 at 03:20 UTC. All nine scenarios have prerecorded colleague briefings. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) also remains a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab). The subsequent [Ash and factual handovers](simulator-meeting-opening.md#ash-and-factual-handovers) follow-up is local, including Quinn's change to Beacon.
 
 ## Voice Lab release
 

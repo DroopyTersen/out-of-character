@@ -1,77 +1,77 @@
 {
   "model": "gpt-live-1",
-  "voice": "sage",
+  "voice": "ash",
   "clips": {
     "sharepoint": {
-      "scriptHash": "f99aa7632fbab25c2f42d393cb17a44bea0cf796b519dccf5d378d100aa906b9",
-      "sourceHash": "42e196fda514b2eee47a0bccb8d96efc7c15830fca7e43784caa3f5789838d3d",
-      "audioHash": "7d77cab68ad791b3ceaaea1502cbfbd8b91be4eab4ab56dfad3d10c14f371f84",
-      "transcript": "Quick handover before your call. We are already building a custom application for this client, and you are their account contact. The software project looks on track, but we have a lead that they may also need help with SharePoint. Our team can help with collaboration and adoption as well as custom software. Use the check-in to understand what is actually going wrong, who it affects, and whether there is a useful next conversation. You are not there to force an implementation sale or promise extra work inside the existing project. Get curious, make a relevant connection, and earn a sensible next step.",
-      "seconds": 39.1,
-      "attempts": 1
+      "scriptHash": "20850c9a36c341127cee42b77c8b326818c9ef42139c14afd79097733a47ae21",
+      "sourceHash": "df1b619dd0a7470862d6f108208dfdb97bfb19c67a7666ed842527934e1daf9f",
+      "audioHash": "d00f6ad649df3c439611a370159942d69f0110190994b3bdf3bedbb83f95783e",
+      "transcript": "Quick handover before your call. We are already building a custom application for this client, and you are their account contact. The software project looks on track, but we have a lead that they may also need help with SharePoint. Our team works on collaboration and adoption as well as custom software. We do not have much detail on the SharePoint side yet. You have a check-in with their IT director.",
+      "seconds": 24.8,
+      "attempts": 2
     },
     "scope": {
-      "scriptHash": "4a24c99ea46ff204fb79cb5bf696cf741cc4e66a5c48c3485692082dc6a271ef",
-      "sourceHash": "40ef9fb5fe10f792b63dc75f32b6105001f1e7a223331c9a13757c141341d654",
-      "audioHash": "4f0fbe91d0872c1f5b8158c9a4f236fd1d684c3caa8fa3f18908e969f58fc441",
-      "transcript": "Here is where we are. You are the technical lead on our custom software project, and the release is due in ten days. The client now wants a reporting dashboard added and thinks it should be a small change.It is outside the agreed scope, the release is already full, and we have not estimated the dashboard. Find out what they really need and why. You will need to protect the commitments we have already made while proposing a useful way forward. Do not invent an estimate or agree to squeeze it in. Any scope or priority change needs an informed decision with the product owner.",
-      "seconds": 38,
+      "scriptHash": "01e256fa122780ba691af84dda5164e3f78d8f8bb6904801b49e0bce3f2dbe8c",
+      "sourceHash": "0085aa11a17631b1b6255acd55816e3626a676d8268ee922c8c6a1eb9a7f5bb4",
+      "audioHash": "0a2c6fd554c43c7089639755e615110c362c22642ed2bad451124373a2fcb2a5",
+      "transcript": "Here is where we are. You are the technical lead on our custom software project, and the release is due in ten days. The client now wants a reporting dashboard added and thinks it should be a small change. It is outside the agreed scope, the release is already full, and we have not estimated the dashboard. The product owner is responsible for release priorities. The client has asked for this call to discuss the request.",
+      "seconds": 25.4,
       "attempts": 1
     },
     "proposal": {
-      "scriptHash": "05b2141996f5b3e6e17a28b41d14bb3a1320ba3cde164eac489e37e2cf68ce05",
-      "sourceHash": "f892a32617203544a8920fe34b67da0eea2cc1764fe3c2ac500af11d6cc45b63",
-      "audioHash": "e10356392fc9245061b9476afd991909172c74ffed087d9cacf2cc18b8477f33",
-      "transcript": "You are meeting a prospective client as our solution consultant. All we have so far is a short request for an application to replace their customer-service spreadsheet. They want a fixed-price proposal by Friday, but we have not agreed the users, workflow, scope, or what success means. We also have no approved price, staffing commitment, or delivery date to offer. Your job is to understand enough about the need and the decision behind that deadline to suggest a proportionate next step. Keep it useful and focused. We need to qualify the opportunity without turning the call into an unpaid design workshop.",
-      "seconds": 40.3,
+      "scriptHash": "8a7fb8f031f2b74c1cf6af75303a00a76a73fea1d981b1c078fca7eff52e6134",
+      "sourceHash": "64584e69bff43e6f11391a38449e20b492dc190a4dae1d270e120e1fb399d6ee",
+      "audioHash": "da3c6557024e4386d9a4a4fb38bd118b1cf2ed2855b415994164bcbed275d418",
+      "transcript": "You are meeting a prospective client as our solution consultant. All we have so far is a short request for an application to replace their customer-service spreadsheet. They want a fixed-price proposal by Friday. Beyond that request, we have not done discovery or agreed a scope with them. There is no approved price, staffing commitment, or delivery date. This is your first proper conversation with them about the application.",
+      "seconds": 29.5,
       "attempts": 1
     },
     "courtesy": {
-      "scriptHash": "e6e7eafb4f3ea5fee7b9c474dba6cd97cb191685e7b2adf2446ef66d5588253f",
-      "sourceHash": "95d78a55c8caf79363b8b26a01c10d549cb2927b16437dd162f59531f5c09f9a",
-      "audioHash": "9aaaa211c176267ae151ae06d913518f604f139e795e350c2f034ca53dc03c5c",
-      "transcript": "You have been handling our proposal for this client’s intranet work. They have asked for a call before sending the formal decision, and the indication is that they are leaning toward another firm. Go in ready to listen. You need to understand how they are making the decision and whether there is a concern we can responsibly address. Do not jump straight to a discount, criticize the competitor, or invent an offer. There may be a useful next step, or the right outcome may be a candid conversation that preserves the relationship. Work out what is real before deciding how to respond.",
-      "seconds": 37.6,
+      "scriptHash": "a8c1dbd541f9b1f0a0070cb507bd368ec1b0dc29806be48bb9ee412ffb6fbf7b",
+      "sourceHash": "dfe32bd670a6634187d80aa7f2c8c96297f3bcd672f062d966a62d3ac0ae0d39",
+      "audioHash": "7613a0659c229b62266a930df49e311eaf3bafb11ac9c6dab850673514bb3d34",
+      "transcript": "You have been handling our proposal for this client's intranet work. They have asked for a call before sending the formal decision and are leaning toward another firm, largely on price. Our proposal includes content inventory and cleanup, implementation, and training for site owners. The other firm's total is roughly a third lower, but we have not seen their scope. Neither proposal has been signed. Any discount on our price needs internal approval; you do not have that authority on this call.",
+      "seconds": 35.9,
       "attempts": 1
     },
     "in-house": {
-      "scriptHash": "d44be85c9d51970ffe0a469eef19acc5d03f25604edbaaeb05cf80405662e995",
-      "sourceHash": "fabfd0dc4f7ff02b2b5e11b0116e83780a20b97db634d5b9f21c22a8113b257b",
-      "audioHash": "858e3c420a581ee303f641cebd44911a01ba57e6b35c50e38c653754b311de00",
-      "transcript": "A quick heads-up before the introduction. This client already has an engineering team that builds their applications and knows their business. Their leadership suggested talking to us about an order-status portal, but that does not mean the team wants a consultancy involved. You are exploring whether we could help and what a workable partnership would look like. Respect what they already know. Find out where outside support could add value, be clear about ownership and handover, and earn a focused follow-up if there is a fit. We have not committed people, price, or a delivery date, so do not sell certainty we do not have.",
-      "seconds": 40.4,
+      "scriptHash": "3194e14996d5929be5f9388c9bfe287ac41f463d4a215cb136663e6303cca269",
+      "sourceHash": "6a30899f8271cfe820ac6b25f24a86b9f025d62f6a026b06dc0cb4c7271d2711",
+      "audioHash": "590c0e9e42f6eb7c5fc9f51c6f47faf33bce548d8c950ce8a1c184a40c260e1f",
+      "transcript": "A quick heads-up before the introduction. This client already has an engineering team that builds their applications and knows their business. Their leadership suggested talking to us about an order-status portal. You are representing our consultancy in the conversation with their IT manager. We have not agreed a role for an outside team, and there is no commitment yet on people, price, or a delivery date.",
+      "seconds": 26.4,
       "attempts": 1
     },
     "swap": {
-      "scriptHash": "cfec35125b93f90b37e76d21b2113816186937b282db96cede53743329699e1c",
-      "sourceHash": "75264e8aa76869d4436db0acb1c8b6a8dd345a6961ce751682af5ec1d0fdc678",
-      "audioHash": "25b89e632398989e5c78e1ae425a2dd1e3d945c4b90e7ae8e0771cd7d58ab694",
-      "transcript": "You are our engagement manager, and the client has asked for a private conversation about Theo, our lead developer. They want him replaced after difficult sprint reviews. Theo is personally doing critical integration work, and we have nobody who can take over his expertise quickly enough. Pulling him out of development would put the project timeline at serious risk. That does not excuse poor behavior. Hear what happened and what it did to their team. Your goal is a change the client can trust while Theo keeps contributing technically. You have authority over how our team runs client meetings and handles conduct internally, but the client still needs to trust the next step.",
-      "seconds": 44.2,
-      "attempts": 2
+      "scriptHash": "c05f16c11887d3a9ef6833828c19093c93e66b1d0fa359389d2f77950a882121",
+      "sourceHash": "62d37c19c7429a3cf4d8fdffbeea5793f4ccf02d19e9635c5f75320a64561767",
+      "audioHash": "4093346c701eba3667414729ee349b8648fe49a2d0da88893dd4a108e5bcfe37",
+      "transcript": "You are our engagement manager, and the client has asked for a private conversation about Theo, our lead developer. They want him replaced after difficult sprint reviews. Theo is personally doing critical integration work, and we have nobody who can take over his expertise quickly enough. Pulling him out of development would put the project timeline at serious risk. You manage our team’s work on this engagement, including client meetings and conduct. The client has asked to speak with you directly about what has been happening.",
+      "seconds": 33.1,
+      "attempts": 1
     },
     "happy-hour": {
-      "scriptHash": "458853c4fa19929daf7bfe16f9521050cb60aa6489dbd8d2923ff15c53ce8940",
-      "sourceHash": "a2a00d9e4b026db22d06b20a884f3922bdf286f17b3cc28095cb4f1e8f03b3bf",
-      "audioHash": "a83892412adfc6c18ad457a2191eaea602dbc0873e3af92b5120db66611e714a",
-      "transcript": "We are hosting a casual happy hour, and you are about to chat with one of our clients. There is no pitch, project problem, or deal you need to win. Just get to know the person, follow the conversation, and enjoy yourself. This one has no objectives or scores. Go say hello.",
-      "seconds": 18.6,
+      "scriptHash": "852139aef1f31eef33c6fa321a7718a42ad1d42ec68e94d6b48bdc449c660853",
+      "sourceHash": "3a433b57558647a4a1c9b9d8121b4c38fd3ad89283fe39e35b6536be0982c124",
+      "audioHash": "bf127e2c5b5ffaec092db05f7b2fd3c1c3b4bc545abcfd69b9692cd03f430afd",
+      "transcript": "We are hosting a casual happy hour with some of our clients. You are there as one of the consultants, and you have just met a client guest by the drinks. It is a social get-together away from the usual project meetings.",
+      "seconds": 14.4,
       "attempts": 1
     },
     "demo": {
-      "scriptHash": "f9ae6a0374e8e9679d4d09ee507de6afa4c52fed3beee3c689a1656a2af989e3",
-      "sourceHash": "93e9290c62274957c79553a999a113f76cf074c5bf701e49ec527f1bf8867521",
-      "audioHash": "25dcf35892c7d4481b895300247ef35ca4100a7346409e23e8d1a7692c4680dd",
-      "transcript": "The field-inspection prototype made a strong impression, and you are the technical consultant following up with the client. Here is the catch: those polished screens used sample data. Integration, offline work, and security have not been validated. There is no approved production scope, estimate, or delivery promise. The client’s director is meeting the CFO Thursday and wants to move quickly. Find out what they believe the demo proved, correct any mistaken assumptions, and help them describe the opportunity honestly. You need a credible next step that tests the important unknowns, not a six-week promise just because the demonstration looked convincing.",
-      "seconds": 42.8,
-      "attempts": 2
+      "scriptHash": "e55cacae0067a21ecb17fde51edb838368e33a13decd07d69d7071dd3c2b8b4f",
+      "sourceHash": "f6029e441894a594ed4a1d8c36f89c38efcd9359f973f725b3a34ada869c98fb",
+      "audioHash": "7a4a61c54baf0d4786a7b9b2cf73af4b83df1030a8bbd81d2104461aaab6c520",
+      "transcript": "The field-inspection prototype made a strong impression, and you are the technical consultant following up with the client. Those polished screens used sample data. Integration, offline work, and security have not been validated. There is no approved production scope, estimate, or delivery promise. You are meeting the operations manager who championed it. Their director meets the CFO on Thursday, and they want to tell her it can be delivered in six weeks. That timing has not been estimated or agreed with our team.",
+      "seconds": 33.4,
+      "attempts": 1
     },
     "deployment": {
-      "scriptHash": "d39ab6b75795552a59a1962890d79c0d7a1c1061b658a61703bed0ca57fa2463",
-      "sourceHash": "452b65acc562c3bfdca43b2b899f78f4336733b24ed015110a86ccd9dfddf948",
-      "audioHash": "e75c2c12995b8c7d9df7a7eae08a09c5a5ab59d048c074b8fd858b3c3d110247",
-      "transcript": "Before you meet the sponsor, here is the situation. You lead our delivery team on a bulk-order approval feature for the client’s purchasing application. It is Tuesday, and user testing was supposed to start Thursday. Development and our internal tests are finished, but the feature is not in their staging environment. Yesterday we discovered required architecture, governance, and security reviews. No review slots or deployment date are confirmed. Our last update said we were on track, so the sponsor has not heard this yet. We should have asked about that process earlier. Explain the gap, own our planning miss, hear the impact, and agree a realistic recovery and next update.",
-      "seconds": 43.1,
+      "scriptHash": "3bcfe52829a71b45616bef7f377dbc8059e91f5ebb948d334640702ce5145991",
+      "sourceHash": "267e41d15bc89eb6ddbb9f1ec3206ea7bbbf3fd842b130aaab5d5505af55d6b3",
+      "audioHash": "4fc3c856d85a78000d03dfb058df82f135b0b611286a09b57eb4f5cd551b8ea0",
+      "transcript": "Before you meet the sponsor, here is the situation. You lead our delivery team on a bulk-order approval feature for the client’s purchasing application. It is Tuesday, and user testing was supposed to start Thursday. Development and our internal tests are finished, but the feature is not in their staging environment. Yesterday, we discovered required architecture, governance, and security reviews. No review slots or deployment date are confirmed. Our delivery plan had not accounted for those reviews. Our last update said we were on track, so the sponsor has not heard about the delay yet.",
+      "seconds": 36.6,
       "attempts": 2
     }
   }

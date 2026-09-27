@@ -12,8 +12,8 @@ const concurrency = Number(option('concurrency') ?? 3);
 for (const id of ids) if (!scenarioBriefings[id]) throw new Error(`Unknown scenario: ${id}`);
 if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) throw new Error('Concurrency must be 1–4.');
 
-const voice = 'sage';
-const instructions = 'You are a calm, brisk, professional colleague giving a short prerecorded handover to a consultant before a client call. Speak naturally at about 180 to 200 words per minute. This is not a client character or an interactive conversation. Read the supplied script exactly once in English, without an introduction, improvisation, or closing remark. Preserve every warning, negation, and commitment boundary.';
+const voice = 'ash';
+const instructions = 'You are a calm, brisk, professional colleague giving a short prerecorded handover to a consultant before a client call. Speak naturally at about 180 to 200 words per minute. This is not a client character or an interactive conversation. Read the supplied script exactly once in English, without an introduction, improvisation, or closing remark. Preserve every fact, qualification, and constraint.';
 const opening = text => `Start speaking immediately. Read the following handover aloud verbatim, once. Do not wait for a reply. Do not add or omit words:\n\n${text}`;
 const manifestPath = 'scripts/scenario-briefings-manifest.json';
 const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, 'utf8')) : { model: LIVE_MODEL, voice, clips: {} };

@@ -20,7 +20,7 @@ test('each playable scenario has an intact recording of its current briefing', a
   expect(Object.keys(manifest.clips).sort()).toEqual(ids);
   expect((await readdir(new URL('public/simulator/briefings/', root))).filter(name => name.endsWith('.mp3')).sort()).toEqual(ids.map(id => `${id}.mp3`).sort());
   expect(manifest.model).toBe(LIVE_MODEL);
-  expect(manifest.voice).toBe('sage');
+  expect(manifest.voice).toBe('ash');
 
   for (const id of ids) {
     const briefing = scenarioBriefings[id]!;

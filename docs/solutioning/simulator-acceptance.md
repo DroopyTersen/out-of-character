@@ -6,6 +6,8 @@ This document preserves the original MVP acceptance evidence. Subsequent engine 
 
 The subsequent [prerecorded briefing follow-up](simulator-meeting-opening.md) covers the nine scenario introductions, Morgan's pace direction, and the revised Theo constraint. It was [deployed from `797258c`](simulator-release.md#prerecorded-colleague-briefings-release) on September 27 at 03:20 UTC. That release record separates local acceptance from production playback, voice/scoring, retry and archive evidence.
 
+The newer [Ash and factual handovers](simulator-meeting-opening.md#ash-and-factual-handovers) revision is verified locally with all nine re-recorded intros and Quinn using Beacon. It has not been deployed.
+
 ## Delivered behavior
 
 - Sales: explore an adjacent SharePoint opportunity with an existing software client. Consultancy: handle an unestimated dashboard request without surrendering scope or ignoring the real need.

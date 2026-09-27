@@ -252,7 +252,7 @@ const plans = {
 const plan = approach === 'opening' ? { turns: 0, lines: {}, choose: () => null } : plans[scenarioId]?.[approach];
 if (!plan) throw new Error(`No rehearsal plan for ${scenarioId}/${approach}.`);
 const scenario = getScenario(scenarioId);
-const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-roleplay-${scenarioId}-${clientId}-${approach}-${director ? 'on' : 'off'}${label ? `-${label}` : ''}`;
+const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-roleplay-${scenarioId}-${clientId}-${approach}${label ? `-${label}` : ''}`;
 await mkdir(output, { recursive: true });
 const clips = {};
 for (const [id, line] of Object.entries(plan.lines)) {
@@ -279,12 +279,14 @@ const contextual = new ContextualDirector({ scenarioId, clientId, objectives: ()
 report.interventions = contextual.records;
 const close = () => { if (closing) return; closing = true; contextual.close(); clearInterval(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
+  if (!contextual.canObserveActor) return;
+  const observation = contextual.beginObservation({ audience: 'actor', transcript, revision: transcript.length, capturedAt: Date.now() });
   try {
-    const capturedAt = Date.now();
     const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
     report.directions.push({ afterTurn, signals: judgment.signals });
-    await contextual.observe({ audience: 'actor', signals: judgment.signals, transcript, revision: transcript.length, capturedAt });
+    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model });
   } catch (error) {
+    contextual.observe(observation, { signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
   }
 }

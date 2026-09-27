@@ -1,6 +1,6 @@
 # Contextual live coaching and actor direction
 
-Implemented for the demo on `contextual-director`. This is the only live coaching path for scored scenarios: no feature flag, shadow mode, or legacy delivery fallback. It has not been deployed.
+Implemented for the demo. This is the only live coaching path for scored scenarios: no feature flag, shadow mode, or legacy delivery fallback.
 
 ## Flow
 

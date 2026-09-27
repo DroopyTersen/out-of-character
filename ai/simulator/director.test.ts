@@ -10,8 +10,8 @@ const input: DirectorInput = {
 };
 const intervention = { action: 'intervene', text: 'Ask what decision Friday supports.', evidenceIds: ['p1'] };
 const previous = (text: string, changes: Partial<DirectorRecord> = {}): DirectorRecord => ({
-  source: 'director', id: 'cue-prior', issueId: 'hint:objective:decision', audience: 'trainee', signal: { condition: 'objective:decision', selected: true },
-  revision: 1, inputIds: ['p1'], snapshotAt: 1000, gateAt: 1100, model: 'gpt-6-sol', effort: 'none',
+  source: 'director', id: 'cue-prior', observationId: 'observation-prior', issueId: 'hint:objective:decision', audience: 'trainee', signal: { condition: 'objective:decision', selected: true },
+  revision: 1, inputCount: 1, lastInputId: 'p1', snapshotAt: 1000, gateAt: 1100, model: 'gpt-6-sol', effort: 'none',
   result: { action: 'intervene', text, evidenceIds: ['p1'] }, outcome: 'published', ...changes,
 });
 const response = (value: unknown = intervention, overrides: Record<string, unknown> = {}) => ({
@@ -42,7 +42,7 @@ test('actor context excludes consultant plans, scoring, and hint history', () =>
 });
 
 test('only delivered generated advice suppresses repetition; failed drafts and fixed alerts do not', () => {
-  const alert: DetectorRecord = { source: 'detector', id: 'alert', issueId: 'trainee:mistake:1', audience: 'trainee', signal: { condition: 'mistake', probability: .99 }, revision: 1, inputIds: ['p1'], snapshotAt: 1000, gateAt: 1100, readyAt: 1100, deliveredAt: 1100, model: 'jev', result: { action: 'intervene', text: 'Generic alert', evidenceIds: [] }, outcome: 'published' };
+  const alert: DetectorRecord = { source: 'detector', id: 'alert', observationId: 'observation-alert', issueId: 'trainee:mistake:1', audience: 'trainee', signal: { condition: 'mistake', probability: .99 }, revision: 1, snapshotAt: 1000, gateAt: 1100, readyAt: 1100, deliveredAt: 1100, model: 'jev', result: { action: 'intervene', text: 'Generic alert', evidenceIds: [] }, outcome: 'published' };
   const history = [previous('Already shown'), previous('Never shown', { outcome: 'stale' }), alert, previous('Failed to send', { outcome: 'error' })];
   expect(directorContext({ ...input, history }).previousInterventions).toEqual([{ condition: 'objective:decision', text: 'Already shown' }]);
   const actorHistory = [previous('Rejected', { audience: 'actor', signal: { condition: 'role', probability: .99 }, outcome: 'sent', delivery: { eventId: 'cue-rejected', status: 'rejected' } }), previous('Submitted', { audience: 'actor', signal: { condition: 'role', probability: .99 }, outcome: 'sent', delivery: { eventId: 'cue-submitted', status: 'unknown' } })];
@@ -52,7 +52,7 @@ test('only delivered generated advice suppresses repetition; failed drafts and f
 test('output contract rejects fabricated evidence, unsolicited fields, empty hints, and malformed none', () => {
   for (const result of [
     { ...intervention, evidenceIds: ['p999'] }, { ...intervention, evidenceIds: ['p1', 'p1'] }, { ...intervention, audience: 'actor' },
-    { ...intervention, text: ' ' }, { ...intervention, text: 'a'.repeat(401) }, { action: 'none', text: 'Advice', evidenceIds: [] },
+    { ...intervention, text: ' ' }, { ...intervention, text: 'a'.repeat(161) }, { action: 'none', text: 'Advice', evidenceIds: [] },
   ]) expect(() => validateDirectorResult(result, input.transcript)).toThrow('Director output was invalid.');
   expect(validateDirectorResult({ action: 'none', text: null, evidenceIds: [] }, input.transcript).action).toBe('none');
 });

@@ -34,7 +34,7 @@ try {
       // conceals gate false negatives. Human labels belong in a separate report.
       const row: Record<string, unknown> = { turn, audience, signals, eligible: false, issueId: null, detectorDurationMs: audience === 'trainee' ? trainee.durationMs : actor.durationMs, detectorUsage: audience === 'trainee' ? trainee.usage : actor.usage, generation: [] };
       report.rows.push(row);
-      await gate.review(audience, now, transcript.filter(entry => entry.speaker === (audience === 'trainee' ? 'trainee' : 'client')).length, turn, async issue => {
+      const review = gate.review(audience, now, turn, async issue => {
         row.eligible = true;
         row.issueId = issue.id;
         for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
@@ -43,6 +43,8 @@ try {
           (row.generation as unknown[]).push({ effort, durationMs: Math.round(performance.now() - started), ...result });
         }
       });
+      row.decision = review.decision;
+      await review.work;
     }
   }
 } catch (error) {

@@ -259,6 +259,7 @@ export class SimulatorSession extends DurableObject<Env> {
     const scenario = getScenario(snapshot.scenarioId);
     if (!scenario.objectives.length) return;
     this.gradeCalls++;
+    const observation = final ? undefined : this.contextual?.beginObservation({ audience: 'trainee', transcript, revision, capturedAt });
     try {
       const achievedIds = final ? [] : snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
       const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
@@ -268,11 +269,12 @@ export class SimulatorSession extends DurableObject<Env> {
       snapshot.evaluation = { revision: result.revision, skills: result.skills, concern: result.concern, model: result.model, durationMs: result.durationMs, objectives: final ? result.objectives : reconcileObjectives(scenario, snapshot.evaluation?.objectives ?? [], result.objectives) };
       snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
       if (!final) {
-        const work = this.contextual?.observe({ audience: 'trainee', signals: result.signals, transcript, revision, capturedAt });
+        const work = this.contextual?.observe(observation, { signals: result.signals, model: result.model });
         if (work) this.ctx.waitUntil(work);
       }
-    } catch {
+    } catch (error) {
       if (this.gradeAbort.signal.aborted && !final) return;
+      if (!final) this.contextual?.observe(observation, { signals: [], failure: error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
       snapshot.feedbackStatus = snapshot.evaluation ? 'delayed' : 'unavailable';
       // One cadence-limited retry per input, still inside the overall paid-call cap.
       if (!final && this.retriedText !== this.gradedText) {
@@ -293,11 +295,14 @@ export class SimulatorSession extends DurableObject<Env> {
   private async direct(transcript: SessionSnapshot['transcript'], revision: number, capturedAt: number) {
     this.directing = true;
     const snapshot = this.snapshot!;
+    const observation = this.contextual?.beginObservation({ audience: 'actor', transcript, revision, capturedAt });
     try {
       const result = await this.paid.evaluateClient({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
-      const work = this.contextual?.observe({ audience: 'actor', signals: result.signals, transcript, revision, capturedAt });
+      const work = this.contextual?.observe(observation, { signals: result.signals, model: result.model });
       if (work) this.ctx.waitUntil(work);
-    } catch { /* Client direction is optional. Continue the original role-play. */ }
+    } catch (error) {
+      this.contextual?.observe(observation, { signals: [], failure: error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
+    }
     finally { this.directing = false; }
   }
 

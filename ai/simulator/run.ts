@@ -39,7 +39,7 @@ fixtures: for (const fixture of suite.fixtures) {
     const input = { ...fixture, transcript: fixture.transcript.slice(0, transcriptLength), achievedIds, apiKey: key, revision: transcriptLength, signal: AbortSignal.timeout(30_000) };
     const trainee = await evaluateTrainee(input);
     const client = await evaluateClient({ ...input, signal: AbortSignal.timeout(30_000) });
-    const condition = selectDirectorSignal(client.signals)?.condition ?? 'none';
+    const condition = selectDirectorSignal(client.signals, 'actor')?.condition ?? 'none';
     const achieved = trainee.objectives.filter(item => item.achieved).map(item => item.id);
     const checks = transcriptLength !== fixture.transcript.length ? [] : [
       ...fixture.expected.achieved.map(id => ({ name: `achieved:${id}`, passed: achieved.includes(id) })),
@@ -49,7 +49,7 @@ fixtures: for (const fixture of suite.fixtures) {
       ...(fixture.expected.highSkills ?? []).map(id => ({ name: `high:${id}`, passed: trainee.skills[id].value != null && trainee.skills[id].value! >= 2.5 })),
       ...(fixture.expected.concern == null ? [] : [{ name: `concern:${fixture.expected.concern}`, passed: !!trainee.concern === fixture.expected.concern }]),
       ...Object.entries(fixture.expected.objectiveEvidence ?? {}).map(([id, entryId]) => ({ name: `evidence:${id}:${entryId}`, passed: trainee.objectives.find(item => item.id === id)?.evidence?.entryId === entryId })),
-      ...(fixture.expected.director ? [{ name: `director:${fixture.expected.director}`, passed: fixture.expected.director === 'none' ? condition === 'none' : !!selectDirectorSignal(client.signals.filter(signal => signal.condition === fixture.expected.director)) }] : []),
+      ...(fixture.expected.director ? [{ name: `director:${fixture.expected.director}`, passed: fixture.expected.director === 'none' ? condition === 'none' : !!selectDirectorSignal(client.signals.filter(signal => signal.condition === fixture.expected.director), 'actor') }] : []),
     ];
     const scenario = getScenario(fixture.scenarioId);
     achievedIds = [...new Set([...achievedIds, ...achieved.filter(id => scenario.objectives.find(item => item.id === id)?.kind !== 'outcome')])];

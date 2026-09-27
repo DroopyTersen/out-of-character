@@ -25,7 +25,7 @@ function fixture(overrides: Partial<typeof directorServices> = {}) {
       ...overrides,
     },
   });
-  const observe = (signals: DirectorSignal[] = [{ condition: 'objective:decision', selected: true }], audience: 'trainee' | 'actor' = 'trainee', capturedAt = Date.now()) => director.observe({ audience, signals, transcript: [...snapshot.transcript], revision: snapshot.revision, capturedAt });
+  const observe = (signals: DirectorSignal[] = [{ condition: 'objective:decision', selected: true }], audience: 'trainee' | 'actor' = 'trainee', capturedAt = Date.now()) => director.observe(director.beginObservation({ audience, transcript: [...snapshot.transcript], revision: snapshot.revision, capturedAt }), { signals });
   return { snapshot, director, sent, calls, observe };
 }
 function deferred<T>() {
@@ -78,10 +78,10 @@ test('an obsolete mistake judgment cannot show a concern after newer speech', as
   const f = fixture();
   const transcript = [...f.snapshot.transcript];
   f.snapshot.transcript.push(passage('p3', 'trainee', 'I retract that guarantee. We need an estimate first.'));
-  await f.director.observe({ audience: 'trainee', signals: [{ condition: 'mistake', probability: .99 }], transcript, revision: 1, capturedAt: epoch });
+  await f.director.observe(f.director.beginObservation({ audience: 'trainee', transcript, revision: 1, capturedAt: epoch }), { signals: [{ condition: 'mistake', probability: .99 }] });
   expect(f.director.coaching()).toBeNull();
   expect(f.calls).toHaveLength(0);
-  expect(f.director.summary().staleGates).toBe(1);
+  expect(f.director.records).toEqual([expect.objectContaining({ source: 'observation', outcome: 'stale' })]);
 });
 
 test('six submitted actor notes stop generation even when the provider rejects them', async () => {
@@ -97,7 +97,7 @@ test('six submitted actor notes stop generation even when the provider rejects t
   expect(f.sent).toHaveLength(6);
   expect(f.calls).toHaveLength(6);
   expect(f.director.canObserveActor).toBe(false);
-  expect(f.director.records.every(row => row.source === 'director' && row.delivery?.status === 'rejected')).toBe(true);
+  expect(f.director.records.filter(row => row.source === 'director').every(row => row.delivery?.status === 'rejected')).toBe(true);
 });
 
 test('both audiences can run while generation is pending, and none suppresses repeated reviews', async () => {
@@ -105,15 +105,15 @@ test('both audiences can run while generation is pending, and none suppresses re
   const f = fixture({ generateDirector: () => pending.promise });
   const coach = f.observe();
   const actor = f.observe([{ condition: 'role', probability: .99 }], 'actor');
-  expect(f.director.summary().calls).toBe(2);
+  expect(f.director.summary().callsByAudience).toEqual({ trainee: 1, actor: 1 });
   pending.resolve({ ...result, action: 'none', text: null, evidenceIds: [] });
   await Promise.all([coach, actor]);
   expect(f.director.coaching()).toBeNull();
   expect(f.sent).toHaveLength(0);
   setSystemTime(epoch + 21_000);
   await f.observe();
-  expect(f.director.summary().calls).toBe(2);
-  expect(f.director.records.map(row => row.outcome)).toEqual(['none', 'none']);
+  expect(f.director.summary().callsByAudience).toEqual({ trainee: 1, actor: 1 });
+  expect(f.director.records.filter(row => row.source === 'director').map(row => row.outcome)).toEqual(['none', 'none']);
 });
 
 test('new speech from either speaker revalidates a hint; a resolved question is discarded', async () => {
@@ -128,7 +128,7 @@ test('new speech from either speaker revalidates a hint; a resolved question is 
     await work;
     expect(checked).toBe(1);
     expect(f.director.coaching()).toBeNull();
-    expect(f.director.records[0]?.outcome).toBe('stale');
+    expect(f.director.records.find(row => row.source === 'director')?.outcome).toBe('stale');
   }
 });
 
@@ -159,7 +159,7 @@ test('a slower director response can publish after twelve seconds when still rel
     setSystemTime(epoch + 12_000);
     pending.resolve(result);
     await work;
-    expect(f.director.records[0]?.outcome).toBe(audience === 'trainee' ? 'published' : 'sent');
+    expect(f.director.records.find(row => row.source === 'director')?.outcome).toBe(audience === 'trainee' ? 'published' : 'sent');
   }
 });
 
@@ -178,14 +178,14 @@ test('a slower response still needs an applicability check against newer speech'
   await work;
   expect(checks).toBe(1);
   expect(f.director.coaching()).toBeNull();
-  expect(f.director.records[0]?.outcome).toBe('stale');
+  expect(f.director.records.find(row => row.source === 'director')?.outcome).toBe('stale');
 });
 
 test('expired or obsolete gates never spend, and late generation cannot publish', async () => {
   const f = fixture();
   await f.observe(undefined, 'trainee', epoch - 17_001);
   expect(f.calls).toHaveLength(0);
-  await f.director.observe({ audience: 'trainee', signals: [{ condition: 'stalled', probability: .99 }], transcript: [], revision: 0, capturedAt: epoch });
+  await f.director.observe(f.director.beginObservation({ audience: 'trainee', transcript: [], revision: 0, capturedAt: epoch }), { signals: [{ condition: 'stalled', probability: .99 }] });
   expect(f.calls).toHaveLength(0);
   const pending = deferred<typeof result>();
   const late = fixture({ generateDirector: () => pending.promise });
@@ -194,7 +194,7 @@ test('expired or obsolete gates never spend, and late generation cannot publish'
   pending.resolve(result);
   await work;
   expect(late.director.coaching()).toBeNull();
-  expect(late.director.records[0]?.outcome).toBe('timeout');
+  expect(late.director.records.find(row => row.source === 'director')?.outcome).toBe('timeout');
 });
 
 test('actor directions remain private and record provider rejection without changing public state', async () => {
@@ -224,7 +224,7 @@ test('closing aborts generation and freezes terminal records despite a late comp
   pending.resolve(result);
   await work;
   expect(f.director.records).toEqual(closed);
-  expect(f.director.records[0]?.outcome).toBe('aborted');
+  expect(f.director.records.find(row => row.source === 'director')?.outcome).toBe('aborted');
   expect(f.director.coaching()).toBeNull();
 });
 
@@ -243,7 +243,7 @@ test('a pending objective hint uses current applicability, not a later choice, a
     await work;
     expect(rechecks).toBe(1);
     expect(f.director.coaching()?.text ?? null).toBe(achieved ? null : result.text);
-    expect(f.director.records[0]?.outcome).toBe(achieved ? 'stale' : 'published');
+    expect(f.director.records.find(row => row.source === 'director')?.outcome).toBe(achieved ? 'stale' : 'published');
   }
 });
 
@@ -256,5 +256,32 @@ test('a failed applicability check publishes nothing and does not invent a measu
   pending.resolve(result);
   await work;
   expect(f.director.coaching()).toBeNull();
-  expect(f.director.records[0]).toMatchObject({ outcome: 'timeout', recheck: { probability: null, durationMs: null } });
+  expect(f.director.records.find(row => row.source === 'director')).toMatchObject({ outcome: 'timeout', recheck: { probability: null, durationMs: null } });
+});
+
+test('private review history preserves quiet, admitted, and suppressed judgments with their transcript position', async () => {
+  const pending = deferred<typeof result>();
+  const f = fixture({ generateDirector: () => pending.promise });
+  const signals: DirectorSignal[] = [{ condition: 'knowledge', probability: .1 }, { condition: 'authority', probability: .92 }, { condition: 'role', probability: .4 }, { condition: 'interests', probability: .8 }];
+  await f.observe([{ condition: 'stalled', probability: .1 }]);
+  const work = f.observe(signals, 'actor');
+  await f.observe(signals, 'actor');
+  pending.resolve(result);
+  await work;
+  f.director.providerEvent(String(f.sent[0]?.event_id), true);
+  const observations = f.director.records.filter(row => row.source === 'observation');
+  expect(observations.map(row => row.outcome)).toEqual(['no_trigger', 'started', 'busy']);
+  expect(observations[1]).toMatchObject({ audience: 'actor', signals, revision: 1, snapshotAt: epoch, completedAt: epoch, inputCount: 2, lastInputId: 'p2' });
+  const generated = f.director.records.find(row => row.source === 'director')!;
+  expect(generated).toMatchObject({ observationId: observations[1]!.id, signal: { condition: 'authority', probability: .92 }, result: { action: 'intervene', text: result.text, evidenceIds: ['p1'] }, completedAt: epoch, delivery: { status: 'accepted', acknowledgedAt: epoch } });
+  expect(JSON.stringify(f.snapshot)).not.toContain(observations[1]!.id);
+});
+
+test('evaluation failures and stale observations are reviewable without generating advice', async () => {
+  const f = fixture();
+  await f.director.observe(f.director.beginObservation({ audience: 'actor', transcript: f.snapshot.transcript, revision: 1, capturedAt: epoch }), { signals: [], failure: 'evaluation_timeout' });
+  await f.director.observe(f.director.beginObservation({ audience: 'actor', transcript: [], revision: 0, capturedAt: epoch }), { signals: [{ condition: 'role', probability: .9 }] });
+  expect(f.director.records.map(row => row.outcome)).toEqual(['evaluation_timeout', 'stale']);
+  expect(f.calls).toHaveLength(0);
+  expect(f.sent).toHaveLength(0);
 });

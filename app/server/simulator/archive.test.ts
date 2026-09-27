@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { emptySkills, type SessionSnapshot } from '../../../core/simulator/types';
+import type { DirectorSignal, InterventionRecord } from '../../../core/simulator/director';
 import { writeArchive, type ArchiveProvenance, type ArchiveWrite } from './archive.server';
 
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
@@ -31,7 +32,7 @@ const snapshot: SessionSnapshot = {
 const provenance: ArchiveProvenance = {
   model: 'gpt-live', voice: 'cedar', rubricVersion: 'r1', simulatorVersion: 's1',
   actorDigest: 'actor-digest', openingDigest: 'opening-digest', workerId: 'worker-id',
-  workerTag: 'release-tag', contextualDirector: { model: 'gpt-6-sol', effort: 'none', version: 'contextual-director-v1', observations: 0, staleGates: 0, skipped: 0, calls: 0, rechecks: 0, notes: 0 },
+  workerTag: 'release-tag', contextualDirector: { model: 'gpt-6-sol', effort: 'none', version: 'contextual-director-v1', callsByAudience: { trainee: 0, actor: 0 }, rechecks: 0, notes: 0 },
 };
 const partial = (capturedAt: number, changes: Partial<SessionSnapshot> = {}): ArchiveWrite => ({
   state: 'partial', capturedAt, snapshot: { ...snapshot, ...changes }, provenance,
@@ -91,18 +92,41 @@ test('bound arbitrary transcript text is stored literally', async () => {
   } finally { f.sqlite.close(); }
 });
 
-test('the largest accepted transcript fits below the conservative D1 row budget', async () => {
+test('a full transcript and hour of private review history fit below the D1 row budget', async () => {
   const f = fixture();
   try {
-    const transcript = Array.from({ length: 240 }, (_, index) => ({
+    const transcript = Array.from({ length: 800 }, (_, index) => ({
       id: `p${index + 1}`, speaker: (index % 2 ? 'client' : 'trainee') as 'client' | 'trainee',
-      text: 'x'.repeat(index < 80 ? 334 : 333), startMs: index * 1000, endMs: index * 1000 + 800,
+      text: '話'.repeat(100), startMs: index * 1000, endMs: index * 1000 + 800,
     }));
     expect(transcript.reduce((sum, entry) => sum + entry.text.length, 0)).toBe(80_000);
-    await writeArchive(f.d1, final(5000, { transcript }));
+    const traineeSignals: DirectorSignal[] = [{ condition: 'mistake', probability: .9 }, ...['need', 'impact', 'decision', 'boundary', 'next-step'].map(id => ({ condition: `objective:${id}` as const, selected: true })), { condition: 'stalled', probability: .9 }];
+    const actorSignals: DirectorSignal[] = (['knowledge', 'authority', 'role', 'interests'] as const).map(condition => ({ condition, probability: .9 }));
+    // Conservative upper envelope: 719 trainee rounds, 450 actor rounds,
+    // 60 generations/rechecks, and a new fixed concern on alternating rounds.
+    const observations: InterventionRecord[] = Array.from({ length: 1169 }, (_, index) => ({
+      source: 'observation', id: `observation-${crypto.randomUUID()}`, audience: index < 719 ? 'trainee' : 'actor',
+      revision: index, snapshotAt: 1_800_000_000_000 + index * 5000, completedAt: 1_800_000_002_000 + index * 5000, model: 'jev-1.13.0', signals: index < 719 ? traineeSignals : actorSignals,
+      inputCount: 800, lastInputId: 'p800', outcome: 'started', issueId: `trainee:mistake:${index}`,
+    }));
+    const base = { audience: 'trainee' as const, signal: { condition: 'mistake' as const, probability: .99 }, revision: 800, snapshotAt: 1000, gateAt: 1500, readyAt: 2000, deliveredAt: 2100 };
+    const generations: InterventionRecord[] = Array.from({ length: 60 }, (_, index) => ({
+      ...base, source: 'director', id: `intervention-${crypto.randomUUID()}`, observationId: observations[index]!.id, issueId: `trainee:mistake:${index}`,
+      inputCount: 800, lastInputId: 'p800', model: 'gpt-6-sol', effort: 'none', completedAt: 2200,
+      result: { action: 'intervene', text: '話'.repeat(160), evidenceIds: ['p798', 'p799', 'p800'] }, outcome: 'published',
+      recheck: { inputCount: 800, lastInputId: 'p800', startedAt: 1800, durationMs: 200, probability: .95, usage: { inputTokens: 20000, outputTokens: 100 } }, usage: { inputTokens: 20000, outputTokens: 100, cachedTokens: 10000 },
+      delivery: { eventId: `cue-${crypto.randomUUID()}`, status: 'accepted', acknowledgedAt: 2300 },
+    }));
+    const concerns: InterventionRecord[] = Array.from({ length: 360 }, (_, index) => ({
+      ...base, source: 'detector', id: `intervention-${crypto.randomUUID()}`, observationId: observations[index]!.id, issueId: `trainee:mistake:${index}`,
+      model: 'jev-1.13.0', result: { action: 'intervene', text: 'A commitment or claim may go beyond what has been established. Review it before proceeding.', evidenceIds: [] }, outcome: 'published',
+    }));
+    await writeArchive(f.d1, { ...final(5000, { transcript }), interventions: [...observations, ...generations, ...concerns] });
     const row = f.row()!;
-    expect(JSON.parse(row.transcript_json)).toHaveLength(240);
-    expect(Buffer.byteLength(JSON.stringify(row))).toBeLessThan(2_000_000);
+    expect(JSON.parse(row.transcript_json)).toHaveLength(800);
+    expect(JSON.parse(row.interventions_json)).toHaveLength(1589);
+    const storedBytes = Object.values(row).reduce((sum: number, value) => sum + (typeof value === 'string' ? Buffer.byteLength(value) : 8), 0);
+    expect(storedBytes).toBeLessThan(1_500_000); // Leave at least 500 KB for other row metadata.
   } finally { f.sqlite.close(); }
 });
 
@@ -124,8 +148,8 @@ test('additive migration preserves existing rows and stores generated directions
     await writeArchive(f.d1, partial(2000));
     expect(JSON.parse(f.row()!.interventions_json)).toEqual([]);
     await writeArchive(f.d1, { ...final(3000), interventions: [{
-      source: 'director', id: 'cue-test', issueId: 'actor:role:1', audience: 'actor', signal: { condition: 'role', probability: .99 },
-      revision: 1, inputIds: ['p1'], snapshotAt: 1000, gateAt: 1500, readyAt: 1900, deliveredAt: 2000,
+      source: 'director', id: 'cue-test', observationId: 'observation-test', issueId: 'actor:role:1', audience: 'actor', signal: { condition: 'role', probability: .99 },
+      revision: 1, inputCount: 1, lastInputId: 'p1', snapshotAt: 1000, gateAt: 1500, readyAt: 1900, deliveredAt: 2000,
       model: 'gpt-6-sol', effort: 'none', result: { action: 'intervene', text: 'Private actor direction', evidenceIds: ['p1'] }, outcome: 'sent', delivery: { eventId: 'cue-test', status: 'accepted' },
     }] });
     expect(JSON.parse(f.row()!.interventions_json)[0]).toMatchObject({ audience: 'actor', result: { text: 'Private actor direction' }, delivery: { status: 'accepted' } });

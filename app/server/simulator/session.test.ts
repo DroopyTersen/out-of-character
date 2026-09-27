@@ -3,6 +3,7 @@ import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
+import { parseArchive } from '../../../scripts/simulator-transcripts';
 
 // Bun cannot load the Workers runtime. Substitute only its base-class/storage
 // boundary and paid network adapters; exercise the actual session owner/events.
@@ -50,8 +51,14 @@ test('contextual coaching runs for scored sessions and keeps actor history out o
   await f.session.fetch(request('end'));
   await waitFor(() => f.row()?.archive_state === 'final');
   const archived = JSON.parse(f.row()!.interventions_json);
-  expect(archived).toHaveLength(2);
-  expect(archived.find((item: any) => item.audience === 'actor')).toMatchObject({ outcome: 'sent', delivery: { status: 'rejected' } });
+  expect(archived.filter((row: any) => row.source === 'director')).toHaveLength(2);
+  expect(archived.filter((row: any) => row.source === 'observation')).toHaveLength(2);
+  expect(archived.find((item: any) => item.source === 'director' && item.audience === 'actor')).toMatchObject({ outcome: 'sent', delivery: { status: 'rejected' } });
+  const exported = parseArchive(f.row()!);
+  const observation = exported.interventions.find((item: any) => item.source === 'observation' && item.audience === 'actor');
+  expect(observation).toMatchObject({ outcome: 'started', model: 'fixture', signals: [{ condition: 'role', probability: .99 }] });
+  expect(exported.interventions.find((item: any) => item.source === 'director' && item.audience === 'actor').observationId).toBe(observation.id);
+  expect(JSON.stringify(current)).not.toContain(observation.id);
   expect(JSON.parse(f.row()!.cues_json)).toEqual([]);
   expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toMatchObject({ model: 'gpt-6-sol', effort: 'none' });
 }, 10_000);
@@ -74,9 +81,38 @@ test('ending the session does not wait for pending contextual generation', async
   expect(ended.status).toBe('ended');
   expect(ended.coaching).toBeNull();
   await waitFor(() => f.row()?.archive_state === 'final');
-  expect(JSON.parse(f.row()!.interventions_json)[0].outcome).toBe('aborted');
+  expect(JSON.parse(f.row()!.interventions_json).find((row: any) => row.source === 'director').outcome).toBe('aborted');
   release(); await Promise.all(f.pending);
   expect(JSON.stringify(await (await f.session.fetch(request('poll'))).json())).not.toContain('Late advice');
+}, 10_000);
+
+test('End archives pending Jev attempts as aborted and ignores a late actor judgment', async () => {
+  let grades = 0;
+  let releaseActor!: () => void;
+  const f = await fixture({ overrides: {
+    evaluateTrainee: async input => {
+      if (++grades === 1) await new Promise<void>((_, reject) => input.signal!.addEventListener('abort', () => reject(new DOMException('Ended', 'AbortError')), { once: true }));
+      return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] };
+    },
+    evaluateClient: async input => {
+      await new Promise<void>(resolve => { releaseActor = resolve; });
+      return { revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] };
+    },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start')); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'What would success look like?', start_ms: 0, end_ms: 1000 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => grades === 1 && !!releaseActor);
+  await f.session.fetch(request('end'));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  const archived = f.row()!;
+  const observations = parseArchive(archived).interventions;
+  expect(observations.map((row: any) => row.audience).sort()).toEqual(['actor', 'trainee']);
+  for (const observation of observations) expect(observation).toMatchObject({ source: 'observation', outcome: 'aborted', signals: [], completedAt: expect.any(Number) });
+  releaseActor(); await Promise.all(f.pending);
+  expect(f.row()).toEqual(archived);
+  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'))).toHaveLength(0);
 }, 10_000);
 
 test('actor detection stops after six submitted notes while trainee grading continues', async () => {
@@ -760,7 +796,7 @@ for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a
   if (!newerReply) expect(snapshot.feedbackStatus).toBe('current');
   await f.session.fetch(request('end'));
   await waitFor(() => f.row()?.archive_state === 'final');
-  expect(JSON.parse(f.row()!.interventions_json).map((record: { signal: { condition: string } }) => record.signal.condition)).toEqual(newerReply ? [] : ['role']);
+  expect(JSON.parse(f.row()!.interventions_json).filter((record: { source: string }) => record.source === 'director').map((record: { signal: { condition: string } }) => record.signal.condition)).toEqual(newerReply ? [] : ['role']);
   if (!newerReply) {
     const privateCue = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))?.content;
     expect(f.row()!.interventions_json).toContain(String(privateCue));

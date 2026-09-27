@@ -1,28 +1,30 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
-import { getClient, getClientCues, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
+import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
 import { evaluateInterview, evaluateInterviewer } from '../ai/interview/evaluate.server.ts';
+import { interviewCues } from '../ai/interview/scenario.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
 import { appendTranscript, canSendCue } from '../core/simulator/state.ts';
+import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
-// real GPT-Live supplies the client and Jev selects optional private direction.
+// real GPT-Live supplies the client and Jev gates contextual private directions from Sol.
 // A plan chooses each trainee line from what the client has actually said so far.
 // Usage: bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid
-//   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--director] [--max-seconds=180]
+//   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--max-seconds=180]
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded paid rehearsal.');
 if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const scenarioId = option('scenario') ?? 'sharepoint';
 const isInterview = scenarioId === INTERVIEW_SCENARIO_ID;
+const interviewDirector = process.argv.includes('--director');
 const clientId = option('client') ?? 'morgan';
 const approach = option('plan') ?? (process.argv.includes('--poor') ? 'poor' : 'good');
 const label = option('label');
-const director = process.argv.includes('--director');
 const maxSeconds = Number(option('max-seconds') ?? 180);
 if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > 300) throw new Error('--max-seconds must be an integer from 60 to 300.');
 
@@ -267,7 +269,7 @@ const plans = {
 const plan = approach === 'opening' ? { turns: 0, lines: {}, choose: () => null } : plans[scenarioId]?.[approach];
 if (!plan) throw new Error(`No rehearsal plan for ${scenarioId}/${approach}.`);
 const scenario = getScenario(scenarioId);
-const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-roleplay-${scenarioId}-${clientId}-${approach}-${director ? 'on' : 'off'}${label ? `-${label}` : ''}`;
+const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-roleplay-${scenarioId}-${clientId}-${approach}${label ? `-${label}` : ''}`;
 await mkdir(output, { recursive: true });
 const clips = {};
 for (const [id, line] of Object.entries(plan.lines)) {
@@ -283,29 +285,38 @@ const { client: _permissions, ...session } = liveConfiguration(scenarioId, clien
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
-const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, director, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
+const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
 let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
 const observations = [];
-const cueIds = new Set();
 const sentCues = [];
 const used = new Set();
-const send = event => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
-const close = () => { if (closing) return; closing = true; clearInterval(pacing); send({ type: 'session.close' }); };
+const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
+const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
+report.interventions = contextual?.records ?? [];
+const close = () => { if (closing) return; closing = true; contextual?.close(); clearInterval(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
+  if (isInterview) {
+    try {
+      const judgment = await evaluateInterviewer({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
+      const cue = interviewCues.find(item => item.id === judgment.cueId);
+      const now = Date.now();
+      const lastSame = sentCues.findLast(item => item.id === cue?.id);
+      const sent = !!(!closing && interviewDirector && cue && (!lastSame || now - lastSame.sentAt >= 90_000) && canSendCue({ id: cue.id, probability: judgment.cueProbability, revision: transcript.length }, sentCues.at(-1) ?? null, true, now, 90_000));
+      report.directions.push({ afterTurn, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
+      if (sent) { sentCues.push({ id: cue.id, revision: transcript.length, sentAt: now }); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }
+    } catch (error) { report.directions.push({ afterTurn, unavailable: true, error: error.name }); }
+    return;
+  }
+  if (!contextual.canObserveActor) return;
+  const observation = contextual.beginObservation({ audience: 'actor', transcript, revision: transcript.length, capturedAt: Date.now() });
   try {
-    const evaluate = isInterview ? evaluateInterviewer : evaluateClient;
-    const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
-    const cue = getClientCues(scenario).find(item => item.id === judgment.cueId);
-    const now = Date.now();
-    const repeatAfterMs = isInterview ? 90_000 : Infinity;
-    const lastSame = sentCues.findLast(item => item.id === cue?.id);
-    const alreadySent = isInterview ? lastSame && now - lastSame.sentAt < repeatAfterMs : cueIds.has(cue?.id);
-    const sent = !!(!closing && director && cue && !alreadySent && canSendCue({ id: cue.id, probability: judgment.cueProbability, revision: transcript.length }, sentCues.at(-1) ?? null, true, now, repeatAfterMs));
-    report.directions.push({ afterTurn, ...(isInterview ? {} : { fidelity: judgment.fidelity, interests: judgment.interests }), cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
-    if (sent) { cueIds.add(cue.id); sentCues.push({ id: cue.id, revision: transcript.length, sentAt: now }); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }
+    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
+    report.directions.push({ afterTurn, signals: judgment.signals });
+    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model });
   } catch (error) {
+    contextual.observe(observation, { signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
   }
 }
@@ -364,6 +375,7 @@ const completed = new Promise(resolve => {
     } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
       report.openingAcknowledged = true;
     } else if (value.type === 'session.thinking.appended') {
+      contextual?.providerEvent(value.client_event_id, true);
       const direction = report.directions.find(item => `direction-${item.afterTurn}` === value.client_event_id);
       if (direction) direction.acknowledged = true;
       const guard = report.delegations.find(item => item.eventId === value.client_event_id);
@@ -381,7 +393,11 @@ const completed = new Promise(resolve => {
       }
     } else if (value.type === 'session.closed') {
       report.finalized = true; report.usageSeconds = value.usage?.seconds ?? null; resolve();
-    } else if (value.type === 'error') report.errors.push({ code: value.error?.code ?? 'unknown', command: value.error?.client_event_id ?? null });
+    } else if (value.type === 'error') {
+      const eventId = value.error?.client_event_id;
+      if (typeof eventId === 'string' && eventId.startsWith('cue-')) contextual?.providerEvent(eventId, false);
+      else report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
+    }
   });
   ws.addEventListener('error', () => { report.errors.push('Voice transport failed.'); close(); });
   ws.addEventListener('close', () => { if (!report.finalized) report.errors.push('Transport closed before finalization.'); resolve(); });
@@ -394,7 +410,7 @@ try {
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
-  clearTimeout(deadline); clearInterval(pacing); ws.close();
+  contextual?.close(); clearTimeout(deadline); clearInterval(pacing); ws.close();
   await Promise.all(observations);
   if (report.delegations.some(item => !item.acknowledged)) report.errors.push('Actor role direction was not acknowledged.');
   await writeFile(`${output}/client-audio.pcm`, Buffer.concat(chunks));
@@ -403,5 +419,5 @@ finally {
   if (await wav.exited) report.errors.push('Client audio conversion failed.');
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
 }
-console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, fidelity, cueId, unavailable }) => ({ afterTurn, fidelity, cueId, unavailable })), errors: report.errors }));
+console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), errors: report.errors }));
 if (!report.finalized || report.errors.length) process.exitCode = 1;

@@ -98,13 +98,24 @@ try {
   await livePage.getByRole('heading', { name: /Before you meet/ }).waitFor();
   check(await livePage.getByRole('button', { name: 'Start meeting' }).evaluate(node => node.getBoundingClientRect().bottom <= innerHeight + 1), 'mobile start button is below the viewport');
   await livePage.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration) && document.querySelector('.sim-briefing audio').duration > 10);
+  await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio').currentTime > 0.2);
   await livePage.getByRole('button', { name: 'Pause intro', exact: true }).click();
+  const pausedAt = await livePage.locator('.sim-briefing audio').evaluate(node => node.currentTime);
   check(await livePage.locator('.sim-briefing audio').evaluate(node => node.paused), 'pause button did not pause the clip');
-  await livePage.getByRole('slider', { name: 'Intro playback position' }).fill('2');
-  await livePage.waitForFunction(() => Math.abs(document.querySelector('.sim-briefing audio').currentTime - 2) < 0.2);
+  await livePage.waitForTimeout(300);
+  check(await livePage.locator('.sim-briefing audio').evaluate((node, pausedAt) => Math.abs(node.currentTime - pausedAt) < 0.1, pausedAt), 'paused playback kept advancing');
   await livePage.getByRole('button', { name: 'Play intro', exact: true }).click();
-  await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio').currentTime > 2.2);
-  check(await livePage.locator('.sim-briefing audio').evaluate(node => !node.paused), 'resume did not continue playback');
+  await livePage.waitForFunction(pausedAt => document.querySelector('.sim-briefing audio').currentTime > pausedAt + 0.2, pausedAt);
+  check(await livePage.locator('.sim-briefing audio').evaluate(node => !node.paused), 'play did not continue playback');
+  check(await livePage.getByLabel('Intro recording').isVisible(), 'native audio controls are hidden');
+  check(await livePage.getByLabel('Intro recording').evaluate(node => node.controls), 'native audio controls are disabled');
+  // Exercise the browser's own keyboard control, then confirm the large button follows it.
+  await livePage.getByLabel('Intro recording').press('Space');
+  await livePage.getByRole('button', { name: 'Play intro', exact: true }).waitFor();
+  await livePage.getByLabel('Intro recording').evaluate(node => { node.currentTime = 5; });
+  await livePage.waitForFunction(() => Math.abs(document.querySelector('.sim-briefing audio').currentTime - 5) < 0.2);
+  await livePage.getByLabel('Intro recording').press('Space');
+  await livePage.getByRole('button', { name: 'Pause intro', exact: true }).waitFor();
   await livePage.screenshot({ path: `${output}/audio-success-390.png`, fullPage: true });
   await livePage.setViewportSize({ width: 1440, height: 900 });
   await livePage.screenshot({ path: `${output}/audio-success-1440.png`, fullPage: true });
@@ -116,7 +127,7 @@ try {
   });
   await livePage.waitForTimeout(100);
   check(await livePage.locator('.sim-briefing-error').count() === 0, 'rapid play then pause incorrectly marked the clip unavailable');
-  // Let playback finish: a hosted asset may not support seeking to an unloaded tail.
+  // Let actual playback finish to verify completion, rather than dispatching an ended event.
   await livePage.locator('.sim-briefing audio').evaluate(node => node.play());
   await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio')?.ended, null, { timeout: 60_000 });
   await livePage.getByRole('button', { name: 'Play intro', exact: true }).waitFor();

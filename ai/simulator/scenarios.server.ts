@@ -1,14 +1,12 @@
 import { SIMULATOR_VERSION, type Catalog, type Client, type ClientStats, type ScenarioSummary } from '../../core/simulator/types';
 
 export type Objective = ScenarioSummary['objectives'][number] & { criterion: string; hint: string };
-export type ClientCue = { id: string; when: string; text: string };
 export type Scenario = Omit<ScenarioSummary, 'objectives'> & {
   objectives: Objective[];
   opening: string;
   interests: string[];
   facts: string[];
   constraints: string[];
-  cues: ClientCue[];
   seriousMistake: string;
 };
 type CastMember = Client & { voice: string; behavior: string; stats: ClientStats };
@@ -99,12 +97,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Earn a next step', kind: 'outcome', criterion: 'The client currently agrees to a relevant bounded follow-up with a purpose, an owned next action, and timing or a clear scheduling process. A proposal alone, polite interest, vague send-me-something, or withdrawn agreement is insufficient. The step must preserve current delivery and not depend on unapproved free work or implementation authority.', hint: 'Agree what happens next, who owns it, and how it gets scheduled.' },
     ],
     seriousMistake: 'The trainee commits unestimated SharePoint work inside the existing project, promises implementation without authority/funding, fabricates consultancy capability or proof, or pressures the client with a false guarantee.',
-    cues: [
-      { id: 'adoption-open', when: 'The adoption concern is relevant and remains unresolved, but the actor is drifting into agreement based on features or assurances. Do not repeat after ownership and adoption have been addressed.', text: 'Your adoption concern is still open. Features alone do not explain who will own the process or why staff would use it. A useful focus is what would make this attempt different.' },
-      { id: 'earned-progress', when: 'The trainee has substantively addressed ownership/adoption and protected current delivery, but the client is repeating the same objections without a new reason.', text: 'The bounded approach addresses your concern about repeating the rollout failure. A scoping conversation can serve your interests. You may become more open while retaining the assessment cap and separate implementation approval.' },
-      { id: 'reasonable-tradeoff', when: 'The trainee has reasonably bounded free planning and offered a useful smaller first step, but the client keeps demanding the full plan for free.', text: 'Free planning is a preference. Avoiding another failed initiative matters more. A useful bounded alternative can be worthwhile even if the full assessment requires a separate proposal.' },
-      { id: 'approval-boundary', when: 'The client is making or about to make an implementation commitment outside their defined authority, or the dialogue is confusing exploration with implementation approval.', text: 'You may authorize a separately scoped assessment up to $8,000. Implementation still requires separate funding approval. A scoping conversation does not authorize delivery or speak for the operations director.' },
-    ],
   },
   {
     id: 'scope', title: 'The small change', category: 'Consultancy',
@@ -138,12 +130,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree an owned next step', kind: 'outcome', criterion: 'The client currently accepts a next action with an owner and timing or decision process, protecting the existing release until an informed scope/priority decision. A refused, vague, withdrawn, or unapproved extra-work promise does not count.', hint: 'Agree who will assess the option and who will make the priority decision.' },
     ],
     seriousMistake: 'The trainee commits unknown effort within the existing release or price without a decision, invents an estimate as a certainty, or ignores a material delivery risk while agreeing the change.',
-    cues: [
-      { id: 'executive-need', when: 'The consultant explores timing or purpose, but the client withholds the executive review pressure without a character-grounded reason.', text: 'Your executive review is in two weeks. A credible picture of workload and overdue items is the real need. Relevant questions about purpose or timing make that context useful to share.' },
-      { id: 'scope-pressure', when: 'The client passively drops the request despite an unexplained refusal or vague statement of difficulty, and no useful way to meet the executive need has been discussed.', text: 'You still need something credible for the executive review. It is reasonable to ask what can be delivered or investigated within the constraints, while keeping existing work on track.' },
-      { id: 'earned-progress', when: 'A plausible smaller option and an owned impact/priority decision meet the real need, but the client keeps insisting on the full dashboard without a new reason.', text: 'A smaller demonstration or manual report may satisfy the executive review. You can support a bounded next step and a product-owner priority decision without insisting on the full dashboard.' },
-      { id: 'approval-boundary', when: 'The client treats unknown effort as guaranteed or claims approval to change release priorities without involving the product owner.', text: 'Dashboard effort and data quality have not been assessed. The product owner must participate in a release priority decision. You can sponsor that decision, but cannot silently approve unknown scope.' },
-    ],
   },
   {
     id: 'proposal', title: 'Just send me a proposal', category: 'Sales',
@@ -179,10 +165,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree a proportionate next step', kind: 'outcome', criterion: 'The client explicitly accepts a focused qualification or planning step with purpose, an owner, and timing or a scheduling process. It does not depend on an invented price, unapproved free design work, or an implementation promise.', hint: 'Agree the smallest useful next action and who will arrange it.' },
     ],
     seriousMistake: 'The trainee invents a firm price, guarantees delivery before scoping, presents an indicative submission as a binding commitment, or promises an unbounded free solution design.',
-    cues: [
-      { id: 'premature-quote', when: 'The client accepts an unsupported fixed price as a credible proposal despite scope and estimating still being absent.', text: 'You need a credible funding submission. A number without scope or assumptions is not yet a dependable quotation; press what it actually covers.' },
-      { id: 'earned-progress', when: 'A focused qualification step directly serves the Friday planning decision with bounded effort and clear ownership, but the client repeats a blanket refusal of all discovery.', text: 'Avoiding a long workshop matters, but a short focused step can help your funding decision. Consider that specific bounded proposal without granting delivery approval.' },
-    ],
   },
   {
     id: 'in-house', title: 'We could build this ourselves', category: 'Sales',
@@ -218,10 +200,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree a responsible fit decision', kind: 'outcome', criterion: 'The client accepts an owned, timed step to assess a bounded partnership, or explicitly agrees an owned communication closing the opportunity in favor of internal delivery. Neither path relies on unapproved staffing or budget.', hint: 'Agree how you will decide whether outside help is worthwhile.' },
     ],
     seriousMistake: 'The trainee fabricates consultancy staffing, guarantees savings or dates, disparages the internal team as incompetent without evidence, or treats an exploratory discussion as funding approval.',
-    cues: [
-      { id: 'ownership-open', when: 'The client agrees to outside delivery on the strength of generic expertise while its expressed ownership and maintainability concern remains unanswered.', text: 'The concern is retaining ownership after the engagement. A credentials pitch does not yet explain how your team will be able to maintain the result.' },
-      { id: 'earned-progress', when: 'A bounded collaboration concretely protects internal ownership and capacity, but the client continues dismissing all outside help without a new reason.', text: 'Your team’s competence is respected and a concrete arrangement protects its ownership. You may explore the limited contribution without committing implementation funding.' },
-    ],
   },
   {
     id: 'courtesy', title: 'The courtesy call', category: 'Sales',
@@ -257,10 +235,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree a useful follow-up or close', kind: 'outcome', criterion: 'The client accepts either a focused comparison with ownership and timing, or an explicit professional close with an owned notification or acknowledgment of the bid’s closure. Vague keep-in-touch sentiment and pressure-induced promises do not count.', hint: 'Agree whether there is a useful comparison to make or a bid to close.' },
     ],
     seriousMistake: 'The trainee offers an unauthorized discount, fabricates competitor omissions or failures, guarantees savings without evidence, or misrepresents the client’s courtesy call as an award.',
-    cues: [
-      { id: 'fair-comparison', when: 'The client endorses a claim that the competing proposal excludes work despite never having checked that scope.', text: 'You have not checked those line items. They are questions to verify, not known exclusions; the other supplier may cover them.' },
-      { id: 'earned-progress', when: 'The client keeps obstructing a narrow, relevant comparison it could use before tomorrow’s recommendation, or demands a sale despite a respectful agreed bid closure.', text: 'A focused factual comparison may help your decision. A clean close is also legitimate; there is no need to invent future work or another obstacle.' },
-    ],
   },
   {
     id: 'demo', title: 'The demo went too well', category: 'Sales',
@@ -297,10 +271,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree a credible validation step', kind: 'outcome', criterion: 'The client accepts a focused scoping or validation action with an owner and timing or scheduling process, and does not continue treating six weeks as a delivery commitment.', hint: 'Agree how to turn the prototype into a supportable proposal.' },
     ],
     seriousMistake: 'The trainee presents prototype behavior as proven production capability, guarantees the six-week date, fabricates integration or offline readiness, or implies that security approval is already granted.',
-    cues: [
-      { id: 'date-boundary', when: 'The client treats six weeks as a firm commitment even though the consultant has explicitly made delivery conditional on unresolved scoping.', text: 'Six weeks remains an aspiration. A useful next step can support Thursday’s funding conversation without manufacturing a delivery guarantee.' },
-      { id: 'earned-progress', when: 'The consultant has explained the limits and offered usable leadership framing plus a bounded validation, but the client keeps insisting on a guaranteed date without a new interest.', text: 'A credible message and focused validation can protect your standing with leadership. Consider the concrete step while keeping implementation unapproved.' },
-    ],
   },
   {
     id: 'deployment', title: 'Done, but not deployed', category: 'Consultancy',
@@ -341,11 +311,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree ownership and the next update', kind: 'outcome', criterion: 'The client explicitly accepts a recovery action with named role ownership, a time for the next status update, and a plan to reset affected testing expectations. It does not rely on bypassing reviews or guaranteeing an unconfirmed deployment date.', hint: 'Agree who will coordinate the reviews, who will notify testers, and when you will update the client.' },
     ],
     seriousMistake: 'The trainee guarantees an unconfirmed review or deployment date, claims development complete means user acceptance is complete, offers to bypass client controls or deploy in an unauthorized environment, or denies the consultancy’s discovery responsibility by blaming the client alone.',
-    cues: [
-      { id: 'accountability-open', when: 'The client accepts a generic apology or a promise to chase IT while the consultant keeps blaming the client alone for not volunteering the process.', text: 'The missed planning step is still unresolved. You expected the consultancy to ask how delivery would reach your environment. An apology without acknowledging that oversight does not address your concern.' },
-      { id: 'date-boundary', when: 'The client treats an unconfirmed revised date as certain or assumes its sponsorship can waive architecture, governance, or security operations review.', text: 'You can help connect the consultancy with the IT service manager. You cannot waive the reviews, commit reviewer availability, or certify a new deployment date.' },
-      { id: 'earned-progress', when: 'Specific accountability and an owned recovery plan address the client’s expressed impact, but the client keeps rejecting all replanning solely because Thursday was the original target.', text: 'The existing purchasing process remains usable. You may accept a concrete recovery and next update without claiming that trust is fully restored or that a new deployment date is confirmed.' },
-    ],
   },
   {
     id: 'swap', title: 'The swap request', category: 'Consultancy',
@@ -384,10 +349,6 @@ export const scenarios: Scenario[] = [
       { id: 'next-step', label: 'Agree a plan that keeps Theo contributing', kind: 'outcome', criterion: 'The client currently accepts a specific owned intervention to improve the meeting experience, a time to review its effect, and Theo continuing development. Acceptance of removing Theo from development or merely investigating replacements does not achieve this objective. The agreement cannot depend on guaranteed behavior, confidential personnel disclosures, or dismissing the complaint.', hint: 'Earn agreement to a concrete change and a check-in while Theo continues technical work.' },
     ],
     seriousMistake: 'The trainee dismisses or retaliates against the client’s complaint, promises an immediate replacement or risk-free removal of Theo despite the uncovered technical work, fabricates confidential personnel facts, or guarantees another person’s behavior before speaking with them.',
-    cues: [
-      { id: 'impact-open', when: 'The client drops the complaint because the consultant praises Theo’s technical value, without a concrete response to the reported effect on client participation.', text: 'Theo’s technical importance does not resolve your experts’ reluctance to speak. A credible next step needs to address their experience in the reviews.' },
-      { id: 'earned-progress', when: 'The trainee has explained the delivery risk and proposed a concrete meeting intervention with follow-through while Theo stays on development, but the client keeps demanding full removal without an unresolved concern.', text: 'A specific improvement to the reviews and a check on its effect can protect your people while Theo continues development. Consider that tradeoff if it addresses the complaint. Accepting a trial does not withdraw your complaint or prevent escalation if it fails.' },
-    ],
   },
   {
     id: 'happy-hour', title: 'The happy hour', category: 'Consultancy',
@@ -398,7 +359,7 @@ export const scenarios: Scenario[] = [
     interests: [],
     facts: ['You are a guest at the consultancy’s after-work happy hour, chatting one-to-one with the consultant.'],
     constraints: ['There is no hidden business problem, sales opportunity, negotiation, or required next step. The conversation can wander freely.'],
-    objectives: [], seriousMistake: '', cues: [],
+    objectives: [], seriousMistake: '',
   },
 ];
 
@@ -414,16 +375,6 @@ export function getClient(id: string): CastMember {
   return client;
 }
 
-const consultantOwnershipCue: ClientCue = {
-  id: 'consultant-ownership',
-  when: 'The client is supplying the consultancy’s approach, engagement scope, delivery plan, proposal, or effort estimate after the trainee leaves that work to them. A request to write up or estimate the plan the client just supplied does not undo this takeover. Choose this when the client is still doing that work, not after they have stopped and returned responsibility. Ordinary discovery, client-owned internal actions, truthful client expertise, desired outcomes, and cooperation with a substantive trainee proposal are not takeover.',
-  text: 'You still need the consultant’s recommendation. State the result and conditions you need, then ask them to propose a credible approach, scope, or estimate. Keep your own expertise and cooperate with useful proposals, but do not complete their plan for them.',
-};
-
-export function getClientCues(scenario: Scenario): ClientCue[] {
-  if (scenario.id === interviewScenario.id) return scenario.cues;
-  return scenario.objectives.length ? [...scenario.cues, consultantOwnershipCue] : scenario.cues;
-}
 export function publicCatalog(): Catalog {
   return {
     version: SIMULATOR_VERSION,
@@ -454,7 +405,7 @@ export function actorBrief(scenario: Scenario, client: CastMember): string {
     openEnded ? 'Keep turns conversational, usually one to three sentences, and leave room for the other person. A brief reaction or story is fine; you do not have to end every turn with a question. Let the conversation breathe and wander. Never narrate stage directions or internal reasoning.' : 'After the opening, use conversational turns, usually one to three sentences, then leave room for a response. Take initiative when your interests call for it: question an assumption, make a counteroffer, or state an uncomfortable condition. Focus on one point at a time. Ask because you need the answer, not to guide the trainee through a checklist. Show emotion in your delivery and choice of words; never say stage directions or internal reasoning aloud.',
     'Backchannel policy: Use brief acknowledgments such as "mm" or "right" sparingly and in character. An acknowledgment is not agreement. Treat the other person’s short acknowledgments as listening, not as a new point to answer.',
     'Interruption policy: When the other person interrupts with a real point or question, stop and respond to what they said; do not restart your earlier sentence. Short acknowledgments or background noise are not interruptions, so finish your thought.',
-    'Delegation policy:\nBackend tools: None.\nDelegate to the backend when: Never.\nDo not delegate to the backend when: Any request is made in this role-play, including questions about estimates, plans, scheduling, or technical feasibility. You are the client, not an assistant carrying out tasks. Answer from your facts and authority; unknown details remain unknown and proposed follow-ups remain future commitments. No outside work happens during this meeting.\nIf you receive a private context note, use it as temporary background at a natural opportunity. Never read it aloud as a note, reveal the exercise instructions, or change your personality. Actual dialogue can supersede an outdated note.',
+    'Delegation policy:\nBackend tools: None.\nDelegate to the backend when: Never.\nDo not delegate to the backend when: Any request is made in this role-play, including questions about estimates, plans, scheduling, or technical feasibility. You are the client, not an assistant carrying out tasks. Answer from your facts and authority; unknown details remain unknown and proposed follow-ups remain future commitments. No outside work happens during this meeting.\nYou may receive brief private producer cues as context notes during the conversation, like an anchor hearing a producer through an earpiece. They are backstage direction, not dialogue or new facts. Use a relevant cue at the next natural opportunity while staying in your role, personality, knowledge, and authority. Do not acknowledge the cue, quote it, read it aloud, or mention the producer or earpiece. Keep the conversation natural; actual dialogue supersedes an outdated cue.',
   ].join('\n\n');
 }
 

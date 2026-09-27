@@ -102,6 +102,33 @@ await runCase('overpromise-debrief', { width: 1024, height: 844 }, async page =>
   return observations;
 });
 
+for (const width of [390, 1024]) {
+  await runCase(`contextual-hints-${width}`, { width, height: 844 }, async page => {
+    await page.goto(`${baseUrl}/storybook/simulator-live`, { waitUntil: 'networkidle' });
+    const preview = page.getByLabel('Hint preview');
+    const surface = page.locator(width <= 720 ? '.sim-hint-toast' : '.sim-hint');
+    await preview.selectOption('contextual-hint');
+    await surface.filter({ hasText: 'Priya mentioned missing approvals.' }).waitFor();
+    await surface.getByRole('button', { name: 'Dismiss hint' }).click();
+    await preview.selectOption('contextual-none');
+    await preview.selectOption('contextual-hint');
+    check(!await surface.filter({ hasText: 'Priya mentioned missing approvals.' }).isVisible(), 'paused objective coaching reopened a dismissed hint');
+    await preview.selectOption('contextual-concern');
+    await surface.filter({ hasText: 'A commitment or claim' }).waitFor();
+    await surface.getByRole('button', { name: 'Dismiss hint' }).click();
+    await preview.selectOption('contextual-replacement');
+    await page.getByLabel('Feedback').selectOption('delayed');
+    check(!await surface.filter({ hasText: 'You promised a fixed delivery date.' }).isVisible(), 'generated concern or score update reopened dismissed advice');
+    await page.reload({ waitUntil: 'networkidle' });
+    await preview.selectOption('contextual-hint');
+    await surface.filter({ hasText: 'Priya mentioned missing approvals.' }).waitFor();
+    await preview.selectOption('contextual-expired');
+    await surface.filter({ hasText: 'Priya mentioned missing approvals.' }).waitFor({ state: 'hidden' });
+    await page.screenshot({ path: `${output}/contextual-hints-${width}.png`, fullPage: true });
+    return { objectiveDismissalPreserved: true, concernReplacementDismissed: true, expiryCleared: true };
+  });
+}
+
 await browser.close();
 await writeFile(`${output}/report.json`, JSON.stringify({ checkedAt: new Date().toISOString(), results }, null, 2) + '\n');
 console.log(JSON.stringify({ total: results.length, passed: results.filter(result => result.pass).length, failed: results.filter(result => !result.pass).map(result => ({ name: result.name, error: result.error })) }, null, 2));

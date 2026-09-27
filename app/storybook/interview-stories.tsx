@@ -48,7 +48,7 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, summary: In
   return {
     id: 'anonymous-workshop-interview', scenarioId: 'project-closeout', clientId: 'sam-cedar', status,
     startedAt: Date.now() - 50_000, limitSeconds: 3600, warning: null,
-    revision: entries.length, transcript: entries, evaluation: null, feedbackStatus: feedback, message: null,
+    revision: entries.length, transcript: entries, evaluation: null, coaching: null, feedbackStatus: feedback, message: null,
     finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 50 : null,
     interview: { evaluation: feedback === 'waiting' || feedback === 'unavailable' ? null : evaluation, summary },
   };

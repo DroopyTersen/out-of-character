@@ -1,4 +1,5 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { evaluateClient, evaluateTrainee } from './evaluate.server';
 import { simulatorFixtures, simulatorHoldouts, simulatorValidation } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
@@ -7,7 +8,7 @@ import { simulatorCatalogFixtures } from './catalog-fixtures';
 import { RUBRIC_VERSION } from './rubric';
 import { SIMULATOR_VERSION } from '../../core/simulator/types';
 import { getScenario } from './scenarios.server';
-import { canSendCue } from '../../core/simulator/state';
+import { selectDirectorSignal } from '../../core/simulator/director';
 
 // Explicit opt-in paid command; opening the workshop never runs this script.
 const key = process.env.TYPESAFE_API_KEY;
@@ -21,13 +22,13 @@ const suites = [
   { flag: '--catalog', fixtures: simulatorCatalogFixtures, output: 'output/simulator-catalog.json' },
   { flag: '--blind', fixtures: simulatorBlindFixtures, output: 'output/simulator-blind.json' },
   { flag: '--challenge', fixtures: simulatorChallenges, output: 'output/simulator-challenges.json' },
-  { flag: '--validation', fixtures: simulatorValidation, output: 'ai/simulator/validation-results.json' },
-  { flag: '--holdout', fixtures: simulatorHoldouts, output: 'ai/simulator/holdout-results.json' },
-  { flag: '--replay', fixtures: simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)), output: 'ai/simulator/replay.json' },
+  { flag: '--validation', fixtures: simulatorValidation, output: 'output/simulator-validation.json' },
+  { flag: '--holdout', fixtures: simulatorHoldouts, output: 'output/simulator-holdout.json' },
+  { flag: '--replay', fixtures: simulatorFixtures.filter(item => ['earned-discovery', 'scope-tradeoff'].includes(item.id)), output: 'output/simulator-replay.json' },
 ];
 const suite = only
   ? { fixtures: [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures, ...simulatorCatalogFixtures].filter(item => item.id === only), output: `output/simulator-${only}.json` }
-  : suites.find(item => process.argv.includes(item.flag)) ?? { fixtures: simulatorFixtures, output: 'ai/simulator/results.json' };
+  : suites.find(item => process.argv.includes(item.flag)) ?? { fixtures: simulatorFixtures, output: 'output/simulator-development.json' };
 if (!suite.fixtures.length) throw new Error('Unknown fixture.');
 const rows = [];
 fixtures: for (const fixture of suite.fixtures) {
@@ -38,7 +39,7 @@ fixtures: for (const fixture of suite.fixtures) {
     const input = { ...fixture, transcript: fixture.transcript.slice(0, transcriptLength), achievedIds, apiKey: key, revision: transcriptLength, signal: AbortSignal.timeout(30_000) };
     const trainee = await evaluateTrainee(input);
     const client = await evaluateClient({ ...input, signal: AbortSignal.timeout(30_000) });
-    const cueEligible = canSendCue({ id: client.cueId, probability: client.cueProbability, revision: transcriptLength }, null, true, Date.now());
+    const condition = selectDirectorSignal(client.signals, 'actor')?.condition ?? 'none';
     const achieved = trainee.objectives.filter(item => item.achieved).map(item => item.id);
     const checks = transcriptLength !== fixture.transcript.length ? [] : [
       ...fixture.expected.achieved.map(id => ({ name: `achieved:${id}`, passed: achieved.includes(id) })),
@@ -48,12 +49,11 @@ fixtures: for (const fixture of suite.fixtures) {
       ...(fixture.expected.highSkills ?? []).map(id => ({ name: `high:${id}`, passed: trainee.skills[id].value != null && trainee.skills[id].value! >= 2.5 })),
       ...(fixture.expected.concern == null ? [] : [{ name: `concern:${fixture.expected.concern}`, passed: !!trainee.concern === fixture.expected.concern }]),
       ...Object.entries(fixture.expected.objectiveEvidence ?? {}).map(([id, entryId]) => ({ name: `evidence:${id}:${entryId}`, passed: trainee.objectives.find(item => item.id === id)?.evidence?.entryId === entryId })),
-      ...(fixture.expected.cue ? [{ name: `cue:${fixture.expected.cue}`, passed: client.cueId === fixture.expected.cue }] : []),
-      ...(fixture.expected.cue ? [{ name: 'cue eligible without cooldown', passed: cueEligible === (fixture.expected.cue !== 'no_hint') }] : []),
+      ...(fixture.expected.director ? [{ name: `director:${fixture.expected.director}`, passed: fixture.expected.director === 'none' ? condition === 'none' : !!selectDirectorSignal(client.signals.filter(signal => signal.condition === fixture.expected.director), 'actor') }] : []),
     ];
     const scenario = getScenario(fixture.scenarioId);
     achievedIds = [...new Set([...achievedIds, ...achieved.filter(id => scenario.objectives.find(item => item.id === id)?.kind !== 'outcome')])];
-    rows.push({ fixtureId: fixture.id, transcriptLength, trainee, client, cueEligible, checks });
+    rows.push({ fixtureId: fixture.id, transcriptLength, trainee, client, condition, checks });
     console.log(`${fixture.id} @${transcriptLength}: ${checks.filter(item => item.passed).length}/${checks.length} checks; trainee ${trainee.durationMs}ms, client ${client.durationMs}ms`);
   } catch (error) {
     // SDK errors can contain request headers and provider payloads. Never print them.
@@ -64,6 +64,7 @@ fixtures: for (const fixture of suite.fixtures) {
   }
 }
 const output = outputArg ?? suite.output;
+await mkdir(dirname(output), { recursive: true });
 await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), simulatorVersion: SIMULATOR_VERSION, rubricVersion: RUBRIC_VERSION, rows }, null, 2) + '\n');
 if (rows.some(row => row.checks.some(check => !check.passed))) process.exitCode = 1;
 console.log(`Saved ${rows.length} measured fixture results to ${output}.`);

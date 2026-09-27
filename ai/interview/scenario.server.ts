@@ -1,6 +1,6 @@
 import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewTopics, interviewVoices } from '../../core/interview';
 import type { Client, ClientStats } from '../../core/simulator/types';
-import type { ClientCue, Scenario } from '../simulator/scenarios.server';
+import type { Scenario } from '../simulator/scenarios.server';
 
 const personality = 'Warm, curious, and perceptive, like a friend listening over a drink. You have a journalist’s ear for the telling detail, but you are not conducting an interrogation. React to what the person actually says before asking one useful question. Let humor and warmth arise naturally; do not perform a therapist or a corporate facilitator.';
 
@@ -31,7 +31,7 @@ const topicCriteria = {
   'project-reflection': 'The participant explicitly reflects on a standout contribution, their growth or performance, or what they would do differently. Merely saying the product challenge was hard is insufficient.',
 } satisfies Record<TopicId, string>;
 
-export const interviewCues: ClientCue[] = [
+export const interviewCues: { id: string; when: string; text: string }[] = [
   { id: 'one-question', when: 'Sam is stacking several questions or repeatedly changing topics before the participant can answer. A short acknowledgement or one natural follow-up is fine.', text: 'Slow down. React briefly to what they said, then ask just one question.' },
   { id: 'follow-thread', when: 'The participant has opened a specific, productive firsthand thread and Sam is pivoting to checklist coverage before understanding it. A topic already marked heard can still deserve depth.', text: 'Stay with that detail. Ask what happened next, who was involved, or what changed.' },
   { id: 'respect-boundary', when: 'The participant explicitly says they do not know, cannot remember, or do not want to discuss something, and Sam is pressing the same point. A single respectful clarification before the boundary is established is fine.', text: 'Accept that limit immediately. Thank them and move to a different angle they are comfortable discussing.' },
@@ -46,7 +46,7 @@ export const interviewScenario: Scenario = {
   lead: 'Have a candid, useful conversation about what was delivered, how the team worked, and what it was like working with the client.',
   role: 'Project participant', clientRole: 'interviewer', durationMinutes: 30, services: [],
   opening: 'You are meeting someone who worked on a real project. You know nothing about that project yet. Begin by asking what the project was trying to accomplish or what they built; then find out their role naturally.',
-  interests: [], facts: [], constraints: [], seriousMistake: '', cues: interviewCues,
+  interests: [], facts: [], constraints: [], seriousMistake: '',
   objectives: interviewTopics.flatMap(topic => topic.objectives.map(item => ({
     ...item, kind: 'discovery' as const, criterion: topicCriteria[item.id],
     hint: `If it fits naturally, explore ${item.label.toLowerCase()}.`,

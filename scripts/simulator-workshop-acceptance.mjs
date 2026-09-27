@@ -163,7 +163,8 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await page.getByRole('button', { name: 'Show full result' }).click();
     await page.getByText('Recording details', { exact: true }).click();
     check((await page.locator('.sim-lab-source .sim-lab-provenance').innerText()).includes('Trainee'), 'full result timing missing');
-    check(await page.locator('.sim-director-readout').getByText(/Role fidelity/).isVisible(), 'client diagnostics missing');
+    check(await page.getByText(/These are historical rubric recordings/).isVisible(), 'recording provenance missing');
+    check(await page.getByRole('heading', { name: 'Trainee assessment', exact: true }).isVisible(), 'trainee assessment missing');
     check(await page.locator('.sim-lab-checks span').count() > 0, 'fixture checks missing');
     await page.locator('.sim-objectives details').first().locator('summary').click();
     check(await page.locator('.sim-objectives blockquote').first().isVisible(), 'source evidence not visible');

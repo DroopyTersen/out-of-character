@@ -18,10 +18,6 @@ type RecordedRow = {
   transcriptLength: number;
   trainee: TraineeEvaluation & { answers: unknown };
   client: {
-    fidelity: number;
-    interests: number[];
-    cueId: string;
-    cueProbability: number;
     durationMs: number;
     answers: unknown;
   };
@@ -91,6 +87,7 @@ export function recordedAttempt(catalog: Catalog, fixture: SimulatorFixture, cou
     revision: count,
     transcript: fixture.transcript.slice(0, count),
     evaluation,
+    coaching: null,
     feedbackStatus: evaluation ? (evaluation.revision < count ? 'delayed' : 'current') : 'waiting',
     message: null,
     finalization: 'pending',

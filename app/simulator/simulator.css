@@ -205,12 +205,6 @@ details[open] > summary > .sim-disclosure { transform: rotate(180deg); }
 .sim-lab-check-details summary { cursor: pointer; padding: 12px 0; min-height: 44px; }
 p.sim-lab-check-details { padding: 12px 0; }
 .sim-lab-check-details[data-failed=true] summary { color: #f9a6af; }
-.sim-director-readout { padding: 20px; background: #122f4290; margin-top: 24px; border-radius: 5px; }
-.sim-director-readout p { margin: 8px 0; font-size: 13px; color: #a9c3d6; }
-.sim-director-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0; }
-.sim-director-metrics dt { color: #9fbcd0; font-size: 12px; }
-.sim-director-metrics dd { margin: 5px 0 0; color: #d2e7f2; font-size: 22px; font-variant-numeric: tabular-nums; }
-.sim-director-metrics small { color: #82a5bc; font-size: 12px; }
 .sim-collection-note { color: #91b4cd; margin: 14px 0; font-size: 13px; }
 /* Two actual audio channels share a quiet pixel spectrum. */
 .sim-voice-display { --voice-client: #44efcd; --voice-trainee: #79bfff; }
@@ -285,7 +279,6 @@ p.sim-lab-check-details { padding: 12px 0; }
   .sim-session-bar { display: grid; grid-template-columns: 1fr auto; gap: 12px; }.sim-session-bar .eyebrow { grid-column: 1; grid-row: 1; padding: 0; border: 0; font-size: 11px; }.sim-session-bar h1 { grid-column: 1/-1; grid-row: 2; font-size: 19px; }.sim-session-bar time { grid-column: 1; grid-row: 3; }.sim-session-bar .sim-end { grid-column: 2; grid-row: 3; font-size: 16px; min-height: 44px; }
   .simulator-title { font-size: 14px; letter-spacing: 0; }.simulator-header .workshop-link { min-height: 44px; display: inline-flex; align-items: center; }.simulator-header .workshop-link span { display: none; }.simulator-header .workshop-return { padding: 0; }
   .sim-debrief .sim-heading h1 { font-size: clamp(23px, 6.4vw, 28px); text-wrap: balance; }
-  .sim-director-metrics { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 480px) {

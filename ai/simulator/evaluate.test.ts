@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
 import { skills } from '../../core/simulator/types';
-import { evaluateTraineeQuestionGroups, readTraineeAnswers, shouldPartitionTraineeQuestions } from './evaluate.server';
-import { actorBrief, getClient, getClientCues, getScenario, scenarios } from './scenarios.server';
+import { evaluateTraineeQuestionGroups, readClientAnswers, readTraineeAnswers, shouldPartitionTraineeQuestions } from './evaluate.server';
+import { actorBrief, getClient, getScenario, scenarios } from './scenarios.server';
 import { simulatorFixtures } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
-import { clientQuestions, traineeQuestions } from './rubric';
+import { traineeQuestions } from './rubric';
 
 // Only the paid, probabilistic provider result is substituted. Parsing, public
 // evidence projection, and outcome eligibility use the production implementation.
@@ -21,6 +21,32 @@ function answers() {
   }
   return result;
 }
+test('director signals reflect the objective selection and discard invalid optional judgments without losing scores', () => {
+  const raw = answers();
+  raw['objective:problem'] = { type: 'boolean', probability: .1 };
+  raw.stalled = { type: 'boolean', probability: .93 };
+  const read = () => readTraineeAnswers(getScenario('sharepoint'), simulatorFixtures[0]!.transcript, raw);
+  expect(read().signals).toContainEqual({ condition: 'objective:problem', selected: true });
+  expect(read().signals).toContainEqual({ condition: 'objective:impact', selected: false });
+  expect(read().signals).toContainEqual({ condition: 'stalled', probability: .93 });
+  raw.stalled = { type: 'boolean', probability: NaN };
+  expect(read().signals.some(signal => signal.condition === 'stalled')).toBe(false);
+  expect(read().skills.listening.value).toBe(3.1);
+  raw.hint = { type: 'choice', choice: 'none' };
+  expect(read().signals.filter(signal => signal.condition.startsWith('objective:')).every(signal => 'selected' in signal && !signal.selected)).toBe(true);
+});
+
+test('actor signals use typed conditions without requiring an authored cue', () => {
+  const raw: Parameters<typeof readClientAnswers>[0] = {
+    'director:knowledge': { type: 'boolean', probability: .72 },
+    'director:authority': { type: 'boolean', probability: .13 },
+    'director:role': { type: 'boolean', probability: .95 },
+    'director:interests': { type: 'boolean', probability: .81 },
+  };
+  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'role', probability: .95 }, { condition: 'interests', probability: .81 }]);
+  raw['director:role'] = { type: 'boolean', probability: -1 };
+  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'interests', probability: .81 }]);
+});
 test('feedback quotes source text and leaves unavailable or uncited evidence unscored', () => {
   const transcript = simulatorFixtures[0]!.transcript;
   const raw = answers();
@@ -34,7 +60,7 @@ test('feedback quotes source text and leaves unavailable or uncited evidence uns
   expect(result.skills.rapport.value).toBeNull();
   expect(result.objectives.find(item => item.id === 'capability')!.achieved).toBe(false);
   expect(result.objectives.find(item => item.id === 'impact')!.achieved).toBe(false);
-  expect(result.hint).toBeNull();
+  expect(result.signals.some(signal => 'selected' in signal && signal.selected)).toBe(false);
 });
 test('an independent bounded agreement can coexist with a concern about another claim', () => {
   const raw = answers();
@@ -57,7 +83,7 @@ test('a trainee proposal cannot supply client agreement or a discovered fact, an
   const result = readTraineeAnswers(getScenario('sharepoint'), simulatorFixtures[0]!.transcript, raw, ['problem']);
   expect(result.objectives.find(item => item.id === 'stakeholder')!.achieved).toBe(false);
   expect(result.objectives.find(item => item.id === 'next-step')!.achieved).toBe(false);
-  expect(result.hint).toBeNull();
+  expect(result.signals.some(signal => 'selected' in signal && signal.selected)).toBe(false);
 });
 test('malformed probabilities and invented evidence IDs fail closed', () => {
   const raw = answers();
@@ -77,15 +103,6 @@ test('the actor receives client context without trainee-only briefing or lead', 
     for (const limit of scenario.constraints) expect(brief).toContain(limit);
     expect(brief).not.toContain(scenario.lead);
     for (const line of scenario.briefing ?? []) expect(brief).not.toContain(line);
-  }
-});
-test('the shared ownership cue is available to the judge for scored scenes only', () => {
-  for (const scenario of scenarios) {
-    const cues = getClientCues(scenario);
-    const question = clientQuestions(scenario).cue;
-    expect(question?.type).toBe('choice');
-    if (question?.type === 'choice') expect(Object.keys(question.criteria ?? {})).toEqual(['no_hint', ...cues.map(cue => cue.id)]);
-    expect(cues.some(cue => cue.id === 'consultant-ownership')).toBe(scenario.objectives.length > 0);
   }
 });
 test('long conversations cover every eligible passage in bounded evidence batches', () => {

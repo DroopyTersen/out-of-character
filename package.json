@@ -13,7 +13,8 @@
     "deploy:preview": "bun run build && wrangler preview --ignore-base-config",
     "cf-typegen": "wrangler types && react-router typegen",
     "eval:jev": "bun ai/evals/run.ts",
-    "eval:simulator": "bun --env-file=.dev.vars ai/simulator/run.ts"
+    "eval:simulator": "bun --env-file=.dev.vars ai/simulator/run.ts",
+    "eval:director": "bun --env-file=.dev.vars ai/simulator/director-replay.ts"
   },
   "dependencies": {
     "@ai-sdk/typesafe-ai": "3.0.2",

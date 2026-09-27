@@ -2,8 +2,8 @@ import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
 import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
-import type { SentCue } from '../../../core/simulator/state';
 import { LIVE_MODEL } from './live.server';
+import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 
 export type ArchiveProvenance = {
   model: string;
@@ -14,14 +14,16 @@ export type ArchiveProvenance = {
   openingDigest: string;
   workerId: string | null;
   workerTag: string | null;
-  directorEnabled: boolean;
+  contextualDirector: DirectorSummary | null;
+  directorEnabled?: boolean;
 };
 
 export type ArchiveWrite = {
-  state: 'partial' | 'final'; capturedAt: number; snapshot: SessionSnapshot; provenance: ArchiveProvenance; cues: SentCue[];
+  state: 'partial' | 'final'; capturedAt: number; snapshot: SessionSnapshot; provenance: ArchiveProvenance;
+  interventions: InterventionRecord[];
 };
 
-export async function archiveProvenance(env: Env, snapshot: SessionSnapshot): Promise<ArchiveProvenance> {
+export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, contextualDirector: DirectorSummary | null): Promise<ArchiveProvenance> {
   const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
   const digest = async (text: string) => {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -31,26 +33,27 @@ export async function archiveProvenance(env: Env, snapshot: SessionSnapshot): Pr
   return {
     model: LIVE_MODEL, voice: client.voice, rubricVersion: snapshot.interview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
-    directorEnabled: env.SIMULATOR_DIRECTOR_ENABLED === 'true',
+    contextualDirector,
+    ...(snapshot.interview ? { directorEnabled: String(env.SIMULATOR_DIRECTOR_ENABLED) === 'true' } : {}),
   };
 }
 
 /** SessionSnapshot is the public projection built by the session owner, not raw provider output. */
 export async function writeArchive(db: D1Database, value: ArchiveWrite): Promise<void> {
-  const { snapshot, capturedAt, state, provenance, cues } = value;
+  const { snapshot, capturedAt, state, provenance } = value;
   const columns = [
     snapshot.id, snapshot.scenarioId, snapshot.clientId, snapshot.startedAt, capturedAt,
     state === 'final' ? capturedAt : null, state, snapshot.status, snapshot.finalization,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.evaluation ? JSON.stringify(snapshot.evaluation) : null,
-    JSON.stringify(provenance), JSON.stringify(cues),
+    JSON.stringify(provenance), '[]', JSON.stringify(value.interventions),
   ];
   const result = await db.prepare(`
     INSERT INTO simulator_attempts (
       id, scenario_id, client_id, started_at, updated_at, ended_at, archive_state,
       session_status, finalization, feedback_status, usage_seconds, message,
-      transcript_json, evaluation_json, provenance_json, cues_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      transcript_json, evaluation_json, provenance_json, cues_json, interventions_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       scenario_id = excluded.scenario_id, client_id = excluded.client_id,
       started_at = excluded.started_at, updated_at = excluded.updated_at,
@@ -59,7 +62,7 @@ export async function writeArchive(db: D1Database, value: ArchiveWrite): Promise
       feedback_status = excluded.feedback_status, usage_seconds = excluded.usage_seconds,
       message = excluded.message, transcript_json = excluded.transcript_json,
       evaluation_json = excluded.evaluation_json, provenance_json = excluded.provenance_json,
-      cues_json = excluded.cues_json
+      interventions_json = excluded.interventions_json
     WHERE excluded.archive_state = 'final' OR (
       simulator_attempts.archive_state = 'partial' AND excluded.updated_at >= simulator_attempts.updated_at
     )

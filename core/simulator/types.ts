@@ -69,14 +69,13 @@ export type TraineeEvaluation = {
   revision: number;
   skills: Record<SkillId, SkillReading>;
   objectives: ObjectiveReading[];
-  hint: string | null;
-  hintId?: string | null;
   concern: string | null;
   model: string;
   durationMs: number;
 };
 export type SessionStatus = 'connecting' | 'live' | 'ending' | 'ended' | 'interrupted';
 export type FeedbackStatus = 'waiting' | 'current' | 'delayed' | 'unavailable';
+export type LiveHint = { id: string; text: string; kind: 'hint' | 'concern'; objectiveId: string | null; evidenceIds: string[]; createdAt: number; expiresAt: number };
 export type SessionSnapshot = {
   id: string;
   scenarioId: string;
@@ -89,6 +88,7 @@ export type SessionSnapshot = {
   transcript: TranscriptEntry[];
   evaluation: TraineeEvaluation | null;
   interview?: InterviewSession;
+  coaching: LiveHint | null;
   feedbackStatus: FeedbackStatus;
   message: string | null;
   finalization: 'pending' | 'confirmed' | 'unconfirmed';

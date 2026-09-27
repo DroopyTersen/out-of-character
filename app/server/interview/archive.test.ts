@@ -25,13 +25,13 @@ const base: InterviewArchiveWrite = {
     id: 'interview-1', scenarioId: 'project-closeout', clientId: 'sam-cedar',
     status: 'live', startedAt: 1000, limitSeconds: 3600, warning: null, revision: 1,
     transcript: [{ id: 'p1', speaker: 'trainee', text: 'Jen helped us fix the access issue.', startMs: 100, endMs: 900 }],
-    evaluation: null, feedbackStatus: 'current', message: null, finalization: 'pending', usageSeconds: null,
+    evaluation: null, coaching: null, feedbackStatus: 'current', message: null, finalization: 'pending', usageSeconds: null,
     interview: { evaluation: null, summary: { status: 'pending', text: null } },
   },
   provenance: {
     model: 'gpt-live', voice: 'cedar', rubricVersion: 'interview-r1', simulatorVersion: 'interview-v1',
     actorDigest: 'actor-digest', openingDigest: 'opening-digest', workerId: 'worker-id',
-    workerTag: 'tag', directorEnabled: true,
+    workerTag: 'tag', contextualDirector: null,
   },
   cues: [],
 };

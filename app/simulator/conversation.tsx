@@ -32,16 +32,19 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
   const automaticFinish = !!warning && warning.kind !== 'idle' && !remaining;
   const micOff = muted || phase === 'ending' || automaticFinish;
   const evaluation = openEnded ? null : snapshot?.evaluation ?? null;
-  const concern = evaluation?.concern;
-  const feedbackStatus = snapshot?.feedbackStatus;
-  // A cleared concern can become relevant again; score-only updates cannot reopen it.
+  const liveHint = snapshot?.coaching;
+  const concern = liveHint?.kind === 'concern';
+  const [expiredHint, setExpiredHint] = useState<string | null>(null);
   useEffect(() => {
-    if (feedbackStatus === 'current' && concern === null) setDismissedHints(previous => previous.filter(key => !key.startsWith('concern:')));
-  }, [concern, feedbackStatus]);
+    setExpiredHint(null);
+    if (!liveHint) return;
+    const timer = setTimeout(() => setExpiredHint(liveHint.id), Math.max(0, liveHint.expiresAt - liveHint.createdAt));
+    return () => clearTimeout(timer);
+  }, [liveHint?.id, liveHint?.expiresAt]);
   const caption = snapshot?.transcript.toSorted((a, b) => b.endMs - a.endMs)[0];
-  const hint = phase === 'live' && snapshot?.feedbackStatus !== 'unavailable' ? evaluation?.concern ?? evaluation?.hint : null;
-  // Authored hint identity survives new score revisions and temporary observation gaps.
-  const hintKey = evaluation?.concern ? `concern:${evaluation.concern}` : `hint:${evaluation?.hintId ?? hint}`;
+  const hint = phase === 'live' && liveHint?.id !== expiredHint ? liveHint?.text : null;
+  // A generated replacement and score revisions preserve the same dismissal identity.
+  const hintKey = liveHint?.id ?? '';
   const hintOpen = !!hint && !dismissedHints.includes(hintKey);
   const dismissHint = () => {
     setDismissedHints(previous => [...previous, hintKey]);
@@ -69,7 +72,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
             <DialogTrigger asChild><button className="sim-open-brief sim-mobile-only" aria-label="Open session brief"><span>Brief <ChevronRight size={18} aria-hidden="true" /></span></button></DialogTrigger>
             <SessionBrief scenario={scenario} client={client} />
           </Dialog>
-          {!openEnded && <div className="sim-mobile-only"><SimulatorHintToast text={hintOpen ? hint : null} concern={!!evaluation?.concern} delayed={snapshot?.feedbackStatus === 'delayed'} onDismiss={dismissHint} /></div>}
+          {!openEnded && <div className="sim-mobile-only"><SimulatorHintToast text={hintOpen ? hint! : null} concern={concern} onDismiss={dismissHint} /></div>}
         </div>
         <div className="sim-caption sim-desktop-only">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Your voice connection is opening.' : phase === 'ending' ? 'Your conversation has ended.' : 'Say hello when you are ready.'}</p>}</div>
         <div className="sim-call-controls" role="group" aria-label="Call controls">
@@ -88,7 +91,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
           <button className="sim-end sim-mobile-only" onClick={onEnd} disabled={phase === 'ending'} aria-label={endLabel}>{phase === 'live' ? 'End' : endLabel}</button>
         </div>
       </section>
-      {!openEnded && <><div className="sim-coaching"><div className="sim-desktop-only"><SimulatorHint evaluation={evaluation} phase={phase} status={snapshot?.feedbackStatus} /></div><SimulatorObjectives scenario={scenario} evaluation={evaluation} /></div>
+      {!openEnded && <><div className="sim-coaching"><div className="sim-desktop-only"><SimulatorHint phase={phase} liveHint={hintOpen ? liveHint! : null} onDismiss={dismissHint} /></div><SimulatorObjectives scenario={scenario} evaluation={evaluation} /></div>
       <SimulatorSkills evaluation={evaluation} status={phase === 'ending' && evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} compact /></>}
     </div>
     {transcriptOpen && <section className="sim-transcript-panel sim-desktop-only" ref={transcriptPanel} id="sim-conversation-transcript" tabIndex={-1} aria-label="Conversation transcript"><header className="sim-section-heading"><h2>Conversation</h2><button className="quiet-button" onClick={closeTranscript}>Close transcript</button></header><SimulatorTranscript entries={snapshot?.transcript ?? []} /></section>}

@@ -50,7 +50,7 @@ const stories = [
   { id: 'simulator-voice', label: 'Simulator audio', description: 'Replay every speaking, listening, overlap, muted, and connection state. Adjust intensity without a microphone.', component: SimulatorVoiceStory },
   { id: 'simulator-voice-lab', label: 'Voice Lab', description: 'Hear prepared voice clips for each client while viewing their portrait and personality.', component: SimulatorVoiceLabStory },
   { id: 'simulator-debrief', label: 'Simulator debrief', description: 'Successful and difficult attempts, real evidence, skill gaps, and unconfirmed finalization.', component: SimulatorDebriefStory },
-  { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, measured trainee judgments, client interests and fidelity, cue selection, and raw probabilities.', component: SimulatorJudgingStory },
+  { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, historical trainee judgments, source evidence, and raw probabilities.', component: SimulatorJudgingStory },
   { id: 'interview-setup', label: 'The Debrief setup', description: 'Voice choice and private transcript notice. Start is a safe preview without a microphone.', component: InterviewSetupStory },
   { id: 'interview-live', label: 'The Debrief live', description: 'Synthetic conversation, live observations, topic threads, mute and transcript states.', component: InterviewLiveStory },
   { id: 'interview-summary', label: 'The Debrief summary', description: 'Synthetic internal summary, pending and unavailable states, copy and transcript access.', component: InterviewSummaryStory },

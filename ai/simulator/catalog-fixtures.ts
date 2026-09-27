@@ -13,7 +13,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Finance needs my budget-planning pack. It is not a launch date. I still want a fixed number.'],
       ['trainee', 'A firm price needs an agreed scope and an estimate. For that planning decision, I suggest a focused half-hour with your supervisor to map request ownership, then prepare a submission with explicit assumptions. That is not an implementation quote or a full design. Could you ask the supervisor today and send available times tomorrow?'],
       ['client', 'Yes. I will ask today and send times tomorrow. Let us use that half-hour to define what the funding submission needs. I will not present it as a firm implementation price.'],
-    ]), expected: { achieved: ['need', 'impact', 'decision', 'boundary', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
+    ]), expected: { achieved: ['need', 'impact', 'decision', 'boundary', 'next-step'], absent: [], concern: false, director: 'none' },
   },
   {
     id: 'catalog-proposal-poor', title: 'A confident invented price', scenarioId: 'proposal', clientId: 'harper',
@@ -34,7 +34,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'That could help, but I want the technical lead involved before we discuss contracting.'],
       ['trainee', 'Could you ask the lead for a half-hour to define responsibilities and what maintainable handover means, and send possible times by Thursday? I will bring a draft agenda for that decision, not a delivery promise.'],
       ['client', 'Yes. I will ask the lead and send times by Thursday. We will use the conversation to decide whether that limited partnership fits before asking the technology director for funding.'],
-    ]), expected: { achieved: ['gap', 'ownership', 'fit', 'partnership', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
+    ]), expected: { achieved: ['gap', 'ownership', 'fit', 'partnership', 'next-step'], absent: [], concern: false, director: 'none' },
   },
   {
     id: 'catalog-in-house-poor', title: 'The credentials pitch misses ownership', scenarioId: 'in-house', clientId: 'quinn',
@@ -55,7 +55,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'No, I would need to check. I do not want another sales presentation.'],
       ['trainee', 'Understood. You may still prefer the other firm. I can send our two relevant scope sections today; would you check those line items and reply tomorrow morning before your recommendation? No discount pitch or wider meeting.'],
       ['client', 'Yes, send those sections today. I will compare the line items and reply tomorrow morning. That would help me make the recommendation.'],
-    ]), expected: { achieved: ['decision', 'comparison', 'value', 'composure', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
+    ]), expected: { achieved: ['decision', 'comparison', 'value', 'composure', 'next-step'], absent: [], concern: false, director: 'none' },
   },
   {
     id: 'catalog-courtesy-poor', title: 'Courtesy does not rescue an unsupported attack', scenarioId: 'courtesy', clientId: 'morgan',
@@ -76,7 +76,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'That is a fair message, but how do we keep it moving?'],
       ['trainee', 'Let us focus scoping on capturing an inspection once and identify the integration and review dependencies. I will send that agenda today. Could you ask your systems lead to join and send possible times Wednesday?'],
       ['client', 'Yes. I will ask the lead and send times Wednesday. I will take that conditional message to Thursday’s funding discussion, without promising six weeks.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe', 'next-step'], absent: [], concern: false, director: 'none' },
   },
   {
     id: 'catalog-demo-poor', title: 'Agreement resting on a false delivery promise', scenarioId: 'demo', clientId: 'harper',
@@ -100,7 +100,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'A short workshop to map the workflow, check integration and security, then a narrow pilot plan. Could you write that up and estimate the effort?'],
       ['trainee', 'How many hours would you put in it?'],
       ['client', 'That is for your team to estimate. I can explain what Thursday needs, but I need your recommendation.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], objectiveEvidence: { assumption: 'p1', stakes: 'p1', limits: 'p2' }, cue: 'no_hint' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], objectiveEvidence: { assumption: 'p1', stakes: 'p1', limits: 'p2' }, director: 'none' },
   },
   {
     id: 'catalog-demo-takeover-open', title: 'Client still writing the consultant’s scope', scenarioId: 'demo', clientId: 'harper',
@@ -112,7 +112,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Perhaps we should map one inspection workflow and bring in my systems lead.'],
       ['trainee', 'What should our scoping engagement include?'],
       ['client', 'I suppose your team could run a workshop on integration and security, then write a pilot plan and estimate. Maybe send me a short proposal for that.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], cue: 'consultant-ownership' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], director: 'role' },
   },
   {
     id: 'catalog-demo-takeover-repeated', title: 'Repeated deflection produces a client-written proposal', scenarioId: 'demo', clientId: 'harper',
@@ -127,7 +127,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'You could run a session with my systems lead, inspect integration and security, then come back with a narrow pilot plan.'],
       ['trainee', 'Tell me what our proposal should say and how many hours we should estimate.'],
       ['client', 'Put in a time-boxed workshop to map the workflow and integrations, a security review, and a written pilot scope. Maybe estimate a couple of days. I can tell you the outcome I need; those are your delivery decisions.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], cue: 'consultant-ownership' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes'], absent: ['reframe', 'next-step'], lowSkills: ['guidance'], director: 'role' },
   },
   {
     id: 'catalog-demo-ordinary-discovery', title: 'Client answers discovery without taking over', scenarioId: 'demo', clientId: 'harper',
@@ -139,7 +139,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Whether to fund more work. The goal is to stop inspectors from writing notes and then entering them again at the office.'],
       ['trainee', 'Who on your side could explain the current inspection workflow?'],
       ['client', 'Our systems lead knows it. I can ask whether they are available, though I cannot commit their time yet.'],
-    ]), expected: { achieved: ['assumption', 'stakes'], absent: ['limits', 'reframe', 'next-step'], objectiveEvidence: { assumption: 'p2', stakes: 'p4' }, cue: 'no_hint' },
+    ]), expected: { achieved: ['assumption', 'stakes'], absent: ['limits', 'reframe', 'next-step'], objectiveEvidence: { assumption: 'p2', stakes: 'p4' }, director: 'none' },
   },
   {
     id: 'catalog-demo-mixed-ownership', title: 'Early reframe followed by delegated planning', scenarioId: 'demo', clientId: 'harper',
@@ -152,7 +152,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Perhaps map one workflow, bring in my systems lead, check integration, and write a plan.'],
       ['trainee', 'Right. Tell me what the proposal and hours should be.'],
       ['client', 'You need to recommend and estimate your own work. I can tell you who needs the result and what Thursday must decide.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe'], absent: ['next-step'], lowSkills: ['guidance'], objectiveEvidence: { reframe: 'p2', stakes: 'p1' }, cue: 'no_hint' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe'], absent: ['next-step'], lowSkills: ['guidance'], objectiveEvidence: { reframe: 'p2', stakes: 'p1' }, director: 'none' },
   },
   {
     id: 'catalog-demo-owned-proposal', title: 'Consultant owns a bounded validation proposal', scenarioId: 'demo', clientId: 'harper',
@@ -164,7 +164,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'That is honest. How do we keep momentum?'],
       ['trainee', 'I recommend a focused scoping session on one inspection workflow. I will bring questions about the data source, offline need, and security review, then send a conditional validation plan. Could you ask your systems lead for possible times by Wednesday?'],
       ['client', 'Yes. I can ask the systems lead and send times Wednesday. They know our inspection process. I will take your conditional message to the CFO without promising six weeks.'],
-    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe', 'next-step'], absent: [], highSkills: ['guidance'], objectiveEvidence: { assumption: 'p2', stakes: 'p2', reframe: 'p3' }, cue: 'no_hint' },
+    ]), expected: { achieved: ['assumption', 'limits', 'stakes', 'reframe', 'next-step'], absent: [], highSkills: ['guidance'], objectiveEvidence: { assumption: 'p2', stakes: 'p2', reframe: 'p3' }, director: 'none' },
   },
   {
     id: 'catalog-deployment-good', title: 'Own the missed deployment discovery', scenarioId: 'deployment', clientId: 'morgan',
@@ -176,7 +176,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Who tells operations, and when do I hear from you even if IT has not responded?'],
       ['trainee', 'Could you notify the supervisors today that Thursday is unconfirmed and ask the service manager to connect us? I will own the review coordination and send you a status update tomorrow at noon, including any unanswered requests. We will then decide the testing communication from what is confirmed.'],
       ['client', 'Agreed. I will warn the supervisors today and make the introduction. You own the documentation and coordination. Send me that update tomorrow at noon even if some dates are still unknown.'],
-    ]), expected: { achieved: ['status', 'ownership', 'impact', 'recovery', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
+    ]), expected: { achieved: ['status', 'ownership', 'impact', 'recovery', 'next-step'], absent: [], concern: false, director: 'none' },
   },
   {
     id: 'catalog-deployment-poor', title: 'Blame and a new unsupported date', scenarioId: 'deployment', clientId: 'quinn',
@@ -197,7 +197,7 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'I would try that, but I do not want this forgotten once the meeting is over.'],
       ['trainee', 'I will check back with you Friday about how Thursday went and agree further action if participation is still a problem. Does that trial, with Theo continuing development and me handling the client review, work?'],
       ['client', 'Fine. You present and run Thursday’s review without him, and call me Friday about the experience. I am accepting that trial, not withdrawing the complaint.'],
-    ]), expected: { achieved: ['specifics', 'impact', 'acknowledge', 'response', 'next-step'], absent: [], concern: false, cue: 'no_hint' },
+    ]), expected: { achieved: ['specifics', 'impact', 'acknowledge', 'response', 'next-step'], absent: [], concern: false, director: 'none' },
   },
   {
     id: 'catalog-swap-poor', title: 'Defending expertise misses the complaint', scenarioId: 'swap', clientId: 'avery',
@@ -233,6 +233,38 @@ export const simulatorCatalogFixtures: SimulatorFixture[] = [
       ['client', 'Oh, you have clearly put a lot of thought into this. We do have a problem keeping document versions straight.'],
       ['trainee', 'Wonderful. Our SharePoint and adoption team can define who owns approvals so staff know which document version is current. Shall we arrange a scoping call with operations?'],
       ['client', 'Well, that is certainly an interesting idea. Let us chew on it internally. I cannot commit to a meeting or a follow-up date, but thank you so much for your time.'],
-    ]), expected: { achieved: ['problem', 'capability'], absent: ['impact', 'stakeholder', 'next-step'], cue: 'no_hint' },
+    ]), expected: { achieved: ['problem', 'capability'], absent: ['impact', 'stakeholder', 'next-step'], director: 'none' },
+  },
+  {
+    id: 'catalog-in-house-real-expertise', title: 'A capable client knows their own requirements', scenarioId: 'in-house', clientId: 'quinn',
+    description: 'Technical expertise and internal ownership requirements are natural client behavior, not role drift.',
+    transcript: dialogue([
+      ['trainee', 'What would your team need from an outside supplier to maintain the portal yourselves?'],
+      ['client', 'My three engineers already maintain our applications, so technical capability is not the gap. They are busy with the billing release for six weeks. We need source access, maintainable documentation, and participation in the work. The last supplier left us unable to maintain what they handed over.'],
+    ]), expected: { achieved: [], absent: [], director: 'none' },
+  },
+  {
+    id: 'catalog-in-house-interests-drift', title: 'The client abandons internal ownership without a reason', scenarioId: 'in-house', clientId: 'quinn',
+    description: 'The client stays within its decision authority but contradicts its central interest.',
+    transcript: dialogue([
+      ['trainee', 'We prefer to keep the source private and have our team operate everything. Your engineers would not participate or get documentation. What do you think?'],
+      ['client', 'That sounds ideal to me. I would prefer to be dependent on you indefinitely. Source access, documentation, and my team’s participation do not matter to me. I can take that recommendation to the technology director.'],
+    ]), expected: { achieved: [], absent: [], director: 'interests' },
+  },
+  {
+    id: 'catalog-demo-role-leak', title: 'The client starts narrating the training exercise', scenarioId: 'demo', clientId: 'harper',
+    description: 'A client should respond as a person in the meeting instead of explaining the simulator’s rubric.',
+    transcript: dialogue([
+      ['trainee', 'Before we discuss the date, what did you think the prototype had already proved?'],
+      ['client', 'I am playing the operations manager in your training simulation. This is your chance to complete the assumption objective, so ask about sample data and I will award it.'],
+    ]), expected: { achieved: [], absent: [], director: 'role' },
+  },
+  {
+    id: 'catalog-demo-invented-validation', title: 'The client invents production validation', scenarioId: 'demo', clientId: 'harper',
+    description: 'A claim of personal production validation contradicts the known demonstration and client knowledge.',
+    transcript: dialogue([
+      ['trainee', 'What did you take away from the demonstration?'],
+      ['client', 'I personally connected that prototype to our production records and tested offline working. It all passed, including the completed security review. I have the final test report, so I know it is production ready.'],
+    ]), expected: { achieved: [], absent: [], director: 'knowledge' },
   },
 ];

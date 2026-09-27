@@ -17,6 +17,6 @@ test('a disabled simulator still serves the shared intro without an enabled star
   }));
   expect(html).toContain('Before you meet Quinn');
   expect(html).toContain('/simulator/briefings/scope.mp3');
-  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Start conversation/);
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Start meeting/);
   expect(html).toContain('Live practice is currently unavailable.');
 });

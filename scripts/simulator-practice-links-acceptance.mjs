@@ -12,10 +12,10 @@ const browser = await chromium.launch({
 const results = [];
 
 async function run(name, width, exercise, expectedMicCalls = 0) {
-  const context = await browser.newContext({ viewport: { width, height: width === 1440 ? 900 : 844 }, reducedMotion: 'reduce', permissions: ['clipboard-read', 'clipboard-write'] });
+  const context = await browser.newContext({ viewport: { width, height: width === 1440 ? 900 : 844 }, reducedMotion: 'reduce' });
   let micCalls = 0;
   const apiCalls = [], errors = [];
-  // Real rendering, routing, audio and clipboard; block paid/microphone boundaries only.
+  // Real rendering, routing, audio and address-bar URLs; block paid/microphone boundaries only.
   await context.exposeBinding('__recordMic', () => { micCalls++; });
   await context.addInitScript(() => {
     navigator.mediaDevices.getUserMedia = () => { window.__recordMic(); return Promise.reject(new Error('Unexpected microphone request')); };
@@ -43,28 +43,22 @@ async function expectBriefing(page, client, scenario, title) {
   assert.equal(await page.locator('.sim-briefing audio').getAttribute('src'), `/simulator/briefings/${scenario}.mp3`);
 }
 
-async function copyLink(page, expectedPath) {
-  await page.getByRole('button', { name: 'Copy link', exact: true }).click();
-  await page.getByRole('button', { name: 'Link copied', exact: true }).waitFor();
-  const url = await page.evaluate(() => navigator.clipboard.readText());
-  assert.equal(url, new URL(expectedPath, baseUrl).href);
-  return url;
-}
-
 for (const width of [1440, 390, 320]) {
-  await run('direct-and-copy', width, async page => {
+  await run('direct-and-address-bar', width, async page => {
     await page.goto(`${baseUrl}/simulator?scenario=scope&client=morgan`, { waitUntil: 'networkidle' });
     await expectBriefing(page, 'Morgan', 'scope', 'The small change');
     await page.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration));
     // A shared URL has no prior user gesture. Blocked autoplay must leave usable controls.
-    assert.equal(await page.locator('.sim-briefing audio').evaluate(audio => audio.paused && audio.controls && !audio.hidden), true);
-    assert.equal(await page.locator('.sim-briefing-transcript').getAttribute('open'), null);
-    if (width === 390) assert.equal(await page.getByRole('button', { name: 'Start conversation' }).evaluate(button => button.getBoundingClientRect().bottom <= innerHeight), true);
+    assert.equal(await page.locator('.sim-briefing audio').evaluate(audio => audio.paused), true);
+    assert.equal(await page.getByText('Read transcript', { exact: true }).count(), 0);
+    if (width === 390) assert.equal(await page.getByRole('button', { name: 'Start meeting' }).evaluate(button => button.getBoundingClientRect().bottom <= innerHeight), true);
     await page.screenshot({ path: `${output}/direct-${width}.png`, fullPage: true });
-    await copyLink(page, '/simulator?scenario=scope&client=morgan');
+    assert.equal(page.url(), `${baseUrl}/simulator?scenario=scope&client=morgan`);
+    assert.equal(await page.getByRole('button', { name: 'Copy link', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Play intro', exact: true }).isVisible(), true);
     await page.reload({ waitUntil: 'networkidle' });
     await expectBriefing(page, 'Morgan', 'scope', 'The small change');
-    await page.getByRole('button', { name: 'Replay', exact: true }).click();
+    await page.getByRole('button', { name: 'Play intro', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.sim-briefing audio')?.currentTime > 0.2);
     await page.getByRole('button', { name: 'Change scenario or client' }).click();
     await page.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
@@ -79,12 +73,41 @@ for (const width of [1440, 390, 320]) {
       return audio && !audio.paused && audio.currentTime > 0.2;
     });
     const addressBar = page.url();
-    const copied = await copyLink(page, '/simulator?scenario=deployment&client=quinn');
-    assert.equal(addressBar, copied);
+    assert.equal(addressBar, `${baseUrl}/simulator?scenario=deployment&client=quinn`);
     await page.goto(addressBar, { waitUntil: 'networkidle' });
     await expectBriefing(page, 'Quinn', 'deployment', 'Done, but not deployed');
   });
 }
+
+for (const audioLoad of ['loaded', 'failed']) await run(`${audioLoad}-before-hydration`, 390, async page => {
+  let releaseScripts;
+  const scriptsReady = new Promise(resolve => { releaseScripts = resolve; });
+  await page.route('**/*', async route => {
+    if (audioLoad === 'failed' && new URL(route.request().url()).pathname.endsWith('.mp3')) return route.abort();
+    if (route.request().resourceType() === 'script') await scriptsReady;
+    await route.fallback();
+  });
+  try {
+    await page.goto(`${baseUrl}/simulator?scenario=scope&client=morgan`, { waitUntil: 'commit' });
+    // Real SSR markup/media load first, as on a cached shared link or slow JS connection.
+    await page.waitForFunction(load => {
+      const audio = document.querySelector('.sim-briefing audio');
+      return load === 'failed' ? audio?.error : Number.isFinite(audio?.duration);
+    }, audioLoad);
+  } finally { releaseScripts(); }
+  await page.waitForLoadState('networkidle');
+  await expectBriefing(page, 'Morgan', 'scope', 'The small change');
+  if (audioLoad === 'failed') {
+    await page.getByText('The intro couldn’t load. Try refreshing the page.').waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Play intro' }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Start meeting' }).isEnabled(), true);
+    return;
+  }
+  assert.equal(await page.getByRole('slider', { name: 'Intro playback position' }).isEnabled(), true);
+  assert.notEqual(await page.locator('.sim-briefing-progress > span').last().innerText(), '—:—');
+  await page.getByRole('button', { name: 'Play intro', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.sim-briefing audio').currentTime > 0.2);
+});
 
 await run('selection-and-workshop', 390, async page => {
   for (const query of ['scenario=scope', 'scenario=scope&client=unknown']) {
@@ -106,39 +129,24 @@ await run('selection-and-workshop', 390, async page => {
     const audio = document.querySelector('.sim-briefing audio');
     return audio && !audio.paused && audio.currentTime > 0.2;
   });
-  const copied = await copyLink(page, '/simulator?scenario=sharepoint&client=morgan');
-  assert.equal(page.url(), copied);
-  await page.goto(copied, { waitUntil: 'networkidle' });
+  const addressBar = page.url();
+  assert.equal(addressBar, `${baseUrl}/simulator?scenario=sharepoint&client=morgan`);
+  await page.goto(addressBar, { waitUntil: 'networkidle' });
   await expectBriefing(page, 'Morgan', 'sharepoint', 'The adjacent opportunity');
   await page.goto(`${baseUrl}/storybook/simulator-briefing`, { waitUntil: 'networkidle' });
   await page.getByLabel('Scenario').selectOption('happy-hour');
   await page.getByLabel('Client').selectOption('avery');
-  const workshopLink = await copyLink(page, '/simulator?scenario=happy-hour&client=avery');
-  await page.getByLabel('Live practice available').uncheck();
-  assert.equal(await page.getByRole('button', { name: 'Start conversation' }).isDisabled(), true);
-  await page.getByText('Live practice is currently unavailable.', { exact: false }).waitFor();
-  await page.goto(workshopLink, { waitUntil: 'networkidle' });
   await expectBriefing(page, 'Avery', 'happy-hour', 'The happy hour');
-});
-
-await run('clipboard-fallback', 320, async page => {
-  // Simulate the browser denying clipboard permission; keep the rendered fallback real.
-  await page.addInitScript(() => { navigator.clipboard.writeText = () => Promise.reject(new DOMException('Clipboard denied', 'NotAllowedError')); });
-  await page.goto(`${baseUrl}/simulator?scenario=deployment&client=quinn`, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Copy link', exact: true }).click();
-  const input = page.getByRole('textbox', { name: 'Practice link', exact: true });
-  await input.waitFor();
-  assert.equal(await input.inputValue(), `${baseUrl}/simulator?scenario=deployment&client=quinn`);
-  assert.equal(await input.getAttribute('readonly'), '');
-  await input.focus();
-  assert.equal(await input.evaluate(node => node.selectionEnd - node.selectionStart === node.value.length), true);
-  await page.screenshot({ path: `${output}/clipboard-fallback-320.png`, fullPage: true });
+  assert.equal(await page.getByRole('button', { name: 'Copy link', exact: true }).count(), 0);
+  await page.getByLabel('Live practice available').uncheck();
+  assert.equal(await page.getByRole('button', { name: 'Start meeting' }).isDisabled(), true);
+  await page.getByText('Live practice is currently unavailable.', { exact: false }).waitFor();
 });
 
 await run('failed-start-clears-link', 390, async page => {
   await page.goto(`${baseUrl}/simulator?scenario=deployment&client=quinn`, { waitUntil: 'networkidle' });
   // The existing microphone denial keeps this on the real pre-live failure path without a paid session.
-  await page.getByRole('button', { name: 'Start conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Start meeting', exact: true }).click();
   await page.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
   await page.getByRole('alert').waitFor();
   await page.waitForURL(`${baseUrl}/simulator`);

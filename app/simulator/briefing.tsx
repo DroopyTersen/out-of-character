@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Link as LinkIcon, RotateCcw, Volume2 } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { ArrowLeft, ArrowRight, AudioLines, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import type { Client, ScenarioSummary } from '../../core/simulator/types';
 import type { ScenarioBriefing } from '../../core/simulator/briefings';
-import { practicePath } from './practice-links';
 import './briefing.css';
+
+function playbackTime(seconds: number) {
+  return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+}
 
 export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart, enabled = true }: {
   scenario: ScenarioSummary;
@@ -15,34 +18,29 @@ export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart,
 }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [failed, setFailed] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [share, setShare] = useState<{ url: string; copied: boolean } | null>(null);
-
-  const copyLink = async () => {
-    const url = new URL(practicePath(scenario.id, client.id), window.location.origin).href;
-    try {
-      await navigator.clipboard.writeText(url);
-      setShare({ url, copied: true });
-    } catch {
-      setShare({ url, copied: false });
-    }
-  };
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     const player = audio.current;
     if (!player) return;
+    // A shared page may load audio metadata before React attaches event handlers.
+    if (Number.isFinite(player.duration)) setDuration(player.duration);
+    if (player.error) setFailed(true);
+    // Selection provides a user gesture; shared links may need the Play intro button.
     void player.play().catch(error => {
-      // Browsers may require a play gesture; native audio controls remain available.
       if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') setFailed(true);
     });
     return () => { player.pause(); };
   }, [briefing.audio]);
 
-  const replay = () => {
+  const togglePlayback = () => {
     const player = audio.current;
     if (!player) return;
-    player.currentTime = 0;
-    setFinished(false);
+    if (!player.paused) { player.pause(); return; }
+    if (player.ended) player.currentTime = 0;
     void player.play().catch(error => {
       if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') setFailed(true);
     });
@@ -52,36 +50,42 @@ export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart,
     action();
   };
 
+  const IntroIcon = failed ? VolumeX : Volume2;
+
   return <section className="sim-briefing" aria-labelledby="sim-briefing-title">
-    <div className="sim-briefing-actions">
-      <button className="sim-briefing-back quiet-button" onClick={() => leave(onBack)}><ArrowLeft size={16} /> Change scenario or client</button>
-      <button className="sim-briefing-share quiet-button" onClick={copyLink} aria-label={share?.copied ? 'Link copied' : 'Copy link'} title="Copy a link to this practice">{share?.copied ? <Check size={16} /> : <LinkIcon size={16} />}<span>{share?.copied ? 'Link copied' : 'Copy link'}</span></button>
-    </div>
-    <span className="sr-only" role="status">{share && (share.copied ? 'Link copied.' : 'Copy the practice link below.')}</span>
-    {share && !share.copied && <label className="sim-briefing-copy-fallback">Copy this practice link:<input aria-label="Practice link" readOnly value={share.url} onFocus={event => event.target.select()} /></label>}
+    <button className="sim-briefing-back quiet-button" onClick={() => leave(onBack)}><ArrowLeft size={16} /> Change scenario or client</button>
     <header className="sim-briefing-heading">
-      <span className="eyebrow">YOUR BRIEFING · {scenario.category.toUpperCase()}</span>
       <h1 id="sim-briefing-title" tabIndex={-1}>Before you meet {client.name}</h1>
-      <p>A quick note from your team before the conversation begins.</p>
+      <div className="sim-briefing-context"><strong>{scenario.title}</strong><div className="sim-briefing-roles"><span>You: {scenario.role}</span><span>{client.name}: {scenario.clientRole}</span></div></div>
     </header>
-    <div className="sim-briefing-card">
-      <div className="sim-briefing-art" aria-hidden="true"><Volume2 size={50} strokeWidth={1.5} /><span className="sim-briefing-bars"><i /><i /><i /><i /><i /><i /><i /><i /><i /></span></div>
-      <div className="sim-briefing-content">
-        <span className="eyebrow">PRERECORDED MESSAGE</span>
-        <h2>{briefing.speaker}</h2>
-        <p className="sim-briefing-intro">Listen for the situation and your role. Start the live call when you are ready.</p>
-        <audio ref={audio} controls preload="metadata" src={briefing.audio} aria-label={`Briefing from ${briefing.speaker}`} hidden={failed} onError={() => setFailed(true)} onEnded={() => setFinished(true)} onPlaying={() => { setFailed(false); setFinished(false); }} />
-        <div className="sim-briefing-audio-foot">
-          <span role="status">{failed ? 'Audio unavailable. You can read the transcript below.' : finished ? 'Briefing complete. Start when you are ready.' : 'Play the note, then start whenever you are ready.'}</span>
-          {!failed && <button className="quiet-button" onClick={replay}><RotateCcw size={15} /> Replay</button>}
-        </div>
+    <div className="sim-briefing-steps">
+      <div className="sim-briefing-card">
+        <div className="sim-briefing-step-heading" data-unavailable={failed || undefined}><IntroIcon size={28} strokeWidth={1.75} aria-hidden="true" /><h2 aria-live="polite">{failed ? 'Intro unavailable' : finished ? 'Intro complete' : 'Listen first'}</h2></div>
+        <audio ref={audio} preload="metadata" src={briefing.audio} hidden
+          onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+          onTimeUpdate={event => setPosition(event.currentTarget.currentTime)}
+          onPause={() => setPlaying(false)} onPlaying={() => { setPlaying(true); setFailed(false); }}
+          onError={() => { setPlaying(false); setFailed(true); }} onEnded={() => { setPlaying(false); setFinished(true); }} />
+        {failed ? <p className="sim-briefing-error" role="status">The intro couldn’t load. Try refreshing the page.</p> : <>
+          <button className={`sim-briefing-play arcade-button ${finished ? 'secondary' : 'primary'}`} onClick={togglePlayback}>
+            {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />} {playing ? 'Pause intro' : 'Play intro'}
+          </button>
+          <div className="sim-briefing-progress">
+            <span>{playbackTime(position)}</span>
+            <input type="range" aria-label="Intro playback position" aria-valuetext={`${playbackTime(position)} of ${playbackTime(duration)}`} style={{ '--intro-progress': `${duration ? position / duration * 100 : 0}%` } as CSSProperties} min={0} max={duration || 1} step={1} value={position} disabled={!duration} onChange={event => {
+              const nextPosition = Number(event.target.value);
+              setPosition(nextPosition);
+              if (audio.current) audio.current.currentTime = nextPosition;
+            }} />
+            <span>{duration ? playbackTime(duration) : '—:—'}</span>
+          </div>
+        </>}
+      </div>
+      <div className="sim-briefing-bottom">
+        <div className="sim-briefing-step-heading"><AudioLines size={28} strokeWidth={1.75} aria-hidden="true" /><h2>Start your meeting</h2></div>
+        <button className={`arcade-button ${finished || failed ? 'primary' : 'secondary'}`} disabled={!enabled} onClick={() => leave(onStart)}>Start meeting <ArrowRight size={20} /></button>
       </div>
     </div>
-    <div className="sim-briefing-bottom">
-      <div className="sim-briefing-context"><span className="eyebrow">UP NEXT</span><strong>{scenario.title}</strong><span>{scenario.role} meeting {client.name} · {scenario.clientRole}</span></div>
-      <button className="arcade-button primary" disabled={!enabled} onClick={() => leave(onStart)}>Start conversation <ArrowRight size={20} /></button>
-    </div>
     {!enabled && <p className="sim-notice">Live practice is currently unavailable. Explore the <a href="/storybook/simulator-live">workshop previews</a>.</p>}
-    <details className="sim-briefing-transcript" open={failed}><summary>Read briefing transcript</summary><p>{briefing.text}</p></details>
   </section>;
 }

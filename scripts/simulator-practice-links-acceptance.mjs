@@ -79,7 +79,7 @@ for (const width of [1440, 390, 320]) {
   });
 }
 
-for (const audioLoad of ['loaded', 'failed']) await run(`${audioLoad}-before-hydration`, 390, async page => {
+for (const audioLoad of ['loaded', 'playing', 'failed']) await run(`${audioLoad}-before-hydration`, 390, async page => {
   let releaseScripts;
   const scriptsReady = new Promise(resolve => { releaseScripts = resolve; });
   await page.route('**/*', async route => {
@@ -94,6 +94,10 @@ for (const audioLoad of ['loaded', 'failed']) await run(`${audioLoad}-before-hyd
       const audio = document.querySelector('.sim-briefing audio');
       return load === 'failed' ? audio?.error : Number.isFinite(audio?.duration);
     }, audioLoad);
+    if (audioLoad === 'playing') {
+      await page.getByLabel('Intro recording').press('Space');
+      await page.waitForFunction(() => document.querySelector('.sim-briefing audio').currentTime > 0.2);
+    }
   } finally { releaseScripts(); }
   await page.waitForLoadState('networkidle');
   await expectBriefing(page, 'Morgan', 'scope', 'The small change');
@@ -103,8 +107,12 @@ for (const audioLoad of ['loaded', 'failed']) await run(`${audioLoad}-before-hyd
     assert.equal(await page.getByRole('button', { name: 'Start meeting' }).isEnabled(), true);
     return;
   }
-  assert.equal(await page.getByRole('slider', { name: 'Intro playback position' }).isEnabled(), true);
-  assert.notEqual(await page.locator('.sim-briefing-progress > span').last().innerText(), '—:—');
+  assert.equal(await page.getByLabel('Intro recording').isVisible(), true);
+  assert.equal(await page.getByLabel('Intro recording').evaluate(audio => audio.controls && audio.duration > 0), true);
+  if (audioLoad === 'playing') {
+    await page.getByRole('button', { name: 'Pause intro', exact: true }).click();
+    assert.equal(await page.getByLabel('Intro recording').evaluate(audio => audio.paused), true);
+  }
   await page.getByRole('button', { name: 'Play intro', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('.sim-briefing audio').currentTime > 0.2);
 });

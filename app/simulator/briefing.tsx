@@ -1,12 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, AudioLines, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import type { Client, ScenarioSummary } from '../../core/simulator/types';
 import type { ScenarioBriefing } from '../../core/simulator/briefings';
 import './briefing.css';
-
-function playbackTime(seconds: number) {
-  return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
-}
 
 export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart, enabled = true }: {
   scenario: ScenarioSummary;
@@ -20,15 +16,13 @@ export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart,
   const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     const player = audio.current;
     if (!player) return;
-    // A shared page may load audio metadata before React attaches event handlers.
-    if (Number.isFinite(player.duration)) setDuration(player.duration);
+    // A shared page may load audio before React attaches event handlers.
     if (player.error) setFailed(true);
+    setPlaying(!player.paused);
     // Selection provides a user gesture; shared links may need the Play intro button.
     void player.play().catch(error => {
       if (error?.name !== 'NotAllowedError' && error?.name !== 'AbortError') setFailed(true);
@@ -61,25 +55,14 @@ export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart,
     <div className="sim-briefing-steps">
       <div className="sim-briefing-card">
         <div className="sim-briefing-step-heading" data-unavailable={failed || undefined}><IntroIcon size={28} strokeWidth={1.75} aria-hidden="true" /><h2 aria-live="polite">{failed ? 'Intro unavailable' : finished ? 'Intro complete' : 'Listen first'}</h2></div>
-        <audio ref={audio} preload="metadata" src={briefing.audio} hidden
-          onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
-          onTimeUpdate={event => setPosition(event.currentTarget.currentTime)}
-          onPause={() => setPlaying(false)} onPlaying={() => { setPlaying(true); setFailed(false); }}
-          onError={() => { setPlaying(false); setFailed(true); }} onEnded={() => { setPlaying(false); setFinished(true); }} />
-        {failed ? <p className="sim-briefing-error" role="status">The intro couldn’t load. Try refreshing the page.</p> : <>
+        {failed ? <p className="sim-briefing-error" role="status">The intro couldn’t load. Try refreshing the page.</p> :
           <button className={`sim-briefing-play arcade-button ${finished ? 'secondary' : 'primary'}`} onClick={togglePlayback}>
             {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />} {playing ? 'Pause intro' : 'Play intro'}
           </button>
-          <div className="sim-briefing-progress">
-            <span>{playbackTime(position)}</span>
-            <input type="range" aria-label="Intro playback position" aria-valuetext={`${playbackTime(position)} of ${playbackTime(duration)}`} style={{ '--intro-progress': `${duration ? position / duration * 100 : 0}%` } as CSSProperties} min={0} max={duration || 1} step={1} value={position} disabled={!duration} onChange={event => {
-              const nextPosition = Number(event.target.value);
-              setPosition(nextPosition);
-              if (audio.current) audio.current.currentTime = nextPosition;
-            }} />
-            <span>{duration ? playbackTime(duration) : '—:—'}</span>
-          </div>
-        </>}
+        }
+        <audio ref={audio} controls preload="metadata" src={briefing.audio} hidden={failed} aria-label="Intro recording"
+          onPause={() => setPlaying(false)} onPlaying={() => { setPlaying(true); setFailed(false); }}
+          onError={() => { setPlaying(false); setFailed(true); }} onEnded={() => { setPlaying(false); setFinished(true); }} />
       </div>
       <div className="sim-briefing-bottom">
         <div className="sim-briefing-step-heading"><AudioLines size={28} strokeWidth={1.75} aria-hidden="true" /><h2>Start your meeting</h2></div>

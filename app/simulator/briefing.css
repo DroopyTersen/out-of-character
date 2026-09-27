@@ -16,14 +16,9 @@
 .sim-briefing .arcade-button { width: 100%; min-width: 0; min-height: 56px; padding: 14px 20px; font-size: 20px; gap: 12px; }
 .sim-briefing .arcade-button.secondary { background: transparent; border: 1px solid #32768b; color: #b9d9e8; box-shadow: none; }
 .sim-briefing .arcade-button.secondary:hover:not(:disabled) { background: #12354c; border-color: #51a7d4; }
-.sim-briefing-progress { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: #a9c5d7; font-size: 13px; font-variant-numeric: tabular-nums; }
-.sim-briefing-progress input { appearance: none; min-width: 0; flex: 1; height: 44px; margin: 0; background: transparent; cursor: pointer; }
-.sim-briefing-progress input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, #44efcd var(--intro-progress), #28536e var(--intro-progress)); }
-.sim-briefing-progress input::-moz-range-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, #44efcd var(--intro-progress), #28536e var(--intro-progress)); }
-.sim-briefing-progress input::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: #44efcd; }
-.sim-briefing-progress input::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #44efcd; }
+.sim-briefing audio { width: 100%; margin-top: 12px; color-scheme: dark; }
 .sim-briefing-bottom { padding: 24px; border-top: 1px solid #28536e; }
-.sim-briefing button:focus-visible, .sim-briefing input:focus-visible { outline: 2px solid #eef9ff; outline-offset: 4px; }
+.sim-briefing button:focus-visible { outline: 2px solid #eef9ff; outline-offset: 4px; }
 .sim-briefing .arcade-button:disabled { background: #122f40; border-color: #28536e; color: #698b9d; box-shadow: none; }
 .sim-briefing-error { color: #f2d66d; line-height: 1.5; }
 @media (max-width: 700px) {

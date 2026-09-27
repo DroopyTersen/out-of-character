@@ -130,7 +130,7 @@ export class ContextualDirector {
       } else {
         // Set unknown before send: an immediate acknowledgment may arrive.
         const eventId = `cue-${crypto.randomUUID()}`;
-        record.delivery = { eventId, status: 'unknown' };
+        record.delivery = { eventId, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' };
         const sent = this.gate.sendNote(() => this.options.send({ type: 'session.thinking.append', event_id: eventId, delegation_id: null, content: result.text }));
         record.outcome = sent ? 'sent' : 'error';
         if (sent) record.deliveredAt = Date.now();

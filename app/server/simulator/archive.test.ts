@@ -101,7 +101,7 @@ test('a full transcript and hour of private review history fit below the D1 row 
     }));
     expect(transcript.reduce((sum, entry) => sum + entry.text.length, 0)).toBe(80_000);
     const traineeSignals: DirectorSignal[] = [{ condition: 'mistake', probability: .9 }, ...['need', 'impact', 'decision', 'boundary', 'next-step'].map(id => ({ condition: `objective:${id}` as const, selected: true })), { condition: 'stalled', probability: .9 }];
-    const actorSignals: DirectorSignal[] = (['knowledge', 'authority', 'role', 'interests'] as const).map(condition => ({ condition, probability: .9 }));
+    const actorSignals: DirectorSignal[] = (['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const).map(condition => ({ condition, probability: .9 }));
     // Conservative upper envelope: 719 trainee rounds, 450 actor rounds,
     // 60 generations/rechecks, and a new fixed concern on alternating rounds.
     const observations: InterventionRecord[] = Array.from({ length: 1169 }, (_, index) => ({
@@ -115,7 +115,7 @@ test('a full transcript and hour of private review history fit below the D1 row 
       inputCount: 800, lastInputId: 'p800', model: 'gpt-6-sol', effort: 'none', completedAt: 2200,
       result: { action: 'intervene', text: '話'.repeat(160), evidenceIds: ['p798', 'p799', 'p800'] }, outcome: 'published',
       recheck: { inputCount: 800, lastInputId: 'p800', startedAt: 1800, durationMs: 200, probability: .95, usage: { inputTokens: 20000, outputTokens: 100 } }, usage: { inputTokens: 20000, outputTokens: 100, cachedTokens: 10000 },
-      delivery: { eventId: `cue-${crypto.randomUUID()}`, status: 'accepted', acknowledgedAt: 2300 },
+      delivery: { eventId: `cue-${crypto.randomUUID()}`, afterPassageId: 'p800', status: 'accepted', acknowledgedAt: 2300 },
     }));
     const concerns: InterventionRecord[] = Array.from({ length: 360 }, (_, index) => ({
       ...base, source: 'detector', id: `intervention-${crypto.randomUUID()}`, observationId: observations[index]!.id, issueId: `trainee:mistake:${index}`,
@@ -150,7 +150,7 @@ test('additive migration preserves existing rows and stores generated directions
     await writeArchive(f.d1, { ...final(3000), interventions: [{
       source: 'director', id: 'cue-test', observationId: 'observation-test', issueId: 'actor:role:1', audience: 'actor', signal: { condition: 'role', probability: .99 },
       revision: 1, inputCount: 1, lastInputId: 'p1', snapshotAt: 1000, gateAt: 1500, readyAt: 1900, deliveredAt: 2000,
-      model: 'gpt-6-sol', effort: 'none', result: { action: 'intervene', text: 'Private actor direction', evidenceIds: ['p1'] }, outcome: 'sent', delivery: { eventId: 'cue-test', status: 'accepted' },
+      model: 'gpt-6-sol', effort: 'none', result: { action: 'intervene', text: 'Private actor direction', evidenceIds: ['p1'] }, outcome: 'sent', delivery: { eventId: 'cue-test', afterPassageId: 'p1', status: 'accepted' },
     }] });
     expect(JSON.parse(f.row()!.interventions_json)[0]).toMatchObject({ audience: 'actor', result: { text: 'Private actor direction' }, delivery: { status: 'accepted' } });
     expect(f.row()!.evaluation_json).toBeNull();

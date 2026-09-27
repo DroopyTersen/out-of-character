@@ -5,7 +5,7 @@ import { emptySkills, skills, type TranscriptEntry } from '../../core/simulator/
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import { getClient, getScenario, type Scenario } from './scenarios.server';
 import { clientQuestions, evidenceBatches, traineeQuestions } from './rubric';
-import { MATERIAL_CONCERN, type BooleanCondition, type DirectorSignal } from '../../core/simulator/director';
+import { ACTOR_CONDITIONS, MATERIAL_CONCERN, type BooleanCondition, type DirectorSignal } from '../../core/simulator/director';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
 type Answers = Record<string, Answer>;
@@ -164,7 +164,7 @@ export type ClientEvaluation = {
 
 export function readClientAnswers(answers: Answers) {
   return {
-    signals: (['knowledge', 'authority', 'role', 'interests'] as const).flatMap(condition => readSignal(answers, `director:${condition}`, condition)),
+    signals: ACTOR_CONDITIONS.flatMap(condition => readSignal(answers, `director:${condition}`, condition)),
   };
 }
 

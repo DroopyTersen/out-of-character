@@ -1,6 +1,6 @@
 # Simulator deployment
 
-Current release: **`2123149`**, deployed September 26, 2026 at 23:54 UTC. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) plays prepared samples for each client and voice while showing the selected portrait; it is also a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab). The nine simulator scenarios and private archive remain included.
+Current release: **`f696fbb`**, deployed September 27, 2026 at 00:07 UTC. [Voice Lab](https://outofcharacter.droopy.dev/simulator/voice-lab) plays prepared samples for each client and voice while showing the selected portrait; it is also a [Workshop tab](https://outofcharacter.droopy.dev/storybook/simulator-voice-lab). The nine simulator scenarios and private archive remain included.
 
 ## Voice Lab release
 
@@ -176,3 +176,9 @@ The complete release gate passed **152 tests / 5,917 assertions**, typecheck, pr
 ## Workshop Voice Lab tab
 
 The standalone Voice Lab interface is shared with `/storybook/simulator-voice-lab` and appears in the Workshop navigation. Source **`2123149`** deployed September 26, 2026 at 23:54 UTC as Worker version **`e595f373-66aa-4f87-8429-b2246b11a630`**, tagged `2123149`, with **100% traffic**. The complete gate passed **152 tests / 5,917 assertions**, typecheck, production build, privacy scan of 18 client assets, and Wrangler dry run. Production Workshop browser acceptance passed **14/14** at desktop and phone widths, including Voice Lab playback and client/voice selection; the standalone Voice Lab also passed at both widths. No paid provider call or microphone access is needed for either Voice Lab view.
+
+## Revised client voices
+
+Andrew selected Harper–Gleam, Quinn–Cinder, Avery–Marin, and Jamie–Coral. Morgan–Meridian, Casey–Cedar, and Riley–Ripple remain. Source **`f696fbb`** deployed September 27, 2026 at 00:07 UTC as Worker version **`d8879dc4-8385-41b7-adb1-71e1bfa6602d`**, tagged `f696fbb`, with **100% traffic**. Existing prepared clips for these voices were retained.
+
+The full release gate passed **152 tests / 5,920 assertions**, typecheck, production build, privacy scan of 18 client assets, and Wrangler dry run. Production Voice Lab checked every default and its audio URL, passed playback/selection at 1440 and 390 pixels, and the Workshop passed **14/14** browser checks. The public simulator catalog remains enabled with seven clients and nine scenarios.

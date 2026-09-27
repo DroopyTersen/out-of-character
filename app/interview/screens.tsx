@@ -31,7 +31,7 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
   return <section className="interview-setup">
     <div className="interview-setup-copy">
       <h1 tabIndex={-1}>The Debrief<span className="interview-title-dot">.</span></h1>
-      <p className="interview-lede">Talk candidly about your project. Sam turns it into clear, professional feedback.</p>
+      <p className="interview-lede">Talk through your project. Sam does the wordsmithing, saving you time and energy.</p>
       <figure className="interview-example" aria-label="An example of candid conversation becoming professional feedback">
         <div className="interview-example-input">
           <h2>Say it your way</h2>
@@ -43,7 +43,7 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
         </div>
         <div className="interview-example-flow" aria-hidden="true"><ArrowRight size={24} /><span /></div>
         <div className="interview-example-output">
-          <h2><FileText size={18} aria-hidden="true" />Clear feedback</h2>
+          <h2><FileText size={18} aria-hidden="true" />Sam writes it up</h2>
           <ul>
             <li>Arrange access before kickoff; delays cost a week.</li>
             <li>Continue pairing with Priya; it worked well.</li>

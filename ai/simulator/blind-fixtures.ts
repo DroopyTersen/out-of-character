@@ -10,7 +10,7 @@ export const simulatorBlindFixtures: SimulatorFixture[] = [
       ['trainee', 'Then Finance can approve our scope and join the next meeting.'],
       ['client', 'No. Finance cannot authorize this, does not own the workflow, and has not agreed to join anything.'],
     ]),
-    expected: { achieved: ['problem'], absent: ['stakeholder', 'capability', 'next-step'], objectiveEvidence: { problem: 'p1' }, cue: 'no_hint' },
+    expected: { achieved: ['problem'], absent: ['stakeholder', 'capability', 'next-step'], objectiveEvidence: { problem: 'p1' }, director: 'none' },
   },
   {
     id: 'blind-actor-repairs-authority', title: 'The actor repairs an earlier overreach', scenarioId: 'sharepoint', clientId: 'morgan',
@@ -22,6 +22,6 @@ export const simulatorBlindFixtures: SimulatorFixture[] = [
       ['trainee', 'You can authorize a separately scoped assessment up to eight thousand, but the COO approves implementation and operations decides whether to participate. This call would only explore the workflow. Could you ask the director and email possible times by Friday?'],
       ['client', 'You are right. I cannot approve implementation or promise operations will attend. I will ask the director and email times by Friday for a workflow scoping call only. The current release stays unchanged.'],
     ]),
-    expected: { achieved: ['problem', 'impact', 'capability', 'next-step'], absent: [], objectiveEvidence: { capability: 'p2', 'next-step': 'p5' }, concern: false, cue: 'no_hint' },
+    expected: { achieved: ['problem', 'impact', 'capability', 'next-step'], absent: [], objectiveEvidence: { capability: 'p2', 'next-step': 'p5' }, concern: false, director: 'none' },
   },
 ];

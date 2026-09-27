@@ -4,10 +4,12 @@ import { emptySkills, type SessionSnapshot } from '../../../core/simulator/types
 import { writeArchive, type ArchiveProvenance, type ArchiveWrite } from './archive.server';
 
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
+const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_simulator_interventions.sql', import.meta.url)).text();
 
-function fixture() {
+function fixture(migrated = true) {
   const sqlite = new Database(':memory:');
   sqlite.exec(migration);
+  if (migrated) sqlite.exec(interventionsMigration);
   // Only the D1 prepare/bind/run boundary is adapted; migration and writes run in SQLite.
   const d1 = {
     prepare: (sql: string) => ({
@@ -16,7 +18,7 @@ function fixture() {
       }),
     }),
   } as unknown as D1Database;
-  const row = (id = snapshot.id) => sqlite.query('SELECT * FROM simulator_attempts WHERE id = ?').get(id) as Record<string, any> | null;
+  const row = (id = snapshot.id) => sqlite.prepare('SELECT * FROM simulator_attempts WHERE id = ?').get(id) as Record<string, any> | null;
   return { sqlite, d1, row };
 }
 
@@ -24,16 +26,16 @@ const snapshot: SessionSnapshot = {
   id: 'attempt-1', scenarioId: 'sharepoint', clientId: 'morgan', status: 'live',
   startedAt: 1000, limitSeconds: 3600, warning: null, revision: 1,
   transcript: [{ id: 'p1', speaker: 'trainee', text: 'Can we start with your main concern?', startMs: 100, endMs: 2000 }],
-  evaluation: null, feedbackStatus: 'waiting', message: null, finalization: 'pending', usageSeconds: null,
+  evaluation: null, coaching: null, feedbackStatus: 'waiting', message: null, finalization: 'pending', usageSeconds: null,
 };
 const provenance: ArchiveProvenance = {
   model: 'gpt-live', voice: 'cedar', rubricVersion: 'r1', simulatorVersion: 's1',
   actorDigest: 'actor-digest', openingDigest: 'opening-digest', workerId: 'worker-id',
-  workerTag: 'release-tag', directorEnabled: true,
+  workerTag: 'release-tag', contextualDirector: { model: 'gpt-6-sol', effort: 'none', version: 'contextual-director-v1', observations: 0, staleGates: 0, skipped: 0, calls: 0, rechecks: 0, notes: 0 },
 };
 const partial = (capturedAt: number, changes: Partial<SessionSnapshot> = {}): ArchiveWrite => ({
   state: 'partial', capturedAt, snapshot: { ...snapshot, ...changes }, provenance,
-  cues: [{ id: 'nudge', revision: 1, sentAt: 1800 }],
+  interventions: [],
 });
 const final = (capturedAt: number, changes: Partial<SessionSnapshot> = {}): ArchiveWrite => ({
   ...partial(capturedAt, { status: 'ended', finalization: 'confirmed', feedbackStatus: 'current', ...changes }),
@@ -62,7 +64,7 @@ test('a final snapshot supersedes partial and rejects delayed partials; repeat f
     const completed = final(4000, {
       usageSeconds: 52,
       transcript: [...snapshot.transcript, { id: 'p2', speaker: 'client', text: 'Agreed.', startMs: 2100, endMs: 2800 }],
-      evaluation: { revision: 2, skills: emptySkills(), objectives: [], hint: null, concern: null, model: 'judge', durationMs: 40 },
+      evaluation: { revision: 2, skills: emptySkills(), objectives: [], concern: null, model: 'judge', durationMs: 40 },
     });
     await writeArchive(f.d1, completed);
     const first = f.row();
@@ -107,4 +109,28 @@ test('the largest accepted transcript fits below the conservative D1 row budget'
 test('an unsuccessful D1 result is reported as a failed archive write', async () => {
   const failed = { prepare: () => ({ bind: () => ({ run: async () => ({ success: false }) }) }) } as unknown as D1Database;
   await expect(writeArchive(failed, partial(3000))).rejects.toThrow('Simulator archive write failed.');
+});
+
+test('additive migration preserves existing rows and stores generated directions separately', async () => {
+  const f = fixture(false);
+  try {
+    f.sqlite.exec(`INSERT INTO simulator_attempts (
+      id, scenario_id, client_id, started_at, updated_at, archive_state,
+      session_status, finalization, feedback_status, transcript_json, provenance_json, cues_json
+    ) VALUES ('attempt-1', 'sharepoint', 'morgan', 1000, 1500, 'partial', 'live', 'pending', 'waiting', '[]', '{}', '[]')`);
+    const legacy = f.row();
+    f.sqlite.exec(interventionsMigration);
+    expect(f.row()).toEqual({ ...legacy, interventions_json: '[]' });
+    await writeArchive(f.d1, partial(2000));
+    expect(JSON.parse(f.row()!.interventions_json)).toEqual([]);
+    await writeArchive(f.d1, { ...final(3000), interventions: [{
+      source: 'director', id: 'cue-test', issueId: 'actor:role:1', audience: 'actor', signal: { condition: 'role', probability: .99 },
+      revision: 1, inputIds: ['p1'], snapshotAt: 1000, gateAt: 1500, readyAt: 1900, deliveredAt: 2000,
+      model: 'gpt-6-sol', effort: 'none', result: { action: 'intervene', text: 'Private actor direction', evidenceIds: ['p1'] }, outcome: 'sent', delivery: { eventId: 'cue-test', status: 'accepted' },
+    }] });
+    expect(JSON.parse(f.row()!.interventions_json)[0]).toMatchObject({ audience: 'actor', result: { text: 'Private actor direction' }, delivery: { status: 'accepted' } });
+    expect(f.row()!.evaluation_json).toBeNull();
+    expect(f.row()!.transcript_json).not.toContain('Private actor direction');
+    expect(JSON.parse(f.row()!.cues_json)).toEqual([]);
+  } finally { f.sqlite.close(); }
 });

@@ -1,16 +1,17 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
-import { getClient, getClientCues, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
+import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
-import { appendTranscript, canSendCue } from '../core/simulator/state.ts';
+import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
+import { appendTranscript } from '../core/simulator/state.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
-// real GPT-Live supplies the client and Jev selects optional private direction.
+// real GPT-Live supplies the client and Jev gates contextual private directions from Sol.
 // A plan chooses each trainee line from what the client has actually said so far.
 // Usage: bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid
-//   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--director] [--max-seconds=180]
+//   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--max-seconds=180]
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded paid rehearsal.');
 if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -18,7 +19,6 @@ const scenarioId = option('scenario') ?? 'sharepoint';
 const clientId = option('client') ?? 'morgan';
 const approach = option('plan') ?? (process.argv.includes('--poor') ? 'poor' : 'good');
 const label = option('label');
-const director = process.argv.includes('--director');
 const maxSeconds = Number(option('max-seconds') ?? 180);
 if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > 300) throw new Error('--max-seconds must be an integer from 60 to 300.');
 
@@ -268,24 +268,22 @@ const { client: _permissions, ...session } = liveConfiguration(scenarioId, clien
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
-const report = { rubricVersion: RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, director, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
+const report = { rubricVersion: RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
 let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
 const observations = [];
-const cueIds = new Set();
-const sentCues = [];
 const used = new Set();
-const send = event => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
-const close = () => { if (closing) return; closing = true; clearInterval(pacing); send({ type: 'session.close' }); };
+const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
+const contextual = new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
+report.interventions = contextual.records;
+const close = () => { if (closing) return; closing = true; contextual.close(); clearInterval(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
   try {
-    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
-    const cue = getClientCues(scenario).find(item => item.id === judgment.cueId);
-    const now = Date.now();
-    const sent = !!(!closing && director && cue && !cueIds.has(cue.id) && canSendCue({ id: cue.id, probability: judgment.cueProbability, revision: transcript.length }, sentCues.at(-1) ?? null, true, now));
-    report.directions.push({ afterTurn, fidelity: judgment.fidelity, interests: judgment.interests, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
-    if (sent) { cueIds.add(cue.id); sentCues.push({ id: cue.id, revision: transcript.length, sentAt: now }); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }
+    const capturedAt = Date.now();
+    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
+    report.directions.push({ afterTurn, signals: judgment.signals });
+    await contextual.observe({ audience: 'actor', signals: judgment.signals, transcript, revision: transcript.length, capturedAt });
   } catch (error) {
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
   }
@@ -345,8 +343,7 @@ const completed = new Promise(resolve => {
     } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
       report.openingAcknowledged = true;
     } else if (value.type === 'session.thinking.appended') {
-      const direction = report.directions.find(item => `direction-${item.afterTurn}` === value.client_event_id);
-      if (direction) direction.acknowledged = true;
+      contextual.providerEvent(value.client_event_id, true);
       const guard = report.delegations.find(item => item.eventId === value.client_event_id);
       if (guard) guard.acknowledged = true;
     } else if (value.type === 'session.delegation.created') {
@@ -362,7 +359,11 @@ const completed = new Promise(resolve => {
       }
     } else if (value.type === 'session.closed') {
       report.finalized = true; report.usageSeconds = value.usage?.seconds ?? null; resolve();
-    } else if (value.type === 'error') report.errors.push({ code: value.error?.code ?? 'unknown', command: value.error?.client_event_id ?? null });
+    } else if (value.type === 'error') {
+      const eventId = value.error?.client_event_id;
+      if (typeof eventId === 'string' && eventId.startsWith('cue-')) contextual.providerEvent(eventId, false);
+      else report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
+    }
   });
   ws.addEventListener('error', () => { report.errors.push('Voice transport failed.'); close(); });
   ws.addEventListener('close', () => { if (!report.finalized) report.errors.push('Transport closed before finalization.'); resolve(); });
@@ -372,7 +373,7 @@ try {
   if (report.finalized) report.trainee = await evaluateTrainee({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
-  clearTimeout(deadline); clearInterval(pacing); ws.close();
+  contextual.close(); clearTimeout(deadline); clearInterval(pacing); ws.close();
   await Promise.all(observations);
   if (report.delegations.some(item => !item.acknowledged)) report.errors.push('Actor role direction was not acknowledged.');
   await writeFile(`${output}/client-audio.pcm`, Buffer.concat(chunks));
@@ -381,5 +382,5 @@ finally {
   if (await wav.exited) report.errors.push('Client audio conversion failed.');
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
 }
-console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, fidelity, cueId, unavailable }) => ({ afterTurn, fidelity, cueId, unavailable })), errors: report.errors }));
+console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), errors: report.errors }));
 if (!report.finalized || report.errors.length) process.exitCode = 1;

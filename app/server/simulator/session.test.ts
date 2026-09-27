@@ -11,6 +11,7 @@ mock.module('cloudflare:workers', () => ({ DurableObject: class {
 } }));
 const { SimulatorSession } = await import('./session');
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
+const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_simulator_interventions.sql', import.meta.url)).text();
 afterEach(() => setSystemTime());
 async function waitFor(check: () => boolean) {
   const deadline = performance.now() + 2500;
@@ -24,9 +25,89 @@ const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'share
 const request = (action: string, cap = capability) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(attempt) : undefined });
 const activityPoll = (active: boolean, audio = false) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio }) });
 
+test('contextual coaching runs for scored sessions and keeps actor history out of public state', async () => {
+  let generations = 0;
+  const f = await fixture({ overrides: {
+    evaluateTrainee: async input => ({ revision: input.revision, skills: emptySkills(), objectives: [], privateDiagnostic: 'must never enter public feedback', concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'objective:problem', selected: true }] }),
+    evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] }),
+    generateDirector: async input => { generations++; return { action: 'intervene', text: input.audience === 'actor' ? 'PRIVATE: Ask the consultant to propose the scope.' : 'Ask which approval is currently blocked.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 100, outputTokens: 15 } }; },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'You should design the whole plan for us.', start_ms: 0, end_ms: 1000 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => generations === 2);
+  const current = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(current.coaching?.text).toBe('Ask which approval is currently blocked.');
+  expect(JSON.stringify(current)).not.toContain('PRIVATE:');
+  expect(JSON.stringify(current)).not.toContain('signals');
+  expect(current.evaluation).not.toHaveProperty('privateDiagnostic');
+  expect(JSON.stringify(current)).not.toContain('must never enter public feedback');
+  const cues = f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
+  expect(cues).toHaveLength(1);
+  if (cues[0]) f.socket.emit({ type: 'error', error: { client_event_id: cues[0].event_id } });
+  await f.session.fetch(request('end'));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  const archived = JSON.parse(f.row()!.interventions_json);
+  expect(archived).toHaveLength(2);
+  expect(archived.find((item: any) => item.audience === 'actor')).toMatchObject({ outcome: 'sent', delivery: { status: 'rejected' } });
+  expect(JSON.parse(f.row()!.cues_json)).toEqual([]);
+  expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toMatchObject({ model: 'gpt-6-sol', effort: 'none' });
+}, 10_000);
+
+test('ending the session does not wait for pending contextual generation', async () => {
+  let release!: () => void;
+  const f = await fixture({ overrides: {
+    evaluateTrainee: async input => ({ revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'stalled', probability: .99 }] }),
+    generateDirector: async input => {
+      await new Promise<void>(done => { release = done; });
+      return { action: 'intervene', text: 'Late advice must not appear.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+    },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start')); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Let us try the same approach again.', start_ms: 0, end_ms: 1000 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => !!release);
+  const ended = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(ended.status).toBe('ended');
+  expect(ended.coaching).toBeNull();
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(JSON.parse(f.row()!.interventions_json)[0].outcome).toBe('aborted');
+  release(); await Promise.all(f.pending);
+  expect(JSON.stringify(await (await f.session.fetch(request('poll'))).json())).not.toContain('Late advice');
+}, 10_000);
+
+test('actor detection stops after six submitted notes while trainee grading continues', async () => {
+  let assessments = 0, grades = 0;
+  const f = await fixture({ overrides: {
+    evaluateTrainee: async input => { grades++; return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }; },
+    evaluateClient: async input => { assessments++; return { revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] }; },
+  } });
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  await f.session.fetch(request('start')); await f.session.fetch(request('ready'));
+  for (let round = 0; round < 8; round++) {
+    setSystemTime(epoch + round * 61_000);
+    await f.session.fetch(request('poll'));
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'I can approve the whole release.', start_ms: round * 5000, end_ms: round * 5000 + 900 });
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Can you confirm the approval boundary?', start_ms: round * 5000 + 1000, end_ms: round * 5000 + 1900 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Yes, I approve all of it.', start_ms: round * 5000 + 2000, end_ms: round * 5000 + 2900 });
+    setSystemTime(epoch + round * 61_000 + 2000);
+    await waitFor(() => grades === round + 1);
+    await Promise.all(f.pending);
+  }
+  expect(assessments).toBe(6);
+  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'))).toHaveLength(6);
+  expect(grades).toBe(8);
+  await f.session.fetch(request('end'));
+}, 15_000);
+
 function archiveDatabase() {
   const sqlite = new Database(':memory:');
   sqlite.exec(migration);
+  sqlite.exec(interventionsMigration);
   let failNext = false;
   let held: { entered: () => void; wait: Promise<void> } | undefined;
   const d1 = {
@@ -87,14 +168,15 @@ async function fixture({ pendingCreation, values = new Map<string, unknown>(), o
   } as unknown as DurableObjectState;
   const session = new SimulatorSession(ctx, {
     OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture',
-    SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient ? 'true' : 'false',
     SIMULATOR_ARCHIVE: archive.d1,
     ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
     createLive: async () => { creations++; await pendingCreation; return { session: { id: 'provider-private-id' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } }; },
     attachLive: async () => socket as unknown as WebSocket,
-    evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    evaluateClient: async () => { throw new Error('Director should be disabled.'); },
+    evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }; },
+    evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }),
+    generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
+    recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
     ...overrides,
   });
   await ready;
@@ -150,6 +232,8 @@ test('happy hour archives the client voice without live or final judging', async
   expect(f.socket.readyState).toBe(3);
   expect(f.row()?.archive_state).toBe('final');
   expect(f.row()?.scenario_id).toBe('happy-hour');
+  expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toBeNull();
+  expect(JSON.parse(f.row()!.interventions_json)).toEqual([]);
   expect(f.row()?.evaluation_json).toBeNull();
   expect(JSON.parse(f.row()!.provenance_json).voice).toBe('coral');
   expect(JSON.parse(f.row()!.transcript_json)).toEqual(ended.transcript);
@@ -160,7 +244,7 @@ test('normal End keeps a late trainee tail but excludes an unheard client agreem
     evaluateTrainee: async input => {
       graded = input.transcript;
       const agreement = input.transcript.find(item => item.speaker === 'client' && item.text.includes('I agree'));
-      return { revision: input.revision, skills: emptySkills(), objectives: agreement ? [{ id: 'next-step', achieved: true, probability: .99, evidence: { entryId: agreement.id, speaker: agreement.speaker, text: agreement.text } }] : [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+      return { revision: input.revision, skills: emptySkills(), objectives: agreement ? [{ id: 'next-step', achieved: true, probability: .99, evidence: { entryId: agreement.id, speaker: agreement.speaker, text: agreement.text } }] : [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [] };
     },
   } });
   f.socket.holdClose = true;
@@ -493,7 +577,7 @@ test('a late same-speaker delta cannot change the passage cited by an objective'
         await new Promise<void>(resolve => { releaseGrade = resolve; });
       }
       const passage = input.transcript[0]!;
-      return { revision: input.revision, skills: emptySkills(), objectives: [{ id: 'capability', achieved: true, probability: .99, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+      return { revision: input.revision, skills: emptySkills(), objectives: [{ id: 'capability', achieved: true, probability: .99, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [] };
     },
   } });
   try {
@@ -523,8 +607,8 @@ test('the final grade can revoke an earlier historical objective', async () => {
       return {
         revision: input.revision, skills: emptySkills(),
         objectives: [{ id: 'capability', achieved: ++calls === 1, probability: calls === 1 ? .99 : .12, evidence: calls === 1 ? { entryId: passage.id, speaker: passage.speaker, text: passage.text } : null }],
-        hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1,
-        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {},
+        concern: null, model: 'fixture', durationMs: 1,
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [],
       };
     },
   } });
@@ -542,7 +626,7 @@ test('the final grade can revoke an earlier historical objective', async () => {
 
 test('the shared consultant ownership correction reaches only the actor', async () => {
   const f = await fixture({ overrides: {
-    evaluateClient: async input => ({ revision: input.revision, cueId: 'consultant-ownership', cueProbability: .99, fidelity: 1, interests: [1], model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} }),
+    evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] }),
   } });
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
@@ -561,7 +645,7 @@ test('one transient judging failure retries unchanged dialogue and stops after s
   const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++calls === 1) throw new Error('Transient failure');
-      return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+      return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [] };
     },
   } });
   try {
@@ -589,7 +673,7 @@ test('two failed judgments stop retrying until new dialogue earns its own retry'
   const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++calls < 4) throw new Error('Transient failure');
-      return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+      return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [] };
     },
   } });
   try {
@@ -622,7 +706,7 @@ test('new settled dialogue marks earlier feedback delayed while reassessment is 
   const f = await fixture({ overrides: {
     evaluateTrainee: async input => {
       if (++calls === 2) await new Promise<void>(resolve => { release = resolve; });
-      return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+      return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [] };
     },
   } });
   await f.session.fetch(request('start'));
@@ -654,7 +738,7 @@ for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a
     evaluateClient: async input => {
       assessed();
       await new Promise<void>(done => { resolve = done; });
-      return { revision: input.revision, cueId: 'approval-boundary', cueProbability: .99, fidelity: 1, interests: [1], model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {} };
+      return { revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] };
     },
   } });
   await f.session.fetch(request('start'));
@@ -676,10 +760,11 @@ for (const newerReply of [false, true]) test(`director ${newerReply ? 'rejects a
   if (!newerReply) expect(snapshot.feedbackStatus).toBe('current');
   await f.session.fetch(request('end'));
   await waitFor(() => f.row()?.archive_state === 'final');
-  expect(JSON.parse(f.row()!.cues_json).map((cue: { id: string }) => cue.id)).toEqual(newerReply ? [] : ['approval-boundary']);
+  expect(JSON.parse(f.row()!.interventions_json).map((record: { signal: { condition: string } }) => record.signal.condition)).toEqual(newerReply ? [] : ['role']);
   if (!newerReply) {
     const privateCue = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))?.content;
-    expect(JSON.stringify(f.row())).not.toContain(String(privateCue));
+    expect(f.row()!.interventions_json).toContain(String(privateCue));
+    expect(f.row()!.transcript_json).not.toContain(String(privateCue));
   }
 });
 
@@ -707,7 +792,7 @@ test('live alarm checkpoints dialogue, then End saves the final public score and
   expect(JSON.parse(row.evaluation_json)).toEqual(ended.evaluation);
   expect(row.evaluation_json).not.toContain('answers');
   expect(row.evaluation_json).not.toContain('usage');
-  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', directorEnabled: false });
+  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', contextualDirector: { model: 'gpt-6-sol', effort: 'none' } });
   const stored = JSON.stringify(row);
   expect(stored).not.toContain(capability);
   expect(stored).not.toContain('provider-private-id');

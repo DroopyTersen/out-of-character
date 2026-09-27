@@ -96,7 +96,7 @@ for (const width of [390, 1672]) {
       await hint.waitFor({ state: 'visible' });
       const first = await hint.innerText();
       check(await hint.evaluate(node => !['fixed', 'absolute'].includes(getComputedStyle(node).position)), 'desktop hint is floating instead of in flow');
-      check(await page.getByRole('button', { name: 'Dismiss hint' }).count() === 0, 'desktop hint has mobile dismissal');
+      check(await hint.getByRole('button', { name: 'Dismiss hint' }).isVisible(), 'desktop hint cannot be dismissed');
       await preview.selectOption({ label: 'Another hint' });
       check(await hint.innerText() !== first, 'desktop hint preview did not update');
       await preview.selectOption({ label: 'Concern' });
@@ -167,8 +167,10 @@ for (const width of [390, 1672]) {
     await hint.waitFor({ state: 'hidden' });
     await preview.selectOption({ label: 'Sample hint' });
     await preview.selectOption({ label: 'Concern' });
+    await hint.waitFor({ state: 'hidden' });
+    await preview.selectOption({ label: 'New concern episode' });
     await hint.waitFor({ state: 'visible' });
-    check(await hint.evaluate(node => node.classList.contains('concern')), 'cleared concern did not resurface when repeated');
+    check(await hint.evaluate(node => node.classList.contains('concern')), 'new concern episode did not surface');
     await preview.selectOption({ label: 'No hint' });
     await hint.waitFor({ state: 'hidden' });
 
@@ -187,7 +189,7 @@ for (const width of [390, 1672]) {
     await preview.selectOption({ label: 'Concern' });
     await hint.waitFor({ state: 'visible' });
     await controls.getByLabel('Feedback').selectOption('unavailable');
-    await hint.waitFor({ state: 'hidden' });
+    await hint.waitFor({ state: 'visible' });
 
     await controls.getByLabel('Feedback').selectOption('recorded');
     await preview.selectOption({ label: 'No hint' });

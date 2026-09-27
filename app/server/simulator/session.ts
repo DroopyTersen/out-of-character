@@ -1,14 +1,15 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
-import { getClient, getClientCues, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
-import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
+import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
+import { appendTranscript, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../../core/simulator/state';
 import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, type SessionSnapshot, type SessionWarning } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { activitySchema, simulatorJson, startSchema } from './api';
 import { archiveProvenance, writeArchive } from './archive.server';
+import { ContextualDirector, directorServices } from './contextual-director';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
-const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
+const services = { createLive, attachLive, evaluateTrainee, evaluateClient, ...directorServices };
 const GRADE_INTERVAL_MS = 5000;
 const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
 
@@ -37,7 +38,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private directing = false;
   private lastDirected = 0;
   private reachedLive = false;
-  private sentCues: SentCue[] = [];
+  private contextual: ContextualDirector | undefined;
   private seenEvents = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env, private readonly paid = services) {
@@ -72,7 +73,7 @@ export class SimulatorSession extends DurableObject<Env> {
       if (activity.audio) this.lastAudio = Date.now();
     }
     if (action === '/ready' && this.snapshot.status === 'connecting') {
-      if (this.checkLifetime()) return simulatorJson(this.snapshot);
+      if (this.checkLifetime()) return simulatorJson(this.publicSnapshot());
       // The lease makes start single-use, so this transition and its greeting happen once.
       this.snapshot.status = 'live';
       this.reachedLive = true;
@@ -81,7 +82,11 @@ export class SimulatorSession extends DurableObject<Env> {
     }
     if (action === '/end') await this.end();
     this.checkLifetime();
-    return simulatorJson(this.snapshot);
+    return simulatorJson(this.publicSnapshot());
+  }
+
+  private publicSnapshot(): SessionSnapshot {
+    return { ...this.snapshot!, coaching: this.contextual?.coaching() ?? null };
   }
 
   private async start(request: Request, capability: string): Promise<Response> {
@@ -93,9 +98,15 @@ export class SimulatorSession extends DurableObject<Env> {
     this.snapshot = {
       id: input.id, scenarioId: input.scenarioId, clientId: input.clientId,
       status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS, warning: null,
-      revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting',
+      revision: 0, transcript: [], evaluation: null, coaching: null, feedbackStatus: 'waiting',
       message: null, finalization: 'pending', usageSeconds: null,
     };
+    if (getScenario(input.scenarioId).objectives.length) this.contextual = new ContextualDirector({
+      scenarioId: input.scenarioId, clientId: input.clientId, objectives: () => this.snapshot!.evaluation?.objectives ?? [],
+      isFresh: transcript => this.isFresh(transcript),
+      openaiKey: this.env.OPENAI_API_KEY!, typesafeKey: this.env.TYPESAFE_API_KEY!, services: this.paid,
+      settled: () => settledTranscript(this.snapshot!.transcript, this.passageUpdatedAt, Date.now()), send: event => this.send(event),
+    });
     await this.ctx.storage.put('lease', this.lease);
     await this.ctx.storage.setAlarm(Date.now() + 30_000);
     try {
@@ -106,7 +117,7 @@ export class SimulatorSession extends DurableObject<Env> {
       }
       this.lastSeen = Date.now();
       this.timer = setInterval(() => this.tick(), 500);
-      return simulatorJson({ sdp: created.sdp, snapshot: this.snapshot });
+      return simulatorJson({ sdp: created.sdp, snapshot: this.publicSnapshot() });
     } catch {
       this.snapshot.message = 'The voice connection could not be established.';
       await this.end(true);
@@ -173,6 +184,7 @@ export class SimulatorSession extends DurableObject<Env> {
       return;
     }
     if (snapshot.status === 'ending') return;
+    if (event.type === 'session.thinking.appended' && typeof event.client_event_id === 'string') this.contextual?.providerEvent(event.client_event_id, true);
     if (event.type === 'session.delegation.created') {
       const delegation = event.delegation as { id?: unknown; target?: unknown } | undefined;
       if (delegation?.target === 'client' && typeof delegation.id === 'string') {
@@ -182,7 +194,10 @@ export class SimulatorSession extends DurableObject<Env> {
     if (event.type === 'error') {
       const error = event.error as { client_event_id?: unknown } | undefined;
       // A declined optional cue need not interrupt otherwise-working practice.
-      if (typeof error?.client_event_id === 'string' && error.client_event_id.startsWith('cue-')) return;
+      if (typeof error?.client_event_id === 'string' && error.client_event_id.startsWith('cue-')) {
+        this.contextual?.providerEvent(error.client_event_id, false);
+        return;
+      }
       snapshot.message = 'The voice service reported a problem. You can end this attempt and try again.';
     }
   }
@@ -201,11 +216,11 @@ export class SimulatorSession extends DurableObject<Env> {
     this.gradedText = text;
     // A quoted source must stay exact, even if more speech arrives during grading.
     for (const entry of transcript) this.judgedPassages.add(entry.id);
-    this.grading = this.grade(transcript, snapshot.revision, false).finally(() => { this.grading = undefined; });
+    this.grading = this.grade(transcript, snapshot.revision, false, now).finally(() => { this.grading = undefined; });
     this.ctx.waitUntil(this.grading);
-    if (this.env.SIMULATOR_DIRECTOR_ENABLED === 'true' && !this.directing && now - this.lastDirected >= 8000 && !this.closing) {
+    if (this.contextual?.canObserveActor && !this.directing && now - this.lastDirected >= 8000) {
       this.lastDirected = now;
-      this.ctx.waitUntil(this.direct(transcript, snapshot.revision));
+      this.ctx.waitUntil(this.direct(transcript, snapshot.revision, now));
     }
   }
 
@@ -239,7 +254,7 @@ export class SimulatorSession extends DurableObject<Env> {
     return true;
   }
 
-  private async grade(transcript: SessionSnapshot['transcript'], revision: number, final: boolean) {
+  private async grade(transcript: SessionSnapshot['transcript'], revision: number, final: boolean, capturedAt = Date.now()) {
     const snapshot = this.snapshot!;
     const scenario = getScenario(snapshot.scenarioId);
     if (!scenario.objectives.length) return;
@@ -250,8 +265,12 @@ export class SimulatorSession extends DurableObject<Env> {
       if (!final && this.closing) return;
       if (snapshot.evaluation && revision < snapshot.evaluation.revision) return;
       // Explicit public projection: raw client diagnostics and grader questions stay private.
-      snapshot.evaluation = { revision: result.revision, skills: result.skills, hint: result.hint, hintId: result.hintId, concern: result.concern, model: result.model, durationMs: result.durationMs, objectives: final ? result.objectives : reconcileObjectives(scenario, snapshot.evaluation?.objectives ?? [], result.objectives) };
+      snapshot.evaluation = { revision: result.revision, skills: result.skills, concern: result.concern, model: result.model, durationMs: result.durationMs, objectives: final ? result.objectives : reconcileObjectives(scenario, snapshot.evaluation?.objectives ?? [], result.objectives) };
       snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
+      if (!final) {
+        const work = this.contextual?.observe({ audience: 'trainee', signals: result.signals, transcript, revision, capturedAt });
+        if (work) this.ctx.waitUntil(work);
+      }
     } catch {
       if (this.gradeAbort.signal.aborted && !final) return;
       snapshot.feedbackStatus = snapshot.evaluation ? 'delayed' : 'unavailable';
@@ -271,16 +290,13 @@ export class SimulatorSession extends DurableObject<Env> {
     return JSON.stringify(transcript) === JSON.stringify(settledTranscript(this.snapshot!.transcript, this.passageUpdatedAt, Date.now()));
   }
 
-  private async direct(transcript: SessionSnapshot['transcript'], revision: number) {
+  private async direct(transcript: SessionSnapshot['transcript'], revision: number, capturedAt: number) {
     this.directing = true;
     const snapshot = this.snapshot!;
     try {
       const result = await this.paid.evaluateClient({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
-      const cue = getClientCues(getScenario(snapshot.scenarioId)).find(item => item.id === result.cueId);
-      if (this.closing || !cue || this.sentCues.some(sent => sent.id === cue.id) || !canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.sentCues.at(-1) ?? null, this.isFresh(transcript), Date.now())) return;
-      if (this.send({ type: 'session.thinking.append', event_id: `cue-${crypto.randomUUID()}`, delegation_id: null, content: cue.text })) {
-        this.sentCues.push({ id: cue.id, revision, sentAt: Date.now() });
-      }
+      const work = this.contextual?.observe({ audience: 'actor', signals: result.signals, transcript, revision, capturedAt });
+      if (work) this.ctx.waitUntil(work);
     } catch { /* Client direction is optional. Continue the original role-play. */ }
     finally { this.directing = false; }
   }
@@ -293,6 +309,7 @@ export class SimulatorSession extends DurableObject<Env> {
     const snapshot = this.snapshot!;
     const drain = snapshot.status === 'live' && !interrupted;
     snapshot.status = 'ending';
+    this.contextual?.close();
     clearInterval(this.timer);
     this.gradeAbort.abort();
     try { await this.connecting; } catch { /* Creation failure is surfaced by start. */ }
@@ -368,11 +385,12 @@ export class SimulatorSession extends DurableObject<Env> {
   private async saveArchive(state: 'partial' | 'final') {
     try {
       // Freeze the data and its timestamp before any asynchronous work.
-      const snapshot = structuredClone(this.snapshot!);
-      const cues = structuredClone(this.sentCues);
+      const snapshot = structuredClone(this.publicSnapshot());
+      const interventions = structuredClone(this.contextual?.records ?? []);
+      const director = this.contextual?.summary() ?? null;
       const capturedAt = Date.now();
-      const provenance = await archiveProvenance(this.env, snapshot);
-      await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, cues, provenance });
+      const provenance = await archiveProvenance(this.env, snapshot, director);
+      await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, provenance, interventions });
     } catch {
       // Best effort: never delay closure or retry a failed transcript save.
       console.warn('Simulator archive save failed', { id: this.snapshot?.id, category: state });

@@ -1,6 +1,6 @@
 import { Check, ChevronDown, Lightbulb, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { skills, type Evidence, type FeedbackStatus, type ScenarioSummary, type TraineeEvaluation } from '../../core/simulator/types';
+import { skills, type Evidence, type FeedbackStatus, type LiveHint, type ScenarioSummary, type TraineeEvaluation } from '../../core/simulator/types';
 
 export function EvidenceQuote({ evidence }: { evidence: Evidence }) {
   return <blockquote className="sim-evidence"><span>{evidence.speaker === 'trainee' ? 'You' : 'Client'}</span><p>“{evidence.text}”</p></blockquote>;
@@ -14,17 +14,18 @@ export function SimulatorObjectives({ scenario, evaluation }: { scenario: Scenar
   })}</ol></section>;
 }
 
-export function SimulatorHintToast({ text, concern, delayed, onDismiss }: { text: string | null | undefined; concern: boolean; delayed: boolean; onDismiss: () => void }) {
+export function SimulatorHintToast({ text, concern, onDismiss }: { text: string | null | undefined; concern: boolean; onDismiss: () => void }) {
   const reduced = useReducedMotion();
   return <><div className="sim-announcement" role="status" aria-atomic="true">{text}</div>{text && <motion.aside className={`sim-hint-toast ${concern ? 'concern' : ''}`} key={text} initial={{ opacity: 0, y: reduced ? 0 : -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .18 }}>
-    <Lightbulb size={22} aria-hidden="true" /><div><h2>{delayed ? 'Latest hint' : 'Live hint'}</h2><p>{text}</p></div><button onClick={onDismiss} aria-label="Dismiss hint"><X size={20} /></button>
+    <Lightbulb size={22} aria-hidden="true" /><div><h2>Live hint</h2><p>{text}</p></div><button onClick={onDismiss} aria-label="Dismiss hint"><X size={20} /></button>
   </motion.aside>}</>;
 }
 
-export function SimulatorHint({ evaluation, phase = 'live', status }: { evaluation: TraineeEvaluation | null; phase?: 'connecting' | 'live' | 'ending'; status?: FeedbackStatus }) {
+export function SimulatorHint({ phase, liveHint, onDismiss }: { phase: 'connecting' | 'live' | 'ending'; liveHint: LiveHint | null; onDismiss: () => void }) {
   const reduced = useReducedMotion();
-  const text = evaluation?.concern ?? (phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : evaluation?.hint ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : status === 'unavailable' ? 'Live feedback is unavailable right now. Keep going; hints and objectives will update if it returns.' : 'Listen for what matters to the client. Your next hint will appear here.'));
-  return <section className={`sim-hint ${evaluation?.concern ? 'concern' : ''}`} role="status" aria-atomic="true"><h2><Lightbulb size={18} />{phase === 'ending' ? 'Session review' : 'Live hint'}</h2><AnimatePresence mode="wait" initial={false}><motion.p key={text} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .18 }}>{text}</motion.p></AnimatePresence></section>;
+  const concern = liveHint?.kind === 'concern';
+  const text = phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : liveHint?.text ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : 'Listen for what matters to the client. Your next hint will appear here.');
+  return <section className={`sim-hint ${concern ? 'concern' : ''}`} role="status" aria-atomic="true"><h2><Lightbulb size={18} />{phase === 'ending' ? 'Session review' : 'Live hint'}{liveHint && onDismiss && <button className="quiet-button" onClick={onDismiss} aria-label="Dismiss hint"><X size={18} /></button>}</h2><AnimatePresence mode="wait" initial={false}><motion.p key={text} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .18 }}>{text}</motion.p></AnimatePresence></section>;
 }
 
 const feedbackLabels: Record<FeedbackStatus, string> = { waiting: 'Listening for evidence', current: 'Jev · live', delayed: 'Latest available feedback', unavailable: 'Feedback unavailable' };

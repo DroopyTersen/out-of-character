@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { clients, scenarios } from '../ai/simulator/scenarios.server';
+import { clients } from '../ai/simulator/scenarios.server';
 
 // Workshop transcripts/results are intentional public examples. Actor direction,
 // private reference text, rubric instructions, and credentials must stay server-side.
@@ -8,8 +8,10 @@ const privateText = [
   'You personally sponsored that failed rollout and took the blame',
   'Judge only the actual dialogue, with speakers identified',
   'Assess the CLIENT ACTOR, not the trainee',
+  'Write one private direction to the CLIENT ACTOR',
+  'worldLimitsNotNecessarilyKnownToClient',
+  'previousInterventions',
   ...clients.map(client => client.behavior),
-  ...scenarios.flatMap(scenario => scenario.cues.map(cue => cue.when)),
 ];
 let checked = 0;
 for await (const path of new Bun.Glob('**/*.{js,json,css,html}').scan('build/client')) {

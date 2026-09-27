@@ -176,16 +176,23 @@ export function SimulatorLiveStory() {
     kind: warningPreview === 'finishing' ? 'limit' : warningPreview as 'idle' | 'limit' | 'capacity',
     endsAt: Date.now() + (warningPreview === 'finishing' ? -1000 : 60_000),
   };
-  if (hintPreview !== 'recorded') {
-    const hints: Record<string, string> = { sample: 'Ask how the document problems affect Priya’s team.', another: 'Find out who else needs to be involved in the next step.' };
-    snapshot.evaluation = {
-      revision: playback.step, skills: emptySkills(), objectives: [], model: 'illustrative', durationMs: 0,
-      ...snapshot.evaluation,
-      hint: hints[hintPreview] ?? null, hintId: hints[hintPreview] ? `preview-${hintPreview}` : null,
-      concern: hintPreview === 'concern' ? 'You made a commitment before checking the delivery impact. Clarify the boundary with the client.' : null,
-    };
-    snapshot.feedbackStatus = 'current';
-  }
+  const hints: Record<string, string> = {
+    sample: 'Ask how the document problems affect Priya’s team.',
+    another: 'Find out who else needs to be involved in the next step.',
+    concern: 'You made a commitment before checking the delivery impact. Clarify the boundary with the client.',
+    'new-concern': 'You made another commitment before checking the delivery impact. Clarify the boundary with the client.',
+    'contextual-hint': 'Priya mentioned missing approvals. Ask which decision gets delayed when that happens.',
+    'contextual-concern': 'A commitment or claim may go beyond what has been established. Review it before proceeding.',
+    'contextual-replacement': 'You promised a fixed delivery date. Clarify that the scope still needs estimating.',
+    'contextual-expired': 'Priya mentioned missing approvals. Ask which decision gets delayed when that happens.',
+  };
+  const hintText = hints[hintPreview];
+  const concern = ['concern', 'new-concern', 'contextual-concern', 'contextual-replacement'].includes(hintPreview);
+  snapshot.coaching = hintText ? {
+    id: concern ? `trainee:mistake:${hintPreview === 'new-concern' ? 2 : 1}` : hintPreview.startsWith('contextual-') ? 'hint:objective:problem' : `hint:${hintPreview}`,
+    kind: concern ? 'concern' : 'hint', objectiveId: concern ? null : 'problem', text: hintText, evidenceIds: ['p1'],
+    createdAt: Date.now(), expiresAt: Date.now() + (hintPreview === 'contextual-expired' ? -1000 : 30_000),
+  } : null;
   if (feedback !== 'recorded') snapshot.feedbackStatus = feedback;
   if (feedback === 'unavailable') snapshot.evaluation = null;
   const speaker = snapshot.transcript.at(-1)?.speaker;
@@ -225,7 +232,7 @@ export function SimulatorLiveStory() {
           </select>
         </label>
         <Playback playback={playback} max={fixture.transcript.length} />
-        <label>Hint preview<select value={hintPreview} onChange={event => setHintPreview(event.target.value)}><option value="recorded">Recorded coaching</option><option value="sample">Sample hint</option><option value="another">Another hint</option><option value="concern">Concern</option><option value="none">No hint</option></select></label>
+        <label>Hint preview<select value={hintPreview} onChange={event => setHintPreview(event.target.value)}><option value="recorded">No coaching</option><option value="sample">Sample hint</option><option value="another">Another hint</option><option value="concern">Concern</option><option value="new-concern">New concern episode</option><option value="none">No hint</option><option value="contextual-hint">Contextual hint</option><option value="contextual-concern">Immediate concern</option><option value="contextual-replacement">Specific concern</option><option value="contextual-none">Paused contextual hint</option><option value="contextual-expired">Expired contextual hint</option></select></label>
         <label>Session warning<select aria-label="Session warning" value={warningPreview} onChange={event => setWarningPreview(event.target.value)}><option value="none">None</option><option value="idle">Inactivity</option><option value="limit">One-hour limit</option><option value="capacity">Conversation capacity</option><option value="finishing">Finishing current reply</option></select></label>
       </div>
       <p className="sim-collection-note">{scenario.objectives.length ? `Recorded Jev checkpoints; illustrative audio activity${hintPreview !== 'recorded' ? ' and coaching preview' : ''}.` : 'Illustrative happy-hour conversation; no scoring.'} No live connection.</p>
@@ -384,39 +391,6 @@ export function SimulatorJudgingStory() {
             ) : (
               <p className="sim-lab-check-details">No checks at this turn</p>
             )}
-            <section className="sim-director-readout">
-              <h3>Client behavior analysis</h3>
-              {row ? (
-                <>
-                  <dl className="sim-director-metrics">
-                    <div>
-                      <dt>Role fidelity</dt>
-                      <dd>
-                        {row.client.fidelity.toFixed(2)} <small>/ 4</small>
-                      </dd>
-                    </div>
-                    {row.client.interests.map((value, index) => (
-                      <div key={index}>
-                        <dt>Interest {index + 1}</dt>
-                        <dd>
-                          {value.toFixed(2)} <small>/ 4</small>
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <p>
-                    Selected cue: <strong>{row.client.cueId}</strong> · {(row.client.cueProbability * 100).toFixed(0)}%
-                  </p>
-                  <p>
-                    {row.client.cueId !== 'no_hint' && row.client.cueProbability >= 0.9
-                      ? 'Passes the probability gate. Freshness, deduplication, and cooldown still apply in a live session.'
-                      : 'No private direction would be sent from this judgment.'}
-                  </p>
-                </>
-              ) : (
-                <p>Waiting for a recorded client judgment.</p>
-              )}
-            </section>
           </div>
           <div>
             <h3 className="sim-lab-column-title">Trainee assessment</h3>
@@ -433,9 +407,8 @@ export function SimulatorJudgingStory() {
           </details>
         )}
         <p className="sim-lab-provenance">
-          Re-record explicitly with <code>bun run eval:simulator</code> or <code>bun run eval:simulator --replay</code>,{' '}
-          <code>bun run eval:simulator --holdout</code>, or <code>bun run eval:simulator --validation</code>. Opening
-          this lab performs no provider calls.
+          These are historical rubric recordings. New <code>bun run eval:simulator</code> results are written under <code>output/</code>.
+          Opening this lab performs no provider calls.
         </p>
       </div>
     </>

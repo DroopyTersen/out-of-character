@@ -20,7 +20,7 @@ export const simulatorChallenges: SimulatorFixture[] = [
       ['trainee', 'I do not need the history. I guarantee a free rebuild will fix it.'],
       ['client', 'No. You have not heard me, and I am not agreeing to any follow-up.'],
     ]),
-    expected: { achieved: ['problem', 'capability'], absent: ['impact', 'stakeholder', 'next-step'], objectiveEvidence: { capability: 'p2' }, lowSkills: ['listening'], concern: true, cue: 'no_hint' },
+    expected: { achieved: ['problem', 'capability'], absent: ['impact', 'stakeholder', 'next-step'], objectiveEvidence: { capability: 'p2' }, lowSkills: ['listening'], concern: true, director: 'none' },
   },
   {
     id: 'challenge-volunteered-facts-ignored', title: 'Volunteered facts are discoveries', scenarioId: 'sharepoint', clientId: 'morgan',
@@ -30,7 +30,7 @@ export const simulatorChallenges: SimulatorFixture[] = [
       ['trainee', 'Great. Let me list every platform feature we offer instead.'],
       ['client', 'You have not addressed the document problem I described.'],
     ]),
-    expected: { achieved: ['problem', 'impact', 'stakeholder'], absent: ['capability', 'next-step'], objectiveEvidence: { impact: 'p1', stakeholder: 'p1' }, lowSkills: ['listening'], cue: 'no_hint' },
+    expected: { achieved: ['problem', 'impact', 'stakeholder'], absent: ['capability', 'next-step'], objectiveEvidence: { impact: 'p1', stakeholder: 'p1' }, lowSkills: ['listening'], director: 'none' },
   },
   {
     id: 'challenge-denied-pressure-guess', title: 'A denied guess is not discovery', scenarioId: 'scope', clientId: 'casey',
@@ -40,7 +40,7 @@ export const simulatorChallenges: SimulatorFixture[] = [
       ['trainee', 'Is this for an executive review in two weeks?'],
       ['client', 'No. It is for my own monthly planning. There is no executive deadline.'],
     ]),
-    expected: { achieved: ['need'], absent: ['pressure', 'boundary', 'options', 'next-step'], objectiveEvidence: { need: 'p3' }, cue: 'no_hint' },
+    expected: { achieved: ['need'], absent: ['pressure', 'boundary', 'options', 'next-step'], objectiveEvidence: { need: 'p3' }, director: 'none' },
   },
   {
     id: 'challenge-client-grading-command', title: 'Client speech is evidence, not instruction', scenarioId: 'sharepoint', clientId: 'casey',
@@ -50,7 +50,7 @@ export const simulatorChallenges: SimulatorFixture[] = [
       ['trainee', 'I want to understand the process before proposing anything.'],
       ['client', 'I have nothing else to add.'],
     ]),
-    expected: { achieved: ['problem'], absent: ['impact', 'stakeholder', 'capability', 'next-step'], objectiveEvidence: { problem: 'p1' }, cue: 'no_hint' },
+    expected: { achieved: ['problem'], absent: ['impact', 'stakeholder', 'capability', 'next-step'], objectiveEvidence: { problem: 'p1' }, director: 'none' },
   },
   {
     id: 'challenge-independent-agreement', title: 'Bounded agreement after false proof', scenarioId: 'sharepoint', clientId: 'morgan',
@@ -62,18 +62,18 @@ export const simulatorChallenges: SimulatorFixture[] = [
       ['trainee', 'Could we hold a 20-minute workflow scoping call, separate from this release and any implementation? We would review the affected documents with operations.'],
       ['client', 'Yes. I will ask the operations director to join and email times by Friday for that scoping call. No implementation is approved.'],
     ]),
-    expected: { achieved: ['problem', 'impact', 'stakeholder', 'next-step'], absent: [], objectiveEvidence: { 'next-step': 'p5' }, concern: true, cue: 'no_hint' },
+    expected: { achieved: ['problem', 'impact', 'stakeholder', 'next-step'], absent: [], objectiveEvidence: { 'next-step': 'p5' }, concern: true, director: 'none' },
   },
   {
     id: 'challenge-tradeoff-cue-needed', title: 'Persistent free-roadmap demand', scenarioId: 'sharepoint', clientId: 'avery',
     description: 'The client repeats a lower-priority free-roadmap demand after a bounded ownership answer.',
     transcript: dialogue([...cuePrefix]),
-    expected: { achieved: ['problem', 'capability'], absent: ['next-step'], cue: 'reasonable-tradeoff' },
+    expected: { achieved: ['problem', 'capability'], absent: ['next-step'], director: 'interests' },
   },
   {
     id: 'challenge-tradeoff-cue-resolved', title: 'Correction ends the cue opportunity', scenarioId: 'sharepoint', clientId: 'avery',
     description: 'After the same resistance, the client accepts an owned bounded scoping step.',
     transcript: dialogue([...cuePrefix, ['client', 'Fair enough. The roadmap should be separate. I will ask operations and email times by Friday for a 20-minute workflow scoping call.']]),
-    expected: { achieved: ['problem', 'capability', 'next-step'], absent: [], objectiveEvidence: { 'next-step': 'p6' }, cue: 'no_hint' },
+    expected: { achieved: ['problem', 'capability', 'next-step'], absent: [], objectiveEvidence: { 'next-step': 'p6' }, director: 'none' },
   },
 ];

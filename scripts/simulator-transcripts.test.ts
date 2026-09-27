@@ -24,11 +24,18 @@ test('export parses archive fields and excludes unexpected columns', () => {
     updated_at: 2000, ended_at: null, archive_state: 'partial', session_status: 'live',
     finalization: 'pending', feedback_status: 'waiting', usage_seconds: null, message: null,
     transcript_json: '[{"speaker":"trainee","text":"Hello"}]', evaluation_json: null,
-    provenance_json: '{"workerTag":"release"}', cues_json: '[]',
+    provenance_json: '{"workerTag":"release"}', cues_json: '[]', interventions_json: '[]',
     provider_id: 'must-not-export',
   });
   expect(archive.transcript).toEqual([{ speaker: 'trainee', text: 'Hello' }]);
   expect(archive.evaluation).toBeNull();
   expect(archive.provenance).toEqual({ workerTag: 'release' });
+  expect(archive.interventions).toEqual([]);
   expect(JSON.stringify(archive)).not.toContain('must-not-export');
+});
+
+test('new archive exports preserve private intervention history for the local reviewer', () => {
+  const record = { audience: 'actor', outcome: 'sent', result: { action: 'intervene', text: 'Private direction', evidenceIds: ['p1'] }, delivery: { eventId: 'cue-test', status: 'accepted' } };
+  const archived = parseArchive({ id, transcript_json: '[]', provenance_json: '{}', cues_json: '[]', interventions_json: JSON.stringify([record]) });
+  expect(archived.interventions).toEqual([record]);
 });

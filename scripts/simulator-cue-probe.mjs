@@ -14,7 +14,8 @@ const pcm = Buffer.from(await new Response(converter.stdout).arrayBuffer());
 if (await converter.exited || !pcm.length) throw new Error('Cannot prepare the supplied audio fixture.');
 await mkdir(output, { recursive: true });
 const report = { checkedAt: new Date().toISOString(), model: 'gpt-live-1', synthetic: true, cueEnabled, cueForcedForProtocolProbe: cueEnabled, cueAcknowledged: false, finalized: false, usageSeconds: null, outputAudioBytes: 0, transcript: [], errors: [] };
-const cue = getScenario('sharepoint').cues.find(item => item.id === 'approval-boundary');
+// Fixed synthetic instruction tests the voice protocol independently of generation.
+const cue = 'You can discuss a separately scoped assessment. Implementation still requires separate funding approval; do not approve delivery or speak for the operations director.';
 const config = liveConfiguration('sharepoint', 'morgan');
 const { client: _frontendPermissions, ...session } = config;
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
@@ -34,7 +35,7 @@ const completed = new Promise(resolve => {
       send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: `Begin this meeting now in English: ${getScenario('sharepoint').opening} Then listen.` });
       pacing = setInterval(() => {
         ticks++;
-        if (cueEnabled && ticks === 300) send({ type: 'session.thinking.append', event_id: 'probe-cue', delegation_id: null, content: cue.text });
+        if (cueEnabled && ticks === 300) send({ type: 'session.thinking.append', event_id: 'probe-cue', delegation_id: null, content: cue });
         let chunk = Buffer.alloc(960);
         if (ticks > 450 && offset < pcm.length) { chunk = pcm.subarray(offset, Math.min(offset + 960, pcm.length)); offset += chunk.length; }
         send({ type: 'session.input_audio.append', audio: chunk.toString('base64') });

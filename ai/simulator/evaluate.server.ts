@@ -3,8 +3,9 @@ import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experim
 import { JEV_MODEL } from '../judging';
 import { emptySkills, skills, type TranscriptEntry } from '../../core/simulator/types';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
-import { getClient, getClientCues, getScenario, type Scenario } from './scenarios.server';
+import { getClient, getScenario, type Scenario } from './scenarios.server';
 import { clientQuestions, evidenceBatches, traineeQuestions } from './rubric';
+import { MATERIAL_CONCERN, type BooleanCondition, type DirectorSignal } from '../../core/simulator/director';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
 type Answers = Record<string, Answer>;
@@ -28,6 +29,10 @@ function yes(answers: Answers, id: string): number {
   const answer = answers[id];
   if (answer?.type !== 'boolean' || !probability(answer.probability)) throw new Error('Invalid simulator condition judgment.');
   return answer.probability;
+}
+function readSignal(answers: Answers, id: string, condition: BooleanCondition): DirectorSignal[] {
+  const answer = answers[id];
+  return answer?.type === 'boolean' && probability(answer.probability) ? [{ condition, probability: answer.probability }] : [];
 }
 function score(answers: Answers, id: string) {
   const answer = answers[id];
@@ -75,7 +80,12 @@ export function readTraineeAnswers(scenario: Scenario, transcript: TranscriptEnt
   const selected = choice(answers, 'hint', ['none', ...scenario.objectives.map(item => item.id)]);
   const candidate = scenario.objectives.find(item => item.id === selected.choice);
   const hintId = candidate && !achievedIds.includes(candidate.id) && !objectives.find(item => item.id === candidate.id)?.achieved ? candidate.id : null;
-  return { skills: readings, objectives, hintId, hint: hintId ? candidate!.hint : null, concern: mistake ? 'A commitment or claim may go beyond what has been established. Review it before proceeding.' : null };
+  const signals: DirectorSignal[] = [
+    { condition: 'mistake', probability: yes(answers, 'mistake') },
+    ...scenario.objectives.map(item => ({ condition: `objective:${item.id}` as const, selected: hintId === item.id })),
+    ...readSignal(answers, 'stalled', 'stalled'),
+  ];
+  return { skills: readings, objectives, concern: mistake ? MATERIAL_CONCERN : null, signals };
 }
 
 function validateInput(input: Input) {
@@ -136,23 +146,27 @@ export async function evaluateTrainee(input: Input) {
     traineeQuestions(scenario, input.transcript, input.achievedIds), shouldPartitionTraineeQuestions(input.transcript),
     (questions, signal) => experimental_evaluate({ model, state, questions, abortSignal: signal, maxRetries: 0 }), input.signal,
   );
+  const reading = readTraineeAnswers(scenario, input.transcript, result.answers, input.achievedIds);
   return {
-    ...readTraineeAnswers(scenario, input.transcript, result.answers, input.achievedIds), revision: input.revision,
+    ...reading, revision: input.revision,
     model: result.response.modelId, durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };
 }
 
 export type ClientEvaluation = {
   revision: number;
-  fidelity: number;
-  interests: number[];
-  cueId: string;
-  cueProbability: number;
   model: string;
   durationMs: number;
   usage: { inputTokens: number | undefined; outputTokens: number | undefined; totalTokens: number | undefined };
   answers: Answers;
+  signals: DirectorSignal[];
 };
+
+export function readClientAnswers(answers: Answers) {
+  return {
+    signals: (['knowledge', 'authority', 'role', 'interests'] as const).flatMap(condition => readSignal(answers, `director:${condition}`, condition)),
+  };
+}
 
 export async function evaluateClient(input: Input): Promise<ClientEvaluation> {
   validateInput(input);
@@ -164,18 +178,14 @@ export async function evaluateClient(input: Input): Promise<ClientEvaluation> {
     state: {
       dialogueColumns: ['id', 'speaker', 'text'],
       dialogue: input.transcript.map(({ id, speaker, text }) => [id, speaker, text]),
-      client: { name: client.name, stats: client.stats, behavior: client.behavior },
+      client: { name: client.name, role: scenario.clientRole, stats: client.stats, behavior: client.behavior },
       scenario: { meetingPremise: scenario.opening, interests: scenario.interests, clientFacts: scenario.facts, worldLimitsNotNecessarilyKnownToClient: scenario.constraints },
     },
-    questions: clientQuestions(scenario), abortSignal: input.signal, maxRetries: 0,
+    questions: clientQuestions(), abortSignal: input.signal, maxRetries: 0,
   });
-  const cue = choice(result.answers, 'cue', ['no_hint', ...getClientCues(scenario).map(item => item.id)]);
-  const p = cue.probabilities?.[cue.choice];
-  if (p == null || !probability(p)) throw new Error('Client cue probability is unavailable.');
   return {
-    revision: input.revision, fidelity: score(result.answers, 'fidelity').score,
-    interests: scenario.interests.map((_, index) => score(result.answers, `interest:${index}`).score),
-    cueId: cue.choice, cueProbability: p, model: result.response.modelId,
+    ...readClientAnswers(result.answers), revision: input.revision,
+    model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };
 }

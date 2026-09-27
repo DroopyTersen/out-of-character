@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { actorBrief, getClient, getScenario, publicCatalog } from '../../ai/simulator/scenarios.server';
-import { appendTranscript, buildDebrief, canSendCue, reconcileObjectives, settledTranscript } from './state';
+import { appendTranscript, buildDebrief, reconcileObjectives, settledTranscript } from './state';
 import { emptySkills, type ObjectiveReading, type TranscriptEntry } from './types';
 
 describe('simulator boundaries', () => {
@@ -104,21 +104,12 @@ describe('transcript and feedback behavior', () => {
     expect(entries.map(entry => entry.text)).toEqual([judgedText, ' Actually, I was mistaken.']);
     expect(entries.map(entry => entry.id)).toEqual(['p1', 'p2']);
   });
-  test('client cues require fresh, probable, nonrepeating evidence and a cooldown', () => {
-    const cue = { id: 'earned-progress', probability: .95, revision: 7 };
-    expect(canSendCue(cue, null, true, 50_000)).toBe(true);
-    expect(canSendCue(cue, null, false, 50_000)).toBe(false);
-    for (const p of [.6, NaN, 1.1]) expect(canSendCue({ ...cue, probability: p }, null, true, 50_000)).toBe(false);
-    expect(canSendCue({ ...cue, id: 'no_hint' }, null, true, 50_000)).toBe(false);
-    expect(canSendCue(cue, { id: 'approval-boundary', revision: 5, sentAt: 40_000 }, true, 50_000)).toBe(false);
-    expect(canSendCue(cue, { ...cue, sentAt: 1 }, true, 50_000)).toBe(false);
-  });
   test('debrief never invents performance for unobserved skills', () => {
     const scenario = publicCatalog().scenarios[0]!;
     expect(buildDebrief(scenario, null).takeaways).toEqual([]);
     const readings = emptySkills();
     readings.listening = { value: 1, distribution: null, evidence: { entryId: 'p2', speaker: 'trainee', text: 'The features are what matter.' } };
-    const result = buildDebrief(scenario, { revision: 2, skills: readings, objectives: [], hint: null, concern: null, model: 'fixture', durationMs: 0 });
+    const result = buildDebrief(scenario, { revision: 2, skills: readings, objectives: [], concern: null, model: 'fixture', durationMs: 0 });
     expect(result.takeaways.map(item => [item.kind, item.labels])).toEqual([['practice', ['Listening']]]);
     expect(result.takeaways[0]!.evidence.text).toBe('The features are what matter.');
   });
@@ -129,7 +120,7 @@ describe('transcript and feedback behavior', () => {
     readings.confidence = { value: 3.4, distribution: null, evidence };
     readings.listening = { value: .8, distribution: null, evidence };
     readings.guidance = { value: .2, distribution: null, evidence };
-    const evaluation = { revision: 2, skills: readings, objectives: [], hint: null, concern: null, model: 'fixture', durationMs: 0 };
+    const evaluation = { revision: 2, skills: readings, objectives: [], concern: null, model: 'fixture', durationMs: 0 };
     const result = buildDebrief(publicCatalog().scenarios[0]!, evaluation);
     expect(result.takeaways.map(item => [item.kind, item.labels, item.suggestions.length])).toEqual([
       ['keep', ['Confidence', 'Credibility'], 0],

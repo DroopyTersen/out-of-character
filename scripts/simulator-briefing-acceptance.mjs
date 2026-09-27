@@ -86,9 +86,11 @@ await production.addInitScript(() => {
 });
 const livePage = await production.newPage();
 const apiCalls = [];
+let createdPractice;
 await livePage.route('**/api/**', route => {
   apiCalls.push(new URL(route.request().url()).pathname);
   const creation = new URL(route.request().url()).pathname === '/api/simulator/sessions';
+  if (creation) { const { scenarioId, clientId } = route.request().postDataJSON(); createdPractice = { scenarioId, clientId }; }
   return route.fulfill({ status: creation ? 502 : 200, contentType: 'application/json', body: JSON.stringify(creation ? { error: 'Voice service unavailable.' } : { ended: true }) });
 });
 try {
@@ -122,14 +124,17 @@ try {
   await livePage.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
   check(apiCalls.length === 0, 'back from briefing called API');
   check(await livePage.evaluate(() => window.__micCalls) === 0, 'back from briefing requested microphone');
-  await livePage.getByRole('button', { name: 'Start simulation' }).click();
+  await livePage.goto(`${baseUrl}/simulator?scenario=deployment&client=quinn`, { waitUntil: 'networkidle' });
+  await livePage.getByRole('heading', { name: 'Before you meet Quinn', exact: true }).waitFor();
+  check(apiCalls.length === 0 && await livePage.evaluate(() => window.__micCalls) === 0, 'shared intro started a call automatically');
   await livePage.getByRole('button', { name: 'Start conversation' }).click();
   await livePage.getByRole('alert').waitFor();
   const micCalls = await livePage.evaluate(() => window.__micCalls);
   const creations = apiCalls.filter(path => path === '/api/simulator/sessions').length;
   check(micCalls === 1, `explicit start requested microphone ${micCalls} times`);
   check(creations === 1, `explicit start created ${creations} sessions`);
-  results.push({ productionGate: true, pass: true, prematureApiCalls: 0, prematureMicCalls: 0, micCallsAfterStart: micCalls, sessionCreationAttempts: creations });
+  check(createdPractice?.scenarioId === 'deployment' && createdPractice?.clientId === 'quinn', 'explicit start did not use the shared pair');
+  results.push({ productionGate: true, pass: true, baseUrl, prematureApiCalls: 0, prematureMicCalls: 0, micCallsAfterStart: micCalls, sessionCreationAttempts: creations, createdPractice });
 } catch (error) { results.push({ productionGate: true, pass: false, error: error.stack, apiCalls }); }
 await production.close();
 

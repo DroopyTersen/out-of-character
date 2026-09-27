@@ -8,6 +8,8 @@ The subsequent [prerecorded briefing follow-up](simulator-meeting-opening.md) co
 
 The newer [Ash and factual handovers](simulator-meeting-opening.md#ash-and-factual-handovers) revision was [deployed from `d55033c`](simulator-release.md#ash-briefings-and-quinn-voice-release) on September 27 at 04:43 UTC. The fresh full gate, nine-clip production briefing checks at three widths, Quinn's prepared Beacon playback on both Voice Lab surfaces, and all 234 served asset hashes pass. This release did not repeat paid voice/scoring or physical-phone tests.
 
+The [shareable practice links follow-up](simulator-practice-links.md) is verified locally with a **157-test** full gate and **5/5** groups in both the link and briefing browser suites. It has not been deployed; its new shared-start check intercepts the microphone and session endpoint.
+
 ## Delivered behavior
 
 - Sales: explore an adjacent SharePoint opportunity with an existing software client. Consultancy: handle an unestimated dashboard request without surrendering scope or ignoring the real need.

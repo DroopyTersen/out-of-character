@@ -28,15 +28,17 @@ function SimulatorBriefingStory() {
   const [scenarioId, setScenarioId] = useState(simulatorCatalog.scenarios[0]!.id);
   const [clientId, setClientId] = useState(simulatorCatalog.clients[0]!.id);
   const [notice, setNotice] = useState('');
+  const [enabled, setEnabled] = useState(true);
   const scenario = simulatorCatalog.scenarios.find(item => item.id === scenarioId)!;
   const client = simulatorCatalog.clients.find(item => item.id === clientId)!;
   return <>
     <div className="workshop-controls">
       <label>Scenario<select value={scenarioId} onChange={event => { setScenarioId(event.target.value); setNotice(''); }}>{simulatorCatalog.scenarios.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
       <label>Client<select value={clientId} onChange={event => { setClientId(event.target.value); setNotice(''); }}>{simulatorCatalog.clients.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /> Live practice available</label>
       {notice && <p role="status">{notice}</p>}
     </div>
-    <SimulatorBriefing key={`${scenarioId}:${clientId}`} scenario={scenario} client={client} briefing={scenarioBriefings[scenarioId]!} onBack={() => setNotice('Workshop preview: return to selection.')} onStart={() => setNotice('Workshop preview: no microphone or paid session was opened.')} />
+    <SimulatorBriefing key={`${scenarioId}:${clientId}`} scenario={scenario} client={client} briefing={scenarioBriefings[scenarioId]!} enabled={enabled} onBack={() => setNotice('Workshop preview: return to selection.')} onStart={() => setNotice('Workshop preview: no microphone or paid session was opened.')} />
   </>;
 }
 const stories = [

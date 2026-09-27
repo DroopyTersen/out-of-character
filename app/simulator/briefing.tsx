@@ -1,19 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Link as LinkIcon, RotateCcw, Volume2 } from 'lucide-react';
 import type { Client, ScenarioSummary } from '../../core/simulator/types';
 import type { ScenarioBriefing } from '../../core/simulator/briefings';
+import { practicePath } from './practice-links';
 import './briefing.css';
 
-export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart }: {
+export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart, enabled = true }: {
   scenario: ScenarioSummary;
   client: Client;
   briefing: ScenarioBriefing;
   onBack: () => void;
   onStart: () => void;
+  enabled?: boolean;
 }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [failed, setFailed] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [share, setShare] = useState<{ url: string; copied: boolean } | null>(null);
+
+  const copyLink = async () => {
+    const url = new URL(practicePath(scenario.id, client.id), window.location.origin).href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShare({ url, copied: true });
+    } catch {
+      setShare({ url, copied: false });
+    }
+  };
 
   useEffect(() => {
     const player = audio.current;
@@ -40,7 +53,12 @@ export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart 
   };
 
   return <section className="sim-briefing" aria-labelledby="sim-briefing-title">
-    <button className="sim-briefing-back quiet-button" onClick={() => leave(onBack)}><ArrowLeft size={16} /> Change scenario or client</button>
+    <div className="sim-briefing-actions">
+      <button className="sim-briefing-back quiet-button" onClick={() => leave(onBack)}><ArrowLeft size={16} /> Change scenario or client</button>
+      <button className="sim-briefing-share quiet-button" onClick={copyLink} aria-label={share?.copied ? 'Link copied' : 'Copy link'} title="Copy a link to this practice">{share?.copied ? <Check size={16} /> : <LinkIcon size={16} />}<span>{share?.copied ? 'Link copied' : 'Copy link'}</span></button>
+    </div>
+    <span className="sr-only" role="status">{share && (share.copied ? 'Link copied.' : 'Copy the practice link below.')}</span>
+    {share && !share.copied && <label className="sim-briefing-copy-fallback">Copy this practice link:<input aria-label="Practice link" readOnly value={share.url} onFocus={event => event.target.select()} /></label>}
     <header className="sim-briefing-heading">
       <span className="eyebrow">YOUR BRIEFING · {scenario.category.toUpperCase()}</span>
       <h1 id="sim-briefing-title" tabIndex={-1}>Before you meet {client.name}</h1>
@@ -61,8 +79,9 @@ export function SimulatorBriefing({ scenario, client, briefing, onBack, onStart 
     </div>
     <div className="sim-briefing-bottom">
       <div className="sim-briefing-context"><span className="eyebrow">UP NEXT</span><strong>{scenario.title}</strong><span>{scenario.role} meeting {client.name} · {scenario.clientRole}</span></div>
-      <button className="arcade-button primary" onClick={() => leave(onStart)}>Start conversation <ArrowRight size={20} /></button>
+      <button className="arcade-button primary" disabled={!enabled} onClick={() => leave(onStart)}>Start conversation <ArrowRight size={20} /></button>
     </div>
+    {!enabled && <p className="sim-notice">Live practice is currently unavailable. Explore the <a href="/storybook/simulator-live">workshop previews</a>.</p>}
     <details className="sim-briefing-transcript" open={failed}><summary>Read briefing transcript</summary><p>{briefing.text}</p></details>
   </section>;
 }

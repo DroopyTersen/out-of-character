@@ -71,3 +71,9 @@ Limitations: synthetic provider runs are short rehearsals, not proof of every re
 - Removed the decorative eyebrow labels from setup, live conversation, summary, and the mobile navigation drawer. Removed their unused styles and tightened heading spacing.
 - Replaced the setup quote with “What’s the story about this project that never made it into a status report?” The spoken interview still starts with the agreed project softball.
 - Type checking passed, along with all nine interview screen checks and twelve navigation checks at 1440, 390, and 320 px. Screenshots and reports are under `output/interview-ui/copy-cleanup/`.
+
+## Feedback visualization
+
+- Replaced the setup quote with a before-and-after example: candid speech bubbles flow into concise, professional project feedback. The example preserves both the access complaint and the positive pairing feedback.
+- The same visualization appears in the existing Workshop setup story. A small CSS animation connects the two sides; reduced motion retains the static example. There are no new dependencies, requests, or runtime state.
+- Two screenshot review rounds refined the copy, desktop readability, tablet proportions, and small-phone spacing. Type checking and all nine Workshop checks passed. Additional captures cover 1440, 1024, 768, 390, and 320 px; review notes, screenshots, and reports are under `output/interview-ui/feedback-visual/`.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Clipboard, FileText, Mic, MicOff, Volume2 } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Clipboard, FileText, Mic, MicOff, Volume2 } from 'lucide-react';
 import { interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewSession } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import type { AudioLevels } from '../simulator/audio-levels';
@@ -31,8 +31,25 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
   return <section className="interview-setup">
     <div className="interview-setup-copy">
       <h1 tabIndex={-1}>The Debrief<span className="interview-title-dot">.</span></h1>
-      <p className="interview-lede">Talk through a real project: what you built, how it went, and what the next team should know.</p>
-      <div className="interview-intro"><span className="interview-intro-mark" aria-hidden="true">“</span><p>What’s the story about this project that never made it into a status report?</p><small>Sam</small></div>
+      <p className="interview-lede">Talk candidly about your project. Sam turns it into clear, professional feedback.</p>
+      <figure className="interview-example" aria-label="An example of candid conversation becoming professional feedback">
+        <div className="interview-example-input">
+          <h2>Say it your way</h2>
+          <div className="interview-thoughts">
+            <p>“Ugh, a week lost to logins…”</p>
+            <p>“Can we sort that before kickoff?”</p>
+            <p>“Pairing with Priya? So good.”</p>
+          </div>
+        </div>
+        <div className="interview-example-flow" aria-hidden="true"><ArrowRight size={24} /><span /></div>
+        <div className="interview-example-output">
+          <h2><FileText size={18} aria-hidden="true" />Clear feedback</h2>
+          <ul>
+            <li>Arrange access before kickoff; delays cost a week.</li>
+            <li>Continue pairing with Priya; it worked well.</li>
+          </ul>
+        </div>
+      </figure>
     </div>
     <div className="interview-setup-side">
       <div className="interview-voice-choice sim-panel">

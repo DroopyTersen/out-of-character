@@ -5,10 +5,23 @@
 .interview-setup-copy { max-width: 710px; }
 .interview-setup h1, .interview-summary h1 { font-size: clamp(50px, 6vw, 94px); letter-spacing: -.06em; line-height: 1.03; margin: 0 0 25px; }
 .interview-lede { font-size: clamp(20px, 2vw, 28px); line-height: 1.48; color: #d4e8f1; max-width: 650px; }
-.interview-intro { position: relative; border-left: 2px solid #44efcd; background: #0b2937; padding: 22px 24px 20px 27px; margin-top: 48px; max-width: 570px; }
-.interview-intro-mark { position: absolute; top: -8px; left: 12px; color: #44efcd; font-size: 48px; line-height: 1; font-family: Georgia, serif; }
-.interview-intro p { color: #effaf7; font-size: 20px; line-height: 1.5; padding-left: 10px; }
-.interview-intro small { display: block; margin: 13px 0 0 10px; color: #88aebe; font-size: 12px; }
+.interview-example { display: grid; grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1.06fr); align-items: center; gap: 13px; margin: 40px 0 0; }
+.interview-example h2 { font: 600 17px 'Chakra Petch', sans-serif; letter-spacing: 0; }
+.interview-example-input h2 { margin-bottom: 16px; color: #e7bd8d; }
+.interview-thoughts { display: grid; gap: 11px; padding: 0 5px; }
+.interview-thoughts p { position: relative; width: fit-content; max-width: 100%; padding: 10px 13px; border: 1px solid #745d4b; border-radius: 8px 8px 8px 0; background: #282a2c; color: #e6d1b8; font-size: 15px; line-height: 1.5; transform: rotate(-2deg); }
+.interview-thoughts p:nth-child(2) { margin-left: 22px; transform: rotate(2deg); border-color: #615951; background: #212c31; }
+.interview-thoughts p:nth-child(3) { margin-left: 3px; transform: rotate(-1deg); }
+.interview-example-flow { position: relative; color: #78b5b4; }
+.interview-example-flow span { position: absolute; top: 10px; left: 0; width: 4px; height: 4px; background: #44efcd; box-shadow: -7px 0 #44efcd55; animation: interview-feedback-flow 2.8s ease-in-out infinite; }
+.interview-example-output { align-self: stretch; padding: 19px 18px; border: 1px solid #398b81; border-top: 3px solid #44efcd; border-radius: 3px; background: #0d3035; box-shadow: 5px 5px 0 #021820; }
+.interview-example-output h2 { display: flex; align-items: center; gap: 8px; color: #69ead3; padding-bottom: 14px; border-bottom: 1px solid #285c5d; }
+.interview-example-output h2 svg { flex-shrink: 0; }
+.interview-example-output ul { display: grid; gap: 14px; margin: 16px 0 0; padding: 0; list-style: none; }
+.interview-example-output li { position: relative; padding-left: 13px; color: #d7ede8; font-size: 15px; line-height: 1.55; }
+.interview-example-output li::before { content: ''; position: absolute; left: 0; top: .65em; width: 4px; height: 4px; background: #44efcd; }
+@keyframes interview-feedback-flow { 0%, 15% { opacity: 0; transform: translateX(-3px); } 35%, 65% { opacity: 1; } 85%, 100% { opacity: 0; transform: translateX(26px); } }
+@media (prefers-reduced-motion: reduce) { .interview-example-flow span { display: none; } }
 .interview-setup-side { align-self: center; }
 .interview-voice-choice { padding: 28px; }
 .interview-voice-choice h2 { font-size: 27px; margin: 0; }
@@ -17,7 +30,7 @@
 .interview-voices button:hover { border-color: #8ad9d0; }
 .interview-voices button.selected { border-color: #44efcd; background: #103937; box-shadow: inset 0 0 0 1px #44efcd; }
 .interview-voices img { width: min(100%, 122px); height: 128px; object-fit: contain; image-rendering: pixelated; }
-.interview-voices strong { font: 20px Silkscreen, monospace; }
+.interview-voices strong { font: clamp(16px, 1.6vw, 20px) Silkscreen, monospace; }
 .interview-choice-mark { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #577c90; border-radius: 50%; }
 .selected .interview-choice-mark { background: #44efcd; border-color: #44efcd; color: #082b30; }
 .interview-start { text-align: center; padding-top: 24px; }
@@ -102,10 +115,14 @@
   .interview-topic-groups { gap: 12px; }
 }
 @media (max-width: 800px) {
-  .interview-setup { grid-template-columns: 1fr; min-height: 0; gap: 28px; padding: 37px 4px 35px; }
+  .interview-setup { grid-template-columns: 1fr; min-height: 0; gap: 24px; padding: 37px 4px 35px; }
   .interview-setup-copy { max-width: 640px; }
-  .interview-intro { margin-top: 25px; }
+  .interview-example { margin-top: 25px; }
   .interview-setup-side { width: 100%; max-width: 620px; }
+  .interview-voice-choice { padding: 22px; }
+  .interview-voices button { padding: 12px 10px; }
+  .interview-voices img { height: 110px; }
+  .interview-start { padding-top: 20px; }
   .interview-live-grid { grid-template-columns: 1fr; }
   .interview-observations { grid-template-columns: 1fr; }
   .interview-reading-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -114,8 +131,18 @@
   .interview-setup { padding-top: 26px; }
   .interview-setup h1 { font-size: clamp(40px, 13vw, 60px); margin: 0 0 17px; }
   .interview-lede { font-size: 17px; }
-  .interview-intro { display: none; }
-  .interview-intro p { font-size: 16px; }
+  .interview-example { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1.04fr); gap: 7px; margin-top: 23px; }
+  .interview-example h2 { font-size: 14px; }
+  .interview-example-input h2 { margin-bottom: 12px; }
+  .interview-thoughts { gap: 9px; padding: 0 2px; }
+  .interview-thoughts p { padding: 8px; font-size: 12px; line-height: 1.4; }
+  .interview-thoughts p:nth-child(2) { margin-left: 5px; }
+  .interview-example-flow svg { width: 18px; }
+  .interview-example-output { padding: 12px 10px; }
+  .interview-example-output h2 { gap: 5px; padding-bottom: 10px; }
+  .interview-example-output h2 svg { display: none; }
+  .interview-example-output ul { gap: 12px; margin-top: 12px; }
+  .interview-example-output li { padding-left: 10px; font-size: 12px; line-height: 1.5; }
   .interview-voice-choice { padding: 18px; }
   .interview-voice-choice h2 { font-size: 21px; }
   .interview-voices { gap: 8px; margin-top: 18px; }
@@ -155,6 +182,10 @@
   .interview-summary-text { font-size: 15px; }
 }
 @media (max-width: 350px) {
+  .interview-setup { padding-top: 18px; gap: 20px; }
+  .interview-example { margin-top: 18px; }
+  .interview-voice-choice h2 { font-size: 18px; }
+  .interview-start { padding-top: 12px; }
   .interview-voices img { height: 78px; }
   .interview-voices strong { font-size: 13px; }
   .interview-topic ul { grid-template-columns: 1fr; }

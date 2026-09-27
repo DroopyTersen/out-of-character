@@ -1,6 +1,6 @@
 # Project closeout interview POC
 
-Status: implemented and verified locally on `project-closeout-interviews`, based on `origin/main` at implementation start (`e90a4d0`). Checkpoint reviews, per-screen design iterations, real-provider rehearsals and the full repository gate are complete. Not deployed.
+Status: implemented on `project-closeout-interviews` and verified on an isolated Cloudflare preview. Main's contextual simulator director at `d5bd3f5` is integrated; the interview still uses its existing authored cues. See the [contextual interviewer direction plan](interview-contextual-director-plan.md) for the proposed follow-up and `interview-progress.md` for verification and deployment history.
 
 ## Goal
 

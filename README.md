@@ -23,6 +23,8 @@ The workshop lets you replay the draw and reel, inspect the flat cast, backstori
 
 `bun run deploy:preview --name project-closeout-interviews` updates the branch's [Cloudflare Worker Preview](https://developers.cloudflare.com/workers/previews/) without changing the production deployment or custom domain. The `previews` block in `wrangler.jsonc` provides separate transcript storage and rate limits; Cloudflare isolates each preview's live session objects. This branch uses the `out-of-character-interview-preview` D1 database. Apply new migrations to that database before updating the preview.
 
+[Try The Debrief preview](https://project-closeout-interviews-out-of-character.droopy.workers.dev/interview).
+
 The preview has its own `OPENAI_API_KEY`, `TYPESAFE_API_KEY`, and `OPENROUTER_API_KEY` secrets; subsequent deployments retain them. A new preview needs those secrets provisioned separately. Preview pages are public, while transcripts and summaries retain the session capability protection. Production releases still use `bun run deploy`.
 
 ## The Simulator

@@ -16,7 +16,6 @@ const fixture = await readFile(`${output}/participant.wav`);
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 await context.route('**/__interview_fixture.wav', route => route.fulfill({ contentType: 'audio/wav', body: fixture }));
-await context.route('**/__interview_acceptance_blank', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Interview transport acceptance</title>' }));
 await context.addInitScript(() => {
   const NativePeer = RTCPeerConnection;
   const audit = { peak: 0, remoteTracks: 0, fixturePlayed: false, media: null };
@@ -69,7 +68,7 @@ await context.addInitScript(() => {
 });
 
 const page = await context.newPage();
-const report = { checkedAt: new Date().toISOString(), route: '/__interview_acceptance_blank', voice: 'sam-gleam', syntheticMicrophone: true, fixturePlayed: false, opening: false, openingText: '', audiblePeak: 0, snapshots: [], requests: [], finalization: null, summary: null, resources: null, errors: [] };
+const report = { checkedAt: new Date().toISOString(), route: '/interview', voice: 'sam-gleam', syntheticMicrophone: true, fixturePlayed: false, opening: false, openingText: '', audiblePeak: 0, snapshots: [], requests: [], finalization: null, summary: null, resources: null, errors: [] };
 const snapshots = report.snapshots;
 let lastClientText = '';
 let lastClientChangeAt = 0;
@@ -111,12 +110,9 @@ const waitUntil = async (check, timeoutMs) => {
 
 let startedAt = 0;
 try {
-  await page.goto(`${base}/__interview_acceptance_blank`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(async () => {
-    const { LiveConnection } = await import('/app/simulator/live-connection.ts');
-    window.__interviewConnection = new LiveConnection({ snapshot: () => {}, levels: () => {}, error: message => { window.__interviewAudit.clientError = message; } });
-    void window.__interviewConnection.start('project-closeout', 'sam-gleam');
-  });
+  await page.goto(`${base}/interview`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Female voice', exact: true }).click();
+  await page.getByRole('button', { name: 'Start interview' }).click();
   startedAt = Date.now();
   if (!await waitUntil(() => snapshots.some(item => item.status === 'live'), 20_000)) throw new Error('Interview did not become live.');
   report.opening = await waitUntil(() => snapshots.some(item => item.transcript.some(entry => entry.speaker === 'client')) || false, Math.max(0, 30_000 - (Date.now() - startedAt)));
@@ -136,11 +132,11 @@ try {
   await waitUntil(() => snapshots.some(item => item.transcript.some(entry => entry.speaker === 'trainee')), Math.max(0, 60_000 - (Date.now() - startedAt)));
   await waitUntil(() => snapshots.some(item => item.transcript.filter(entry => entry.speaker === 'client').length >= (report.opening ? 2 : 1)) && Date.now() - lastClientChangeAt >= 1800, Math.max(0, 60_000 - (Date.now() - startedAt)));
   report.liveSeconds = Math.round((Date.now() - startedAt) / 1000);
-  report.clientError = await page.evaluate(() => window.__interviewAudit?.clientError || null);
+  report.clientNotices = await page.locator('.sim-notice').allTextContents();
 } catch (error) { report.errors.push(error.message); }
 finally {
   try {
-    await page.evaluate(() => { void window.__interviewConnection?.end(); }).catch(() => {});
+    await page.getByRole('button', { name: 'End interview', exact: true }).click({ timeout: 2_000 }).catch(() => {});
     let ended = await waitUntil(() => snapshots.some(item => item.status === 'ended' || item.status === 'interrupted'), 30_000);
     if (!ended && ownedSession?.id && ownedSession.capability) {
       const response = await fetch(`${base}/api/simulator/sessions/${ownedSession.id}/end`, { method: 'POST', headers: { Origin: base, Authorization: ownedSession.capability } });
@@ -155,12 +151,14 @@ finally {
     report.summary = snapshots.at(-1)?.summary || null;
     report.audiblePeak = await page.evaluate(() => window.__interviewAudit?.peak || 0).catch(() => report.audiblePeak);
     report.resources = await page.evaluate(() => ({ microphone: window.__interviewAudit?.sourceTrack?.readyState, peer: window.__interviewAudit?.peer?.signalingState })).catch(() => null);
+    report.sessionId = ownedSession?.id || null;
   } catch (error) { report.errors.push(`Closure check failed: ${error.message}`); }
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2) + '\n');
   await context.close();
   await browser.close();
 }
 
-const passed = report.opening && report.finalization === 'confirmed' && report.summary?.status === 'ready' && Boolean(report.summary.text?.trim()) && report.resources?.microphone === 'ended' && report.resources?.peer === 'closed' && !report.errors.length;
+const participantHeard = snapshots.some(item => item.transcript.some(entry => entry.speaker === 'trainee' && entry.text.trim()));
+const passed = report.opening && report.audiblePeak > 0.005 && participantHeard && report.finalization === 'confirmed' && report.summary?.status === 'ready' && Boolean(report.summary.text?.trim()) && report.resources?.microphone === 'ended' && report.resources?.peer === 'closed' && !report.errors.length;
 console.log(JSON.stringify({ output, passed, opening: report.openingText, audiblePeak: report.audiblePeak, fixturePlayed: report.fixturePlayed, finalization: report.finalization, summaryStatus: report.summary?.status || null, resources: report.resources, errors: report.errors }));
 if (!passed) process.exitCode = 1;

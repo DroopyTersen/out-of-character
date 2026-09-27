@@ -19,6 +19,12 @@ For local paid services, copy `.dev.vars.example` to the ignored `.dev.vars` and
 
 The workshop lets you replay the draw and reel, inspect the flat cast, backstories, and active judge-facing descriptions, adjust the gauge and score streak, expand the character race, replay performance and silence, preview the final top 10 and highlighted transcript, and compare saved Noul/Score readings. Its fixtures use the real presentation components without microphone access or paid requests.
 
+## Branch previews
+
+`bun run deploy:preview --name project-closeout-interviews` updates the branch's [Cloudflare Worker Preview](https://developers.cloudflare.com/workers/previews/) without changing the production deployment or custom domain. The `previews` block in `wrangler.jsonc` provides separate transcript storage and rate limits; Cloudflare isolates each preview's live session objects. This branch uses the `out-of-character-interview-preview` D1 database. Apply new migrations to that database before updating the preview.
+
+The preview has its own `OPENAI_API_KEY`, `TYPESAFE_API_KEY`, and `OPENROUTER_API_KEY` secrets; subsequent deployments retain them. A new preview needs those secrets provisioned separately. Preview pages are public, while transcripts and summaries retain the session capability protection. Production releases still use `bun run deploy`.
+
 ## The Simulator
 
 `/simulator` adds serious sales and consultancy practice. Choose one of nine scenarios and seven reusable client personalities, then talk to GPT-Live 1. Jev updates seven skills, ordered objectives that can be achieved in any sequence, and an authored coaching hint for scored scenarios. The client pursues its own interests and respects hidden budget, scope, and approval constraints. A separate Jev assessment can select private reminders without changing the client's personality. The debrief uses the actual dialogue as evidence. `/simulator/voice-lab` plays a prepared sample for any client and GPT-Live voice while showing the portrait, character profile, sample text, and voice description. The lab needs no microphone or practice session. Preview which clips need recording with `bun scripts/voice-lab-samples.mjs --dry-run`; generate them with `bun --env-file=.dev.vars scripts/voice-lab-samples.mjs --paid`.

@@ -11,7 +11,7 @@ const browser = await chromium.launch({
 });
 const results = [];
 
-async function run(name, width, exercise) {
+async function run(name, width, exercise, expectedMicCalls = 0) {
   const context = await browser.newContext({ viewport: { width, height: width === 1440 ? 900 : 844 }, reducedMotion: 'reduce', permissions: ['clipboard-read', 'clipboard-write'] });
   let micCalls = 0;
   const apiCalls = [], errors = [];
@@ -27,7 +27,7 @@ async function run(name, width, exercise) {
     await exercise(page);
     const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(pageWidth <= width + 1, `Horizontal overflow: ${pageWidth} > ${width}`);
-    assert.equal(micCalls, 0);
+    assert.equal(micCalls, expectedMicCalls);
     assert.deepEqual(apiCalls, []);
     assert.deepEqual(errors, []);
     results.push({ name, baseUrl, width, pass: true, pageWidth, micCalls, apiCalls, errors });
@@ -68,12 +68,20 @@ for (const width of [1440, 390, 320]) {
     await page.waitForFunction(() => document.querySelector('.sim-briefing audio')?.currentTime > 0.2);
     await page.getByRole('button', { name: 'Change scenario or client' }).click();
     await page.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
+    await page.waitForURL(`${baseUrl}/simulator`);
     await page.getByRole('button', { name: 'Consultancy Done, but not deployed', exact: true }).click();
     await page.getByRole('button', { name: /^Quinn / }).click();
     await page.getByRole('button', { name: 'Start simulation', exact: true }).click();
     await expectBriefing(page, 'Quinn', 'deployment', 'Done, but not deployed');
+    await page.waitForURL(`${baseUrl}/simulator?scenario=deployment&client=quinn`);
+    await page.waitForFunction(() => {
+      const audio = document.querySelector('.sim-briefing audio');
+      return audio && !audio.paused && audio.currentTime > 0.2;
+    });
+    const addressBar = page.url();
     const copied = await copyLink(page, '/simulator?scenario=deployment&client=quinn');
-    await page.goto(copied, { waitUntil: 'networkidle' });
+    assert.equal(addressBar, copied);
+    await page.goto(addressBar, { waitUntil: 'networkidle' });
     await expectBriefing(page, 'Quinn', 'deployment', 'Done, but not deployed');
   });
 }
@@ -84,11 +92,22 @@ await run('selection-and-workshop', 390, async page => {
     await page.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
     assert.match(await page.getByRole('alert').innerText(), /practice link is incomplete or unavailable/);
     assert.equal(await page.locator('.sim-briefing').count(), 0);
+    await page.getByRole('button', { name: 'Start simulation', exact: true }).click();
+    await page.waitForURL(`${baseUrl}/simulator?scenario=sharepoint&client=morgan`);
+    await page.getByRole('button', { name: 'Change scenario or client' }).click();
+    await page.waitForURL(`${baseUrl}/simulator`);
+    assert.equal(await page.getByRole('alert').count(), 0);
   }
   await page.goto(`${baseUrl}/simulator`, { waitUntil: 'networkidle' });
   assert.equal(await page.getByRole('alert').count(), 0);
   await page.getByRole('button', { name: 'Start simulation', exact: true }).click();
+  await page.waitForURL(`${baseUrl}/simulator?scenario=sharepoint&client=morgan`);
+  await page.waitForFunction(() => {
+    const audio = document.querySelector('.sim-briefing audio');
+    return audio && !audio.paused && audio.currentTime > 0.2;
+  });
   const copied = await copyLink(page, '/simulator?scenario=sharepoint&client=morgan');
+  assert.equal(page.url(), copied);
   await page.goto(copied, { waitUntil: 'networkidle' });
   await expectBriefing(page, 'Morgan', 'sharepoint', 'The adjacent opportunity');
   await page.goto(`${baseUrl}/storybook/simulator-briefing`, { waitUntil: 'networkidle' });
@@ -115,6 +134,18 @@ await run('clipboard-fallback', 320, async page => {
   assert.equal(await input.evaluate(node => node.selectionEnd - node.selectionStart === node.value.length), true);
   await page.screenshot({ path: `${output}/clipboard-fallback-320.png`, fullPage: true });
 });
+
+await run('failed-start-clears-link', 390, async page => {
+  await page.goto(`${baseUrl}/simulator?scenario=deployment&client=quinn`, { waitUntil: 'networkidle' });
+  // The existing microphone denial keeps this on the real pre-live failure path without a paid session.
+  await page.getByRole('button', { name: 'Start conversation', exact: true }).click();
+  await page.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
+  await page.getByRole('alert').waitFor();
+  await page.waitForURL(`${baseUrl}/simulator`);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
+  assert.equal(await page.locator('.sim-briefing').count(), 0);
+}, 1);
 
 await browser.close();
 await writeFile(`${output}/results.json`, JSON.stringify(results, null, 2));

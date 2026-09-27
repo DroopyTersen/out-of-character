@@ -38,8 +38,7 @@ for (const width of [1440, 390, 320]) {
         const audio = document.querySelector('.sim-briefing audio');
         return audio && Number.isFinite(audio.duration) && audio.duration > 10;
       });
-      const transcript = page.locator('.sim-briefing-transcript p');
-      check((await transcript.textContent()).trim().length > 80, `missing transcript for ${id}`);
+      check(await page.getByText('Read transcript', { exact: true }).count() === 0, 'transcript control should be absent');
     }
     await clients.selectOption({ index: 1 });
     check((await page.locator('.sim-briefing-heading h1').innerText()).includes(await clients.locator('option').nth(1).innerText()), 'client context did not update');
@@ -47,11 +46,11 @@ for (const width of [1440, 390, 320]) {
     const overflow = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
     check(overflow.document <= overflow.viewport + 1, `horizontal overflow: ${JSON.stringify(overflow)}`);
     if (width < 700) {
-      const button = await page.getByRole('button', { name: 'Start conversation' }).evaluate(node => ({ button: node.getBoundingClientRect().width, parent: node.parentElement.getBoundingClientRect().width }));
+      const button = await page.getByRole('button', { name: 'Start meeting' }).evaluate(node => ({ button: node.getBoundingClientRect().width, parent: node.parentElement.clientWidth - parseFloat(getComputedStyle(node.parentElement).paddingLeft) - parseFloat(getComputedStyle(node.parentElement).paddingRight) }));
       check(Math.abs(button.button - button.parent) <= 2, `mobile start button is not full width: ${JSON.stringify(button)}`);
     }
     await page.screenshot({ path: `${output}/briefing-${width}.png`, fullPage: true });
-    await page.getByRole('button', { name: 'Start conversation' }).click();
+    await page.getByRole('button', { name: 'Start meeting' }).click();
     check(apiCalls.length === 0, `workshop opened API: ${apiCalls.join(', ')}`);
     check(await page.evaluate(() => window.__micCalls) === 0, 'workshop requested microphone');
     check(errors.length === 0, `page errors: ${errors.join(' | ')}`);
@@ -68,9 +67,9 @@ await page.route('**/simulator/briefings/*.mp3', route => route.abort());
 try {
   await page.goto(`${baseUrl}/storybook/simulator-briefing`, { waitUntil: 'networkidle' });
   await page.locator('.sim-briefing audio').evaluate(node => node.dispatchEvent(new Event('error')));
-  await page.getByText('Audio unavailable. You can read the transcript below.').waitFor();
-  check(await page.locator('.sim-briefing-transcript').getAttribute('open') !== null, 'transcript did not open after audio failure');
-  check(await page.getByRole('button', { name: 'Start conversation' }).isEnabled(), 'audio failure blocked starting');
+  await page.getByText('The intro couldn’t load. Try refreshing the page.').waitFor();
+  check(await page.getByRole('button', { name: 'Play intro' }).count() === 0, 'unavailable audio left a broken play control');
+  check(await page.getByRole('button', { name: 'Start meeting' }).isEnabled(), 'audio failure blocked starting');
   results.push({ fallback: true, pass: true });
 } catch (error) { results.push({ fallback: true, pass: false, error: error.stack }); }
 await fallback.close();
@@ -97,29 +96,36 @@ try {
   await livePage.goto(`${baseUrl}/simulator`, { waitUntil: 'networkidle' });
   await livePage.getByRole('button', { name: 'Start simulation' }).click();
   await livePage.getByRole('heading', { name: /Before you meet/ }).waitFor();
-  check(await livePage.getByRole('button', { name: 'Start conversation' }).evaluate(node => node.getBoundingClientRect().bottom <= innerHeight + 1), 'mobile start button is below the viewport');
+  check(await livePage.getByRole('button', { name: 'Start meeting' }).evaluate(node => node.getBoundingClientRect().bottom <= innerHeight + 1), 'mobile start button is below the viewport');
   await livePage.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration) && document.querySelector('.sim-briefing audio').duration > 10);
-  await livePage.locator('.sim-briefing audio').evaluate(node => { node.pause(); node.currentTime = 2; });
-  await livePage.getByRole('button', { name: 'Replay' }).click();
-  check(await livePage.locator('.sim-briefing audio').evaluate(node => node.currentTime < 1 && !node.paused), 'replay did not restart the clip');
+  await livePage.getByRole('button', { name: 'Pause intro', exact: true }).click();
+  check(await livePage.locator('.sim-briefing audio').evaluate(node => node.paused), 'pause button did not pause the clip');
+  await livePage.getByRole('slider', { name: 'Intro playback position' }).fill('2');
+  await livePage.waitForFunction(() => Math.abs(document.querySelector('.sim-briefing audio').currentTime - 2) < 0.2);
+  await livePage.getByRole('button', { name: 'Play intro', exact: true }).click();
+  await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio').currentTime > 2.2);
+  check(await livePage.locator('.sim-briefing audio').evaluate(node => !node.paused), 'resume did not continue playback');
   await livePage.screenshot({ path: `${output}/audio-success-390.png`, fullPage: true });
   await livePage.setViewportSize({ width: 1440, height: 900 });
   await livePage.screenshot({ path: `${output}/audio-success-1440.png`, fullPage: true });
   await livePage.evaluate(() => {
     const player = document.querySelector('.sim-briefing audio');
     player.pause();
-    document.querySelector('.sim-briefing-audio-foot button').click();
+    document.querySelector('.sim-briefing-play').click();
     player.pause();
   });
   await livePage.waitForTimeout(100);
-  check(await livePage.locator('.sim-briefing audio').evaluate(node => !node.hidden), 'rapid Replay then pause incorrectly marked the clip unavailable');
-  await livePage.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration));
+  check(await livePage.locator('.sim-briefing-error').count() === 0, 'rapid play then pause incorrectly marked the clip unavailable');
   // Let playback finish: a hosted asset may not support seeking to an unloaded tail.
   await livePage.locator('.sim-briefing audio').evaluate(node => node.play());
   await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio')?.ended, null, { timeout: 60_000 });
+  await livePage.getByRole('button', { name: 'Play intro', exact: true }).waitFor();
+  check((await livePage.getByRole('button', { name: 'Start meeting' }).getAttribute('class')).includes('primary'), 'completed intro did not emphasize the meeting');
+  await livePage.getByRole('button', { name: 'Play intro', exact: true }).click();
+  await livePage.waitForFunction(() => { const audio = document.querySelector('.sim-briefing audio'); return !audio.paused && audio.currentTime < 2; });
   check(apiCalls.length === 0, `finishing briefing called API: ${apiCalls.join(', ')}`);
   check(await livePage.evaluate(() => window.__micCalls) === 0, 'finishing briefing requested microphone');
-  check(await livePage.getByRole('button', { name: 'Start conversation' }).isEnabled(), 'finished briefing hid start control');
+  check(await livePage.getByRole('button', { name: 'Start meeting' }).isEnabled(), 'finished briefing hid start control');
   await livePage.getByRole('button', { name: 'Change scenario or client' }).click();
   await livePage.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
   check(apiCalls.length === 0, 'back from briefing called API');
@@ -127,7 +133,7 @@ try {
   await livePage.goto(`${baseUrl}/simulator?scenario=deployment&client=quinn`, { waitUntil: 'networkidle' });
   await livePage.getByRole('heading', { name: 'Before you meet Quinn', exact: true }).waitFor();
   check(apiCalls.length === 0 && await livePage.evaluate(() => window.__micCalls) === 0, 'shared intro started a call automatically');
-  await livePage.getByRole('button', { name: 'Start conversation' }).click();
+  await livePage.getByRole('button', { name: 'Start meeting' }).click();
   await livePage.getByRole('alert').waitFor();
   const micCalls = await livePage.evaluate(() => window.__micCalls);
   const creations = apiCalls.filter(path => path === '/api/simulator/sessions').length;

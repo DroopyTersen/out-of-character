@@ -65,3 +65,9 @@ Final review dispositions:
 - The full repository gate passed after these follow-ups: 174 tests, 6,127 assertions, type checking, production build, privacy boundary check and Worker dry run (`output/interview/reviewed-check.log`). Implementation and local acceptance are complete.
 
 Limitations: synthetic provider runs are short rehearsals, not proof of every real interview. Mobile screenshots use browser emulation, not a physical-phone microphone session. This implementation has not been deployed, and the new D1 migration has only been applied locally.
+
+## Presentation follow-up
+
+- Removed the decorative eyebrow labels from setup, live conversation, summary, and the mobile navigation drawer. Removed their unused styles and tightened heading spacing.
+- Replaced the setup quote with “What’s the story about this project that never made it into a status report?” The spoken interview still starts with the agreed project softball.
+- Type checking passed, along with all nine interview screen checks and twelve navigation checks at 1440, 390, and 320 px. Screenshots and reports are under `output/interview-ui/copy-cleanup/`.

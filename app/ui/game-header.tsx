@@ -29,7 +29,7 @@ export function GameHeader({ children, simulator = false, interview = false }: {
     {simulator && <span className="simulator-title site-page-title">{interview ? 'The Debrief' : 'The Simulator'}</span>}
     <button ref={trigger} className="site-menu-trigger" type="button" aria-label="Open navigation" aria-haspopup="dialog" aria-expanded={menuOpen} onClick={openMenu}><Menu size={23} aria-hidden="true" /></button>
     <dialog ref={menu} className="site-menu-dialog" aria-label="Navigation" onClose={onMenuClose} onClick={event => { if (event.target === event.currentTarget) closeMenu(); }}>
-      <div className="site-menu-heading"><span className="eyebrow">OUT OF CHARACTER</span><button type="button" aria-label="Close navigation" onClick={closeMenu}><X size={22} aria-hidden="true" /></button></div>
+      <div className="site-menu-heading"><button type="button" aria-label="Close navigation" onClick={closeMenu}><X size={22} aria-hidden="true" /></button></div>
       <nav aria-label="Mobile navigation"><NavigationLinks onChoose={closeMenu} /></nav>
     </dialog>
   </header>;

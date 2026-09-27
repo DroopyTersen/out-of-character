@@ -3,8 +3,7 @@
 .interview-title-dot { color: #44efcd; }
 .interview-setup { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(390px, .85fr); gap: clamp(28px, 5vw, 86px); align-items: center; min-height: min(790px, calc(100svh - 110px)); padding: 52px clamp(8px, 2vw, 30px); }
 .interview-setup-copy { max-width: 710px; }
-.interview-setup-copy > .eyebrow { color: #6dc8bb; }
-.interview-setup h1, .interview-summary h1 { font-size: clamp(50px, 6vw, 94px); letter-spacing: -.06em; line-height: 1.03; margin: 18px 0 25px; }
+.interview-setup h1, .interview-summary h1 { font-size: clamp(50px, 6vw, 94px); letter-spacing: -.06em; line-height: 1.03; margin: 0 0 25px; }
 .interview-lede { font-size: clamp(20px, 2vw, 28px); line-height: 1.48; color: #d4e8f1; max-width: 650px; }
 .interview-intro { position: relative; border-left: 2px solid #44efcd; background: #0b2937; padding: 22px 24px 20px 27px; margin-top: 48px; max-width: 570px; }
 .interview-intro-mark { position: absolute; top: -8px; left: 12px; color: #44efcd; font-size: 48px; line-height: 1; font-family: Georgia, serif; }
@@ -27,7 +26,7 @@
 .interview-start .sim-notice { text-align: left; margin-bottom: 16px; }
 .interview-session-bar { display: flex; align-items: center; gap: 26px; padding: 27px 0 21px; border-bottom: 1px solid #27536a; }
 .interview-session-bar > div { flex: 1; min-width: 0; }
-.interview-session-bar h1 { font: 600 clamp(25px, 2.3vw, 34px) 'Chakra Petch', sans-serif; margin-top: 5px; }
+.interview-session-bar h1 { font: 600 clamp(25px, 2.3vw, 34px) 'Chakra Petch', sans-serif; }
 .interview-session-bar time { color: #a7c4d6; font-variant-numeric: tabular-nums; font-size: 23px; white-space: nowrap; }
 .interview-session-bar time small { font-size: 11px; color: #7ca4ba; }
 .interview-end { min-height: 44px; border: 1px solid #eaa2a5; border-radius: 4px; padding: 9px 17px; background: transparent; color: #ffc0c2; font-size: 15px; white-space: nowrap; }
@@ -36,7 +35,7 @@
 .interview-primary, .interview-observations { min-width: 0; }
 .interview-observations { display: grid; gap: 20px; }
 .interview-sam-stage { text-align: center; padding: 22px 24px 18px; }
-.interview-sam-heading h2 { font: 42px Silkscreen, monospace; margin: 4px 0 3px; }
+.interview-sam-heading h2 { font: 42px Silkscreen, monospace; margin: 0 0 3px; }
 .interview-sam-heading p { color: #95b8c9; font-size: 14px; }
 .interview-sam-stage .sim-voice-display { max-width: 480px; margin: 10px auto 0; }
 .interview-sam-stage .sim-portrait { height: clamp(200px, 20vw, 300px); }
@@ -54,7 +53,7 @@
 .interview-transcript { max-height: 340px; }
 .interview-readings, .interview-topics { padding: 22px 25px; }
 .interview-readings > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
-.interview-readings h2, .interview-topics h2 { font-size: 26px; margin-top: 5px; }
+.interview-readings h2, .interview-topics h2 { font-size: 26px; }
 .interview-feedback-state { color: #98bbcb; font-size: 11px; text-align: right; white-space: nowrap; }
 .interview-feedback-state::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: #efba57; }
 .interview-feedback-state[data-status=current]::before { background: #44efcd; }
@@ -80,11 +79,11 @@
 .interview-topic li.heard .interview-topic-mark { color: #082b30; border-color: #44efcd; background: #44efcd; }
 .interview-summary { max-width: 960px; }
 .interview-summary-header { padding: 55px 0 30px; }
-.interview-summary-header h1 { margin: 12px 0 13px; font-size: clamp(44px, 5vw, 70px); }
+.interview-summary-header h1 { margin: 0 0 13px; font-size: clamp(44px, 5vw, 70px); }
 .interview-summary-header p { color: #b8d4e0; font-size: 19px; }
 .interview-summary-paper { padding: clamp(22px, 3vw, 38px); min-height: 300px; }
 .interview-summary-paper-header { display: flex; justify-content: space-between; align-items: start; gap: 15px; border-bottom: 1px solid #2d5a70; padding-bottom: 22px; }
-.interview-summary-paper-header h2 { font: 600 26px 'Chakra Petch', sans-serif; margin-top: 7px; }
+.interview-summary-paper-header h2 { font: 600 26px 'Chakra Petch', sans-serif; }
 .interview-summary-paper-header button { display: inline-flex; align-items: center; gap: 7px; color: #44efcd; font-size: 13px; white-space: nowrap; }
 .interview-summary-text { color: #d4e5ed; font-size: 16px; line-height: 1.75; max-width: 76ch; }
 .interview-summary-text p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 23px 0; }
@@ -113,7 +112,7 @@
 }
 @media (max-width: 560px) {
   .interview-setup { padding-top: 26px; }
-  .interview-setup h1 { font-size: clamp(40px, 13vw, 60px); margin: 11px 0 17px; }
+  .interview-setup h1 { font-size: clamp(40px, 13vw, 60px); margin: 0 0 17px; }
   .interview-lede { font-size: 17px; }
   .interview-intro { display: none; }
   .interview-intro p { font-size: 16px; }
@@ -125,14 +124,13 @@
   .interview-voices strong { font-size: 16px; }
   .interview-session-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 0; position: sticky; top: 0; z-index: 5; background: #061e2a; }
   .interview-session-bar > div { grid-column: 1 / -1; }
-  .interview-session-bar .eyebrow { display: none; }
   .interview-session-bar h1 { font-size: 22px; }
   .interview-session-bar time { font-size: 19px; }
   .interview-end { font-size: 14px; }
   .interview-live-grid { padding-top: 16px; }
   .interview-sam-stage { padding: 16px 14px 12px; }
   .interview-sam-heading h2 { font-size: 24px; }
-  .interview-sam-heading > .eyebrow, .interview-sam-heading p { display: none; }
+  .interview-sam-heading p { display: none; }
   .interview-sam-stage .sim-voice-display { display: grid; grid-template-columns: 84px minmax(0, 1fr); margin-top: 0; }
   .interview-sam-stage .sim-portrait { height: 110px; }
   .interview-caption { display: none; }
@@ -157,7 +155,6 @@
   .interview-summary-text { font-size: 15px; }
 }
 @media (max-width: 350px) {
-  .interview-setup-copy > .eyebrow { font-size: 9px; letter-spacing: 1.5px; }
   .interview-voices img { height: 78px; }
   .interview-voices strong { font-size: 13px; }
   .interview-topic ul { grid-template-columns: 1fr; }

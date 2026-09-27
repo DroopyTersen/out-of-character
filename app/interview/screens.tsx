@@ -30,10 +30,9 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
 }) {
   return <section className="interview-setup">
     <div className="interview-setup-copy">
-      <span className="eyebrow">PROJECT CLOSEOUT · A CONVERSATION WITH SAM</span>
       <h1 tabIndex={-1}>The Debrief<span className="interview-title-dot">.</span></h1>
       <p className="interview-lede">Talk through a real project: what you built, how it went, and what the next team should know.</p>
-      <div className="interview-intro"><span className="interview-intro-mark" aria-hidden="true">“</span><p>What were you building on this project?</p><small>Sam</small></div>
+      <div className="interview-intro"><span className="interview-intro-mark" aria-hidden="true">“</span><p>What’s the story about this project that never made it into a status report?</p><small>Sam</small></div>
     </div>
     <div className="interview-setup-side">
       <div className="interview-voice-choice sim-panel">
@@ -64,7 +63,7 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
   };
   const readingStatus = status === 'current' ? 'Live observations' : status === 'delayed' || (status === 'unavailable' && interview?.evaluation) ? 'Latest observations' : status === 'unavailable' ? 'Observations unavailable' : 'Listening for details';
   return <section className="interview-readings sim-panel">
-    <header><div><span className="eyebrow">IN THE MOMENT</span><h2>Conversation readings</h2></div><span className="interview-feedback-state" data-status={status}>{readingStatus}</span></header>
+    <header><h2>Conversation readings</h2><span className="interview-feedback-state" data-status={status}>{readingStatus}</span></header>
     <p>These reflect what you have shared so far. A concise answer can say a lot.</p>
     <div className="interview-reading-list">{interviewReadings.map(item => {
       const reading = interview?.evaluation?.readings[item.id];
@@ -84,7 +83,7 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
 
 function InterviewTopics({ interview }: { interview: InterviewSession | undefined }) {
   const heard = new Set(interview?.evaluation?.objectives.filter(item => item.achieved && item.evidence).map(item => item.id) ?? []);
-  return <section className="interview-topics sim-panel"><header><span className="eyebrow">THREADS WE’VE HEARD</span><h2>Your project story</h2><p>Topics can come up in any order. There is no checklist to finish.</p></header>
+  return <section className="interview-topics sim-panel"><header><h2>Your project story</h2><p>Topics can come up in any order. There is no checklist to finish.</p></header>
     <div className="interview-topic-groups">{interviewTopics.map(topic => <div className="interview-topic" key={topic.id}><h3>{topic.label}</h3><ul>{topic.objectives.map(objective => <li key={objective.id} className={heard.has(objective.id) ? 'heard' : ''}><span className="interview-topic-mark" aria-hidden="true">{heard.has(objective.id) && <Check size={13} />}</span><span>{objective.label}</span></li>)}</ul></div>)}</div>
   </section>;
 }
@@ -104,12 +103,12 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
   const micOff = muted || phase === 'ending' || automaticFinish;
   const caption = snapshot?.transcript.toSorted((a, b) => b.endMs - a.endMs)[0];
   return <section className="interview-conversation">
-    <header className="interview-session-bar"><div><span className="eyebrow">THE DEBRIEF · LIVE CONVERSATION</span><h1 tabIndex={-1}>A conversation with Sam</h1></div><time aria-label={`${formatTime(elapsed)} elapsed`}>{formatTime(elapsed)} <small>elapsed</small></time><button className="interview-end" onClick={onEnd} disabled={phase === 'ending'}>{phase === 'connecting' ? 'Cancel' : phase === 'ending' ? 'Finishing…' : 'End interview'}</button></header>
+    <header className="interview-session-bar"><div><h1 tabIndex={-1}>A conversation with Sam</h1></div><time aria-label={`${formatTime(elapsed)} elapsed`}>{formatTime(elapsed)} <small>elapsed</small></time><button className="interview-end" onClick={onEnd} disabled={phase === 'ending'}>{phase === 'connecting' ? 'Cancel' : phase === 'ending' ? 'Finishing…' : 'End interview'}</button></header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
     {warning && <div className="sim-session-warning" role="status"><div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong><p>{warning.kind === 'idle' ? `The interview will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before the interview ends automatically.`}</p></div>{warning.kind === 'idle' && <button onClick={onContinue}>Continue interview</button>}</div>}
     <div className="interview-live-grid">
       <div className="interview-primary">
-        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><span className="eyebrow">YOUR INTERVIEWER</span><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : 'Sam is ready when you are.'}</p>}</div>
+        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : 'Sam is ready when you are.'}</p>}</div>
           <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
         </div>
         {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}
@@ -129,9 +128,9 @@ export function InterviewSummaryScreen({ snapshot, onReset, error }: { snapshot:
   };
   const paragraphs = summary?.text?.trim().split(/\n\s*\n/).filter(Boolean) ?? [];
   return <section className="interview-summary">
-    <header className="interview-summary-header"><span className="eyebrow">THE DEBRIEF · YOUR PROJECT STORY</span><h1 tabIndex={-1}>What we heard<span className="interview-title-dot">.</span></h1><p>Sam’s internal notes reflect one participant’s account of the project.</p></header>
+    <header className="interview-summary-header"><h1 tabIndex={-1}>What we heard<span className="interview-title-dot">.</span></h1><p>Sam’s internal notes reflect one participant’s account of the project.</p></header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
-    <article className="interview-summary-paper sim-panel"><div className="interview-summary-paper-header"><div><span className="eyebrow">PRIVATE INTERVIEW SUMMARY</span><h2>{summary?.status === 'ready' ? 'The conversation, in context' : 'Your summary'}</h2></div>{summary?.status === 'ready' && <button className="quiet-button" onClick={() => { void copy(); }}><Clipboard size={17} />{copyState === 'copied' ? 'Copied' : 'Copy summary'}</button>}</div>
+    <article className="interview-summary-paper sim-panel"><div className="interview-summary-paper-header"><h2>{summary?.status === 'ready' ? 'The conversation, in context' : 'Your summary'}</h2>{summary?.status === 'ready' && <button className="quiet-button" onClick={() => { void copy(); }}><Clipboard size={17} />{copyState === 'copied' ? 'Copied' : 'Copy summary'}</button>}</div>
       {copyState === 'failed' && <p role="status" className="sim-notice">Copy was unavailable. You can select the summary text below.</p>}
       {summary?.status === 'ready' && paragraphs.length ? <div className="interview-summary-text">{paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div> : <div className="interview-summary-state" role="status"><strong>{summary?.status === 'unavailable' ? 'The summary is unavailable' : 'Sam is putting your conversation together.'}</strong><p>{summary?.status === 'unavailable' ? 'Open the transcript below.' : 'This can take a moment after the voice call ends. You can read the transcript while it finishes.'}</p></div>}
     </article>

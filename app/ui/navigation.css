@@ -8,7 +8,7 @@
 .site-menu-trigger { display: none; }
 .site-menu-dialog { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(360px, calc(100vw - 42px)); height: 100dvh; max-height: none; padding: 24px 22px; border: 0; border-left: 1px solid #33768a; background: #092332; color: #eaf4fc; box-shadow: -18px 0 48px #010e1899; }
 .site-menu-dialog::backdrop { background: #010e18b3; }
-.site-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 28px; border-bottom: 1px solid #28566b; }
+.site-menu-heading { display: flex; justify-content: flex-end; padding-bottom: 28px; border-bottom: 1px solid #28566b; }
 .site-menu-heading button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #3a6c80; border-radius: 3px; background: #12384a; color: #d6eef3; }
 .site-menu-dialog nav { display: grid; gap: 6px; margin: 22px 0 0; }
 .site-menu-dialog .site-nav-link { justify-content: flex-start; min-height: 56px; padding: 12px 14px; border: 1px solid transparent; font-size: 18px; }

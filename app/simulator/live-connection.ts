@@ -148,17 +148,20 @@ export class LiveConnection {
   }
 
   /** Voice is already closed; only the private summary may still be in progress. */
-  private pollSummary(snapshot: SessionSnapshot, deadline = Date.now() + 135_000) {
+  private pollSummary(snapshot: SessionSnapshot, deadline = Date.now() + 135_000, failures = 0) {
     if (this.disposed || snapshot.interview?.summary?.status !== 'pending') return;
     this.pollTimer = setTimeout(async () => {
       try {
         if (Date.now() >= deadline) throw new Error('Summary timed out.');
-        const next = await this.request('poll', undefined, false, this.summaryController.signal) as SessionSnapshot;
+        const next = await this.request('poll', { active: false, audio: false }, false, this.summaryController.signal) as SessionSnapshot;
         if (this.disposed) return;
         this.callbacks.snapshot(next);
         this.pollSummary(next, deadline);
-      } catch {
-        if (!this.disposed) this.callbacks.snapshot({ ...snapshot, interview: { ...snapshot.interview!, summary: { status: 'unavailable', text: null } } });
+      } catch (error) {
+        if (this.disposed) return;
+        const lostSession = error instanceof SessionRequestError && [401, 403, 404, 410].includes(error.status);
+        if (!lostSession && failures < 2 && Date.now() < deadline) this.pollSummary(snapshot, deadline, failures + 1);
+        else this.callbacks.snapshot({ ...snapshot, interview: { ...snapshot.interview!, summary: { status: 'unavailable', text: null } } });
       }
     }, 1000);
   }

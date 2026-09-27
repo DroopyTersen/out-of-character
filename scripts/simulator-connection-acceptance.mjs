@@ -10,7 +10,7 @@ const results = [];
 const baseSnapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 3600, warning: null, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
 
 try {
-  const modes = process.env.ACCEPTANCE_MODES?.split(',') ?? ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity', 'server-ending', 'interview-end', 'interview-auto', 'interview-summary-failure', 'interview-dispose-summary'];
+  const modes = process.env.ACCEPTANCE_MODES?.split(',') ?? ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity', 'server-ending', 'interview-end', 'interview-auto', 'interview-summary-failure', 'interview-summary-retry', 'interview-dispose-summary'];
   for (const mode of modes) {
     console.log(`Checking ${mode}`);
     const context = await browser.newContext();
@@ -67,7 +67,7 @@ try {
     let id;
     let automaticFinish = false, automaticEnding = false, automaticEnded = false;
     const interview = mode.startsWith('interview-');
-    let summaryReady = false;
+    let summaryReady = false, summaryRetried = false;
     const snapshot = (id, status) => ({ ...baseSnapshot(id, status), ...(interview ? { scenarioId: 'project-closeout', clientId: 'sam-cedar', interview: { evaluation: null, summary: status === 'ended' ? { status: summaryReady ? 'ready' : 'pending', text: summaryReady ? 'The participant described a fictional inventory project.' : null } : null } } : {}) });
     const capabilities = new Set();
     const activityPolls = [];
@@ -93,7 +93,12 @@ try {
         await new Promise(resolve => { releaseEnd = resolve; });
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
       }
-      if (action === 'poll') activityPolls.push(route.request().postDataJSON());
+      if (action === 'poll') {
+        const activity = route.request().postDataJSON();
+        if (typeof activity?.active !== 'boolean' || typeof activity?.audio !== 'boolean') return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Invalid activity report.' }) });
+        activityPolls.push(activity);
+      }
+      if (interview && automaticEnded && summaryReady && mode === 'interview-summary-retry' && !summaryRetried) { summaryRetried = true; return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary failure' }) }); }
       if (interview && automaticEnded && summaryReady && mode === 'interview-summary-failure') return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Unavailable' }) });
       const value = snapshot(id, automaticEnded ? 'ended' : automaticEnding ? 'ending' : 'live');
       if (automaticFinish) value.warning = { kind: 'limit', endsAt: Date.now() - 1000 };

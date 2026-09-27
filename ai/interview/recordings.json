@@ -1,0 +1,1250 @@
+{
+  "synthetic": true,
+  "collectedAt": "2026-09-27T15:23:15.475Z",
+  "rubricVersion": "interview-rubric-v1",
+  "source": "output/interview/results-calibrated.json",
+  "rows": [
+    {
+      "fixtureId": "terse-three-weeks",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 1.85,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "I do not know who approved it. I only know when my account started working."
+            }
+          },
+          "openness": {
+            "value": 1.99,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "I do not know who approved it. I only know when my account started working."
+            }
+          },
+          "specificity": {
+            "value": 1.86,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "I do not know who approved it. I only know when my account started working."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.94,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Three weeks."
+            }
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.1,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.84,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.25,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.32,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.49,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.34,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.4,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.23,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.1,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.25,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.45,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.23,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 255
+      },
+      "interviewer": {
+        "cueId": "no_hint",
+        "cueProbability": 0.78,
+        "model": "jev-1.13.0",
+        "durationMs": 115
+      }
+    },
+    {
+      "fixtureId": "vague-yes",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": null,
+            "evidence": null
+          },
+          "openness": {
+            "value": null,
+            "evidence": null
+          },
+          "specificity": {
+            "value": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.27,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.3,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.17,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.41,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.1,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.09,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.18,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.29,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.13,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.08,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 179
+      },
+      "interviewer": {
+        "cueId": "avoid-leading",
+        "cueProbability": 0.87,
+        "model": "jev-1.13.0",
+        "durationMs": 116
+      }
+    },
+    {
+      "fixtureId": "terse-expert",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 2.98,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "They spend most mornings outside cell coverage. We queued changes locally, then synced when they returned to the depot."
+            }
+          },
+          "openness": {
+            "value": 2,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "They spend most mornings outside cell coverage. We queued changes locally, then synced when they returned to the depot."
+            }
+          },
+          "specificity": {
+            "value": 3.53,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We replaced the paper inspection log with an offline iPad app for 42 field inspectors. I owned the sync API and migration."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.35,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.17,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.12,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.1,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.18,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.22,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.26,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.48,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.12,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We replaced the paper inspection log with an offline iPad app for 42 field inspectors. I owned the sync API and migration."
+            }
+          },
+          {
+            "id": "project-role",
+            "probability": 0.95,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We replaced the paper inspection log with an offline iPad app for 42 field inspectors. I owned the sync API and migration."
+            }
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.73,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.25,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 136
+      },
+      "interviewer": {
+        "cueId": "no_hint",
+        "cueProbability": 0.98,
+        "model": "jev-1.13.0",
+        "durationMs": 105
+      }
+    },
+    {
+      "fixtureId": "vague-rant",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 0.21,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "Everything. Every single thing. That is what I am saying."
+            }
+          },
+          "openness": {
+            "value": null,
+            "evidence": null
+          },
+          "specificity": {
+            "value": 0,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "The whole thing was a mess. Everybody was terrible, meetings were a joke, and nobody ever knew what was going on. Honestly, it was just awful in every way."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.03,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.21,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.02,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.17,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.19,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.13,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.22,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.03,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 155
+      },
+      "interviewer": {
+        "cueId": "no_hint",
+        "cueProbability": 0.62,
+        "model": "jev-1.13.0",
+        "durationMs": 117
+      }
+    },
+    {
+      "fixtureId": "leading-and-mm",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": null,
+            "evidence": null
+          },
+          "openness": {
+            "value": null,
+            "evidence": null
+          },
+          "specificity": {
+            "value": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.03,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.03,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.04,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 132
+      },
+      "interviewer": {
+        "cueId": "avoid-leading",
+        "cueProbability": 0.89,
+        "model": "jev-1.13.0",
+        "durationMs": 154
+      }
+    },
+    {
+      "fixtureId": "uncertainty",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 2.17,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day."
+            }
+          },
+          "openness": {
+            "value": 2.01,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day."
+            }
+          },
+          "specificity": {
+            "value": 1.85,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.07,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.3,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.18,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.16,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.16,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.06,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.44,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.45,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.54,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.12,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.72,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.2,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.4,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.1,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 157
+      },
+      "interviewer": {
+        "cueId": "no_hint",
+        "cueProbability": 0.93,
+        "model": "jev-1.13.0",
+        "durationMs": 102
+      }
+    },
+    {
+      "fixtureId": "explicit-boundary",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": null,
+            "evidence": null
+          },
+          "openness": {
+            "value": null,
+            "evidence": null
+          },
+          "specificity": {
+            "value": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.11,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.05,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.31,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.23,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.29,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.36,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.16,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.28,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.22,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.5,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.12,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.17,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.21,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 136
+      },
+      "interviewer": {
+        "cueId": "respect-boundary",
+        "cueProbability": 0.98,
+        "model": "jev-1.13.0",
+        "durationMs": 93
+      }
+    },
+    {
+      "fixtureId": "revealing-aside",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 2.99,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
+            }
+          },
+          "openness": {
+            "value": 1.93,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
+            }
+          },
+          "specificity": {
+            "value": 3.32,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.6,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.38,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.78,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.72,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.3,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.93,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
+            }
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.7,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.55,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.81,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.24,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.45,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.15,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.69,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.5,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 132
+      },
+      "interviewer": {
+        "cueId": "no_hint",
+        "cueProbability": 0.63,
+        "model": "jev-1.13.0",
+        "durationMs": 128
+      }
+    },
+    {
+      "fixtureId": "named-hearsay",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 2.83,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
+            }
+          },
+          "openness": {
+            "value": 2.28,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
+            }
+          },
+          "specificity": {
+            "value": 2.85,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.11,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.78,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.5,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.62,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.64,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.23,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.64,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.82,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.49,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.93,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
+            }
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.64,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "probability": 0.27,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.85,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
+            }
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.31,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 133
+      },
+      "interviewer": {
+        "cueId": "avoid-leading",
+        "cueProbability": 0.87,
+        "model": "jev-1.13.0",
+        "durationMs": 115
+      }
+    },
+    {
+      "fixtureId": "productive-thread",
+      "participant": {
+        "readings": {
+          "engagement": {
+            "value": 3.24,
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "We split the review into eligibility and completeness checks. That let staff send back only the missing documents."
+            }
+          },
+          "openness": {
+            "value": 3.14,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "The existing forms did not match the actual review steps. We learned that when Nia, a clerk at the client, walked us through three rejected applications."
+            }
+          },
+          "specificity": {
+            "value": 3.91,
+            "evidence": {
+              "entryId": "p6",
+              "speaker": "trainee",
+              "text": "We split the review into eligibility and completeness checks. That let staff send back only the missing documents."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "probability": 0.11,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "probability": 0.85,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "The existing forms did not match the actual review steps. We learned that when Nia, a clerk at the client, walked us through three rejected applications."
+            }
+          },
+          {
+            "id": "client-pace",
+            "probability": 0.1,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "probability": 0.55,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "probability": 0.7,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "probability": 0.81,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "probability": 0.58,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "probability": 0.53,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "probability": 0.68,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "probability": 0.18,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "probability": 0.97,
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "A permit intake portal. Residents submitted applications and staff reviewed them."
+            }
+          },
+          {
+            "id": "project-role",
+            "probability": 0.46,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "probability": 0.79,
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "probability": 0.71,
+            "achieved": false,
+            "evidence": null
+          }
+        ],
+        "model": "jev-1.13.0",
+        "durationMs": 131
+      },
+      "interviewer": {
+        "cueId": "no_hint",
+        "cueProbability": 0.96,
+        "model": "jev-1.13.0",
+        "durationMs": 115
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+.game-header.site-header { gap: clamp(12px, 1.5vw, 24px); }
+.game-header.site-header .site-desktop-nav { display: flex; align-items: center; gap: clamp(4px, .6vw, 14px); margin-left: auto; min-height: 0; }
+.site-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; border-bottom: 2px solid transparent; color: #9db9ca; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.site-nav-link:hover { color: #e7faf5; }
+.site-nav-link.active { color: #44efcd; border-bottom-color: #44efcd; }
+.site-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.site-page-title { margin-left: 0; }
+.site-menu-trigger { display: none; }
+.site-menu-dialog { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(360px, calc(100vw - 42px)); height: 100dvh; max-height: none; padding: 24px 22px; border: 0; border-left: 1px solid #33768a; background: #092332; color: #eaf4fc; box-shadow: -18px 0 48px #010e1899; }
+.site-menu-dialog::backdrop { background: #010e18b3; }
+.site-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 28px; border-bottom: 1px solid #28566b; }
+.site-menu-heading button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #3a6c80; border-radius: 3px; background: #12384a; color: #d6eef3; }
+.site-menu-dialog nav { display: grid; gap: 6px; margin: 22px 0 0; }
+.site-menu-dialog .site-nav-link { justify-content: flex-start; min-height: 56px; padding: 12px 14px; border: 1px solid transparent; font-size: 18px; }
+.site-menu-dialog .site-nav-link.active { border-color: #288b83; background: #103b3e; }
+@media (max-width: 1050px) {
+  .game-header.site-header .edition, .game-header.site-header .site-page-title { display: none; }
+  .game-header.site-header .site-desktop-nav { gap: 0; }
+  .site-nav-link { font-size: 12px; padding-inline: 8px; }
+}
+@media (max-width: 900px) {
+  .game-header.site-header { display: flex; flex-direction: row; flex-wrap: wrap; min-height: 64px; height: auto; flex-basis: auto; padding-block: 9px; gap: 8px; }
+  .game-header.site-header .site-desktop-nav { display: none; }
+  .game-header.site-header .site-page-title { display: inline; order: 1; margin: 0 auto 0 0; color: #eaf4fc; font-size: 16px; }
+  .site-menu-trigger { display: grid; order: 2; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid #3a6c80; border-radius: 3px; background: #103244; color: #d6eef3; }
+  .site-menu-trigger:hover, .site-menu-heading button:hover { border-color: #44efcd; color: #44efcd; }
+  .site-header-actions { order: 3; margin-left: auto; }
+}
+@media (max-width: 600px) {
+  .game-header.site-header .brand { margin-right: auto; }
+  .game-header.site-header .site-page-title { flex: 1; margin: 0; }
+  .site-header-actions { width: 100%; justify-content: flex-end; border-top: 1px solid #1d455b; padding-top: 6px; }
+  .site-header-actions .elapsed { margin-left: auto; }
+}
+@media (max-width: 720px) {
+  .game-header.site-header.simulator-header .brand > span { display: none; }
+  .game-header.site-header.simulator-header .brand { flex: 0 0 auto; margin-right: 0; }
+  .game-header.site-header.simulator-header .site-page-title { display: inline; }
+}
+@media (max-width: 360px) {
+  .game-header.site-header .brand { gap: 6px; font-size: 14px; letter-spacing: 0; }
+  .game-header.site-header .pixel-logo { width: 26px; height: 26px; }
+}

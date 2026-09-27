@@ -12,6 +12,7 @@ import { VoiceLabContent } from '../simulator/voice-lab';
 import { SimulatorBriefing } from '../simulator/briefing';
 import { scenarioBriefings } from '../../core/simulator/briefings';
 import { InterviewLiveStory, InterviewSetupStory, InterviewSummaryStory } from '../storybook/interview-stories';
+import { InterviewJudgingStory } from '../storybook/interview-judging-story';
 
 export const loader = () => ({
   simulatorCatalog: publicCatalog(),
@@ -53,6 +54,7 @@ const stories = [
   { id: 'interview-setup', label: 'The Debrief setup', description: 'Voice choice and private transcript notice. Start is a safe preview without a microphone.', component: InterviewSetupStory },
   { id: 'interview-live', label: 'The Debrief live', description: 'Synthetic conversation, live observations, topic threads, mute and transcript states.', component: InterviewLiveStory },
   { id: 'interview-summary', label: 'The Debrief summary', description: 'Synthetic internal summary, pending and unavailable states, copy and transcript access.', component: InterviewSummaryStory },
+  { id: 'interview-judging', label: 'The Debrief analysis', description: 'Recorded Jev readings, participant evidence, heard topics, and private interviewer cue from synthetic fixtures.', component: InterviewJudgingStory },
   { id: 'draw', label: 'Complete draw', description: 'Idle, landing, scene timing, failure, and connection states.', component: DrawStory },
   { id: 'reel', label: 'Character reel', description: 'Replay the actual reel with a chosen landing character.', component: ReelStory },
   { id: 'gallery', label: 'Character gallery', description: 'All 42 personas, backstories, judge-facing descriptions, and individual artwork.', component: GalleryStory },

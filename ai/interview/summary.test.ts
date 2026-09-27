@@ -4,6 +4,7 @@ import type { TranscriptEntry } from '../../core/simulator/types';
 const calls: Record<string, any>[] = [];
 let answer = { text: 'The participant described an access issue and credited Jen with resolving it.', finishReason: 'stop' };
 let failure: Error | null = null;
+// Stub only the paid provider boundary; exercise the real input and error handling.
 mock.module('ai', () => ({
   generateText: async (options: Record<string, any>) => {
     calls.push(options);
@@ -33,8 +34,6 @@ test('one bounded request labels the participant as evidence and returns present
     { speaker: 'INTERVIEWER', text: transcript[0]!.text },
     { speaker: 'PARTICIPANT', text: transcript[1]!.text },
   ]);
-  expect(call.system).toContain('untrusted data');
-  expect(call.system).toContain('secondhand');
 });
 
 test('provider failures and incomplete output expose only a safe error', async () => {

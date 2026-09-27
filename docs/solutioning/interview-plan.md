@@ -8,6 +8,8 @@ Build a small third demo that conducts a useful real-project closeout interview:
 
 This is a POC. No new framework, identity system, admin screens, retry queue, document ingestion, report workflow or cross-interview synthesis. One interview, one summary, simple failure states. No deployment is authorized by this implementation task.
 
+Added scope: replace the reused Sam portraits with matching approachable male/female artwork, and add shared desktop navigation plus a mobile hamburger drawer for Game, Simulator, The Debrief and Workshop. Keep this inside the shared header with no new navigation framework.
+
 ## Agreed behavior
 
 - Start with what the person built or the project's goal, then naturally ask their role. One question at a time; skip facts already supplied.

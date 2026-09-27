@@ -3,8 +3,8 @@ import type { ObjectiveReading, SkillReading } from './simulator/types';
 export const INTERVIEW_SCENARIO_ID = 'project-closeout';
 export const INTERVIEWER_NAME = 'Sam';
 export const interviewVoices = [
-  { id: 'sam-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male' },
-  { id: 'sam-gleam', voice: 'gleam', label: 'Gleam', presentation: 'Female' },
+  { id: 'sam-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/interview/sam-male.png' },
+  { id: 'sam-gleam', voice: 'gleam', label: 'Gleam', presentation: 'Female', image: '/interview/sam-female.png' },
 ] as const;
 
 export const interviewReadings = [

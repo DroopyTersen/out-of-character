@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { emptyInterviewReadings, interviewTopics, type InterviewEvaluation, type InterviewSummary } from '../../core/interview';
 import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
-import { silentLevels } from '../simulator/audio-levels';
+import { illustrativeLevels } from './simulator-voice-story';
 import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewSnapshot, type InterviewVoiceId } from '../interview/screens';
 import '../simulator/simulator.css';
 import '../interview/interview.css';
@@ -63,12 +64,20 @@ export function InterviewSetupStory() {
 export function InterviewLiveStory() {
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>('sam-cedar');
   const [phase, setPhase] = useState<'connecting' | 'live' | 'ending'>('live');
+  const [speaking, setSpeaking] = useState('listening');
+  const [frame, setFrame] = useState(0);
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    if (reducedMotion || speaking === 'listening' || phase !== 'live') return;
+    const timer = setInterval(() => setFrame(value => value + 1), 80);
+    return () => clearInterval(timer);
+  }, [speaking, reducedMotion, phase]);
   const [muted, setMuted] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackStatus>('current');
   const [count, setCount] = useState(6);
   const [notice, setNotice] = useState('');
   const snapshot = fixture('live', feedback, null, count);
-  return <><div className="workshop-controls"><label>Voice<select value={voiceId} onChange={event => setVoiceId(event.target.value as InterviewVoiceId)}><option value="sam-cedar">Cedar</option><option value="sam-gleam">Gleam</option></select></label><label>Call state<select value={phase} onChange={event => setPhase(event.target.value as typeof phase)}><option value="connecting">Connecting</option><option value="live">Live</option><option value="ending">Ending</option></select></label><label>Observations<select value={feedback} onChange={event => setFeedback(event.target.value as FeedbackStatus)}><option value="waiting">Waiting</option><option value="current">Current</option><option value="delayed">Delayed</option><option value="unavailable">Unavailable</option></select></label><label>Transcript<select value={count} onChange={event => setCount(Number(event.target.value))}><option value="0">Empty</option><option value="2">Opening</option><option value="6">Detailed conversation</option><option value="8">Through reflection</option></select></label><label className="workshop-check"><input type="checkbox" checked={muted} onChange={event => setMuted(event.target.checked)} /> Mic muted</label>{notice && <span role="status">{notice}</span>}</div><InterviewConversation voiceId={voiceId} snapshot={snapshot} phase={phase} muted={muted} levels={silentLevels} elapsed={50} onEnd={() => setNotice('Workshop preview: no live interview to end.')} onMute={() => setMuted(value => !value)} onAudio={() => setNotice('Workshop preview: audio remains off.')} onContinue={() => setNotice('Workshop preview: no live timer is running.')} /></>;
+  return <><div className="workshop-controls"><label>Voice<select value={voiceId} onChange={event => setVoiceId(event.target.value as InterviewVoiceId)}><option value="sam-cedar">Cedar</option><option value="sam-gleam">Gleam</option></select></label><label>Call state<select value={phase} onChange={event => setPhase(event.target.value as typeof phase)}><option value="connecting">Connecting</option><option value="live">Live</option><option value="ending">Ending</option></select></label><label>Speaking<select value={speaking} onChange={event => setSpeaking(event.target.value)}><option value="listening">Listening</option><option value="client">Sam</option><option value="trainee">You</option><option value="overlap">Both</option></select></label><label>Observations<select value={feedback} onChange={event => setFeedback(event.target.value as FeedbackStatus)}><option value="waiting">Waiting</option><option value="current">Current</option><option value="delayed">Delayed</option><option value="unavailable">Unavailable</option></select></label><label>Transcript<select value={count} onChange={event => setCount(Number(event.target.value))}><option value="0">Empty</option><option value="2">Opening</option><option value="6">Detailed conversation</option><option value="8">Through reflection</option></select></label><label className="workshop-check"><input type="checkbox" checked={muted} onChange={event => setMuted(event.target.checked)} /> Mic muted</label>{notice && <span role="status">{notice}</span>}</div><InterviewConversation voiceId={voiceId} snapshot={snapshot} phase={phase} muted={muted} levels={illustrativeLevels(speaking, frame)} elapsed={50} onEnd={() => setNotice('Workshop preview: no live interview to end.')} onMute={() => setMuted(value => !value)} onAudio={() => setNotice('Workshop preview: audio remains off.')} onContinue={() => setNotice('Workshop preview: no live timer is running.')} /></>;
 }
 
 export function InterviewSummaryStory() {

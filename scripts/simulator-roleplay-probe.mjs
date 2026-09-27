@@ -388,7 +388,7 @@ const completed = new Promise(resolve => {
 });
 try {
   await completed;
-  if (report.finalized) {
+  if (report.finalized && report.transcript.some(entry => entry.speaker === 'trainee')) {
     const evaluate = isInterview ? evaluateInterview : evaluateTrainee;
     report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
   }

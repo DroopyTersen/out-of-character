@@ -253,7 +253,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.gradeCalls++;
     try {
       const previous = snapshot.interview?.evaluation ?? snapshot.evaluation;
-      const achievedIds = final ? [] : previous?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
+      const achievedIds = final && !snapshot.interview ? [] : previous?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
       const input = { scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) };
       if (snapshot.interview) {
         const result = await this.paid.evaluateInterview(input);

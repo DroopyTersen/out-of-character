@@ -92,7 +92,7 @@ function recentTranscript(entries: TranscriptEntry[], characterLimit: number): T
 }
 
 function state(entries: TranscriptEntry[]) {
-  return { dialogueColumns: ['id', 'speaker', 'text'], speakerRoles: { trainee: 'project participant', client: 'Sam, AI interviewer' }, dialogue: entries.map(({ id, speaker, text }) => [id, speaker, text]) };
+  return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: entries.map(({ id, speaker, text }) => [id, speaker === 'trainee' ? 'participant' : 'sam', text]) };
 }
 
 export async function evaluateInterview(input: Input) {

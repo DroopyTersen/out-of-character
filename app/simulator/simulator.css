@@ -140,15 +140,17 @@ details[open] > summary > .sim-disclosure { transform: rotate(180deg); }
 .sim-feedback-status.unavailable i { background: #738590; }
 .sim-scale { font-size: 12px; color: #8cb4cc; margin-bottom: 23px; }
 .sim-skill-list { display: grid; gap: 22px; }
+.sim-skill { --sim-skill-color: #8aadc4; }
+.sim-skill[data-rating=poor] { --sim-skill-color: #ff8590; }
+.sim-skill[data-rating=low] { --sim-skill-color: #f5a35c; }
+.sim-skill[data-rating=mixed] { --sim-skill-color: #f2d66d; }
+.sim-skill[data-rating=strong] { --sim-skill-color: #44efcd; }
 .sim-skill summary { display: grid; grid-template-columns: 1fr auto 16px; align-items: center; gap: 7px 12px; cursor: pointer; font-size: 22px; list-style: none; }
 .sim-skill summary::-webkit-details-marker, .sim-objectives summary::-webkit-details-marker { display: none; }
-.sim-skill strong { color: #44efcd; font-size: 23px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sim-skill strong { color: var(--sim-skill-color); font-size: 23px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sim-skill-track { grid-column: 1/-1; height: 9px; background: #153e57; border-radius: 5px; overflow: hidden; }
-.sim-skill-track > span { display: block; height: 100%; background: #44efcd; border-radius: inherit; }
+.sim-skill-track > span { display: block; height: 100%; background: var(--sim-skill-color); border-radius: inherit; }
 .sim-skill[data-unobserved=true] .sim-skill-track { background: transparent; border: 1px dashed #416278; }
-.sim-skill[data-unobserved=true] strong { color: #5f8299; }
-.sim-skills[data-status=delayed] .sim-skill strong { color: #8cc5b9; }
-.sim-skills[data-status=delayed] .sim-skill-track > span { opacity: .5; }
 .sim-skill > p { font-size: 12px; color: #9ab8cc; margin: 10px 0; line-height: 1.5; }
 .sim-feedback-note { font-size: 12px; color: #8cafc5; line-height: 1.5; margin-top: 27px; }
 .sim-evidence { margin: 12px 0 4px; padding: 10px 12px; border-left: 2px solid #326482; background: #12324766; font-size: 14px; color: #b4cbdd; line-height: 1.6; }

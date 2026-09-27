@@ -3,7 +3,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getClientCues, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
+import { evaluateInterview, evaluateInterviewer } from '../ai/interview/evaluate.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
+import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
+import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
 import { appendTranscript, canSendCue } from '../core/simulator/state.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
@@ -15,6 +18,7 @@ if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded
 if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const scenarioId = option('scenario') ?? 'sharepoint';
+const isInterview = scenarioId === INTERVIEW_SCENARIO_ID;
 const clientId = option('client') ?? 'morgan';
 const approach = option('plan') ?? (process.argv.includes('--poor') ? 'poor' : 'good');
 const label = option('label');
@@ -26,6 +30,17 @@ const offer = 'Our SharePoint and adoption team could run a short assessment of 
 const negotiated = /free|no charge|no cost|no extra|include|existing project|current project|throw in|budget|cost|price|how much|cheaper|discount|spend/i;
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
+  'project-closeout': {
+    rehearsal: {
+      turns: 3,
+      lines: {
+        project: 'We built a permit intake portal for a regional agency. I was the technical lead for the integration work.',
+        aside: 'The strange part was that our fastest fix came from a hallway conversation with the client operations manager. The formal approval chain had sent us in circles for three weeks. Once she pointed us to the actual owner, we shipped the import in two days.',
+        boundary: 'I do not know why the approvals were slow, and I would rather not speculate about specific people. What I can say is that we documented the owner and handoff so the next team would not get stuck.',
+      },
+      choose: ({ turn }) => ['project', 'aside', 'boundary'][turn],
+    },
+  },
   sharepoint: {
     // A personable client should not confuse pleasant conversation with consent.
     surface: {
@@ -268,7 +283,7 @@ const { client: _permissions, ...session } = liveConfiguration(scenarioId, clien
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
-const report = { rubricVersion: RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, director, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
+const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, director, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
 let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
@@ -280,11 +295,15 @@ const send = event => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.strin
 const close = () => { if (closing) return; closing = true; clearInterval(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
   try {
-    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
+    const evaluate = isInterview ? evaluateInterviewer : evaluateClient;
+    const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(8000) });
     const cue = getClientCues(scenario).find(item => item.id === judgment.cueId);
     const now = Date.now();
-    const sent = !!(!closing && director && cue && !cueIds.has(cue.id) && canSendCue({ id: cue.id, probability: judgment.cueProbability, revision: transcript.length }, sentCues.at(-1) ?? null, true, now));
-    report.directions.push({ afterTurn, fidelity: judgment.fidelity, interests: judgment.interests, cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
+    const repeatAfterMs = isInterview ? 90_000 : Infinity;
+    const lastSame = sentCues.findLast(item => item.id === cue?.id);
+    const alreadySent = isInterview ? lastSame && now - lastSame.sentAt < repeatAfterMs : cueIds.has(cue?.id);
+    const sent = !!(!closing && director && cue && !alreadySent && canSendCue({ id: cue.id, probability: judgment.cueProbability, revision: transcript.length }, sentCues.at(-1) ?? null, true, now, repeatAfterMs));
+    report.directions.push({ afterTurn, ...(isInterview ? {} : { fidelity: judgment.fidelity, interests: judgment.interests }), cueId: judgment.cueId, probability: judgment.cueProbability, sent, acknowledged: false });
     if (sent) { cueIds.add(cue.id); sentCues.push({ id: cue.id, revision: transcript.length, sentAt: now }); send({ type: 'session.thinking.append', event_id: `direction-${afterTurn}`, delegation_id: null, content: cue.text }); }
   } catch (error) {
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
@@ -369,7 +388,10 @@ const completed = new Promise(resolve => {
 });
 try {
   await completed;
-  if (report.finalized) report.trainee = await evaluateTrainee({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
+  if (report.finalized) {
+    const evaluate = isInterview ? evaluateInterview : evaluateTrainee;
+    report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
+  }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
   clearTimeout(deadline); clearInterval(pacing); ws.close();

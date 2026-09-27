@@ -1,4 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
+import { evaluateInterview, evaluateInterviewer } from '../../../ai/interview/evaluate.server';
+import { summarizeInterview } from '../../../ai/interview/summary.server';
+import { INTERVIEW_SCENARIO_ID } from '../../../core/interview';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
 import { getClient, getClientCues, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, canSendCue, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type SentCue } from '../../../core/simulator/state';
@@ -6,9 +9,10 @@ import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { activitySchema, simulatorJson, startSchema } from './api';
 import { archiveProvenance, writeArchive } from './archive.server';
+import { writeInterviewArchive } from '../interview/archive.server';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
-const services = { createLive, attachLive, evaluateTrainee, evaluateClient };
+const services = { createLive, attachLive, evaluateTrainee, evaluateClient, evaluateInterview, evaluateInterviewer, summarizeInterview };
 const GRADE_INTERVAL_MS = 5000;
 const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
 
@@ -39,9 +43,11 @@ export class SimulatorSession extends DurableObject<Env> {
   private reachedLive = false;
   private sentCues: SentCue[] = [];
   private seenEvents = new Set<string>();
+  private readonly paid: typeof services;
 
-  constructor(ctx: DurableObjectState, env: Env, private readonly paid = services) {
+  constructor(ctx: DurableObjectState, env: Env, paid: Partial<typeof services> = {}) {
     super(ctx, env);
+    this.paid = { ...services, ...paid };
     ctx.blockConcurrencyWhile(async () => { this.lease = await ctx.storage.get<Lease>('lease'); });
   }
 
@@ -95,6 +101,7 @@ export class SimulatorSession extends DurableObject<Env> {
       status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS, warning: null,
       revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting',
       message: null, finalization: 'pending', usageSeconds: null,
+      ...(input.scenarioId === INTERVIEW_SCENARIO_ID ? { interview: { evaluation: null, summary: null } } : {}),
     };
     await this.ctx.storage.put('lease', this.lease);
     await this.ctx.storage.setAlarm(Date.now() + 30_000);
@@ -195,7 +202,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!getScenario(snapshot.scenarioId).objectives.length) return;
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
-    if (snapshot.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
+    if ((snapshot.evaluation || snapshot.interview?.evaluation) && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
     if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < GRADE_INTERVAL_MS || this.gradeCalls >= MAX_LIVE_GRADES) return;
     this.lastGrade = now;
     this.gradedText = text;
@@ -245,8 +252,17 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!scenario.objectives.length) return;
     this.gradeCalls++;
     try {
-      const achievedIds = final ? [] : snapshot.evaluation?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
-      const result = await this.paid.evaluateTrainee({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
+      const previous = snapshot.interview?.evaluation ?? snapshot.evaluation;
+      const achievedIds = final ? [] : previous?.objectives.filter(item => item.achieved && scenario.objectives.find(objective => objective.id === item.id)?.kind !== 'outcome').map(item => item.id) ?? [];
+      const input = { scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, achievedIds, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) };
+      if (snapshot.interview) {
+        const result = await this.paid.evaluateInterview(input);
+        if ((!final && this.closing) || revision < (snapshot.interview.evaluation?.revision ?? 0)) return;
+        snapshot.interview.evaluation = { revision: result.revision, readings: result.readings, model: result.model, durationMs: result.durationMs, objectives: reconcileObjectives(scenario, previous?.objectives ?? [], result.objectives) };
+        snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
+        return;
+      }
+      const result = await this.paid.evaluateTrainee(input);
       if (!final && this.closing) return;
       if (snapshot.evaluation && revision < snapshot.evaluation.revision) return;
       // Explicit public projection: raw client diagnostics and grader questions stay private.
@@ -254,7 +270,7 @@ export class SimulatorSession extends DurableObject<Env> {
       snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
     } catch {
       if (this.gradeAbort.signal.aborted && !final) return;
-      snapshot.feedbackStatus = snapshot.evaluation ? 'delayed' : 'unavailable';
+      snapshot.feedbackStatus = (snapshot.evaluation || snapshot.interview?.evaluation) ? 'delayed' : 'unavailable';
       // One cadence-limited retry per input, still inside the overall paid-call cap.
       if (!final && this.retriedText !== this.gradedText) {
         this.retriedText = this.gradedText;
@@ -275,9 +291,14 @@ export class SimulatorSession extends DurableObject<Env> {
     this.directing = true;
     const snapshot = this.snapshot!;
     try {
-      const result = await this.paid.evaluateClient({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
+      const evaluator = snapshot.interview ? this.paid.evaluateInterviewer : this.paid.evaluateClient;
+      const result = await evaluator({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
       const cue = getClientCues(getScenario(snapshot.scenarioId)).find(item => item.id === result.cueId);
-      if (this.closing || !cue || this.sentCues.some(sent => sent.id === cue.id) || !canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.sentCues.at(-1) ?? null, this.isFresh(transcript), Date.now())) return;
+      if (this.closing || !cue) return;
+      const repeatAfterMs = snapshot.interview ? 90_000 : Infinity;
+      const lastSame = this.sentCues.findLast(sent => sent.id === cue.id);
+      if (lastSame && Date.now() - lastSame.sentAt < repeatAfterMs) return;
+      if (!canSendCue({ id: cue.id, probability: result.cueProbability, revision }, this.sentCues.at(-1) ?? null, this.isFresh(transcript), Date.now(), repeatAfterMs)) return;
       if (this.send({ type: 'session.thinking.append', event_id: `cue-${crypto.randomUUID()}`, delegation_id: null, content: cue.text })) {
         this.sentCues.push({ id: cue.id, revision, sentAt: Date.now() });
       }
@@ -319,7 +340,28 @@ export class SimulatorSession extends DurableObject<Env> {
     this.lease!.closed = snapshot.finalization === 'confirmed' || !this.lease!.providerId;
     await this.ctx.storage.put('lease', this.lease);
     await this.ctx.storage.setAlarm(Date.now() + (this.lease!.closed ? 300_000 : 15_000));
-    if (this.reachedLive) this.ctx.waitUntil(this.saveArchive('final'));
+    if (this.reachedLive) {
+      if (snapshot.interview) {
+        snapshot.interview.summary = { status: snapshot.transcript.some(item => item.speaker === 'trainee') ? 'pending' : 'unavailable', text: null };
+        this.ctx.waitUntil(this.completeInterview());
+      } else this.ctx.waitUntil(this.saveArchive('final'));
+    }
+  }
+
+  private async completeInterview() {
+    const snapshot = this.snapshot!;
+    const interview = snapshot.interview!;
+    // Save the transcript first. A failed summary must not lose the conversation.
+    await this.saveArchive('final');
+    if (interview.summary?.status !== 'pending') return;
+    try {
+      if (!this.env.OPENROUTER_API_KEY) throw new Error('Summary is not configured.');
+      const text = await this.paid.summarizeInterview({ transcript: snapshot.transcript, apiKey: this.env.OPENROUTER_API_KEY });
+      interview.summary = { status: 'ready', text };
+    } catch {
+      interview.summary = { status: 'unavailable', text: null };
+    }
+    await this.saveArchive('final');
   }
 
   private closeOrphan(): Promise<void> {
@@ -372,7 +414,8 @@ export class SimulatorSession extends DurableObject<Env> {
       const cues = structuredClone(this.sentCues);
       const capturedAt = Date.now();
       const provenance = await archiveProvenance(this.env, snapshot);
-      await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, cues, provenance });
+      if (snapshot.interview) await writeInterviewArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot: { ...snapshot, interview: snapshot.interview }, cues, provenance });
+      else await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, cues, provenance });
     } catch {
       // Best effort: never delay closure or retry a failed transcript save.
       console.warn('Simulator archive save failed', { id: this.snapshot?.id, category: state });

@@ -45,6 +45,19 @@ test('poll forwards a validated activity report and rejects malformed reports be
   expect((await handleSimulator(f.request(path, { active: true, audio: false, padding: 'x'.repeat(300) }), f.env))!.status).toBe(413);
   expect(f.calls).toHaveLength(1);
 });
+test('interview starts only with its two voices and summary polling keeps the capability boundary', async () => {
+  const f = fixture();
+  for (const clientId of ['sam-cedar', 'sam-gleam']) {
+    expect((await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'project-closeout', clientId }), f.env))!.status).toBe(200);
+  }
+  expect((await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'project-closeout', clientId: 'morgan' }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'sharepoint', clientId: 'sam-cedar' }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request(`sessions/${id}/poll`, undefined, { Authorization: '' }), f.env))!.status).toBe(401);
+  expect((await handleSimulator(f.request(`sessions/${id}/poll`, undefined, { Origin: 'https://elsewhere.example' }), f.env))!.status).toBe(403);
+  expect((await handleSimulator(f.request(`sessions/${id}/summary`), f.env))!.status).toBe(404);
+  expect(f.calls).toHaveLength(2);
+  expect(f.calls.every(call => call.headers.get('Authorization') === capability)).toBe(true);
+});
 test('public catalog and browser data channel cannot receive actor configuration', async () => {
   const f = fixture();
   const response = await handleSimulator(new Request('https://practice.example/api/simulator/catalog'), f.env);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { INTERVIEW_SCENARIO_ID, interviewVoices } from '../../../core/interview';
 import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/scenarios.server';
 import { BodyError, boundedJson } from '../http';
 
@@ -9,7 +10,7 @@ export const startSchema = z.object({
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
   sdp: z.string().min(20).max(60_000).startsWith('v=0'),
-}).strict();
+}).strict().refine(input => (input.scenarioId === INTERVIEW_SCENARIO_ID) === interviewVoices.some(voice => voice.id === input.clientId), 'Choose an interviewer for an interview.');
 const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && !!env.OPENAI_API_KEY && !!env.TYPESAFE_API_KEY;
 export const simulatorJson = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 

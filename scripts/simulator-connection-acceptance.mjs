@@ -7,10 +7,11 @@ await mkdir(output, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 const results = [];
-const snapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 3600, warning: null, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
+const baseSnapshot = (id, status) => ({ id, scenarioId: 'sharepoint', clientId: 'morgan', status, startedAt: Date.now(), limitSeconds: 3600, warning: null, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', message: null, finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 2 : null });
 
 try {
-  for (const mode of ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity', 'server-ending']) {
+  const modes = process.env.ACCEPTANCE_MODES?.split(',') ?? ['explicit-end', 'hard-failure', 'dispose', 'dispose-during-end', 'activity', 'server-ending', 'interview-end', 'interview-auto', 'interview-summary-failure', 'interview-dispose-summary'];
+  for (const mode of modes) {
     console.log(`Checking ${mode}`);
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -65,6 +66,10 @@ try {
 
     let id;
     let automaticFinish = false, automaticEnding = false, automaticEnded = false;
+    const interview = mode.startsWith('interview-');
+    let summaryReady = false;
+    const snapshot = (id, status) => ({ ...baseSnapshot(id, status), ...(interview ? { scenarioId: 'project-closeout', clientId: 'sam-cedar', interview: { evaluation: null, summary: status === 'ended' ? { status: summaryReady ? 'ready' : 'pending', text: summaryReady ? 'The participant described a fictional inventory project.' : null } : null } } : {}) });
+    const capabilities = new Set();
     const activityPolls = [];
     let releaseEnd;
     let endRequests = 0;
@@ -73,6 +78,7 @@ try {
     await page.route('**/api/simulator/sessions**', async route => {
       const url = new URL(route.request().url());
       const action = url.pathname.split('/').at(-1);
+      capabilities.add(route.request().headers().authorization);
       if (action === 'sessions') {
         const request = route.request().postDataJSON();
         id = request.id;
@@ -82,11 +88,13 @@ try {
       if (action === 'end') {
         endRequests++;
         endSeen();
+        if (interview) { automaticEnded = true; return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) }); }
         if (mode === 'activity' || mode === 'server-ending') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
         await new Promise(resolve => { releaseEnd = resolve; });
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify(snapshot(id, 'ended')) });
       }
       if (action === 'poll') activityPolls.push(route.request().postDataJSON());
+      if (interview && automaticEnded && summaryReady && mode === 'interview-summary-failure') return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Unavailable' }) });
       const value = snapshot(id, automaticEnded ? 'ended' : automaticEnding ? 'ending' : 'live');
       if (automaticFinish) value.warning = { kind: 'limit', endsAt: Date.now() - 1000 };
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) });
@@ -94,13 +102,30 @@ try {
 
     try {
       await page.goto(`${base}/simulator`, { waitUntil: 'networkidle' });
-      await page.evaluate(async () => {
+      await page.evaluate(async interview => {
         const { LiveConnection } = await import('/app/simulator/live-connection.ts');
         const audit = window.__connectionAudit;
         audit.connection = new LiveConnection({ snapshot: value => audit.snapshots.push(value), levels: () => {}, error: (message, fatal) => audit.errors.push({ message, fatal }) });
-        void audit.connection.start('sharepoint', 'morgan');
-      });
+        void audit.connection.start(interview ? 'project-closeout' : 'sharepoint', interview ? 'sam-cedar' : 'morgan');
+      }, interview);
       await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'live'), null, { timeout: 20_000 });
+      if (interview) {
+        if (mode === 'interview-auto') automaticEnded = true;
+        else await page.evaluate(() => window.__connectionAudit.connection.end());
+        await page.waitForFunction(() => window.__connectionAudit.snapshots.at(-1)?.interview?.summary?.status === 'pending' && window.__connectionAudit.tracks.every(track => track.readyState === 'ended'));
+        const closedBeforeSummary = await page.evaluate(() => {
+          const audit = window.__connectionAudit;
+          return audit.peers.every(peer => peer.signalingState === 'closed') && audit.contexts.every(context => context.state === 'closed');
+        });
+        if (mode === 'interview-dispose-summary') await page.evaluate(() => window.__connectionAudit.connection.dispose());
+        summaryReady = true;
+        if (mode === 'interview-dispose-summary') await page.waitForTimeout(1600);
+        else await page.waitForFunction(expected => window.__connectionAudit.snapshots.at(-1)?.interview?.summary?.status === expected, mode === 'interview-summary-failure' ? 'unavailable' : 'ready');
+        const final = await page.evaluate(() => ({ status: window.__connectionAudit.snapshots.at(-1)?.interview?.summary?.status, fatal: window.__connectionAudit.errors.some(error => error.fatal) }));
+        const checks = { mediaClosedWhilePending: closedBeforeSummary, sameCapabilityForSummary: capabilities.size === 1 && /^Bearer [a-f0-9]{64}$/.test([...capabilities][0]), noFatalError: !final.fatal, noExtraClosure: endRequests === (mode === 'interview-auto' ? 0 : 1), pendingCancelledOnDispose: mode !== 'interview-dispose-summary' || final.status === 'pending' };
+        results.push({ mode, pass: Object.values(checks).every(Boolean) && !pageErrors.length, checks, final, pageErrors });
+        continue;
+      }
       if (mode === 'server-ending') {
         const micWasEnabled = await page.evaluate(() => window.__connectionAudit.tracks.every(track => track.enabled));
         automaticEnding = true;
@@ -196,7 +221,8 @@ try {
       };
       results.push({ mode, pass: Object.values(checks).every(Boolean) && !pageErrors.length, checks, early, endDuringDrain, pending, settled, pageErrors });
     } catch (error) {
-      results.push({ mode, pass: false, error: error.message, pageErrors });
+      const audit = await page.evaluate(() => ({ snapshots: window.__connectionAudit?.snapshots.map(value => value.status), errors: window.__connectionAudit?.errors })).catch(() => null);
+      results.push({ mode, pass: false, error: error.message, endRequests, audit, pageErrors });
     } finally {
       releaseEnd?.();
       await page.evaluate(() => {

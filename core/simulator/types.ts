@@ -1,3 +1,5 @@
+import type { InterviewSession } from '../interview';
+
 export const SIMULATOR_VERSION = 'simulator-v1';
 export const SESSION_LIMIT_SECONDS = 3600;
 export const SESSION_IDLE_WARNING_MS = 3 * 60_000;
@@ -35,7 +37,7 @@ export type Client = {
 export type ScenarioSummary = {
   id: string;
   title: string;
-  category: 'Sales' | 'Consultancy';
+  category: 'Sales' | 'Consultancy' | 'Interview';
   summary: string;
   lead: string;
   briefing?: string[];
@@ -86,6 +88,7 @@ export type SessionSnapshot = {
   revision: number;
   transcript: TranscriptEntry[];
   evaluation: TraineeEvaluation | null;
+  interview?: InterviewSession;
   feedbackStatus: FeedbackStatus;
   message: string | null;
   finalization: 'pending' | 'confirmed' | 'unconfirmed';

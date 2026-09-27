@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
+import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
@@ -11,6 +12,7 @@ mock.module('cloudflare:workers', () => ({ DurableObject: class {
 } }));
 const { SimulatorSession } = await import('./session');
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
+const interviewMigration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
 afterEach(() => setSystemTime());
 async function waitFor(check: () => boolean) {
   const deadline = performance.now() + 2500;
@@ -21,12 +23,14 @@ async function waitFor(check: () => boolean) {
 }
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
-const request = (action: string, cap = capability) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(attempt) : undefined });
+const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
+const request = (action: string, cap = capability, input = attempt) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(input) : undefined });
 const activityPoll = (active: boolean, audio = false) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio }) });
 
 function archiveDatabase() {
   const sqlite = new Database(':memory:');
   sqlite.exec(migration);
+  sqlite.exec(interviewMigration);
   let failNext = false;
   let held: { entered: () => void; wait: Promise<void> } | undefined;
   const d1 = {
@@ -44,6 +48,7 @@ function archiveDatabase() {
     }),
   } as unknown as D1Database;
   const row = () => sqlite.query('SELECT * FROM simulator_attempts WHERE id = ?').get(attempt.id) as Record<string, any> | null;
+  const interviewRow = () => sqlite.query('SELECT * FROM interview_attempts WHERE id = ?').get(attempt.id) as Record<string, any> | null;
   const holdNext = () => {
     let entered!: () => void;
     let release!: () => void;
@@ -52,7 +57,7 @@ function archiveDatabase() {
     held = { entered, wait };
     return { started, release };
   };
-  return { d1, row, failNext: () => { failNext = true; }, holdNext };
+  return { d1, row, interviewRow, failNext: () => { failNext = true; }, holdNext };
 }
 
 class ProviderSocket extends EventTarget {
@@ -80,14 +85,15 @@ async function fixture({ pendingCreation, values = new Map<string, unknown>(), o
   let alarm = 0;
   let creations = 0;
   const judged: unknown[] = [];
+  const interviewJudged: unknown[] = [];
   const pending: Promise<unknown>[] = [];
   const ctx = {
     storage: { get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }, setAlarm: async (value: number) => { alarm = value; }, deleteAll: async () => values.clear() },
     blockConcurrencyWhile: (fn: () => Promise<void>) => { ready = fn(); }, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); },
   } as unknown as DurableObjectState;
   const session = new SimulatorSession(ctx, {
-    OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture',
-    SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient ? 'true' : 'false',
+    OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture', OPENROUTER_API_KEY: 'fixture',
+    SIMULATOR_DIRECTOR_ENABLED: overrides.evaluateClient || overrides.evaluateInterviewer ? 'true' : 'false',
     SIMULATOR_ARCHIVE: archive.d1,
     ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
@@ -95,10 +101,12 @@ async function fixture({ pendingCreation, values = new Map<string, unknown>(), o
     attachLive: async () => socket as unknown as WebSocket,
     evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], hint: null, hintId: null, concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
     evaluateClient: async () => { throw new Error('Director should be disabled.'); },
+    evaluateInterview: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
+    evaluateInterviewer: async () => { throw new Error('Interview director should be disabled.'); },
     ...overrides,
   });
   await ready;
-  return { session, socket, values, judged, pending, archive, row: archive.row, creations: () => creations, alarm: () => alarm };
+  return { session, socket, values, judged, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm };
 }
 
 test('session ownership, authoritative transcript, close acknowledgment, and public projection', async () => {
@@ -119,6 +127,117 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(JSON.stringify(result)).not.toContain('answers');
   expect(f.socket.readyState).toBe(3);
 });
+
+test('interview End closes voice and returns pending before one summary completes', async () => {
+  let releaseSummary!: (text: string) => void;
+  const summaryResult = new Promise<string>(resolve => { releaseSummary = resolve; });
+  const summarized: { speaker: string; text: string }[][] = [];
+  const f = await fixture({ overrides: {
+    summarizeInterview: async input => { summarized.push(input.transcript); return summaryResult; },
+  } });
+  f.socket.holdClose = true;
+  let ending: Promise<Response> | undefined;
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    ending = f.session.fetch(request('end'));
+    expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen resolved our access issue.', start_ms: 100, end_ms: 900 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'I heard that no one helped.', start_ms: 1000, end_ms: 1600 });
+    await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+
+    const ended = await (await ending).json() as Record<string, any>;
+    expect(ended.status).toBe('ended');
+    expect(ended.finalization).toBe('confirmed');
+    expect(ended.interview.summary).toEqual({ status: 'pending', text: null });
+    expect(ended.evaluation).toBeNull();
+    expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['trainee']);
+    expect(f.judged).toHaveLength(0);
+    expect(f.interviewJudged).toHaveLength(1);
+    expect((f.interviewJudged[0] as { speaker: string }[]).map(entry => entry.speaker)).toEqual(['trainee']);
+    await waitFor(() => summarized.length === 1);
+    expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee']);
+    expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
+    expect(f.row()).toBeNull();
+    expect((await f.session.fetch(request('poll', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
+    expect((await f.session.fetch(request('poll', ''))).status).toBe(401);
+
+    releaseSummary('The participant credited Jen with resolving the access issue.');
+    await Promise.all(f.pending);
+    const ready = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    expect(ready.interview.summary).toEqual({ status: 'ready', text: 'The participant credited Jen with resolving the access issue.' });
+    expect(f.interviewRow()).toMatchObject({ summary_status: 'ready', summary_text: ready.interview.summary.text });
+    expect(JSON.parse(f.interviewRow()!.transcript_json)).toEqual(ended.transcript);
+    expect(f.row()).toBeNull();
+  } finally {
+    releaseSummary?.('Fallback summary.');
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+    await ending;
+  }
+}, 10_000);
+
+test('a failed interview summary remains unavailable while the participant transcript stays archived', async () => {
+  const f = await fixture({ overrides: {
+    summarizeInterview: async () => { throw new Error('Provider contained private request data.'); },
+  } });
+  await f.session.fetch(request('start', capability, interviewAttempt));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We shipped the migration despite the handoff delay.', start_ms: 100, end_ms: 900 });
+  await f.session.fetch(request('end'));
+  await Promise.all(f.pending);
+  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(snapshot.interview.summary).toEqual({ status: 'unavailable', text: null });
+  expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'unavailable', summary_text: null });
+  expect(JSON.parse(f.interviewRow()!.transcript_json)[0].text).toBe('We shipped the migration despite the handoff delay.');
+  expect(JSON.stringify(snapshot)).not.toContain('Provider contained');
+  expect(f.row()).toBeNull();
+});
+
+test('interview director repeats a useful cue only after fresh evidence and its cooldown', async () => {
+  let directed = 0;
+  let simulatorDirected = 0;
+  const f = await fixture({ overrides: {
+    evaluateClient: async () => { simulatorDirected++; throw new Error('Wrong director.'); },
+    evaluateInterviewer: async input => {
+      directed++;
+      return { revision: input.revision, cueId: 'follow-thread', cueProbability: .99, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} };
+    },
+    summarizeInterview: async () => 'The participant discussed the project.',
+  } });
+  const cues = () => f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+    setSystemTime(Date.now() + 2000);
+    await f.session.fetch(activityPoll(true));
+    await waitFor(() => cues().length === 1);
+
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen eventually found the owner.', start_ms: 2000, end_ms: 2900 });
+    setSystemTime(Date.now() + 30_000);
+    await f.session.fetch(activityPoll(true));
+    await waitFor(() => directed >= 2);
+    expect(cues()).toHaveLength(1);
+
+    setSystemTime(Date.now() + 91_000);
+    await f.session.fetch(activityPoll(true));
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(1);
+    expect(directed).toBe(2);
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We made the ownership clear for the next team.', start_ms: 4000, end_ms: 4900 });
+    setSystemTime(Date.now() + 2000);
+    await f.session.fetch(activityPoll(true));
+    await waitFor(() => cues().length === 2);
+    expect(simulatorDirected).toBe(0);
+    const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    expect(JSON.stringify(snapshot)).not.toContain(String(cues()[0]!.content));
+  } finally {
+    await f.session.fetch(request('end'));
+  }
+  await Promise.all(f.pending);
+  expect(JSON.parse(f.interviewRow()!.cues_json)).toHaveLength(2);
+}, 10_000);
 
 test('happy hour archives the client voice without live or final judging', async () => {
   let directed = 0;

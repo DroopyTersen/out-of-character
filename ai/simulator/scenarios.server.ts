@@ -403,12 +403,13 @@ export const scenarios: Scenario[] = [
 ];
 
 export function getScenario(id: string): Scenario {
+  if (id === interviewScenario.id) return interviewScenario;
   const scenario = scenarios.find(item => item.id === id);
   if (!scenario) throw new Error('Unknown scenario.');
   return scenario;
 }
 export function getClient(id: string): CastMember {
-  const client = clients.find(item => item.id === id);
+  const client = [...clients, ...interviewers].find(item => item.id === id);
   if (!client) throw new Error('Unknown client.');
   return client;
 }
@@ -420,6 +421,7 @@ const consultantOwnershipCue: ClientCue = {
 };
 
 export function getClientCues(scenario: Scenario): ClientCue[] {
+  if (scenario.id === interviewScenario.id) return scenario.cues;
   return scenario.objectives.length ? [...scenario.cues, consultantOwnershipCue] : scenario.cues;
 }
 export function publicCatalog(): Catalog {
@@ -434,6 +436,7 @@ export function publicCatalog(): Catalog {
 }
 
 export function actorBrief(scenario: Scenario, client: CastMember): string {
+  if (scenario.id === interviewScenario.id) return interviewerBrief(client.id);
   const openEnded = scenario.objectives.length === 0;
   return [
     `You are ${client.name}, the ${scenario.clientRole}, in a realistic private consultancy role-play. The other speaker is the ${scenario.role}. Stay in this client role throughout.`,
@@ -457,6 +460,8 @@ export function actorBrief(scenario: Scenario, client: CastMember): string {
 
 /** The session owner requests this once the caller's audio connection is ready. */
 export function openingInstruction(scenario: Scenario, client: CastMember): string {
+  if (scenario.id === interviewScenario.id) return interviewOpening(client.id);
   if (!scenario.objectives.length) return `Speak first in English as ${client.name}. ${scenario.opening} Keep the hello short, around five to ten seconds, with your personality already audible. Then leave room for the other person. Stay in the scene; do not explain the exercise or introduce objectives.`;
   return `Speak first immediately in English as ${client.name}, the ${scenario.clientRole}; do not wait for the other person. Open the meeting in two or three connected sentences: say your name, briefly establish the project or relationship, then make your opening request in character. Draw only from this premise:\n${scenario.opening}\nKeep your character's speaking pace and attitude. Leave private history, motives, budget, undisclosed problems and further details for the conversation. Do not explain the exercise, read objectives, or supply the consultant's answer. Then hand the conversation over and listen. If they interrupt, respond to what they said instead of restarting the introduction. Continue with your normal short conversational replies.`;
 }
+import { interviewScenario, interviewers, interviewerBrief, interviewOpening } from '../interview/scenario.server';

@@ -1,4 +1,5 @@
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
+import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
 import type { SentCue } from '../../../core/simulator/state';
@@ -28,7 +29,7 @@ export async function archiveProvenance(env: Env, snapshot: SessionSnapshot): Pr
   };
   const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
   return {
-    model: LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
+    model: LIVE_MODEL, voice: client.voice, rubricVersion: snapshot.interview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
     directorEnabled: env.SIMULATOR_DIRECTOR_ENABLED === 'true',
   };

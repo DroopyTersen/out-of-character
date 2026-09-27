@@ -1,0 +1,138 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const baseUrl = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173';
+const output = process.env.ACCEPTANCE_OUTPUT || 'output/simulator-briefing-ui';
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const results = [];
+
+function check(value, message) { if (!value) throw new Error(message); }
+
+for (const width of [1440, 390, 320]) {
+  const context = await browser.newContext({ viewport: { width, height: width === 1440 ? 900 : 820 }, reducedMotion: 'reduce' });
+  await context.addInitScript(() => {
+    window.__micCalls = 0;
+    if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => {
+      window.__micCalls++;
+      return Promise.reject(new Error('Briefing must not request a microphone'));
+    };
+  });
+  const page = await context.newPage();
+  const apiCalls = [], errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/**', route => { apiCalls.push(route.request().url()); return route.abort(); });
+  try {
+    const response = await page.goto(`${baseUrl}/storybook/simulator-briefing`, { waitUntil: 'networkidle' });
+    check(response?.status() === 200, `HTTP ${response?.status()}`);
+    const scenarios = page.getByLabel('Scenario');
+    const clients = page.getByLabel('Client');
+    check(await scenarios.locator('option').count() === 9, 'all nine scenario options are required');
+    const ids = await scenarios.locator('option').evaluateAll(options => options.map(option => option.value));
+    for (const id of ids) {
+      await scenarios.selectOption(id);
+      await page.waitForFunction(expected => document.querySelector('.sim-briefing audio')?.getAttribute('src') === expected, `/simulator/briefings/${id}.mp3`);
+      const source = await page.locator('.sim-briefing audio').getAttribute('src');
+      check(source === `/simulator/briefings/${id}.mp3`, `wrong clip for ${id}: ${source}`);
+      await page.waitForFunction(() => {
+        const audio = document.querySelector('.sim-briefing audio');
+        return audio && Number.isFinite(audio.duration) && audio.duration > 10;
+      });
+      const transcript = page.locator('.sim-briefing-transcript p');
+      check((await transcript.textContent()).trim().length > 80, `missing transcript for ${id}`);
+    }
+    await clients.selectOption({ index: 1 });
+    check((await page.locator('.sim-briefing-heading h1').innerText()).includes(await clients.locator('option').nth(1).innerText()), 'client context did not update');
+    await page.getByRole('button', { name: 'Screen only', exact: true }).click();
+    const overflow = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
+    check(overflow.document <= overflow.viewport + 1, `horizontal overflow: ${JSON.stringify(overflow)}`);
+    if (width < 700) {
+      const button = await page.getByRole('button', { name: 'Start conversation' }).evaluate(node => ({ button: node.getBoundingClientRect().width, parent: node.parentElement.getBoundingClientRect().width }));
+      check(Math.abs(button.button - button.parent) <= 2, `mobile start button is not full width: ${JSON.stringify(button)}`);
+    }
+    await page.screenshot({ path: `${output}/briefing-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Start conversation' }).click();
+    check(apiCalls.length === 0, `workshop opened API: ${apiCalls.join(', ')}`);
+    check(await page.evaluate(() => window.__micCalls) === 0, 'workshop requested microphone');
+    check(errors.length === 0, `page errors: ${errors.join(' | ')}`);
+    results.push({ width, pass: true, scenarios: ids.length, overflow, apiCalls: 0, micCalls: 0 });
+  } catch (error) {
+    await page.screenshot({ path: `${output}/briefing-${width}-failure.png`, fullPage: true }).catch(() => {});
+    results.push({ width, pass: false, error: error.stack, apiCalls, errors });
+  } finally { await context.close(); }
+}
+
+const fallback = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const page = await fallback.newPage();
+await page.route('**/simulator/briefings/*.mp3', route => route.abort());
+try {
+  await page.goto(`${baseUrl}/storybook/simulator-briefing`, { waitUntil: 'networkidle' });
+  await page.locator('.sim-briefing audio').evaluate(node => node.dispatchEvent(new Event('error')));
+  await page.getByText('Audio unavailable. You can read the transcript below.').waitFor();
+  check(await page.locator('.sim-briefing-transcript').getAttribute('open') !== null, 'transcript did not open after audio failure');
+  check(await page.getByRole('button', { name: 'Start conversation' }).isEnabled(), 'audio failure blocked starting');
+  results.push({ fallback: true, pass: true });
+} catch (error) { results.push({ fallback: true, pass: false, error: error.stack }); }
+await fallback.close();
+
+const production = await browser.newContext({ viewport: { width: 390, height: 844 } });
+await production.addInitScript(() => {
+  window.__micCalls = 0;
+  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => {
+    window.__micCalls++;
+    const audio = new AudioContext();
+    return Promise.resolve(audio.createMediaStreamDestination().stream);
+  };
+});
+const livePage = await production.newPage();
+const apiCalls = [];
+await livePage.route('**/api/**', route => {
+  apiCalls.push(new URL(route.request().url()).pathname);
+  const creation = new URL(route.request().url()).pathname === '/api/simulator/sessions';
+  return route.fulfill({ status: creation ? 502 : 200, contentType: 'application/json', body: JSON.stringify(creation ? { error: 'Voice service unavailable.' } : { ended: true }) });
+});
+try {
+  await livePage.goto(`${baseUrl}/simulator`, { waitUntil: 'networkidle' });
+  await livePage.getByRole('button', { name: 'Start simulation' }).click();
+  await livePage.getByRole('heading', { name: /Before you meet/ }).waitFor();
+  check(await livePage.getByRole('button', { name: 'Start conversation' }).evaluate(node => node.getBoundingClientRect().bottom <= innerHeight + 1), 'mobile start button is below the viewport');
+  await livePage.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration) && document.querySelector('.sim-briefing audio').duration > 10);
+  await livePage.locator('.sim-briefing audio').evaluate(node => { node.pause(); node.currentTime = 2; });
+  await livePage.getByRole('button', { name: 'Replay' }).click();
+  check(await livePage.locator('.sim-briefing audio').evaluate(node => node.currentTime < 1 && !node.paused), 'replay did not restart the clip');
+  await livePage.screenshot({ path: `${output}/audio-success-390.png`, fullPage: true });
+  await livePage.setViewportSize({ width: 1440, height: 900 });
+  await livePage.screenshot({ path: `${output}/audio-success-1440.png`, fullPage: true });
+  await livePage.evaluate(() => {
+    const player = document.querySelector('.sim-briefing audio');
+    player.pause();
+    document.querySelector('.sim-briefing-audio-foot button').click();
+    player.pause();
+  });
+  await livePage.waitForTimeout(100);
+  check(await livePage.locator('.sim-briefing audio').evaluate(node => !node.hidden), 'rapid Replay then pause incorrectly marked the clip unavailable');
+  await livePage.waitForFunction(() => Number.isFinite(document.querySelector('.sim-briefing audio')?.duration));
+  await livePage.locator('.sim-briefing audio').evaluate(async node => { node.currentTime = node.duration - .15; await node.play(); });
+  await livePage.waitForFunction(() => document.querySelector('.sim-briefing audio')?.ended);
+  check(apiCalls.length === 0, `finishing briefing called API: ${apiCalls.join(', ')}`);
+  check(await livePage.evaluate(() => window.__micCalls) === 0, 'finishing briefing requested microphone');
+  check(await livePage.getByRole('button', { name: 'Start conversation' }).isEnabled(), 'finished briefing hid start control');
+  await livePage.getByRole('button', { name: 'Change scenario or client' }).click();
+  await livePage.getByRole('heading', { name: 'Choose your simulation' }).waitFor();
+  check(apiCalls.length === 0, 'back from briefing called API');
+  check(await livePage.evaluate(() => window.__micCalls) === 0, 'back from briefing requested microphone');
+  await livePage.getByRole('button', { name: 'Start simulation' }).click();
+  await livePage.getByRole('button', { name: 'Start conversation' }).click();
+  await livePage.getByRole('alert').waitFor();
+  const micCalls = await livePage.evaluate(() => window.__micCalls);
+  const creations = apiCalls.filter(path => path === '/api/simulator/sessions').length;
+  check(micCalls === 1, `explicit start requested microphone ${micCalls} times`);
+  check(creations === 1, `explicit start created ${creations} sessions`);
+  results.push({ productionGate: true, pass: true, prematureApiCalls: 0, prematureMicCalls: 0, micCallsAfterStart: micCalls, sessionCreationAttempts: creations });
+} catch (error) { results.push({ productionGate: true, pass: false, error: error.stack, apiCalls }); }
+await production.close();
+
+await browser.close();
+await writeFile(`${output}/results.json`, JSON.stringify(results, null, 2));
+if (results.some(result => !result.pass)) throw new Error(`Briefing acceptance failed: ${output}/results.json`);
+console.log(`Briefing acceptance passed: ${output}/results.json`);

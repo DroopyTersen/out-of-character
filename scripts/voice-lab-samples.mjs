@@ -1,11 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
 import { clients } from '../ai/simulator/scenarios.server.ts';
 import { clientProfiles } from '../app/simulator/client-profiles.ts';
 import { liveVoices } from '../core/simulator/voices.ts';
 import { LIVE_MODEL } from '../app/server/simulator/live.server.ts';
+import { captureLiveClip, encodeLiveClip, hash, trimmedPcm } from './lib/live-voice-clip.mjs';
 
 // Generate public, reusable audition clips with the same model and voices as live practice.
 // Usage: bun --env-file=.dev.vars scripts/voice-lab-samples.mjs --paid
@@ -20,8 +19,6 @@ if (!Number.isInteger(concurrency)) throw new Error('Concurrency must be an inte
 
 const manifestPath = 'scripts/voice-lab-manifest.json';
 const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, 'utf8')) : { model: LIVE_MODEL, clips: {} };
-const silence = Buffer.alloc(960).toString('base64'); // 20 ms of mono PCM16 at 24 kHz.
-const hash = value => createHash('sha256').update(value).digest('hex');
 const instructions = client => `You are ${client.name}, a client speaking in a consultancy meeting. Play this personality with expressive, theatrical commitment while sounding like a real person. ${client.behavior} This is a short prepared voice sample, not an interactive conversation. Speak in English. Do not invent project details or say stage directions aloud.`;
 const opening = sample => `Speak now as the client. Say this paragraph once, keeping its meaning and most of its wording. Do not introduce it, explain it, or add anything afterward: ${sample}`;
 const tokens = value => value.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
@@ -39,108 +36,10 @@ function closeEnough(expected, actual) {
     && heard.slice(-5).includes(target.at(-1));
 }
 
-function capture(client, voice, sample) {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket('wss://api.openai.com/v1/live/sessions', {
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-    });
-    const chunks = [];
-    let bytes = 0, firstAudible = null, lastAudible = 0, lastSoundAt = 0, lastTextAt = 0;
-    let transcript = '', started = false, closing = false, settled = false, failure = null;
-    let pacing, closeDeadline;
-    const send = event => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event)); };
-    const finish = error => {
-      if (settled) return;
-      settled = true;
-      clearInterval(pacing); clearTimeout(deadline); clearTimeout(closeDeadline);
-      socket.close();
-      if (error) reject(error);
-      else resolve({ pcm: Buffer.concat(chunks), firstAudible, lastAudible, transcript: transcript.trim() });
-    };
-    const close = () => {
-      if (closing) return;
-      closing = true;
-      clearInterval(pacing);
-      send({ type: 'session.close' });
-      closeDeadline = setTimeout(() => finish(failure ?? new Error('Session finalization timed out.')), 10_000);
-    };
-    const deadline = setTimeout(() => { failure = new Error('Speech generation timed out.'); close(); }, 55_000);
-    socket.addEventListener('open', () => send({
-      type: 'session.start',
-      session: {
-        model: LIVE_MODEL, instructions: instructions(client), delegation: { type: 'client' }, store: false,
-        audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice } },
-      },
-    }));
-    socket.addEventListener('message', event => {
-      if (typeof event.data !== 'string') return;
-      let value;
-      try { value = JSON.parse(event.data); } catch { return; }
-      if (value.type === 'session.started') {
-        started = true;
-        lastTextAt = Date.now();
-        send({ type: 'session.instructions.append', event_id: 'sample', delegation_id: null, content: opening(sample) });
-        pacing = setInterval(() => {
-          send({ type: 'session.input_audio.append', audio: silence });
-          if (lastSoundAt && Date.now() - lastSoundAt > 3000 && Date.now() - lastTextAt > 1800) close();
-        }, 20);
-      } else if (value.type === 'session.output_audio.delta') {
-        const audio = Buffer.from(value.delta, 'base64');
-        chunks.push(audio);
-        let energy = 0;
-        for (let i = 0; i + 1 < audio.length; i += 2) energy += audio.readInt16LE(i) ** 2;
-        if (audio.length && Math.sqrt(energy / (audio.length / 2)) > 200) {
-          firstAudible ??= bytes;
-          lastAudible = bytes + audio.length;
-          lastSoundAt = Date.now();
-        }
-        bytes += audio.length;
-      } else if (value.type === 'session.output_transcript.delta') {
-        transcript += value.delta;
-        lastTextAt = Date.now();
-      } else if (value.type === 'session.delegation.created') {
-        failure = new Error('The actor requested an unrelated task.'); close();
-      } else if (value.type === 'error') {
-        failure = new Error(`Voice service error: ${value.error?.code ?? 'unknown'}`); close();
-      } else if (value.type === 'session.closed') {
-        finish(failure ?? (!started || firstAudible === null || !transcript ? new Error('No complete spoken sample was captured.') : null));
-      }
-    });
-    socket.addEventListener('error', () => { failure = new Error('Voice transport failed.'); close(); });
-    socket.addEventListener('close', () => finish(failure ?? new Error('Voice transport closed before finalization.')));
-  });
-}
-
-function trimmedPcm(captureResult) {
-  const { pcm, firstAudible, lastAudible } = captureResult;
-  const start = Math.max(0, firstAudible - 12_000); // Keep 250 ms before speech.
-  const end = Math.min(pcm.length, lastAudible + 19_200); // Keep 400 ms after speech.
-  return pcm.subarray(start, end);
-}
-
-async function encode(captureResult, path) {
-  const trimmed = trimmedPcm(captureResult);
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = join('output/voice-lab-temp', `${randomUUID()}.mp3`);
-  await mkdir(dirname(temporary), { recursive: true });
-  try {
-    const ffmpeg = Bun.spawn([
-      'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', 'pipe:0',
-      '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-codec:a', 'libmp3lame', '-b:a', '64k', temporary,
-    ], { stdin: 'pipe', stdout: 'ignore', stderr: 'pipe' });
-    ffmpeg.stdin.write(trimmed); ffmpeg.stdin.end();
-    const code = await ffmpeg.exited;
-    if (code) throw new Error(`Audio encoding failed: ${await new Response(ffmpeg.stderr).text()}`);
-    const probe = Bun.spawn(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', temporary], { stdout: 'pipe', stderr: 'ignore' });
-    const seconds = Number((await new Response(probe.stdout).text()).trim());
-    if (await probe.exited || !Number.isFinite(seconds) || seconds < 5 || seconds > 35) throw new Error(`Invalid clip duration: ${seconds}`);
-    const audioHash = hash(await readFile(temporary));
-    await rename(temporary, path);
-    return { seconds, audioHash };
-  } finally {
-    await rm(temporary, { force: true });
-  }
-}
+const capture = (client, voice, sample) => captureLiveClip({
+  model: LIVE_MODEL, voice, instructions: instructions(client), opening: opening(sample),
+});
+const encode = (result, path) => encodeLiveClip(result, path);
 
 const pairs = selectedClients.flatMap(id => selectedVoices.map(voice => ({ client: clients.find(client => client.id === id), voice })));
 const pending = [];

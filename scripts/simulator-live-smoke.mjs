@@ -56,8 +56,9 @@ page.on('response', async response => {
   }
 });
 try {
-  await page.goto(`${baseUrl}/simulator`);
+  await page.goto(`${baseUrl}/simulator`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Start simulation' }).click();
+  await page.getByRole('button', { name: 'Start conversation' }).click();
   await page.getByRole('button', { name: 'End session', exact: true }).waitFor({ timeout: 45_000 });
   await page.waitForFunction(() => document.querySelector('.sim-caption')?.textContent?.includes('Client') || document.querySelector('.sim-caption small')?.textContent === 'Morgan', null, { timeout: 25_000 });
   await page.waitForTimeout(24_000);

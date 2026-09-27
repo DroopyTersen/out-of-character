@@ -24,8 +24,9 @@ for (const mode of ['denied', 'creation-failed', 'cancel-pending-mic']) {
     return route.fulfill({ status: route.request().url().endsWith('/sessions') ? 502 : 200, contentType: 'application/json', body: JSON.stringify(route.request().url().endsWith('/sessions') ? { error: 'The voice service is unavailable.' } : { ended: true }) });
   });
   try {
-    await page.goto(`${process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173'}/simulator`);
+    await page.goto(`${process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173'}/simulator`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Start simulation' }).click();
+    await page.getByRole('button', { name: 'Start conversation' }).click();
     if (mode === 'cancel-pending-mic') {
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.evaluate(() => window.__resolveMic());

@@ -4,6 +4,8 @@ Implementation: `simulator-mvp`. Checkpoint commits: `5804582` (plan), `e7f1602`
 
 This document preserves the original MVP acceptance evidence. Subsequent engine and design work is tracked separately in [critique and improvement rounds](simulator-improvement-rounds.md). The [third engine round](simulator-engine-round-3.md) records the current v4 rubric measurements, 110-test gate, and same-audio immediate-End regression. The standard workshop recording files now contain those v4 results; the earlier v3 counts below are historical measurements, not the current recording totals.
 
+The subsequent [prerecorded briefing follow-up](simulator-meeting-opening.md) covers the nine scenario introductions, Morgan's pace direction, and the revised Theo constraint. Its evidence is local; this follow-up has not been deployed.
+
 ## Delivered behavior
 
 - Sales: explore an adjacent SharePoint opportunity with an existing software client. Consultancy: handle an unestimated dashboard request without surrendering scope or ignoring the real need.
@@ -41,6 +43,7 @@ Nonpaid checks:
 ```sh
 bun run check
 bun scripts/simulator-workshop-acceptance.mjs
+bun scripts/simulator-briefing-acceptance.mjs
 bun scripts/simulator-failure-acceptance.mjs
 bun scripts/simulator-voice-acceptance.mjs
 DESIGN_SCREEN=1 bun scripts/simulator-design-capture.mjs

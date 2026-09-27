@@ -9,6 +9,8 @@ import { SimulatorVoiceStory } from '../storybook/simulator-voice-story';
 import { clients, publicCatalog } from '../../ai/simulator/scenarios.server';
 import { SimulatorDebriefStory, SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
 import { VoiceLabContent } from '../simulator/voice-lab';
+import { SimulatorBriefing } from '../simulator/briefing';
+import { scenarioBriefings } from '../../core/simulator/briefings';
 
 export const loader = () => ({
   simulatorCatalog: publicCatalog(),
@@ -21,8 +23,25 @@ function SimulatorVoiceLabStory() {
   const { simulatorCatalog, defaultVoices } = useLoaderData<typeof loader>();
   return <VoiceLabContent clients={simulatorCatalog.clients} defaultVoices={defaultVoices} />;
 }
+function SimulatorBriefingStory() {
+  const { simulatorCatalog } = useLoaderData<typeof loader>();
+  const [scenarioId, setScenarioId] = useState(simulatorCatalog.scenarios[0]!.id);
+  const [clientId, setClientId] = useState(simulatorCatalog.clients[0]!.id);
+  const [notice, setNotice] = useState('');
+  const scenario = simulatorCatalog.scenarios.find(item => item.id === scenarioId)!;
+  const client = simulatorCatalog.clients.find(item => item.id === clientId)!;
+  return <>
+    <div className="workshop-controls">
+      <label>Scenario<select value={scenarioId} onChange={event => { setScenarioId(event.target.value); setNotice(''); }}>{simulatorCatalog.scenarios.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+      <label>Client<select value={clientId} onChange={event => { setClientId(event.target.value); setNotice(''); }}>{simulatorCatalog.clients.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      {notice && <p role="status">{notice}</p>}
+    </div>
+    <SimulatorBriefing key={`${scenarioId}:${clientId}`} scenario={scenario} client={client} briefing={scenarioBriefings[scenarioId]!} onBack={() => setNotice('Workshop preview: return to selection.')} onStart={() => setNotice('Workshop preview: no microphone or paid session was opened.')} />
+  </>;
+}
 const stories = [
   { id: 'simulator-selection', label: 'Simulator selection', description: 'Scenario scrolling, client rail, selection transitions, availability, and microphone errors.', component: SimulatorSelectionStory },
+  { id: 'simulator-briefing', label: 'Simulator briefing', description: 'Prerecorded scenario introduction, audio controls, readable transcript, and start gesture without a live session.', component: SimulatorBriefingStory },
   { id: 'simulator-live', label: 'Simulator conversation', description: 'The production screen with overlay hints, session brief, transcript, objective completions, skill bars, and connection states.', component: SimulatorLiveStory },
   { id: 'simulator-voice', label: 'Simulator audio', description: 'Replay every speaking, listening, overlap, muted, and connection state. Adjust intensity without a microphone.', component: SimulatorVoiceStory },
   { id: 'simulator-voice-lab', label: 'Voice Lab', description: 'Hear prepared voice clips for each client while viewing their portrait and personality.', component: SimulatorVoiceLabStory },

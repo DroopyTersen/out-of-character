@@ -1,6 +1,6 @@
 # Contextual direction for The Debrief
 
-Status: implemented locally on `project-closeout-interviews`, with main through `18827cd` merged. The shared actor lane, interview-specific judgments and prompts, private archive migration, and legacy cue removal are complete. Synthetic Jev/Sol and both voice rehearsals passed their bounded checks. Final review and verification are recorded in `interview-progress.md`. Not deployed.
+Status: implemented on `project-closeout-interviews` and deployed at application revision `ae9c8be` to the [existing isolated preview](https://project-closeout-interviews-out-of-character.droopy.workers.dev/interview). Main through `18827cd` is merged into this branch; the interview branch remains unmerged. Verification and deployment evidence are recorded in `interview-progress.md`.
 
 ## Recommendation
 

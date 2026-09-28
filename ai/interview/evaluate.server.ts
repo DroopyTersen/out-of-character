@@ -4,7 +4,7 @@ import { JEV_MODEL } from '../judging';
 import { emptyInterviewReadings, interviewReadings, type InterviewEvaluation } from '../../core/interview';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import type { TranscriptEntry } from '../../core/simulator/types';
-import { INTERVIEW_CONDITIONS, type DirectorSignal } from '../../core/simulator/director';
+import { INTERVIEW_CONDITIONS, type DeliveredInterviewBackground, type DirectorSignal } from '../../core/simulator/director';
 import { evidenceBatches } from '../simulator/rubric';
 import { interviewScenario, interviewers } from './scenario.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
@@ -19,6 +19,7 @@ type Input = {
   apiKey: string;
   signal?: AbortSignal;
   achievedIds?: string[];
+  deliveredBackground?: DeliveredInterviewBackground[];
 };
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
@@ -116,14 +117,30 @@ export function readInterviewerSignals(answers: InterviewAnswers): DirectorSigna
   return INTERVIEW_CONDITIONS.map(condition => ({ condition, probability: booleanProbability(answers, `director:${condition}`) }));
 }
 
+export function readResearchProbability(answers: InterviewAnswers): number {
+  return booleanProbability(answers, 'research:useful');
+}
+
+/** Outside facts are visible only to Sam's interviewer assessment, never participant scoring. */
+export function interviewerState(transcript: TranscriptEntry[], deliveredBackground: DeliveredInterviewBackground[] = []) {
+  const recent = recentTranscript(transcript, 12_000);
+  return {
+    ...state(recent),
+    earlierDialogueOmitted: recent.length < transcript.length,
+    deliveredBackground: deliveredBackground.slice(-2).map(({ target, facts, retrievedAt, afterPassageId, status }) => ({
+      target, facts, retrievedAt, afterPassageId, status,
+    })),
+  };
+}
+
 export async function evaluateInterviewer(input: Input) {
   validate(input);
   const started = performance.now();
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: state(recentTranscript(input.transcript, 12_000)), questions: interviewerQuestions(),
+    state: interviewerState(input.transcript, input.deliveredBackground), questions: interviewerQuestions(),
     abortSignal: input.signal, maxRetries: 0,
   });
-  return { signals: readInterviewerSignals(result.answers), revision: input.revision, model: result.response.modelId,
+  return { signals: readInterviewerSignals(result.answers), researchProbability: readResearchProbability(result.answers), revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers };
 }

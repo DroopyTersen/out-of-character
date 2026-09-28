@@ -31,6 +31,16 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   'project-closeout': {
+    research: {
+      turns: 4,
+      lines: {
+        project: 'We built a flood planning dashboard using USGS 3DEP data. I led the integration. The surprising part was how much the program quality levels changed what we could promise the planners.',
+        context: 'Three DEP is the public elevation program. We kept talking past each other about quality level two versus quality level one. Those are public program definitions, not our internal labels. I had to translate what that distinction meant for the planning team.',
+        decision: 'I put the two results side by side on an area the planners knew well. That helped them choose a smaller but more detailed area for the pilot. We gave up geographic coverage to get a result they actually trusted.',
+        boundary: 'I do not remember the numerical accuracy specification, so I would not want to guess. The useful lesson was making the tradeoff visible to people who would use the map, instead of arguing over a technical label.',
+      },
+      choose: ({ turn }) => ['project', 'context', 'decision', 'boundary'][turn],
+    },
     positive: {
       turns: 4,
       lines: {
@@ -311,9 +321,9 @@ async function observeClient(afterTurn, transcript) {
   const observation = contextual.beginObservation({ audience: 'actor', transcript, revision: transcript.length, capturedAt: Date.now() });
   try {
     const evaluate = isInterview ? evaluateInterviewer : evaluateClient;
-    const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
-    report.directions.push({ afterTurn, signals: judgment.signals });
-    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model });
+    const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), ...(isInterview ? { deliveredBackground: contextual.background() } : {}) });
+    report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability });
+    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model, researchProbability: judgment.researchProbability });
   } catch (error) {
     contextual.observe(observation, { signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
@@ -329,14 +339,14 @@ async function respond() {
   if (turn && (!isInterview || id)) {
     const observation = observeClient(turn, [...report.transcript]);
     observations.push(observation);
-    if (isInterview) await observation;
+    if (isInterview && approach !== 'research') await observation;
   }
   if (!id) {
     if (isInterview && turn) {
       // Measure Sam's reply after the last possible note without proposing an
       // unobservable new note at the moment the rehearsal closes.
       try {
-        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
+        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), ...(isInterview ? { deliveredBackground: contextual.background() } : {}) });
         report.finalObservation = { signals: result.signals, model: result.model, durationMs: result.durationMs };
       } catch (error) { report.finalObservation = { unavailable: true, error: error.name }; }
     }
@@ -407,7 +417,7 @@ const completed = new Promise(resolve => {
       report.finalized = true; report.usageSeconds = value.usage?.seconds ?? null; resolve();
     } else if (value.type === 'error') {
       const eventId = value.error?.client_event_id;
-      if (typeof eventId === 'string' && eventId.startsWith('cue-')) contextual?.providerEvent(eventId, false);
+      if (typeof eventId === 'string' && /^(cue|research)-/.test(eventId)) contextual?.providerEvent(eventId, false);
       else report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
     }
   });

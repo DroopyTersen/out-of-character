@@ -1,6 +1,7 @@
 import type { InterviewReadingId } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import type { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
+import type { DeliveredInterviewBackground } from '../../core/simulator/director';
 
 type InterviewCondition = (typeof INTERVIEW_CONDITIONS)[number];
 
@@ -12,7 +13,8 @@ export type InterviewFixture = {
   id: string;
   description: string;
   transcript: TranscriptEntry[];
-  expected: { heard: string[]; unheard: string[]; present?: InterviewCondition[]; absent?: InterviewCondition[]; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
+  deliveredBackground?: DeliveredInterviewBackground[];
+  expected: { heard: string[]; unheard: string[]; present?: InterviewCondition[]; absent?: InterviewCondition[]; researchUseful?: boolean; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
 };
 
 export const interviewFixtures: InterviewFixture[] = [
@@ -141,5 +143,103 @@ export const interviewFixtures: InterviewFixture[] = [
       ['trainee', 'I cannot say that. I only saw my access arrive three weeks late.'],
       ['client', 'I jumped to a conclusion. What did you observe, and what work did the delay affect?'],
     ]), expected: { heard: ['client-access'], unheard: ['client-decisions'], absent: ['leading', 'invented-facts', 'boundary-pressure'] },
+  },
+  {
+    id: 'quiet-win-skipped', description: 'Sam skips a quiet success with a useful unexplored cause.',
+    transcript: dialogue([
+      ['client', 'What stood out about working on the project?'],
+      ['trainee', 'Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before.'],
+      ['client', 'Nice. Which ticketing system did you use?'],
+    ]), expected: { heard: [], unheard: [], present: ['missed-thread'] },
+  },
+  {
+    id: 'quiet-win-followed', description: 'The same quiet success is already receiving a useful follow-up.',
+    transcript: dialogue([
+      ['client', 'What stood out about working on the project?'],
+      ['trainee', 'Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before.'],
+      ['client', 'What did Nia learn about those owners that made access work this time?'],
+    ]), expected: { heard: [], unheard: [], absent: ['missed-thread', 'overprobing'] },
+  },
+  {
+    id: 'routine-inventory', description: 'After enough orientation, Sam continues collecting routine process inventory.',
+    transcript: dialogue([
+      ['client', 'What did you build on this project?'],
+      ['trainee', 'A permit portal. I led the API work and we shipped it in June.'],
+      ['client', 'How many planning workshops were there?'],
+      ['trainee', 'Six. We used those to agree the review stages.'],
+      ['client', 'How long was each workshop?'],
+      ['trainee', 'About an hour. The review stages were the useful part; we moved on once those were settled.'],
+      ['client', 'What exact agenda did you use for the fourth workshop?'],
+    ]), expected: { heard: [], unheard: [], present: ['overprobing'] },
+  },
+  {
+    id: 'productive-technical-depth', description: 'The participant volunteers technical detail that explains a result.',
+    transcript: dialogue([
+      ['client', 'What made the offline app work for inspectors?'],
+      ['trainee', 'I designed a local queue so failed uploads could resume without duplicating inspections. That was the hard part.'],
+      ['client', 'How did you know a resumed upload was the same inspection?'],
+      ['trainee', 'We gave each inspection a stable device ID and reconciled it when coverage returned. Inspectors could keep working all morning.'],
+    ]), expected: { heard: [], unheard: [], absent: ['overprobing', 'missed-thread'] },
+  },
+  {
+    id: 'complete-brief-answer', description: 'A short but complete result needs no repeated probe.',
+    transcript: dialogue([
+      ['client', 'What did your team change that helped the release?'],
+      ['trainee', 'We named one signoff owner. That ended the approval confusion, and the release went out the next day.'],
+      ['client', 'That is clear. What else stands out to you about the work?'],
+    ]), expected: { heard: [], unheard: [], absent: ['overprobing', 'missed-thread'] },
+  },
+  {
+    id: 'redundant-probe', description: 'Sam keeps probing a fully explained decision for incidental meeting details.',
+    transcript: dialogue([
+      ['client', 'What held up the release?'],
+      ['trainee', 'Two teams thought the other owned approval. I brought both leads together, got one written owner, and we released the next day.'],
+      ['client', 'What else did you need to resolve?'],
+      ['trainee', 'Nothing. The owner was the only blocker, and both teams accepted it.'],
+      ['client', 'How long was the meeting?'],
+      ['trainee', 'About 20 minutes. That timing did not affect the decision.'],
+      ['client', 'Which calendar invitation did you send, and who booked the room?'],
+    ]), expected: { heard: [], unheard: [], present: ['overprobing'] },
+  },
+  {
+    id: 'needed-clarification', description: 'Sam asks one consequential question about an unresolved decision.',
+    transcript: dialogue([
+      ['client', 'What held up the release?'],
+      ['trainee', 'Two teams thought the other owned approval. I got them into a meeting.'],
+      ['client', 'Who agreed to own the final decision, and did that unblock release?'],
+    ]), expected: { heard: [], unheard: [], absent: ['overprobing'] },
+  },
+  {
+    id: 'research-gap', description: 'A named public program has unfamiliar structure relevant to the participant’s work.',
+    transcript: dialogue([
+      ['client', 'What project did you work on?'],
+      ['trainee', 'I designed an identity flow around the EU eIDAS framework. Qualified electronic signatures have a specific public meaning under that framework; that distinction drove what we could accept. Could you check the public eIDAS definition of a qualified signature before I describe the choice?'],
+    ]), expected: { heard: [], unheard: [], researchUseful: true },
+  },
+  {
+    id: 'brand-name-only', description: 'A familiar company name alone creates no useful research task.',
+    transcript: dialogue([
+      ['client', 'What project did you work on?'],
+      ['trainee', 'A Costco inventory API. I owned the import job.'],
+    ]), expected: { heard: [], unheard: [], researchUseful: false },
+  },
+  {
+    id: 'background-already-supplied', description: 'Sam already has the relevant labeled outside context.',
+    transcript: dialogue([
+      ['client', 'What project did you work on?'],
+      ['trainee', 'I designed an identity flow around the EU eIDAS framework. Qualified electronic signatures have a specific public meaning under that framework; that distinction drove what we could accept. Could you check the public eIDAS definition of a qualified signature before I describe the choice?'],
+    ]),
+    deliveredBackground: [{ id: 'r1', target: { kind: 'term', name: 'qualified electronic signatures' }, facts: [{ text: 'Under eIDAS, qualified electronic signatures meet additional qualified certificate and device requirements.', url: 'https://example.org/eidas', title: 'eIDAS overview' }], retrievedAt: 1_790_000_000_000, afterPassageId: 'p2', status: 'accepted' }],
+    expected: { heard: [], unheard: [], researchUseful: false },
+  },
+  {
+    id: 'public-history-confusion', description: 'Current outside background does not prove an earlier project condition.',
+    transcript: dialogue([
+      ['client', 'What were you working on in 2018?'],
+      ['trainee', 'An inspection portal for Northstar Stores. I handled the import API.'],
+      ['client', 'Northstar has 50 stores today, so your 2018 rollout covered all 50 stores. How did you coordinate that?'],
+    ]),
+    deliveredBackground: [{ id: 'r1', target: { kind: 'organization', name: 'Northstar Stores' }, facts: [{ text: 'Northstar Stores currently operates 50 stores.', url: 'https://example.org/northstar', title: 'Current company profile' }], retrievedAt: 1_790_000_000_000, afterPassageId: 'p2', status: 'accepted' }],
+    expected: { heard: [], unheard: [], present: ['source-confusion'] },
   },
 ];

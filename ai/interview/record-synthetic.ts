@@ -33,6 +33,7 @@ for (const row of jev.rows) {
       model: assessment ? replay.models.detector : row.interviewer.model,
       durationMs: assessment ? assessment.detectorDurationMs : row.interviewer.durationMs,
       signals: assessment ? assessment.signals : row.interviewer.signals,
+      researchProbability: row.interviewer.researchProbability,
     },
     ...(assessment ? { director: {
       decision: assessment.decision, issueId: assessment.issueId,

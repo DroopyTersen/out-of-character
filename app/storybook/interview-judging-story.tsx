@@ -11,7 +11,7 @@ type Recording = {
   rows: {
     fixtureId: string;
     participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: { id: string; achieved: boolean; evidence: { entryId: string; speaker: string; text: string } | null }[] };
-    interviewer: { model: string; durationMs: number; signals: DirectorSignal[] };
+    interviewer: { model: string; durationMs: number; signals: DirectorSignal[]; researchProbability?: number };
     director?: { decision: string; issueId?: string | null; result?: (DirectorResult & { model?: string; durationMs?: number }) | null };
   }[];
 };
@@ -54,6 +54,7 @@ export function InterviewJudgingStory() {
             <h3>Private interviewer direction</h3>
             <>
               <p>Jev observations: {row.interviewer.signals.map(signal => 'probability' in signal ? `${signal.condition.replaceAll('-', ' ')} ${(signal.probability * 100).toFixed(0)}%` : null).filter(Boolean).join(' · ')}</p>
+              {row.interviewer.researchProbability != null && <p>Public lookup useful: {(row.interviewer.researchProbability * 100).toFixed(0)}%. This separate signal can request preparation; it is not a Sol concern.</p>}
               <p>Producer gate: <strong>{row.director?.decision ?? 'Not replayed'}</strong>{row.director?.issueId ? ` · ${row.director.issueId}` : ''}</p>
               {row.director?.result?.action === 'intervene' ? <>
                 <blockquote className="sim-evidence"><span>Recorded Sol direction{row.director.result.model ? ` · ${row.director.result.model}` : ''}</span><p>“{row.director.result.text}”</p></blockquote>

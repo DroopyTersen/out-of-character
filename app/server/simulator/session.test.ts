@@ -10,6 +10,41 @@ import { attempt, capability, request, activityPoll, fixture, waitFor } from './
 afterEach(() => setSystemTime());
 const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
 
+test.each(['accepted', 'rejected'] as const)('interview research %s is archived privately and cannot grade or summarize the participant', async receipt => {
+  let participantInput = '', summaryInput = '';
+  const fact = { text: 'PUBLIC BACKGROUND FACT', url: 'https://www.usgs.gov/3d-elevation-program', title: 'USGS 3DEP' };
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: .9, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    evaluateInterview: async input => { participantInput = JSON.stringify(input); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
+    prepareInterviewResearch: async input => ({ kind: 'term', name: '3DEP', passageId: input.transcript[0]!.id }),
+    lookupInterviewBackground: async () => ({ facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }),
+    summarizeInterview: (input, done) => { summaryInput = JSON.stringify(input); return new ReadableStream({ start(controller) {
+      const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
+    } }); },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('research-')));
+  const note = f.socket.sent.find(event => String(event.event_id).startsWith('research-'))!;
+  const before = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(before.interview.background).toEqual([]);
+  f.socket.emit(receipt === 'accepted' ? { type: 'session.thinking.appended', client_event_id: note.event_id } : { type: 'error', error: { client_event_id: note.event_id } });
+  const current = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(current.interview.background).toHaveLength(receipt === 'accepted' ? 1 : 0);
+  expect(current.message).toBeNull();
+  expect(JSON.stringify(current)).not.toContain('PRIVATE ARCHIVE QUERY');
+  expect(current.interview.evaluation.objectives.filter((item: { achieved: boolean }) => item.achieved)).toEqual([]);
+  await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text(); await Promise.all(f.pending);
+  expect(participantInput).not.toContain('PUBLIC BACKGROUND FACT');
+  expect(summaryInput).not.toContain('PUBLIC BACKGROUND FACT');
+  const research = JSON.parse(f.interviewRow()!.interventions_json).find((item: any) => item.source === 'research');
+  expect(research).toMatchObject({ outcome: 'sent', delivery: { status: receipt }, facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'] });
+  expect(f.row()).toBeNull();
+}, 10_000);
+
 test('contextual coaching runs for scored sessions and keeps actor history out of public state', async () => {
   let generations = 0;
   const f = await fixture({ overrides: {
@@ -244,7 +279,7 @@ test.each(['intervene', 'none'] as const)('interview producer %s stays private a
   const inputs: DirectorInput[] = [];
   let summarized = '';
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, signals: [{ condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     generateDirector: async input => {
       inputs.push(input);
       const result = action === 'none' ? { action, text: null, evidenceIds: [] as [] } : { action, text: 'PRIVATE: Return to the missing access owner.', evidenceIds: [input.transcript[0]!.id] };
@@ -294,7 +329,7 @@ test.each(['intervene', 'none'] as const)('interview producer %s stays private a
 test('End freezes an unfinished interview direction without delaying its summary', async () => {
   let release!: () => void;
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     generateDirector: async input => {
       await new Promise<void>(resolve => { release = resolve; });
       return { action: 'intervene', text: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };

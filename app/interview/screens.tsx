@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, RotateCcw, Volume2 } from 'lucide-react';
-import { interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
+import { interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import type { AudioLevels } from '../simulator/audio-levels';
 import { formatTime } from '../simulator/conversation';
@@ -62,6 +62,7 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
       <div className="interview-start">
         {error && <p className="sim-notice error" role="alert">{error}</p>}
         {!enabled && <p className="sim-notice" role="status">Live interviews are currently unavailable. You can explore the <a href="/storybook/interview-live">Workshop preview</a>.</p>}
+        <p className="interview-research-disclosure">Sam may look up public background on organizations, products, and terms you mention.</p>
         <button className="arcade-button primary" onClick={onStart} disabled={!enabled}>Start interview <Mic size={21} aria-hidden="true" /></button>
         <p>Your words are transcribed and saved privately with an internal summary. Audio is not saved.</p>
       </div>
@@ -106,6 +107,18 @@ function InterviewTopics({ interview }: { interview: InterviewSession | undefine
   </section>;
 }
 
+function InterviewBackgroundFacts({ notes }: { notes: InterviewBackground[] }) {
+  return <div className="interview-background-list">{notes.slice(0, 2).map(note => <div className="interview-background-note" key={note.id}>
+    <div className="interview-background-meta"><strong>{note.target.name}</strong><time dateTime={new Date(note.retrievedAt).toISOString()}>Retrieved {new Date(note.retrievedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time></div>
+    {note.facts.slice(0, 2).map((fact, index) => <p key={`${note.id}-${index}`}>{fact.text} <a href={fact.url} target="_blank" rel="noopener noreferrer">{fact.title}</a></p>)}
+  </div>)}</div>;
+}
+
+function InterviewBackgroundLive({ notes }: { notes: InterviewBackground[] | undefined }) {
+  if (!notes?.length) return null;
+  return <section className="interview-background sim-panel" aria-label="Background Sam received"><h2>Background Sam received</h2><p className="interview-background-context">Current public background; your account establishes what happened on the project.</p><InterviewBackgroundFacts notes={notes} /></section>;
+}
+
 export function InterviewConversation({ voiceId, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, error }: {
   voiceId: InterviewVoiceId; snapshot: InterviewSnapshot | null; phase: 'connecting' | 'live' | 'ending';
   muted: boolean; levels: AudioLevels; elapsed: number;
@@ -130,6 +143,7 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
           <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
         </div>
         {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}
+        <InterviewBackgroundLive notes={snapshot?.interview?.background} />
       </div>
       <div className="interview-observations"><InterviewReadings interview={snapshot?.interview} status={phase === 'ending' && snapshot?.interview?.evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} /><InterviewTopics interview={snapshot?.interview} /></div>
     </div>
@@ -167,6 +181,7 @@ export function InterviewSummaryScreen({ snapshot, report, onRetrySummary, onChe
       {report.stage === 'status-error' && <button className="quiet-button" onClick={onCheckSummary}>Check summary</button>}
       {report.canRetry && <button className="quiet-button" onClick={onRetrySummary}><RotateCcw size={17} /> Retry summary</button>}
     </article>
+    {!!snapshot?.interview?.background?.length && <details className="interview-summary-background sim-debrief-transcript"><summary>Background Sam received <ChevronDown size={18} aria-hidden="true" /></summary><p className="interview-background-context">Current public background; your account establishes what happened on the project.</p><InterviewBackgroundFacts notes={snapshot.interview.background} /></details>}
     <details className="interview-summary-transcript sim-debrief-transcript"><summary>Read the transcript <ChevronDown size={18} aria-hidden="true" /></summary><InterviewTranscript entries={snapshot?.transcript ?? []} /></details>
     <button className="arcade-button interview-new" onClick={onReset}>New interview</button>
   </section>;

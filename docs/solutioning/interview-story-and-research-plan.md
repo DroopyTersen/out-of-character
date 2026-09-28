@@ -1,6 +1,6 @@
 # Interview story value and timely research
 
-Status: approved for implementation. Based on `project-closeout-interviews` at `35d6e2a` (includes main through `3819e6a`). Companion context: [streaming plan](interview-streaming-plan.md), [progress and verification](interview-progress.md), and [existing director design](interview-contextual-director-plan.md).
+Status: implemented; final review and verification in progress. Based on `project-closeout-interviews` at `35d6e2a` (includes main through `3819e6a`). Companion context: [streaming plan](interview-streaming-plan.md), [progress and verification](interview-progress.md), and [existing director design](interview-contextual-director-plan.md).
 
 Concrete payload draft: [Jev state, questions, criteria, and routing](interview-jev-request-design.md).
 

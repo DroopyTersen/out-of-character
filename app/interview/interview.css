@@ -35,7 +35,9 @@
 .selected .interview-choice-mark { background: #44efcd; border-color: #44efcd; color: #082b30; }
 .interview-start { text-align: center; padding-top: 24px; }
 .interview-start .arcade-button { width: 100%; display: flex; justify-content: center; }
-.interview-start > p:last-child { margin: 14px auto 0; color: #85a9bf; font-size: 12px; line-height: 1.6; max-width: 390px; }
+.interview-start > p:not(.sim-notice) { margin: 14px auto 0; color: #a8c7d5; font-size: 13px; line-height: 1.6; max-width: 390px; }
+.interview-start .interview-research-disclosure { margin-bottom: 14px; }
+.interview-start > p:last-child { margin-top: 7px; color: #85a9bf; font-size: 12px; }
 .interview-start .sim-notice { text-align: left; margin-bottom: 16px; }
 .interview-session-bar { display: flex; align-items: center; gap: 26px; padding: 27px 0 21px; border-bottom: 1px solid #27536a; }
 .interview-session-bar > div { flex: 1; min-width: 0; }
@@ -64,6 +66,16 @@
 .interview-live-transcript > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .interview-live-transcript h2 { font-size: 21px; }
 .interview-transcript { max-height: 340px; }
+.interview-background { margin-top: 18px; padding: 18px 22px; }
+.interview-background h2 { font: 600 20px 'Chakra Petch', sans-serif; }
+.interview-background-context { margin: 5px 0 12px; color: #9abccc; font-size: 12px; line-height: 1.5; }
+.interview-background-list { display: grid; gap: 13px; }
+.interview-background-note + .interview-background-note { border-top: 1px solid #285269; padding-top: 12px; }
+.interview-background-meta { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; }
+.interview-background-meta strong { color: #e0f0ee; font-size: 14px; }
+.interview-background-meta time { color: #8fb2c3; font-size: 11px; }
+.interview-background-note p { margin: 6px 0 0; color: #c8dfe6; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.interview-background-note a { color: #74ead7; text-decoration: underline; text-underline-offset: 2px; }
 .interview-readings, .interview-topics { padding: 22px 25px; }
 .interview-readings > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .interview-readings h2, .interview-topics h2 { font-size: 26px; }
@@ -104,6 +116,10 @@
 .interview-summary-state strong { color: #dceef2; font-size: 20px; }
 .interview-summary-state p { margin-top: 10px; color: #9fbdca; line-height: 1.6; }
 .interview-summary-transcript { margin-top: 26px; }
+.interview-summary-background { margin-top: 26px; }
+.interview-summary-background summary { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; }
+.interview-summary-background[open] summary svg { transform: rotate(180deg); }
+.interview-summary-background .interview-background-list { margin: 12px 0 20px; }
 .interview-summary-transcript summary { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; }
 .interview-summary-transcript[open] summary svg { transform: rotate(180deg); }
 .interview-summary-transcript .interview-transcript { margin: 12px 0 20px; }

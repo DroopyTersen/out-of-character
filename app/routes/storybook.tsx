@@ -12,7 +12,7 @@ import { VoiceLabContent } from '../simulator/voice-lab';
 import { SimulatorBriefing } from '../simulator/briefing';
 import { SimulatorDebriefStory, ReportCompilingStory, ReportWritingStory, ReportFailedStory } from '../storybook/simulator-report-story';
 import { scenarioBriefings } from '../../core/simulator/briefings';
-import { InterviewLiveStory, InterviewSetupStory, InterviewSummaryStory } from '../storybook/interview-stories';
+import { InterviewBackgroundDeliveredStory, InterviewBackgroundSkippedStory, InterviewLiveStory, InterviewSetupStory, InterviewSummaryStory } from '../storybook/interview-stories';
 import { InterviewJudgingStory } from '../storybook/interview-judging-story';
 
 export const loader = () => ({
@@ -57,6 +57,8 @@ const stories = [
   { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, historical trainee judgments, source evidence, and raw probabilities.', component: SimulatorJudgingStory },
   { id: 'interview-setup', label: 'The Debrief setup', description: 'Voice choice and private transcript notice. Start is a safe preview without a microphone.', component: InterviewSetupStory },
   { id: 'interview-live', label: 'The Debrief live', description: 'Synthetic conversation, live observations, topic threads, mute and transcript states.', component: InterviewLiveStory },
+  { id: 'interview-background-delivered', label: 'The Debrief · background delivered', description: 'Synthetic public background displayed with a clickable source after delivery. No model or search call.', component: InterviewBackgroundDeliveredStory },
+  { id: 'interview-background-skipped', label: 'The Debrief · lookup skipped', description: 'Synthetic conversation where no public background is delivered. No model or search call.', component: InterviewBackgroundSkippedStory },
   { id: 'interview-summary', label: 'The Debrief summary', description: 'Synthetic internal summary, pending and unavailable states, copy and transcript access.', component: InterviewSummaryStory },
   { id: 'interview-judging', label: 'The Debrief analysis', description: 'Recorded Jev readings, participant evidence, heard topics, and private interviewer cue from synthetic fixtures.', component: InterviewJudgingStory },
   { id: 'draw', label: 'Complete draw', description: 'Idle, landing, scene timing, failure, and connection states.', component: DrawStory },

@@ -26,7 +26,7 @@ const turns = process.argv.includes('--every-turn') ? fixture.transcript.map((_,
 if (turns.length > 24) throw new Error('Replay is limited to 24 snapshots; choose a shorter fixture.');
 const output = process.argv.find(arg => arg.startsWith('--output='))?.slice(9) || `output/director-replay-${fixture.id}.json`;
 const report = { synthetic: true, fixture: fixture.id, kind: interviewFixture ? 'interview' : 'simulator', collectedAt: new Date().toISOString(), version: DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: DIRECTOR_MODEL }, compare, rows: [] as Record<string, unknown>[] };
-const gate = new DirectorGate();
+const gate = new DirectorGate(!!interviewFixture);
 try {
   for (const turn of turns) {
     const transcript = fixture.transcript.slice(0, turn);
@@ -34,7 +34,7 @@ try {
     const clientId = interviewFixture ? 'sam-cedar' : simulatorFixture!.clientId;
     const input = { scenarioId, clientId, transcript, revision: turn, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(30_000) };
     const [trainee, actor] = interviewFixture
-      ? [null, await evaluateInterviewer(input)]
+      ? [null, await evaluateInterviewer({ ...input, deliveredBackground: interviewFixture.deliveredBackground })]
       : await Promise.all([evaluateTrainee(input), evaluateClient(input)]);
     const audiences: { audience: DirectorAudience; signals: DirectorSignal[]; durationMs: number; usage: unknown }[] = interviewFixture
       ? [{ audience: 'actor', signals: actor.signals, durationMs: actor.durationMs, usage: actor.usage }]

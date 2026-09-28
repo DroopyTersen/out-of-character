@@ -48,7 +48,14 @@ export type InterviewEvaluation = {
 export type InterviewSummary = { status: 'pending' | 'ready' | 'unavailable'; text: string | null };
 export const interviewSummarySchema = z.strictObject({ text: z.string().trim().min(1) });
 export type InterviewSummaryContent = z.infer<typeof interviewSummarySchema>;
-export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null };
+/** Public references only; preparation and producer directions remain private. */
+export type InterviewBackground = {
+  id: string;
+  target: { kind: 'organization' | 'product' | 'term'; name: string };
+  facts: { text: string; url: string; title: string }[];
+  retrievedAt: number;
+};
+export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[] };
 
 export function emptyInterviewReadings(): InterviewEvaluation['readings'] {
   return Object.fromEntries(interviewReadings.map(({ id }) => [id, { value: null, distribution: null, evidence: null }])) as InterviewEvaluation['readings'];

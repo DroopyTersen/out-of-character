@@ -9,6 +9,7 @@ import { getClient, getScenario, publicCatalog } from './scenarios.server';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import type { ObjectiveReading, TranscriptEntry } from '../../core/simulator/types';
 import type { DirectorAudience, DirectorSignal, DirectorUsage, DirectorResult, InterventionRecord, ObservationRecord } from '../../core/simulator/director';
+import { deliveredInterviewBackground } from '../../core/simulator/director';
 
 export const DIRECTOR_MODEL = 'gpt-6-sol';
 const outputSchema = z.strictObject({ action: z.enum(['none', 'intervene']), text: z.string().trim().max(160).nullable(), evidenceIds: z.array(z.string()).max(3) });
@@ -54,7 +55,7 @@ export function directorContext(input: Omit<DirectorInput, 'apiKey' | 'signal'>)
     // Failed/obsolete drafts were never advice. Fixed alerts are placeholders
     // for Sol to improve, so they must not suppress a specific replacement.
     previousInterventions: input.history.flatMap(item => {
-      if (item.audience !== input.audience || item.source !== 'director' || item.result?.action !== 'intervene' || !['published', 'sent'].includes(item.outcome) || item.delivery?.status === 'rejected') return [];
+      if (item.source !== 'director' || item.audience !== input.audience || item.result?.action !== 'intervene' || !['published', 'sent'].includes(item.outcome) || item.delivery?.status === 'rejected') return [];
       return [{ condition: item.signal.condition, text: item.result.text,
         ...(item.delivery ? {
           sentAt: item.deliveredAt, afterPassageId: item.delivery.afterPassageId, deliveryStatus: item.delivery.status,
@@ -63,6 +64,7 @@ export function directorContext(input: Omit<DirectorInput, 'apiKey' | 'signal'>)
       }];
     }).slice(-12),
     ...(input.audience === 'actor' ? { recentAssessments: observations.slice(-6).map(item => ({ observedAt: item.snapshotAt, throughPassageId: item.lastInputId, signals: item.signals })) } : {}),
+    ...(interview ? { deliveredBackground: deliveredInterviewBackground(input.history) } : {}),
     dialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker: interview ? (speaker === 'trainee' ? 'participant' : 'sam') : speaker, text })),
   };
 }

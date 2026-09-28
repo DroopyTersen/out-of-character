@@ -23,6 +23,8 @@ function fixture(overrides: Partial<typeof directorServices> = {}) {
     services: {
       generateDirector: async input => { calls.push(input); return { action: 'intervene', text: input.audience === 'trainee' ? 'Ask what decision Friday supports.' : 'Ask the consultant to own the delivery recommendation.', evidenceIds: ['p1'], model: 'gpt-6-sol', usage: { inputTokens: 100, outputTokens: 20 } }; },
       recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 20, outputTokens: 2 } }),
+      prepareInterviewResearch: async () => null,
+      lookupInterviewBackground: async () => null,
       ...overrides,
     },
   });

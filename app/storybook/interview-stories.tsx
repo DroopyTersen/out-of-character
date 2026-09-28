@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { emptyInterviewReadings, interviewTopics, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
+import { emptyInterviewReadings, interviewTopics, type InterviewBackground, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
 import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
 import { illustrativeLevels } from './simulator-voice-story';
 import { streamedReportView } from '../simulator/use-report';
@@ -81,6 +81,38 @@ export function InterviewLiveStory() {
   const snapshot = fixture('live', feedback, null, count);
   return <><div className="workshop-controls"><label>Voice<select value={voiceId} onChange={event => setVoiceId(event.target.value as InterviewVoiceId)}><option value="sam-cedar">Cedar</option><option value="sam-gleam">Gleam</option></select></label><label>Call state<select value={phase} onChange={event => setPhase(event.target.value as typeof phase)}><option value="connecting">Connecting</option><option value="live">Live</option><option value="ending">Ending</option></select></label><label>Speaking<select value={speaking} onChange={event => setSpeaking(event.target.value)}><option value="listening">Listening</option><option value="client">Sam</option><option value="trainee">You</option><option value="overlap">Both</option></select></label><label>Observations<select value={feedback} onChange={event => setFeedback(event.target.value as FeedbackStatus)}><option value="waiting">Waiting</option><option value="current">Current</option><option value="delayed">Delayed</option><option value="unavailable">Unavailable</option></select></label><label>Transcript<select value={count} onChange={event => setCount(Number(event.target.value))}><option value="0">Empty</option><option value="2">Opening</option><option value="6">Detailed conversation</option><option value="8">Through reflection</option></select></label><label className="workshop-check"><input type="checkbox" checked={muted} onChange={event => setMuted(event.target.checked)} /> Mic muted</label>{notice && <span role="status">{notice}</span>}</div><InterviewConversation voiceId={voiceId} snapshot={snapshot} phase={phase} muted={muted} levels={illustrativeLevels(speaking, frame)} elapsed={50} onEnd={() => setNotice('Workshop preview: no live interview to end.')} onMute={() => setMuted(value => !value)} onAudio={() => setNotice('Workshop preview: audio remains off.')} onContinue={() => setNotice('Workshop preview: no live timer is running.')} /></>;
 }
+
+const researchTranscript: TranscriptEntry[] = [
+  { id: 'sam-1', speaker: 'client', text: 'What were you building on this project?', startMs: 0, endMs: 3300 },
+  { id: 'you-1', speaker: 'trainee', text: 'A field mapping prototype that used OpenStreetMap. We wanted to see how inspectors could record what they found across several sites.', startMs: 3800, endMs: 12800 },
+  { id: 'sam-2', speaker: 'client', text: 'What did the inspectors notice when they tried it?', startMs: 13500, endMs: 17100 },
+];
+
+// Manually authored synthetic delivery; this is not a recorded model or search result.
+const researchBackground: InterviewBackground[] = [{
+  id: 'synthetic-osm-background',
+  target: { kind: 'product', name: 'OpenStreetMap' },
+  facts: [{ text: 'OpenStreetMap is maintained by a community of mappers.', url: 'https://www.openstreetmap.org/about', title: 'OpenStreetMap · About' }],
+  retrievedAt: Date.UTC(2026, 8, 27, 12),
+}];
+
+function InterviewResearchStory({ delivered }: { delivered: boolean }) {
+  const [muted, setMuted] = useState(false);
+  const [notice, setNotice] = useState('');
+  const snapshot: InterviewSnapshot = {
+    ...fixture('live', 'waiting', null, 0),
+    revision: researchTranscript.length,
+    transcript: researchTranscript,
+    interview: { evaluation: null, summary: null, ...(delivered ? { background: researchBackground } : {}) },
+  };
+  return <>
+    <div className="workshop-controls"><span>Synthetic transcript · {delivered ? 'manually authored public background delivered; no model or search call' : 'lookup skipped; no public background delivered'}</span>{notice && <span role="status">{notice}</span>}</div>
+    <InterviewConversation voiceId="sam-cedar" snapshot={snapshot} phase="live" muted={muted} levels={illustrativeLevels('listening', 0)} elapsed={18} onEnd={() => setNotice('Workshop preview: no live interview to end.')} onMute={() => setMuted(value => !value)} onAudio={() => setNotice('Workshop preview: audio remains off.')} onContinue={() => setNotice('Workshop preview: no live timer is running.')} />
+  </>;
+}
+
+export function InterviewBackgroundDeliveredStory() { return <InterviewResearchStory delivered />; }
+export function InterviewBackgroundSkippedStory() { return <InterviewResearchStory delivered={false} />; }
 
 export function InterviewSummaryStory() {
   const [status, setStatus] = useState<'ready' | 'pending' | 'writing' | 'unavailable'>('ready');

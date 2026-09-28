@@ -104,9 +104,11 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }),
     generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
     recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
+    prepareInterviewResearch: async () => null,
+    lookupInterviewBackground: async () => null,
     generateReport: () => { throw new Error('No report provider configured in this fixture.'); },
     evaluateInterview: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    evaluateInterviewer: async input => ({ revision: input.revision, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, }),
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, }),
     summarizeInterview: (_input, done) => new ReadableStream({ start(controller) { const report = { text: 'Fixture summary.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close(); } }),
     ...overrides,
   });

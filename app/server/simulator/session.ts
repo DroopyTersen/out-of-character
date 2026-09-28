@@ -104,7 +104,9 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private publicSnapshot(): SessionSnapshot {
-    return { ...this.snapshot!, coaching: this.contextual?.coaching() ?? null };
+    const snapshot = this.snapshot!;
+    return { ...snapshot, coaching: this.contextual?.coaching() ?? null,
+      ...(snapshot.interview ? { interview: { ...snapshot.interview, background: this.contextual?.publicBackground() ?? [] } } : {}) };
   }
 
   private reportState(): ReportState<CoachingReport | InterviewSummaryContent> {
@@ -259,7 +261,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (event.type === 'error') {
       const error = event.error as { client_event_id?: unknown } | undefined;
       // A declined optional cue need not interrupt otherwise-working practice.
-      if (typeof error?.client_event_id === 'string' && error.client_event_id.startsWith('cue-')) {
+      if (typeof error?.client_event_id === 'string' && /^(cue|research)-/.test(error.client_event_id)) {
         this.contextual?.providerEvent(error.client_event_id, false);
         return;
       }
@@ -372,8 +374,10 @@ export class SimulatorSession extends DurableObject<Env> {
     const observation = this.contextual?.beginObservation({ audience: 'actor', transcript, revision, capturedAt });
     try {
       const evaluate = snapshot.interview ? this.paid.evaluateInterviewer : this.paid.evaluateClient;
-      const result = await evaluate({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]) });
-      const work = this.contextual?.observe(observation, { signals: result.signals, model: result.model });
+      const result = await evaluate({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(2500)]),
+        ...(snapshot.interview ? { deliveredBackground: this.contextual?.background() ?? [] } : {}) });
+      const work = this.contextual?.observe(observation, { signals: result.signals, model: result.model,
+        ...('researchProbability' in result && typeof result.researchProbability === 'number' ? { researchProbability: result.researchProbability } : {}) });
       if (work) this.ctx.waitUntil(work);
     } catch (error) {
       this.contextual?.observe(observation, { signals: [], failure: error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });

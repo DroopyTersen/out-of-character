@@ -4,7 +4,7 @@ import { interviewReadings, interviewTopics, INTERVIEW_SCENARIO_ID } from '../..
 import { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
 import { interviewFixtures } from './fixtures';
 import recordings from './recordings.json';
-import { readInterviewAnswers, readInterviewerSignals, type InterviewAnswers } from './evaluate.server';
+import { interviewerState, readInterviewAnswers, readInterviewerSignals, readResearchProbability, type InterviewAnswers } from './evaluate.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
 import { interviewerBrief, interviewOpening, interviewScenario, interviewers } from './scenario.server';
 
@@ -97,19 +97,34 @@ describe('project closeout interview contracts', () => {
     expect(result.objectives.find(item => item.id === 'project-delivery')).toEqual({ id: 'project-delivery', probability: null, achieved: true, evidence: null });
   });
 
-  test('Sam is assessed through six independent concerns without participant scores or topic choices', () => {
+  test('Sam is assessed through seven concerns and a separate research judgment', () => {
     const questions = interviewerQuestions();
-    expect(Object.keys(questions)).toEqual(INTERVIEW_CONDITIONS.map(condition => `director:${condition}`));
+    expect(Object.keys(questions)).toEqual([...INTERVIEW_CONDITIONS.map(condition => `director:${condition}`), 'research:useful']);
     expect(Object.values(questions).every(question => question.type === 'boolean')).toBe(true);
     expect(interviewReadings.map(item => item.id)).toEqual(['engagement', 'openness', 'specificity']);
 
     const answers = answersFor(questions);
     answers['director:missed-thread'] = { type: 'boolean', probability: .91 };
     answers['director:boundary-pressure'] = { type: 'boolean', probability: .04 };
+    answers['research:useful'] = { type: 'boolean', probability: .73 };
     expect(readInterviewerSignals(answers)).toEqual(INTERVIEW_CONDITIONS.map(condition => ({
       condition, probability: condition === 'missed-thread' ? .91 : condition === 'boundary-pressure' ? .04 : .02,
     })));
+    expect(readResearchProbability(answers)).toBe(.73);
     delete answers['director:source-confusion'];
     expect(() => readInterviewerSignals(answers)).toThrow('Invalid interview boolean judgment.');
+    delete answers['research:useful'];
+    expect(() => readResearchProbability(answers)).toThrow('Invalid interview boolean judgment.');
+  });
+
+  test('only the interviewer receives bounded, actually delivered public facts and truncation state', () => {
+    const fixture = interviewFixtures.find(item => item.id === 'background-already-supplied')!;
+    const state = interviewerState(fixture.transcript, fixture.deliveredBackground);
+    expect(state.deliveredBackground).toEqual([{ target: fixture.deliveredBackground![0]!.target, facts: fixture.deliveredBackground![0]!.facts,
+      retrievedAt: fixture.deliveredBackground![0]!.retrievedAt, afterPassageId: 'p2', status: 'accepted' }]);
+    expect(state.earlierDialogueOmitted).toBe(false);
+    expect(interviewQuestions(fixture.transcript)['objective:project-delivery']).toBeDefined();
+    const long = [...fixture.transcript, { ...fixture.transcript[1]!, id: 'p3', text: 'detail '.repeat(1800) }];
+    expect(interviewerState(long).earlierDialogueOmitted).toBe(true);
   });
 });

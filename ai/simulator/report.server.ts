@@ -34,7 +34,7 @@ export function reportContext({ snapshot, interventions }: Pick<ReportInput, 'sn
     end: { status: snapshot.status, reason: snapshot.message },
     jev: { assessment: snapshot.evaluation, freshness: snapshot.feedbackStatus },
     deliveredAdvice: interventions.flatMap(item => {
-      if (item.source === 'observation' || item.result?.action !== 'intervene' || !['published', 'sent'].includes(item.outcome)) return [];
+      if ((item.source !== 'director' && item.source !== 'detector') || item.result?.action !== 'intervene' || !['published', 'sent'].includes(item.outcome)) return [];
       const delivery = item.source === 'director' ? item.delivery : undefined;
       if (delivery?.status === 'rejected') return [];
       return [{ audience: item.audience, text: item.result.text, evidenceIds: item.result.evidenceIds, deliveredAt: item.deliveredAt,

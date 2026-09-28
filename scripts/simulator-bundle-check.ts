@@ -17,7 +17,9 @@ const privateText = [
   ...clients.map(client => client.behavior),
   ...interviewers.map(interviewer => interviewer.behavior),
   'Write one private direction to SAM',
-  'Is Sam ignoring a revealing aside',
+  'Is Sam overlooking or abandoning a participant-supplied thread',
+  'Would a quick public-information lookup materially improve',
+  'Do not infer any private project history, events, motives',
   'Does this exact private direction still usefully guide Sam',
   'Write a comprehensive, readable internal project-closeout summary',
 ];

@@ -57,9 +57,9 @@ Make priority explicit for interviews: boundary pressure first, then source/lead
 
 ## 3. Add a separate, bounded research path
 
-Research should earn its place by improving a question about the participant’s experience. Merely hearing a company or product name is not enough. Add one Jev question to the existing interviewer assessment:
+Research should earn its place by improving a question about the participant’s experience. An early overview of the actual client’s business is a useful case for the existing research judgment; an incidental vendor or product name alone is not. Sam asks who the client was early if the participant has not already identified them, one question at a time, without interrupting a developing story or pressing a declined identity. This is a prompt change within the same research path, not a separate trigger, call, or state machine.
 
-**Would a quick public-information lookup materially improve a follow-up on the current participant-supplied thread?** False for a name-drop alone, familiar background, trivia, topic coverage, answered questions, a healthy story that needs room, or an answer best obtained from the participant. Private project events, motives, personal information, and allegations are not research targets.
+**Would a quick public-information lookup help Sam understand the participant’s account or frame a useful later question?** A clearly identified project client whose business context is missing is sufficient: learn what it does, whom it serves, and how it operates. Sam can use that context later without interrupting the current story. False for an incidental name-drop, already supplied context, trivia, ambiguous identity, a declined subject, or an answer best obtained from the participant. Private project events, motives, personal information, and allegations are not research targets.
 
 This requests a research attempt, not a mandatory search. Luna's preparation can decline. Jev is not a guarantee of query privacy or source truth.
 
@@ -118,7 +118,7 @@ Use authored transcripts with observable expected behavior, not assertions about
 - Explicit boundaries, honest uncertainty, hearsay, leading questions, and corrected behavior retain their existing protections.
 - Interviewer Jev still fits the current 2.5-second timeout with the added questions; a slower optional feature must not suppress boundary checks. Measure before changing cadence or timeout.
 - Boundary/source correction wins over a higher-probability story signal; simulator priority is unchanged.
-- Research helps an actual public knowledge gap; a familiar brand mention alone does not trigger it. Reject a target absent from participant speech, and inspect exactly what reaches the web-enabled call.
+- Research helps an actual public knowledge gap or supplies an early client business overview; an incidental vendor mention alone does not trigger it. Reject a target absent from participant speech, and inspect exactly what reaches the web-enabled call.
 - Ambiguous companies, private complaints, and unsupported results produce no factual note. Web instructions are ignored, and current background is not presented as a fact about an earlier project.
 - Private clauses stay out of queries; research never interrupts speech, delivers after End, exceeds two delivered notes, collides with a corrective cue, completes participant topics, or becomes independent project evidence in the summary. Confirm that delivered source links are visible on mobile as well as desktop.
 

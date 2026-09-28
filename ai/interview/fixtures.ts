@@ -217,10 +217,47 @@ export const interviewFixtures: InterviewFixture[] = [
     ]), expected: { heard: [], unheard: [], researchUseful: true },
   },
   {
-    id: 'brand-name-only', description: 'A familiar company name alone creates no useful research task.',
+    id: 'brand-name-only', description: 'An incidental software vendor is not the project client or a useful research task.',
     transcript: dialogue([
       ['client', 'What project did you work on?'],
-      ['trainee', 'A Costco inventory API. I owned the import job.'],
+      ['trainee', 'An inventory API. We used Microsoft Teams for standups. I owned the import job.'],
+    ]), expected: { heard: [], unheard: [], researchUseful: false },
+  },
+  {
+    id: 'client-business-overview', description: 'The actual client merits business background even without an explicit request or technical knowledge gap.',
+    transcript: dialogue([
+      ['client', 'Who was this project for?'],
+      ['trainee', 'Our client was REI. We built a returns portal on Azure. I owned the import job.'],
+    ]), expected: { heard: [], unheard: [], researchUseful: true },
+  },
+  {
+    id: 'client-business-known', description: 'The participant has already supplied useful business context.',
+    transcript: dialogue([
+      ['client', 'Who was this project for?'],
+      ['trainee', 'Our client was REI, the member-owned outdoor retailer. They sell outdoor gear through stores and online. We built a returns portal to connect those channels. I owned the import job.'],
+    ]), expected: { heard: [], unheard: [], researchUseful: false },
+  },
+  {
+    id: 'client-business-delivered', description: 'Delivered client background satisfies the same research need.',
+    transcript: dialogue([
+      ['client', 'Who was this project for?'],
+      ['trainee', 'Our client was REI. We built a returns portal on Azure. I owned the import job.'],
+    ]),
+    deliveredBackground: [{ id: 'r1', target: { kind: 'organization', name: 'REI' }, facts: [{ text: 'REI is a member-owned outdoor retailer selling gear through stores and online.', url: 'https://example.org/rei', title: 'Synthetic client overview' }], retrievedAt: 1_790_000_000_000, afterPassageId: 'p2', status: 'accepted' }],
+    expected: { heard: [], unheard: [], researchUseful: false },
+  },
+  {
+    id: 'client-identity-ambiguous', description: 'An ambiguous client name is insufficient for a public lookup.',
+    transcript: dialogue([
+      ['client', 'Who was this project for?'],
+      ['trainee', 'Mercury. I cannot remember their full name or industry. There are several companies with that name, so I cannot tell you which one it was.'],
+    ]), expected: { heard: [], unheard: [], researchUseful: false },
+  },
+  {
+    id: 'client-identity-declined', description: 'Research must not work around a participant’s choice to leave the client unnamed.',
+    transcript: dialogue([
+      ['client', 'Who was this project for?'],
+      ['trainee', 'I would rather not identify the client. We used Microsoft Teams, but I just want to talk about the handoff process.'],
     ]), expected: { heard: [], unheard: [], researchUseful: false },
   },
   {

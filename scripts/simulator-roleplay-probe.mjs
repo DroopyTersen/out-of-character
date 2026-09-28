@@ -35,6 +35,16 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   'project-closeout': {
+    'client-overview': {
+      turns: 4,
+      lines: {
+        project: 'We built a returns portal. I owned the import job.',
+        client: 'The client was REI. The unexpected part was how much trust we had to earn with the team handling returns.',
+        story: 'We kept showing them our dashboard, but it did not answer their real question. They needed to know which returns were stuck and who could help. Once we sat with them for an afternoon, we changed the first screen and they started using it.',
+        lesson: 'What I would repeat is spending time with the people doing the work before calling the dashboard finished. That was the real lesson. I do not have more detail to add on the client.',
+      },
+      choose: ({ turn }) => ['project', 'client', 'story', 'lesson'][turn],
+    },
     research: {
       turns: 4,
       lines: {

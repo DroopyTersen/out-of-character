@@ -5,6 +5,7 @@ const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) throw new Error('OPENAI_API_KEY is required.');
 
 const scenarios = [
+  { label: 'client business overview', text: 'Our client was REI. We built a returns portal on Azure. I owned the import job.' },
   { label: 'public term gap', text: 'Our county flood team used the USGS 3D Elevation Program, or 3DEP, to decide which places to survey first. The program coverage shaped the tradeoff we made.' },
   { label: 'private discussion', text: 'I changed an internal project budget after a private conversation with a coworker.' },
 ];

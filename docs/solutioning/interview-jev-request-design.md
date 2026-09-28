@@ -95,12 +95,13 @@ const researchUseful = {
   type: 'boolean',
   instructions: {
     ...rules,
-    task: 'Would a quick public-information lookup materially improve a follow-up on the current participant-supplied thread?',
-    focus: 'Assess the current thread, including the latest participant disclosure even if Sam has not responded. Look for missing public context about an organization, product, or domain term actually mentioned. Do not infer a knowledge gap merely because a name appears. Research should help understand the account, not test or contradict it.',
+    task: 'Would a quick public-information lookup help Sam understand the participant’s account or frame a useful later question?',
+    focus: 'Assess the current thread, including the latest participant disclosure even if Sam has not responded. A clearly identified project client whose business context has not been supplied is a useful research opportunity: learn what it does, whom it serves, and how it operates. That overview can help later questions while the current story continues. Distinguish the actual client from an incidental vendor, product, employer, or comparison. Other research needs a specific public knowledge gap about a mentioned organization, product, or domain term. Research should help understand the account, not test or contradict it.',
+    enoughContext: 'Check deliveredBackground as well as dialogue before deciding context is missing. A supplied definition or business overview closes that gap even when the dialogue contains a request to look it up. For a client overview, a brief description of the business is enough; do not seek a fuller profile or external confirmation. Merely naming a company or domain term does not explain it. An explicitly requested public definition warrants research only if its meaning has not already been supplied.',
   },
   criteria: {
-    true: 'A specific gap in public context is evident, relevant to understanding the participant’s experience, and not already answered by the dialogue or supplied background. A short lookup has a clear potential to sharpen the next question beyond ordinary professional knowledge.',
-    false: 'There is only a name-drop or general curiosity; the context is familiar or already supplied; the story needs room rather than outside information; the target is ambiguous; or the missing answer concerns private events, motives, allegations, a declined subject, or something best learned from the participant.',
+    true: 'The participant identifies the project client and its business context is missing from the dialogue and delivered background; or a specific unanswered public-context gap could improve understanding of their experience. A short public lookup can usefully inform a later question without interrupting the story.',
+    false: 'There is only an incidental name-drop or general curiosity; relevant context is already supplied; the target or its identity is ambiguous; the participant declined to identify or discuss it; or the missing answer concerns private events, motives, allegations, or something best learned from the participant.',
   },
 } satisfies Experimental_EvaluationQuestion;
 ```
@@ -161,4 +162,4 @@ There is no generated explanation, recommended interview question, or search que
 
 The implementation keeps the existing 0.60 interviewer threshold except for overprobing, which requests Sol's second opinion at 0.50. Research requests Luna preparation at 0.50. The paired synthetic cases support these initial referral settings; they are not calibrated guarantees, and both downstream models may decline. The assessment timeout remains 2.5 seconds. Public research expires 25 seconds after the observation was captured, including the Jev assessment time.
 
-Minimum paired cases: missed lead versus followed lead; unnecessary inventory versus participant-led technical detail; redundant probing versus needed clarification; useful public context gap versus company name alone; public background already supplied; participant boundary; current public information incorrectly applied to an older project; and missing earlier transcript context. Test the resulting routed behavior as well as each probability.
+Minimum paired cases: missed lead versus followed lead; unnecessary inventory versus participant-led technical detail; redundant probing versus needed clarification; useful public context gap and newly identified client versus incidental vendor mention; known client business context; ambiguous or declined client identity; public background already supplied; participant boundary; current public information incorrectly applied to an older project; and missing earlier transcript context. Test the resulting routed behavior as well as each probability.

@@ -116,8 +116,9 @@ const waitUntil = async (check, timeoutMs) => {
 
 let startedAt = 0;
 try {
-  await page.goto(`${base}/interview`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${base}/interview`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Female voice', exact: true }).click();
+  if (await page.getByRole('button', { name: 'Female voice', exact: true }).getAttribute('aria-pressed') !== 'true') throw new Error('Voice selection was not interactive.');
   await page.getByRole('button', { name: 'Start interview' }).click();
   startedAt = Date.now();
   if (!await waitUntil(() => snapshots.some(item => item.status === 'live'), 20_000)) throw new Error('Interview did not become live.');

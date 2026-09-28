@@ -64,8 +64,10 @@ test('a declined preparation waits for a new signal episode and stops after thre
 });
 
 test('duplicate public targets are not searched again after a resolved episode', async () => {
-  const f = fixture();
+  const seen: (string[] | undefined)[] = [];
+  const f = fixture({ prepareInterviewResearch: async input => { seen.push(input.alreadyResearched); return target; } });
   await f.observe(); await f.observe(.1); f.advance(); await f.observe();
+  expect(seen).toEqual([[], ['product:openstreetmap']]);
   expect(f.counts()).toEqual({ preparations: 2, searches: 1 });
   expect(f.records().at(-1)?.outcome).toBe('duplicate');
 });

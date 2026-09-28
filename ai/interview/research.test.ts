@@ -18,18 +18,19 @@ const search = { type: 'web_search_call', id: 'search-fixture', status: 'complet
   action: { type: 'search', queries: ['Acme Field Systems official operations'], sources: [{ type: 'url', url: 'https://acme.example/about' }] } };
 const citation = (url: string) => ({ type: 'url_citation', url, title: 'About Acme', start_index: 0, end_index: 10 });
 
-test('preparation uses only the bounded exchange and accepts a normalized participant span', async () => {
+test('preparation receives the bounded exchange and completed targets, and accepts a normalized participant span', async () => {
   let body: Record<string, any> = {};
   const request = (async (_url: unknown, options: RequestInit) => {
     body = JSON.parse(String(options.body));
     return response([message({ target: { kind: 'organization', name: 'ACME Field Systems', passageId: 'p1' } })]);
   }) as typeof fetch;
-  const target = await prepareInterviewResearch(input, request);
+  const target = await prepareInterviewResearch({ ...input, alreadyResearched: ['organization:previous client'] }, request);
   expect(target).toEqual({ kind: 'organization', name: 'ACME Field Systems', passageId: 'p1' });
   expect(body).toMatchObject({ model: 'gpt-6-luna', store: false, reasoning: { effort: 'low' } });
   expect(body.tools).toBeUndefined();
-  const dialogue = JSON.parse(body.input.find((item: { role: string }) => item.role === 'user').content[0].text).dialogue;
-  expect(dialogue).toEqual([
+  const context = JSON.parse(body.input.find((item: { role: string }) => item.role === 'user').content[0].text);
+  expect(context.alreadyResearched).toEqual(['organization:previous client']);
+  expect(context.dialogue).toEqual([
     { id: 's1', speaker: 'sam', text: transcript[0]!.text },
     { id: 'p1', speaker: 'participant', text: transcript[1]!.text },
   ]);

@@ -53,6 +53,14 @@ Explicit paid recordings use `bun run eval:simulator`, `bun run eval:simulator -
 
 See [simulator acceptance](docs/solutioning/simulator-acceptance.md) for reproducible browser/audio commands and evidence, [the implementation plan](docs/solutioning/simulator-implementation-plan.md) for architecture, and [the scenario framework](docs/solutioning/simulator-scenario-framework.md) for authoring more exercises.
 
+## The Debrief
+
+`/interview` is a project-closeout conversation with Sam. After a brief project introduction, Sam follows firsthand experiences, wins, frustrations and lessons. The suggested topics are optional. Jev shows participant observations and detects when a private GPT-6 Sol direction could help Sam listen or follow up better.
+
+After End, GPT-6 Sol with medium reasoning streams an internal summary through the same report lifecycle as the simulator. Only completed, validated text is copyable and saved; a failed attempt offers one explicit retry. The transcript is saved independently in the private interview table. Leaving the screen cancels unfinished summary generation.
+
+Use `/storybook/interview-summary` and **Replay stream** to preview preparing, writing and completed states without a paid call. `ACCEPTANCE_URL=http://127.0.0.1:5174 node scripts/interview-summary-acceptance.mjs` checks the real screen and streaming hook with substituted provider boundaries. See [the streaming plan](docs/solutioning/interview-streaming-plan.md) and [progress](docs/solutioning/interview-progress.md).
+
 - [Product requirements](docs/solutioning/consultancy-party-game-prd.md)
 - [Technical design](docs/solutioning/out-of-character-tech-design.md)
 - [Measured Jev spike](docs/solutioning/jev-spike.md)

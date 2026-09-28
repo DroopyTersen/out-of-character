@@ -1,21 +1,28 @@
 import { useObject } from '@ai-sdk/react';
 import { useRef, useState } from 'react';
 import type { DeepPartial } from 'ai';
+import type { z } from 'zod';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { idleReport, reportSchema, REPORT_MAX_STARTS, REPORT_DEADLINE_MS, type CoachingReport, type ReportState } from '../../core/simulator/report';
 
-type ReportTarget = { id: string; url: string; headers: Record<string, string> };
-type ReportData = { state: ReportState; draft?: DeepPartial<CoachingReport>; loadError?: boolean; snapshot?: SessionSnapshot | null };
+export type ReportTarget = { id: string; url: string; headers: Record<string, string> };
+type ReportData<T = CoachingReport> = { state: ReportState<T>; draft?: DeepPartial<T>; loadError?: boolean; snapshot?: SessionSnapshot | null };
 export type ReportStage = 'compiling' | 'writing' | 'completed' | 'failed' | 'exhausted' | 'ineligible' | 'unavailable' | 'status-error';
-export type ReportView = ReportData & { stage: ReportStage; canRetry: boolean };
+export type StreamedReportView<T> = ReportData<T> & { stage: ReportStage; canRetry: boolean };
+export type ReportView = StreamedReportView<CoachingReport>;
+export type ReportActions = { prepare(target: ReportTarget): void; begin(id: string): void; cancel(): void };
 
 /** One presentation policy for the live hook and Storybook examples. */
 export function reportView(data: ReportData): ReportView {
-  const { state, draft, loadError } = data;
+  return streamedReportView(data, !!data.draft?.overview);
+}
+
+export function streamedReportView<T>(data: ReportData<T>, hasContent: boolean): StreamedReportView<T> {
+  const { state, loadError } = data;
   let stage: ReportStage;
   if (loadError) stage = 'status-error';
   else switch (state.status) {
-    case 'running': stage = draft?.overview ? 'writing' : 'compiling'; break;
+    case 'running': stage = hasContent ? 'writing' : 'compiling'; break;
     case 'idle': stage = 'failed'; break;
     case 'failed': stage = state.starts >= REPORT_MAX_STARTS ? 'exhausted' : 'failed'; break;
     default: stage = state.status;
@@ -24,8 +31,12 @@ export function reportView(data: ReportData): ReportView {
 }
 
 export function useSessionReport() {
+  return useStreamedReport(reportSchema, draft => !!draft?.overview);
+}
+
+export function useStreamedReport<T>(schema: z.ZodType<T>, hasContent: (draft: DeepPartial<T> | undefined) => boolean) {
   const [target, setTarget] = useState<ReportTarget | null>(null);
-  const [state, setState] = useState(idleReport);
+  const [state, setState] = useState(idleReport<T>);
   const [loadError, setLoadError] = useState(false);
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
   const current = useRef<ReportTarget | null>(null);
@@ -47,7 +58,7 @@ export function useSessionReport() {
         return;
       }
       if (!response.ok) throw new Error('Report status unavailable.');
-      const value = await response.json() as SessionSnapshot & { report?: ReportState };
+      const value = await response.json() as SessionSnapshot & { report?: ReportState<T> };
       const { report: finalState, ...finalSnapshot } = value;
       if (!finalState) throw new Error('Report status unavailable.');
       if (current.current === forTarget) {
@@ -59,12 +70,13 @@ export function useSessionReport() {
   }
 
   const sdk = useObject({
-    api: target ? `${target.url}/report` : '/api/simulator/sessions', schema: reportSchema,
+    api: target ? `${target.url}/report` : '/api/simulator/sessions', schema,
     id: target?.id, headers: target?.headers,
     onFinish: () => readFinal(target), onError: () => { void readFinal(target); },
   });
 
-  const view = reportView({ state, draft: state.status === 'running' ? sdk.object : undefined, loadError, snapshot });
+  const draft = state.status === 'running' ? sdk.object : undefined;
+  const view = streamedReportView({ state, draft, loadError, snapshot }, hasContent(draft));
 
   function cancel() {
     if (state.status === 'running') setLoadError(true);
@@ -76,7 +88,7 @@ export function useSessionReport() {
     cancel();
     sdk.clear();
     current.current = next;
-    setTarget(next); setState(idleReport()); setLoadError(false); setSnapshot(null);
+    setTarget(next); setState(idleReport<T>()); setLoadError(false); setSnapshot(null);
     submitted.current = false; statusReadStarted.current = false;
   }
   function begin(id: string) {

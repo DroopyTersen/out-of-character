@@ -1,21 +1,16 @@
 import { expect, test } from 'bun:test';
-import { SessionReport, type ReportArchive } from './report';
+import { SessionReport, type SettledReport } from './report';
 import { skills } from '../../../core/simulator/types';
 import { reportSchema, type CoachingReport } from '../../../core/simulator/report';
-import type { ReportInput, ReportResult } from '../../../ai/simulator/report.server';
+import type { ReportResult } from '../../../ai/simulator/report.server';
 
-const input: Omit<ReportInput, 'signal'> = { apiKey: 'fixture', interventions: [], snapshot: {
-  id: 'session-report', scenarioId: 'sharepoint', clientId: 'morgan', status: 'ended', startedAt: 0, limitSeconds: 3600,
-  warning: null, revision: 1, transcript: [{ id: 'p1', speaker: 'trainee', text: 'What is the main problem?', startMs: 0, endMs: 1 }],
-  evaluation: null, coaching: null, feedbackStatus: 'unavailable', message: null, finalization: 'confirmed', usageSeconds: 1,
-} };
 const report: CoachingReport = reportSchema.parse({ evaluation: { skills: Object.fromEntries(skills.map(({ id }) => [id, { score: null, evidenceIds: [] }])), objectives: {} }, overview: 'Too little conversation to judge.', strengths: [], improvements: [], nextPractice: 'Continue the discovery.' });
 const request = (signal?: AbortSignal) => new Request('https://session/report', { method: 'POST', signal });
 
 test('idle reads are immediate, concurrent starts conflict, success is cached and settles before archive work', async () => {
-  const saved: ReportArchive[] = [];
+  const saved: SettledReport<CoachingReport>[] = [];
   let calls = 0, finish!: (value: ReportResult) => void, stream!: ReadableStreamDefaultController<string>;
-  const session = new SessionReport(input, value => { saved.push(value); }, (_input, done) => { calls++; finish = done; return new ReadableStream({ start(controller) { stream = controller; } }); });
+  const session = new SessionReport<CoachingReport>((_signal, done) => { calls++; finish = done; return new ReadableStream({ start(controller) { stream = controller; } }); }, value => { saved.push(value); });
   expect((await session.read()).status).toBe('idle');
   expect(session.state.starts).toBe(0);
   const response = session.start(request());
@@ -38,8 +33,8 @@ test('idle reads are immediate, concurrent starts conflict, success is cached an
 
 test('one explicit retry is allowed and late callbacks cannot replace its result', async () => {
   const finishes: ((value: ReportResult) => void)[] = [];
-  const saved: ReportArchive[] = [];
-  const session = new SessionReport(input, value => { saved.push(value); }, (_input, done) => { finishes.push(done); return new ReadableStream({ start(controller) { controller.close(); } }); });
+  const saved: SettledReport<CoachingReport>[] = [];
+  const session = new SessionReport<CoachingReport>((_signal, done) => { finishes.push(done); return new ReadableStream({ start(controller) { controller.close(); } }); }, value => { saved.push(value); });
   await session.start(request()).text();
   expect(session.state).toMatchObject({ status: 'failed', starts: 1, report: null });
   const retry = session.start(request());
@@ -55,11 +50,11 @@ test('response cancellation and request abort stop the provider and record cance
   for (const byRequest of [false, true]) {
     const controller = new AbortController();
     let providerSignal: AbortSignal | undefined;
-    const saved: ReportArchive[] = [];
-    const session = new SessionReport(input, value => { saved.push(value); }, (input, _done) => {
-      providerSignal = input.signal;
+    const saved: SettledReport<CoachingReport>[] = [];
+    const session = new SessionReport<CoachingReport>((signal, _done) => {
+      providerSignal = signal;
       return new ReadableStream({ start(stream) { stream.enqueue('{'); } });
-    });
+    }, value => { saved.push(value); });
     const reader = session.start(request(controller.signal)).body!.getReader();
     await reader.read();
     if (byRequest) controller.abort(); else await reader.cancel();
@@ -71,7 +66,7 @@ test('response cancellation and request abort stop the provider and record cance
 
 test('an independent deadline settles a provider that never calls back and releases status readers', async () => {
   let signal: AbortSignal | undefined;
-  const session = new SessionReport(input, () => {}, input => { signal = input.signal; return new ReadableStream(); }, 20);
+  const session = new SessionReport(signalValue => { signal = signalValue; return new ReadableStream(); }, () => {}, 20);
   const response = session.start(request());
   expect((await session.read()).failure).toBe('timeout');
   expect(signal!.aborted).toBe(true);
@@ -79,9 +74,9 @@ test('an independent deadline settles a provider that never calls back and relea
 });
 
 test('a valid-looking body followed by failure stays failed, and an already-aborted request spends nothing', async () => {
-  const session = new SessionReport(input, () => {}, (_input, done) => new ReadableStream({ start(controller) {
+  const session = new SessionReport<CoachingReport>((_signal, done) => new ReadableStream({ start(controller) {
     controller.enqueue(JSON.stringify(report)); done({ report: null, failure: 'provider', usage: null }); controller.close();
-  } }));
+  } }), () => {});
   const controller = new AbortController(); controller.abort();
   expect(session.start(request(controller.signal)).status).toBe(400);
   expect(session.state.starts).toBe(0);

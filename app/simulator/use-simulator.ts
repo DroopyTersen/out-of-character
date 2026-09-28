@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { LiveConnection } from './live-connection';
 import { silentLevels } from './audio-levels';
-import { useSessionReport } from './use-report';
-import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
+import type { ReportActions } from './use-report';
 
-export function useSimulator() {
+export function useSimulator(report: ReportActions) {
   const [phase, setPhase] = useState<'selection' | 'connecting' | 'live' | 'ending' | 'debrief'>('selection');
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +12,6 @@ export function useSimulator() {
   const [levels, setLevels] = useState(silentLevels);
   const connection = useRef<LiveConnection | null>(null);
   const generation = useRef(0);
-  const report = useSessionReport();
   // Connection callbacks outlive renders; submit with the endpoint prepared at Start.
   const reportActions = useRef(report);
   reportActions.current = report;
@@ -29,7 +27,7 @@ export function useSimulator() {
     let reachedLive = false;
     setError(null); setSnapshot(null); setMuted(false); setPhase('connecting');
     const active = () => generation.current === attempt;
-    const beginReport = () => { if (scenarioId !== INTERVIEW_SCENARIO_ID) reportActions.current.begin(live.reportTarget.id); };
+    const beginReport = () => reportActions.current.begin(live.reportTarget.id);
     const live = new LiveConnection({
       snapshot: value => {
         if (!active()) return;
@@ -62,5 +60,5 @@ export function useSimulator() {
     setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels(silentLevels);
   }
   function toggleMute() { setMuted(value => { connection.current?.mute(!value); return !value; }); }
-  return { phase, snapshot, error, muted, levels, report: report.view, retryReport: report.retry, checkReport: report.checkStatus, start, end, reset, toggleMute, keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
+  return { phase, snapshot, error, muted, levels, start, end, reset, toggleMute, keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
 }

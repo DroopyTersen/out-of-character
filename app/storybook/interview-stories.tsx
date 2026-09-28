@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { emptyInterviewReadings, interviewTopics, type InterviewEvaluation, type InterviewSummary } from '../../core/interview';
+import { emptyInterviewReadings, interviewTopics, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
 import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
 import { illustrativeLevels } from './simulator-voice-story';
+import { streamedReportView } from '../simulator/use-report';
+import type { ReportState } from '../../core/simulator/report';
 import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewSnapshot, type InterviewVoiceId } from '../interview/screens';
 import '../simulator/simulator.css';
 import '../interview/interview.css';
@@ -81,9 +83,25 @@ export function InterviewLiveStory() {
 }
 
 export function InterviewSummaryStory() {
-  const [status, setStatus] = useState<InterviewSummary['status']>('ready');
+  const [status, setStatus] = useState<'ready' | 'pending' | 'writing' | 'unavailable'>('ready');
   const [transcriptCount, setTranscriptCount] = useState(transcript.length);
   const [notice, setNotice] = useState('');
-  const summary = { status, text: status === 'ready' ? summaryText : null } satisfies InterviewSummary;
-  return <><div className="workshop-controls"><label>Summary<select value={status} onChange={event => setStatus(event.target.value as InterviewSummary['status'])}><option value="ready">Ready</option><option value="pending">Pending</option><option value="unavailable">Unavailable</option></select></label><label>Transcript<select value={transcriptCount} onChange={event => setTranscriptCount(Number(event.target.value))}><option value="0">Empty</option><option value="8">Available</option></select></label>{notice && <span role="status">{notice}</span>}</div><InterviewSummaryScreen snapshot={fixture('ended', 'current', summary, transcriptCount)} onReset={() => setNotice('Workshop preview: no live interview was started.')} /></>;
+  const [length, setLength] = useState(240);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (!playing) return;
+    const timer = setInterval(() => setLength(value => Math.min(summaryText.length, value + 24)), 90);
+    return () => clearInterval(timer);
+  }, [playing]);
+  useEffect(() => {
+    if (playing && length === summaryText.length) { setPlaying(false); setStatus('ready'); }
+  }, [playing, length]);
+  const replay = () => { setLength(0); setStatus('writing'); setPlaying(true); };
+  const state: ReportState<InterviewSummaryContent> = status === 'ready'
+    ? { status: 'completed', starts: 1, report: { text: summaryText }, failure: null }
+    : status === 'unavailable' ? { status: 'failed', starts: 1, report: null, failure: 'provider' }
+      : { status: 'running', starts: 1, report: null, failure: null };
+  const draft = status === 'writing' ? { text: summaryText.slice(0, length) } : undefined;
+  const report = streamedReportView({ state, draft }, !!draft?.text);
+  return <><div className="workshop-controls"><label>Summary<select value={status} onChange={event => { setPlaying(false); setStatus(event.target.value as typeof status); setLength(240); }}><option value="ready">Ready</option><option value="pending">Preparing</option><option value="writing">Writing</option><option value="unavailable">Unavailable</option></select></label><button onClick={replay}>Replay stream</button><label>Transcript<select value={transcriptCount} onChange={event => setTranscriptCount(Number(event.target.value))}><option value="0">Empty</option><option value="8">Available</option></select></label>{notice && <span role="status">{notice}</span>}</div><InterviewSummaryScreen snapshot={fixture('ended', 'current', null, transcriptCount)} report={report} onRetrySummary={replay} onCheckSummary={() => setNotice('Debugger example: no live request.')} onReset={() => setNotice('Workshop preview: no live interview was started.')} /></>;
 }

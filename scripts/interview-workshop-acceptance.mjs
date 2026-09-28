@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const base = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5173';
-const output = process.env.ACCEPTANCE_OUTPUT || 'output/interview-ui/round2';
+const base = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5174';
+const output = process.env.ACCEPTANCE_OUTPUT || 'output/interview-streaming/browser/workshop';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
 const results = [];
@@ -66,6 +66,20 @@ try {
           await capture(page, `${output}/summary-${width}-${status}.png`);
           await page.getByRole('button', { name: 'Back to workshop controls', exact: true }).click();
         }
+        await controls.getByLabel('Summary').selectOption('writing');
+        await page.getByRole('button', { name: 'Screen only', exact: true }).click();
+        check(await page.getByRole('heading', { name: 'Writing your summary', exact: true }).isVisible(), 'Writing state absent');
+        check(await page.locator('.interview-summary-text').isVisible(), 'Writing prose absent');
+        check(await page.getByRole('button', { name: 'Copy summary', exact: true }).count() === 0, 'Draft summary is copyable');
+        await capture(page, `${output}/summary-${width}-writing.png`);
+        await page.getByRole('button', { name: 'Back to workshop controls', exact: true }).click();
+        await controls.getByRole('button', { name: 'Replay stream', exact: true }).click();
+        await page.getByRole('heading', { name: 'Writing your summary', exact: true }).waitFor();
+        await page.locator('.interview-summary-text').waitFor();
+        check(await page.getByRole('button', { name: 'Copy summary', exact: true }).count() === 0, 'Replay draft is copyable');
+        await page.getByRole('button', { name: 'Copy summary', exact: true }).waitFor({ timeout: 8000 });
+        check((await page.locator('.interview-summary-text').innerText()).includes('The interviewee described'), 'Replay did not finish with prose');
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Replay caused horizontal overflow');
         await page.locator('.interview-summary-transcript summary').click();
         check(await page.locator('.interview-summary-transcript article').count() > 0, 'Transcript lost after summary failure');
       }

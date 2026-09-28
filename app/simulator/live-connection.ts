@@ -24,7 +24,6 @@ export class LiveConnection {
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
   private disconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private controller = new AbortController();
-  private summaryController = new AbortController();
   private requested = false;
   private disposed = false;
   private activeSincePoll = false;
@@ -38,12 +37,12 @@ export class LiveConnection {
 
   get reportTarget() { return { id: this.id, url: `/api/simulator/sessions/${this.id}`, headers: { Authorization: `Bearer ${this.capability}` } }; }
 
-  private async request(action: string, body?: unknown, keepalive = false, signal = this.controller.signal): Promise<unknown> {
+  private async request(action: string, body?: unknown, keepalive = false): Promise<unknown> {
     const timeout = action === 'start' ? 40_000 : action === 'poll' ? 5000 : 30_000;
     const response = await fetch(action === 'start' ? '/api/simulator/sessions' : `/api/simulator/sessions/${this.id}/${action}`, {
       method: 'POST', headers: { Authorization: `Bearer ${this.capability}`, 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}), keepalive,
-      signal: keepalive ? AbortSignal.timeout(timeout) : AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
+      signal: keepalive ? AbortSignal.timeout(timeout) : AbortSignal.any([this.controller.signal, AbortSignal.timeout(timeout)]),
     });
     const result = await response.json().catch(() => null) as { error?: string } | null;
     if (!response.ok || !result) throw new SessionRequestError(result?.error || 'The simulator connection is unavailable.', response.status);
@@ -136,7 +135,6 @@ export class LiveConnection {
         if (snapshot.status === 'ended' || snapshot.status === 'interrupted') {
           this.ending = Promise.resolve();
           this.release();
-          this.pollSummary(snapshot);
           return;
         }
         this.poll();
@@ -145,25 +143,6 @@ export class LiveConnection {
         const lostSession = error instanceof SessionRequestError && [401, 403, 404, 410].includes(error.status);
         if (lostSession || failures + 1 >= 3) await this.fail('Live feedback lost its connection. This attempt has ended.');
         else this.poll(failures + 1);
-      }
-    }, 1000);
-  }
-
-  /** Voice is already closed; only the private summary may still be in progress. */
-  private pollSummary(snapshot: SessionSnapshot, deadline = Date.now() + 135_000, failures = 0) {
-    if (this.disposed || snapshot.interview?.summary?.status !== 'pending') return;
-    this.pollTimer = setTimeout(async () => {
-      try {
-        if (Date.now() >= deadline) throw new Error('Summary timed out.');
-        const next = await this.request('poll', { active: false, audio: false }, false, this.summaryController.signal) as SessionSnapshot;
-        if (this.disposed) return;
-        this.callbacks.snapshot(next);
-        this.pollSummary(next, deadline);
-      } catch (error) {
-        if (this.disposed) return;
-        const lostSession = error instanceof SessionRequestError && [401, 403, 404, 410].includes(error.status);
-        if (!lostSession && failures < 2 && Date.now() < deadline) this.pollSummary(snapshot, deadline, failures + 1);
-        else this.callbacks.snapshot({ ...snapshot, interview: { ...snapshot.interview!, summary: { status: 'unavailable', text: null } } });
       }
     }, 1000);
   }
@@ -201,7 +180,6 @@ export class LiveConnection {
         clearTimeout(closeDeadline);
         this.release();
       }
-      if (ended) this.pollSummary(ended);
     })();
     return this.ending;
   }
@@ -210,7 +188,6 @@ export class LiveConnection {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    this.summaryController.abort();
     void this.end();
     this.release();
   }

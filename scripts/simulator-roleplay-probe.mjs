@@ -31,6 +31,16 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   'project-closeout': {
+    positive: {
+      turns: 4,
+      lines: {
+        project: 'We built a permit intake portal for a regional agency. I was the technical lead. The best part was watching Maya, our newest developer, win over the operations team after they had written us off.',
+        story: 'She sat with a permit clerk for an afternoon. The clerk had been retyping the same address three times. Maya fixed that little thing before the next demo, and the clerk started bringing her coworkers over to show them. That was the first time they treated us like we were on their side.',
+        effect: 'It changed the relationship. After that they told us what was actually painful instead of just nodding in meetings. Maya deserves the credit. The important thing was taking their daily annoyance seriously, not the cleverness of the code.',
+        enough: 'That is really the story. I do not have more detail on that fix. The other thing I would repeat is giving junior developers direct access to the people using their work.',
+      },
+      choose: ({ turn }) => ['project', 'story', 'effect', 'enough'][turn],
+    },
     rehearsal: {
       turns: 3,
       lines: {

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, ChevronDown, Clipboard, FileText, Mic, MicOff, Volume2 } from 'lucide-react';
-import { interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewSession } from '../../core/interview';
+import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, RotateCcw, Volume2 } from 'lucide-react';
+import { interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import type { AudioLevels } from '../simulator/audio-levels';
 import { formatTime } from '../simulator/conversation';
 import { VoiceDisplay } from '../simulator/voice-display';
+import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 
 export type InterviewSnapshot = SessionSnapshot;
 export type InterviewVoiceId = typeof interviewVoices[number]['id'];
@@ -135,21 +136,36 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
   </section>;
 }
 
-export function InterviewSummaryScreen({ snapshot, onReset, error }: { snapshot: InterviewSnapshot | null; onReset: () => void; error?: string | null }) {
-  const summary = snapshot?.interview?.summary;
+const summaryTitles: Record<ReportStage, string> = {
+  compiling: 'Putting your conversation together', writing: 'Writing your summary', completed: 'The conversation, in context',
+  failed: 'The summary is unavailable', exhausted: 'The summary is unavailable', ineligible: 'Not enough conversation to summarize',
+  unavailable: 'This session is no longer available', 'status-error': 'Couldn’t load your summary',
+};
+
+export function InterviewSummaryScreen({ snapshot, report, onRetrySummary, onCheckSummary, onReset, error }: {
+  snapshot: InterviewSnapshot | null; report: StreamedReportView<InterviewSummaryContent>;
+  onRetrySummary: () => void; onCheckSummary: () => void; onReset: () => void; error?: string | null;
+}) {
+  const writing = report.stage === 'compiling' || report.stage === 'writing';
+  const complete = report.state.status === 'completed';
+  const text = report.state.status === 'completed' ? report.state.report.text : writing ? report.draft?.text : null;
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const copy = async () => {
-    if (!summary?.text) return;
-    try { await navigator.clipboard.writeText(summary.text); setCopyState('copied'); }
+    if (!complete || !text) return;
+    try { await navigator.clipboard.writeText(text); setCopyState('copied'); }
     catch { setCopyState('failed'); }
   };
-  const paragraphs = summary?.text?.trim().split(/\n\s*\n/).filter(Boolean) ?? [];
+  const paragraphs = text?.trim().split(/\n\s*\n/).filter(Boolean) ?? [];
   return <section className="interview-summary">
     <header className="interview-summary-header"><h1 tabIndex={-1}>What we heard<span className="interview-title-dot">.</span></h1><p>Sam’s internal notes reflect one participant’s account of the project.</p></header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
-    <article className="interview-summary-paper sim-panel"><div className="interview-summary-paper-header"><h2>{summary?.status === 'ready' ? 'The conversation, in context' : 'Your summary'}</h2>{summary?.status === 'ready' && <button className="quiet-button" onClick={() => { void copy(); }}><Clipboard size={17} />{copyState === 'copied' ? 'Copied' : 'Copy summary'}</button>}</div>
+    <article className="interview-summary-paper sim-panel" aria-busy={writing}><div className="interview-summary-paper-header"><h2>{summaryTitles[report.stage]}</h2>{writing && <LoaderCircle className="sim-report-spinner" size={24} aria-hidden="true" />}{complete && <button className="quiet-button" onClick={() => { void copy(); }}><Clipboard size={17} />{copyState === 'copied' ? 'Copied' : 'Copy summary'}</button>}</div>
+      <span className="sim-announcement" role="status">{summaryTitles[report.stage]}</span>
       {copyState === 'failed' && <p role="status" className="sim-notice">Copy was unavailable. You can select the summary text below.</p>}
-      {summary?.status === 'ready' && paragraphs.length ? <div className="interview-summary-text">{paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div> : <div className="interview-summary-state" role="status"><strong>{summary?.status === 'unavailable' ? 'The summary is unavailable' : 'Sam is putting your conversation together.'}</strong><p>{summary?.status === 'unavailable' ? 'Open the transcript below.' : 'This can take a moment after the voice call ends. You can read the transcript while it finishes.'}</p></div>}
+      {paragraphs.length > 0 && <div className="interview-summary-text">{paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>}
+      {!paragraphs.length && <div className="interview-summary-state"><p>{writing ? 'You can read the transcript while the summary takes shape.' : report.stage === 'status-error' ? 'Your summary may still be finishing. Check its status without starting again.' : 'Your transcript is still available below.'}</p></div>}
+      {report.stage === 'status-error' && <button className="quiet-button" onClick={onCheckSummary}>Check summary</button>}
+      {report.canRetry && <button className="quiet-button" onClick={onRetrySummary}><RotateCcw size={17} /> Retry summary</button>}
     </article>
     <details className="interview-summary-transcript sim-debrief-transcript"><summary>Read the transcript <ChevronDown size={18} aria-hidden="true" /></summary><InterviewTranscript entries={snapshot?.transcript ?? []} /></details>
     <button className="arcade-button interview-new" onClick={onReset}>New interview</button>

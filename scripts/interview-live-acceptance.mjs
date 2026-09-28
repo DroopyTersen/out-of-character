@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 
 const base = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5174';
-const output = resolve(process.env.ACCEPTANCE_OUTPUT || 'output/interview/live-gleam');
+const output = resolve(process.env.ACCEPTANCE_OUTPUT || 'output/interview-streaming/browser/live');
 await mkdir(output, { recursive: true });
 
 const speech = Bun.spawn(['say', '-v', 'Samantha', '-r', '180', '-o', `${output}/participant.aiff`,
@@ -68,7 +68,7 @@ await context.addInitScript(() => {
 });
 
 const page = await context.newPage();
-const report = { checkedAt: new Date().toISOString(), route: '/interview', voice: 'sam-gleam', syntheticMicrophone: true, fixturePlayed: false, opening: false, openingText: '', audiblePeak: 0, snapshots: [], requests: [], finalization: null, summary: null, resources: null, errors: [] };
+const report = { checkedAt: new Date().toISOString(), route: '/interview', voice: 'sam-gleam', syntheticMicrophone: true, fixturePlayed: false, opening: false, openingText: '', audiblePeak: 0, snapshots: [], requests: [], reportStream: null, finalization: null, summary: null, resources: null, errors: [] };
 const snapshots = report.snapshots;
 let lastClientText = '';
 let lastClientChangeAt = 0;
@@ -83,13 +83,19 @@ page.on('request', request => {
 });
 page.on('response', async response => {
   if (!/^\/api\/simulator\/sessions(?:\/|$)/.test(new URL(response.url()).pathname)) return;
+  const action = new URL(response.url()).pathname.split('/').at(-1);
+  const request = report.requests.findLast(item => item.action === action && item.status == null);
+  if (request) request.status = response.status();
+  if (action === 'report') {
+    report.reportStream = { status: response.status(), contentType: response.headers()['content-type'] || null };
+    if (!response.ok()) report.errors.push(`Summary stream could not start (${response.status()}).`);
+    return;
+  }
   try {
     const body = await response.json();
-    const request = report.requests.findLast(item => item.action === new URL(response.url()).pathname.split('/').at(-1) && item.status == null);
-    if (request) request.status = response.status();
     const snapshot = body.snapshot || body;
     if (!snapshot?.status) { if (!response.ok()) report.errors.push(`Session request failed (${response.status()}).`); return; }
-    snapshots.push({ status: snapshot.status, finalization: snapshot.finalization, transcript: snapshot.transcript?.map(({ speaker, text }) => ({ speaker, text })) || [], summary: snapshot.interview?.summary || null });
+    snapshots.push({ source: action, status: snapshot.status, finalization: snapshot.finalization, transcript: snapshot.transcript?.map(({ speaker, text }) => ({ speaker, text })) || [], summary: snapshot.interview?.summary || null, reportState: snapshot.report?.status || null, reportText: snapshot.report?.status === 'completed' ? snapshot.report.report.text : null });
     const clientText = snapshot.transcript?.filter(entry => entry.speaker === 'client').map(entry => entry.text).join(' ') || '';
     if (clientText !== lastClientText) {
       lastClientText = clientText;
@@ -141,14 +147,16 @@ finally {
     if (!ended && ownedSession?.id && ownedSession.capability) {
       const response = await fetch(`${base}/api/simulator/sessions/${ownedSession.id}/end`, { method: 'POST', headers: { Origin: base, Authorization: ownedSession.capability } });
       const snapshot = await response.json();
-      if (snapshot?.status) snapshots.push({ status: snapshot.status, finalization: snapshot.finalization, transcript: snapshot.transcript?.map(({ speaker, text }) => ({ speaker, text })) || [], summary: snapshot.interview?.summary || null });
+      if (snapshot?.status) snapshots.push({ source: 'manual-end', status: snapshot.status, finalization: snapshot.finalization, transcript: snapshot.transcript?.map(({ speaker, text }) => ({ speaker, text })) || [], summary: snapshot.interview?.summary || null, reportState: snapshot.report?.status || null, reportText: snapshot.report?.status === 'completed' ? snapshot.report.report.text : null });
       ended = snapshot?.status === 'ended' || snapshot?.status === 'interrupted';
     }
     if (!ended) report.errors.push('No terminal session snapshot within 30 seconds of End.');
     const last = snapshots.at(-1);
     report.finalization = last?.finalization || null;
-    if (last?.summary?.status === 'pending') await waitUntil(() => snapshots.some(item => ['ready', 'unavailable'].includes(item.summary?.status)), 125_000);
-    report.summary = snapshots.at(-1)?.summary || null;
+    await waitUntil(() => snapshots.some(item => ['completed', 'failed', 'ineligible'].includes(item.reportState)), 135_000);
+    const final = snapshots.findLast(item => ['completed', 'failed', 'ineligible'].includes(item.reportState));
+    report.summary = final ? { status: final.reportState, text: final.reportText } : null;
+    report.summaryPollConfirmed = final?.source === 'poll';
     report.audiblePeak = await page.evaluate(() => window.__interviewAudit?.peak || 0).catch(() => report.audiblePeak);
     report.resources = await page.evaluate(() => ({ microphone: window.__interviewAudit?.sourceTrack?.readyState, peer: window.__interviewAudit?.peer?.signalingState })).catch(() => null);
     report.sessionId = ownedSession?.id || null;
@@ -159,6 +167,6 @@ finally {
 }
 
 const participantHeard = snapshots.some(item => item.transcript.some(entry => entry.speaker === 'trainee' && entry.text.trim()));
-const passed = report.opening && report.audiblePeak > 0.005 && participantHeard && report.finalization === 'confirmed' && report.summary?.status === 'ready' && Boolean(report.summary.text?.trim()) && report.resources?.microphone === 'ended' && report.resources?.peer === 'closed' && !report.errors.length;
+const passed = report.opening && report.audiblePeak > 0.005 && participantHeard && report.finalization === 'confirmed' && report.reportStream?.status === 200 && report.summaryPollConfirmed && report.summary?.status === 'completed' && Boolean(report.summary.text?.trim()) && report.resources?.microphone === 'ended' && report.resources?.peer === 'closed' && !report.errors.length;
 console.log(JSON.stringify({ output, passed, opening: report.openingText, audiblePeak: report.audiblePeak, fixturePlayed: report.fixturePlayed, finalization: report.finalization, summaryStatus: report.summary?.status || null, resources: report.resources, errors: report.errors }));
 if (!passed) process.exitCode = 1;

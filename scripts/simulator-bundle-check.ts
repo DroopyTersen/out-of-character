@@ -19,6 +19,7 @@ const privateText = [
   'Write one private direction to SAM',
   'Is Sam ignoring a revealing aside',
   'Does this exact private direction still usefully guide Sam',
+  'Write a comprehensive, readable internal project-closeout summary',
 ];
 let checked = 0;
 for await (const path of new Bun.Glob('**/*.{js,json,css,html}').scan('build/client')) {

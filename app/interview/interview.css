@@ -177,7 +177,7 @@
   .interview-topic ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .interview-summary-header { padding-top: 30px; }
   .interview-summary-header h1 { font-size: clamp(39px, 10vw, 50px); }
-  .interview-summary-paper-header { display: block; }
+  .interview-summary-paper-header { flex-wrap: wrap; }
   .interview-summary-paper-header button { margin-top: 15px; }
   .interview-summary-text { font-size: 15px; }
 }

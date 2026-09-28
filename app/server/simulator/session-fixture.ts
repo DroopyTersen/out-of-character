@@ -14,8 +14,8 @@ const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_
 const reportMigration = await Bun.file(new URL('../../../migrations/0003_simulator_report.sql', import.meta.url)).text();
 const interviewMigration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
 const interviewInterventionsMigration = await Bun.file(new URL('../../../migrations/0003_interview_interventions.sql', import.meta.url)).text();
-export async function waitFor(check: () => boolean) {
-  const deadline = performance.now() + 2500;
+export async function waitFor(check: () => boolean, timeout = 2500) {
+  const deadline = performance.now() + timeout;
   while (!check()) {
     if (performance.now() > deadline) throw new Error('Timed out waiting for the session event.');
     await new Promise(resolve => setTimeout(resolve, 25));
@@ -94,7 +94,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     blockConcurrencyWhile: (fn: () => Promise<void>) => { ready = fn(); }, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); },
   } as unknown as DurableObjectState;
   const session = new SimulatorSession(ctx, {
-    OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture', OPENROUTER_API_KEY: 'fixture',
+    OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture',
     SIMULATOR_ARCHIVE: archive.d1,
     ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
@@ -107,7 +107,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     generateReport: () => { throw new Error('No report provider configured in this fixture.'); },
     evaluateInterview: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
     evaluateInterviewer: async input => ({ revision: input.revision, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, }),
-    summarizeInterview: async () => 'Fixture summary.',
+    summarizeInterview: (_input, done) => new ReadableStream({ start(controller) { const report = { text: 'Fixture summary.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close(); } }),
     ...overrides,
   });
   await ready;

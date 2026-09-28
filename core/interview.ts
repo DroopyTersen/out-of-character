@@ -1,4 +1,5 @@
 import type { ObjectiveReading, SkillReading } from './simulator/types';
+import { z } from 'zod';
 
 export const INTERVIEW_SCENARIO_ID = 'project-closeout';
 export const INTERVIEWER_NAME = 'Sam';
@@ -45,6 +46,8 @@ export type InterviewEvaluation = {
   durationMs: number;
 };
 export type InterviewSummary = { status: 'pending' | 'ready' | 'unavailable'; text: string | null };
+export const interviewSummarySchema = z.strictObject({ text: z.string().trim().min(1) });
+export type InterviewSummaryContent = z.infer<typeof interviewSummarySchema>;
 export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null };
 
 export function emptyInterviewReadings(): InterviewEvaluation['readings'] {

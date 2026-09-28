@@ -12,8 +12,8 @@ import { opportunities, RUBRIC_VERSION, skillAnchors } from './rubric';
 export const REPORT_PROVENANCE = { model: 'gpt-6-sol', effort: 'medium', version: 'coaching-report-v1', rubricVersion: RUBRIC_VERSION } as const;
 export type ReportInput = { snapshot: SessionSnapshot; interventions: InterventionRecord[]; apiKey: string; signal: AbortSignal };
 export type ReportUsage = { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; cachedTokens: number | null };
-export type ReportResult = { usage: ReportUsage | null } & (
-  | { report: CoachingReport; failure: null }
+export type ReportResult<T = CoachingReport> = { usage: ReportUsage | null } & (
+  | { report: T; failure: null }
   | { report: null; failure: ReportFailure }
 );
 

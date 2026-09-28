@@ -20,13 +20,13 @@ export const reportSchema = z.strictObject({
 });
 export type CoachingReport = z.infer<typeof reportSchema>;
 export type ReportFailure = 'provider' | 'invalid' | 'cancelled' | 'timeout';
-export type ReportState = { starts: number } & (
+export type ReportState<T = CoachingReport> = { starts: number } & (
   | { status: 'idle' | 'running'; report: null; failure: null }
-  | { status: 'completed'; report: CoachingReport; failure: null }
+  | { status: 'completed'; report: T; failure: null }
   | { status: 'failed'; report: null; failure: ReportFailure }
   | { status: 'ineligible' | 'unavailable'; report: null; failure: null }
 );
-export const idleReport = (): ReportState => ({ status: 'idle', starts: 0, report: null, failure: null });
+export const idleReport = <T = CoachingReport>(): ReportState<T> => ({ status: 'idle', starts: 0, report: null, failure: null });
 
 /** Adapt final judgments to the existing evidence/score components without mutating Jev's readings. */
 export function reportEvaluation(report: CoachingReport, snapshot: SessionSnapshot): FeedbackAssessment {

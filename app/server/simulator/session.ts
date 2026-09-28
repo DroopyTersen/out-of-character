@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateInterview, evaluateInterviewer } from '../../../ai/interview/evaluate.server';
 import { summarizeInterview } from '../../../ai/interview/summary.server';
-import { INTERVIEW_SCENARIO_ID } from '../../../core/interview';
+import { INTERVIEW_SCENARIO_ID, type InterviewSummaryContent } from '../../../core/interview';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
 import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../../core/simulator/state';
@@ -11,8 +11,8 @@ import { activitySchema, simulatorJson, startSchema } from './api';
 import { archiveProvenance, writeArchive, writeReport } from './archive.server';
 import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices } from './contextual-director';
-import { generateReport } from '../../../ai/simulator/report.server';
-import { idleReport, type ReportState } from '../../../core/simulator/report';
+import { generateReport, REPORT_PROVENANCE } from '../../../ai/simulator/report.server';
+import { idleReport, type CoachingReport, type ReportState } from '../../../core/simulator/report';
 import { SessionReport, within, type ReportArchive } from './report';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
@@ -48,7 +48,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private contextual: ContextualDirector | undefined;
   private seenEvents = new Set<string>();
   private readonly paid: typeof services;
-  private report: SessionReport | undefined;
+  private report: SessionReport<CoachingReport> | SessionReport<InterviewSummaryContent> | undefined;
   private finalArchive: Promise<void> | undefined;
   private reportArchive = Promise.resolve();
 
@@ -107,8 +107,8 @@ export class SimulatorSession extends DurableObject<Env> {
     return { ...this.snapshot!, coaching: this.contextual?.coaching() ?? null };
   }
 
-  private reportState(): ReportState {
-    if (!this.snapshot || this.snapshot.interview || !getScenario(this.snapshot.scenarioId).objectives.length || !this.snapshot.transcript.some(item => item.speaker === 'trainee' && item.text.trim())) {
+  private reportState(): ReportState<CoachingReport | InterviewSummaryContent> {
+    if (!this.snapshot || !getScenario(this.snapshot.scenarioId).objectives.length || !this.snapshot.transcript.some(item => item.speaker === 'trainee' && item.text.trim())) {
       return { status: 'ineligible', starts: 0, report: null, failure: null };
     }
     return this.report?.state ?? idleReport();
@@ -121,10 +121,25 @@ export class SimulatorSession extends DurableObject<Env> {
     }
     if (!this.snapshot || !['ended', 'interrupted'].includes(this.snapshot.status)) return simulatorJson({ error: 'End the conversation before requesting its report.' }, 409);
     if (this.reportState().status === 'ineligible') return simulatorJson({ error: 'There is not enough scored conversation to review.' }, 422);
-    this.report ??= new SessionReport({ snapshot: structuredClone(this.publicSnapshot()), interventions: structuredClone(this.contextual?.records ?? []), apiKey: this.env.OPENAI_API_KEY! }, archive => {
-      this.reportArchive = this.reportArchive.then(() => this.saveReport(archive));
-      this.ctx.waitUntil(this.reportArchive);
-    }, this.paid.generateReport);
+    if (!this.report) {
+      const snapshot = structuredClone(this.publicSnapshot());
+      if (snapshot.interview) {
+        this.report = new SessionReport<InterviewSummaryContent>((signal, finish) => this.paid.summarizeInterview({ transcript: snapshot.transcript, apiKey: this.env.OPENAI_API_KEY!, signal }, finish), archive => {
+          this.snapshot!.interview!.summary = archive.report ? { status: 'ready', text: archive.report.text } : { status: 'unavailable', text: null };
+          this.reportArchive = this.reportArchive.then(async () => {
+            if (this.finalArchive) await within(this.finalArchive, 15_000).catch(() => {});
+            await this.saveArchive('final');
+          });
+          this.ctx.waitUntil(this.reportArchive);
+        });
+      } else {
+        const interventions = structuredClone(this.contextual?.records ?? []);
+        this.report = new SessionReport<CoachingReport>((signal, finish) => this.paid.generateReport({ snapshot, interventions, apiKey: this.env.OPENAI_API_KEY!, signal }, finish), archive => {
+          this.reportArchive = this.reportArchive.then(() => this.saveReport({ ...REPORT_PROVENANCE, ...archive }));
+          this.ctx.waitUntil(this.reportArchive);
+        });
+      }
+    }
     return this.report.start(request);
   }
 
@@ -395,7 +410,7 @@ export class SimulatorSession extends DurableObject<Env> {
       if (String(snapshot.finalization) !== 'confirmed') snapshot.finalization = 'unconfirmed';
     }
     this.socket?.close();
-    if (snapshot.interview && snapshot.transcript.some(item => item.speaker === 'trainee')) await this.grade(snapshot.transcript, snapshot.revision, true);
+    if (snapshot.transcript.some(item => item.speaker === 'trainee')) await this.grade(snapshot.transcript, snapshot.revision, true);
     snapshot.status = interrupted ? 'interrupted' : 'ended';
     if (snapshot.finalization !== 'confirmed') snapshot.message = 'Practice ended, but the voice service did not confirm finalization.';
     this.lease!.closed = snapshot.finalization === 'confirmed' || !this.lease!.providerId;
@@ -404,28 +419,10 @@ export class SimulatorSession extends DurableObject<Env> {
     if (this.reachedLive) {
       if (snapshot.interview) {
         snapshot.interview.summary = { status: snapshot.transcript.some(item => item.speaker === 'trainee') ? 'pending' : 'unavailable', text: null };
-        this.ctx.waitUntil(this.completeInterview());
-      } else {
-        this.finalArchive = this.saveArchive('final');
-        this.ctx.waitUntil(this.finalArchive);
       }
+      this.finalArchive = this.saveArchive('final');
+      this.ctx.waitUntil(this.finalArchive);
     }
-  }
-
-  private async completeInterview() {
-    const snapshot = this.snapshot!;
-    const interview = snapshot.interview!;
-    // Save the transcript first. A failed summary must not lose the conversation.
-    await this.saveArchive('final');
-    if (interview.summary?.status !== 'pending') return;
-    try {
-      if (!this.env.OPENROUTER_API_KEY) throw new Error('Summary is not configured.');
-      const text = await this.paid.summarizeInterview({ transcript: snapshot.transcript, apiKey: this.env.OPENROUTER_API_KEY });
-      interview.summary = { status: 'ready', text };
-    } catch {
-      interview.summary = { status: 'unavailable', text: null };
-    }
-    await this.saveArchive('final');
   }
 
   private closeOrphan(): Promise<void> {

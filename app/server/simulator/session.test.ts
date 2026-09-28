@@ -144,8 +144,7 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
 });
 
 test('interview End preserves covered topics and returns pending before one summary completes', async () => {
-  let releaseSummary!: (text: string) => void;
-  const summaryResult = new Promise<string>(resolve => { releaseSummary = resolve; });
+  let releaseSummary: ((text: string) => void) | undefined;
   const summarized: { speaker: string; text: string }[][] = [];
   const interviewJudged: { achievedIds: string[]; transcript: { speaker: string; text: string }[] }[] = [];
   const f = await fixture({ overrides: {
@@ -158,7 +157,10 @@ test('interview End preserves covered topics and returns pending before one summ
         model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {},
       };
     },
-    summarizeInterview: async input => { summarized.push(input.transcript); return summaryResult; },
+    summarizeInterview: (input, done) => { summarized.push(input.transcript); return new ReadableStream({ start(controller) {
+      controller.enqueue('{\"text\":');
+      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: null }); controller.close(); releaseSummary = undefined; };
+    } }); },
   } });
   f.socket.holdClose = true;
   let ending: Promise<Response> | undefined;
@@ -190,7 +192,13 @@ test('interview End preserves covered topics and returns pending before one summ
     expect(interviewJudged[1]!.achievedIds).toEqual(['project-delivery']);
     expect(interviewJudged[1]!.transcript.map(entry => entry.text)).toEqual(['We built a permit intake portal.', 'Jen resolved our access issue.']);
     expect(ended.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(covered);
-    await waitFor(() => summarized.length === 1);
+    await Promise.all(f.pending);
+    expect(summarized).toHaveLength(0);
+    expect((await f.session.fetch(request('report', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
+    const response = await f.session.fetch(request('report'));
+    const body = response.text();
+    expect((await f.session.fetch(request('report'))).status).toBe(409);
+    expect(summarized).toHaveLength(1);
     expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
     expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(covered);
@@ -198,7 +206,9 @@ test('interview End preserves covered topics and returns pending before one summ
     expect((await f.session.fetch(request('poll', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
     expect((await f.session.fetch(request('poll', ''))).status).toBe(401);
 
-    releaseSummary('The participant credited Jen with resolving the access issue.');
+    expect(f.interviewRow()!.summary_text).toBeNull();
+    releaseSummary!('The participant credited Jen with resolving the access issue.');
+    expect(JSON.parse(await body)).toEqual({ text: 'The participant credited Jen with resolving the access issue.' });
     await Promise.all(f.pending);
     const ready = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     expect(ready.interview.summary).toEqual({ status: 'ready', text: 'The participant credited Jen with resolving the access issue.' });
@@ -214,12 +224,13 @@ test('interview End preserves covered topics and returns pending before one summ
 
 test('a failed interview summary remains unavailable while the participant transcript stays archived', async () => {
   const f = await fixture({ overrides: {
-    summarizeInterview: async () => { throw new Error('Provider contained private request data.'); },
+    summarizeInterview: () => { throw new Error('Provider contained private request data.'); },
   } });
   await f.session.fetch(request('start', capability, interviewAttempt));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We shipped the migration despite the handoff delay.', start_ms: 100, end_ms: 900 });
   await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text();
   await Promise.all(f.pending);
   const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(snapshot.interview.summary).toEqual({ status: 'unavailable', text: null });
@@ -239,7 +250,9 @@ test.each(['intervene', 'none'] as const)('interview producer %s stays private a
       const result = action === 'none' ? { action, text: null, evidenceIds: [] as [] } : { action, text: 'PRIVATE: Return to the missing access owner.', evidenceIds: [input.transcript[0]!.id] };
       return { ...result, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
-    summarizeInterview: async input => { summarized = JSON.stringify(input); return 'The participant described an access delay.'; },
+    summarizeInterview: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
+      const report = { text: 'The participant described an access delay.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
+    } }); },
   } });
   setSystemTime(1_800_000_000_000);
   await f.session.fetch(request('start', capability, interviewAttempt));
@@ -262,6 +275,7 @@ test.each(['intervene', 'none'] as const)('interview producer %s stays private a
   expect(JSON.stringify(snapshot)).not.toContain('signals');
   expect(f.judged).toHaveLength(0);
   await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text();
   await Promise.all(f.pending);
   const row = f.interviewRow()!;
   const records = JSON.parse(row.interventions_json);
@@ -285,7 +299,6 @@ test('End freezes an unfinished interview direction without delaying its summary
       await new Promise<void>(resolve => { release = resolve; });
       return { action: 'intervene', text: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
-    summarizeInterview: async () => 'An access delay was reported.',
   } });
   setSystemTime(1_800_000_000_000);
   await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
@@ -293,6 +306,7 @@ test('End freezes an unfinished interview direction without delaying its summary
   setSystemTime(1_800_000_002_000);
   await waitFor(() => !!release);
   await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text();
   await waitFor(() => f.interviewRow()?.summary_status === 'ready');
   const archived = f.interviewRow()!;
   expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'director').outcome).toBe('aborted');
@@ -811,16 +825,16 @@ test('new settled dialogue marks earlier feedback delayed while reassessment is 
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Who owns the workflow?', start_ms: 0, end_ms: 1000 });
-  await new Promise(resolve => setTimeout(resolve, 1600));
+  await waitFor(() => calls === 1);
+  await Promise.all(f.pending);
   const first = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(first.feedbackStatus).toBe('current');
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Operations does, but do not contact them yet.', start_ms: 1100, end_ms: 2300 });
-  await new Promise(resolve => setTimeout(resolve, 1600));
+  // Hold the actual reassessment rather than racing a fixed timer.
+  await waitFor(() => !!release, 7000);
   const waiting = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(waiting.evaluation.revision).toBe(first.evaluation.revision);
   expect(waiting.feedbackStatus).toBe('delayed');
-  // Wait for the owner cadence to start the next request, then release its result.
-  while (!release) await new Promise(resolve => setTimeout(resolve, 100));
   release();
   await Promise.all(f.pending);
   const current = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;

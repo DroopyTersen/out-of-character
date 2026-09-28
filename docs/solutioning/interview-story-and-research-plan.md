@@ -1,6 +1,6 @@
 # Interview story value and timely research
 
-Status: reviewed proposal; implementation has not started. Based on `project-closeout-interviews` at `78f7d60` (includes main through `3819e6a`). Companion context: [streaming plan](interview-streaming-plan.md), [progress and verification](interview-progress.md), and [existing director design](interview-contextual-director-plan.md).
+Status: approved for implementation. Based on `project-closeout-interviews` at `35d6e2a` (includes main through `3819e6a`). Companion context: [streaming plan](interview-streaming-plan.md), [progress and verification](interview-progress.md), and [existing director design](interview-contextual-director-plan.md).
 
 Concrete payload draft: [Jev state, questions, criteria, and routing](interview-jev-request-design.md).
 
@@ -99,6 +99,10 @@ The current brief says Sam knows only what the participant tells it. Amend that 
 Save target, sources, result, timing, skip reason, and delivery status in the existing private interview archive JSON with an explicit research record type. Keep ordinary simulator exports unchanged. Add two synthetic Debugger cases for delivered background and skipped research, reusing the current viewer. This needs a small record/type addition and source-link presentation, not a new database or screen.
 
 ## Implementation checkpoints, after plan approval
+
+The implementation goal is to complete the story judgments and bounded public research path, verify their privacy and lifecycle boundaries with tests and measured provider rehearsals, inspect the isolated UI, obtain Claude desktop code review, and commit the result. Deployment and merging are separate actions.
+
+Final desktop alignment corrections: a research attempt means one preparation call; the research signal must fall below 0.5 before a new episode can attempt preparation. The 25-second deadline starts at the observation's captured time. Normalize case, punctuation and whitespace when verifying the participant's six-word target span. Add background and the omission flag only to the interviewer request, never the shared participant state helper.
 
 1. **Story judgment.** Add the colleague test to the existing brief; sharpen `missed-thread`, add `overprobing`, and align Sol's instructions. Add interview priority ordering, update the rubric version, and refresh relevant fixtures/Debugger recordings. Measure before tuning thresholds.
 2. **Research helper and delivery.** Add one research judgment and a focused interview research module with typed preparation/result boundaries. Let the existing `ContextualDirector` own its abort/lifetime and shared delivery gate. Make the source/brief/archive/UI changes together. Run the Luna smoke before integrating research; retain live research only if rehearsals show better questions without distraction. Avoid an agent framework.

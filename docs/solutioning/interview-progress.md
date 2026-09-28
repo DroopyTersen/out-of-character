@@ -175,3 +175,8 @@ Limitations: synthetic provider runs are short rehearsals, not proof of every re
 - Resolved review questions in the proposal: disclose organization/product/term lookups on setup and show sourced background when delivered, rather than detecting whether Sam speaks it. Kept a small delivered-facts context for accuracy checks and two synthetic Debugger cases. Model thresholds and research usefulness still require later fixtures/rehearsals; no new paid experiments or deployment were run.
 
 - Added [the concrete Jev request draft](interview-jev-request-design.md): bounded settled state, explicit source/window rules, full instructions and true/false criteria for missed-thread, overprobing, and research usefulness, the five retained checks, SDK response shape, and code-owned routing. Verified the installed provider's boolean-to-Noul mapping and current TypeSafe documentation. This remains documentation only; example probabilities are illustrative.
+
+## Story judgment and public research — implementation started
+
+- Claude desktop reviewed both documents at `35d6e2a`, confirmed alignment and reported no blockers. Accepted four small corrections: research episode suppression after a declined lookup, interviewer-only background state, deadline measured from the captured observation, and punctuation-tolerant participant target matching.
+- Created an explicit implementation goal covering both slices, bounded provider rehearsals, isolated UI verification, tests, checkpoints and final Claude desktop code review. No deployment or merge is included.

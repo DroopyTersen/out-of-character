@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { formatTimelineRows, producerTimeline } from './interview-timeline';
-import type { ProducerLogRecord } from './interview-producer';
+import type { GradeObjective, GradeRecord, ProducerLogRecord } from './interview-producer';
 
 const startedAt = 1_800_000_000_000;
 const transcript = [
@@ -37,4 +37,34 @@ test('the debug timeline interleaves dialogue and producer work with each step�
   const text = formatTimelineRows(rows);
   expect(text).toContain('0:12  producer    Sol · check-in, missed-thread 0.70  [sent · check 0.81]  2500 ms');
   expect(text).not.toContain('https://');
+});
+
+test('grade rows expose probability drift and separate retained evidence; cue timing stays observational', () => {
+  const grade = (id: string, atMs: number, objectives: GradeObjective[] | undefined, extra: Partial<GradeRecord> = {}): GradeRecord => ({
+    source: 'grade', id, final: false, revision: 1, capturedAt: startedAt + atMs, completedAt: startedAt + atMs + 900,
+    inputCount: 2, lastInputId: 'u1', outcome: 'graded', durationMs: 800, objectives, ...extra,
+  });
+  const first: GradeObjective = { id: 'project-delivery', shown: ['touched', 'u1'], graded: ['touched', 'u1'], levels: [.1, .7, .2, 0] };
+  const cue = records[1] as Extract<ProducerLogRecord, { source: 'producer' }>;
+  const rows = producerTimeline({ startedAt, transcript: [], records: [
+    grade('g1', 5000, [first]),
+    grade('g2', 10_000, [{ ...first, levels: [.1, .5, .4, 0] }]),
+    grade('g3', 15_000, [{ ...first, graded: ['not-yet', null], levels: [.4, .6, 0, 0] }]),
+    grade('g4', 20_000, undefined, { outcome: 'evaluation_timeout', durationMs: undefined }),
+    grade('g5', 30_000, [{ ...first, shown: ['explored', 'u3'], graded: ['explored', 'u3'], levels: [0, .05, .95, 0] }], { final: true, lastInputId: 'u3' }),
+    { ...cue, id: 'c2', triggeredAt: startedAt + 20_000, outcome: 'withheld', reason: 'dialogue_changed', sentAt: undefined, nextSamTurnAt: undefined },
+    { ...cue, id: 'c3', triggeredAt: startedAt + 25_000, nextSamTurnAfterId: 'u1' },
+  ] });
+  const grades = rows.filter(row => row.lane === 'grade');
+  expect(grades).toHaveLength(5);
+  expect(grades[0]!.detail).toContain('touched on · u1');
+  expect(grades[1]!.detail).toContain('t 0.50 e 0.40');
+  expect(grades[2]!.detail).toContain('touched on · u1; graded not yet · no evidence');
+  expect(grades[3]).toMatchObject({ outcome: 'evaluation_timeout', latencyMs: 900 });
+  expect(grades[4]).toMatchObject({ title: 'Grade · final · through u3', outcome: 'graded' });
+  expect(grades[4]!.detail).toContain('touched on → explored · u3');
+  const cues = rows.filter(row => row.lane === 'producer');
+  expect(cues[0]!.outcome).toBe('withheld (dialogue_changed) · check 0.81');
+  expect(cues[0]!.detail).not.toContain('Next observed');
+  expect(cues[1]!.detail).toEndWith(' · Next observed Sam passage after u1');
 });

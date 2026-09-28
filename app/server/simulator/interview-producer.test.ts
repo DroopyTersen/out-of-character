@@ -255,7 +255,7 @@ test('every cue is checked against the latest dialogue; spacing and the cue budg
   await f.producer.settle();
   expect(f.calls.cue[0]).toMatchObject({ cue: 'Cue 1', apiKey: 'typesafe-fixture' });
   expect(f.calls.cue[0]!.transcript.at(-1)!.id).toBe('p3');
-  expect(f.of('producer')[0]).toMatchObject({ outcome: 'withheld', check: { probability: .5, lastInputId: 'p3' } });
+  expect(f.of('producer')[0]).toMatchObject({ outcome: 'withheld', reason: 'check', check: { probability: .5, lastInputId: 'p3' } });
   expect(f.sent).toHaveLength(0);
 
   // A check-in cue, then its research card's follow-up inside the spacing window, then a concern that skips spacing.
@@ -308,6 +308,62 @@ test('the rundown is sent only when a band changes, throttled, plus once near th
   expect(f.calls.generate).toHaveLength(0);
 });
 
+test('coverage churn cannot use the rundown reserved for the time reminder, and nothing sends after close', () => {
+  const f = fixture();
+  const rundowns = () => f.of('rundown');
+  const churn = () => {
+    f.setLevel('project-delivery', rundowns().length % 2 ? 'touched' : 'explored');
+    f.producer.tick();
+    f.advance(PRODUCER_LIMITS.rundownSpacing);
+  };
+  while (rundowns().length < PRODUCER_LIMITS.rundowns - 1) churn();
+  expect(Date.now() - epoch).toBeLessThan(PRODUCER_LIMITS.rundownAt);
+  churn();
+  expect(rundowns()).toHaveLength(PRODUCER_LIMITS.rundowns - 1);
+  f.advance(PRODUCER_LIMITS.rundownAt);
+  f.producer.tick();
+  expect(rundowns()).toHaveLength(PRODUCER_LIMITS.rundowns);
+  expect(rundowns().at(-1)).toMatchObject({ reason: 'time', outcome: 'sent' });
+  expect(rundowns().filter(item => item.reason === 'time')).toHaveLength(1);
+  churn();
+  expect(rundowns()).toHaveLength(PRODUCER_LIMITS.rundowns);
+
+  const g = fixture();
+  g.setLevel('project-delivery', 'touched');
+  g.producer.close();
+  g.producer.tick();
+  g.advance(PRODUCER_LIMITS.rundownAt);
+  g.producer.tick();
+  expect(g.sent).toHaveLength(0);
+  expect(g.producer.records).toEqual([]);
+});
+
+test.each(['socket', 'provider'] as const)('the reserved time reminder retries after a %s failure at the budget edge', failure => {
+  const f = fixture();
+  for (let index = 0; index < PRODUCER_LIMITS.rundowns - 1; index++) {
+    f.setLevel('project-delivery', index % 2 ? 'touched' : 'explored');
+    f.producer.tick();
+    f.advance(PRODUCER_LIMITS.rundownSpacing);
+  }
+  f.advance(PRODUCER_LIMITS.rundownAt);
+  if (failure === 'socket') f.setConnected(false);
+  f.producer.tick();
+  const failed = f.of('rundown').at(-1)!;
+  if (failure === 'provider') {
+    f.producer.providerEvent(failed.delivery!.eventId, false);
+    f.producer.providerEvent(failed.delivery!.eventId, false); // Duplicate receipts do not refund twice.
+  }
+  expect(failed).toMatchObject({ reason: 'time', outcome: 'error' });
+  expect(f.producer.summary().rundowns).toBe(PRODUCER_LIMITS.rundowns - 1);
+  f.setConnected(true);
+  f.producer.tick();
+  expect(f.of('rundown').at(-1)).toBe(failed);
+  f.advance(PRODUCER_LIMITS.rundownSpacing);
+  f.producer.tick();
+  expect(f.of('rundown').at(-1)).toMatchObject({ reason: 'time', outcome: 'sent' });
+  expect(f.producer.summary().rundowns).toBe(PRODUCER_LIMITS.rundowns);
+});
+
 test('delivery acknowledgments decide which cards explain Sam’s claims and which become public', async () => {
   let count = 0;
   const names = ['OpenStreetMap', 'Mapbox', 'routing layer'];
@@ -328,8 +384,11 @@ test('delivery acknowledgments decide which cards explain Sam’s claims and whi
 
   f.advance(4000);
   f.say('client', 'What did Mapbox handle?');
-  f.producer.transcriptChanged(f.transcript().at(-1)!);
-  expect(accepted!.nextSamTurnAt).toBe(Date.now());
+  f.producer.transcriptChanged(f.transcript().at(-1)!, 'p2');
+  expect(accepted!).toMatchObject({ nextSamTurnAt: Date.now(), nextSamTurnAfterId: 'p2' });
+  f.advance(1000);
+  f.producer.transcriptChanged({ id: 'p9', speaker: 'client', text: 'And after that?', startMs: 0, endMs: 1 }, 'p8');
+  expect(accepted!).toMatchObject({ nextSamTurnAt: Date.now() - 1000, nextSamTurnAfterId: 'p2' });
   expect(f.producer.summary().latency.lookup).toEqual({ count: 3, p50: 0, p90: 0 });
 });
 
@@ -368,6 +427,7 @@ test('a participant correction during a delivery check prevents the stale note f
     expect(f.sent).toHaveLength(0);
     const record = kind === 'cue' ? f.of('producer')[0] : f.of('research')[0];
     expect(record!.outcome).toBe('withheld');
+    expect(record!.reason).toBe('dialogue_changed');
     expect(f.producer.publicBackground()).toEqual([]);
   }
 });
@@ -438,4 +498,12 @@ test('rundown text lists every area and marks untouched topics', () => {
   expect(text.split('\n')).toHaveLength(4);
   expect(text).toContain('About 12 of 30 minutes.');
   expect(text).toContain('How the team worked: explored: Tools & process; not yet: What worked well');
+});
+
+test('rundown text reports a declined topic as set aside, not as a gap to revisit', () => {
+  const text = rundownText([{ id: 'client-pace', level: 'set-aside' }, { id: 'process-tools', level: 'touched' }], 5 * 60_000);
+  const line = (label: string) => text.split('\n').find(item => item.startsWith(label))!;
+  expect(line('Working with the client')).toMatch(/set aside: [^;]*Pace/);
+  expect(line('Working with the client')).not.toMatch(/(touched|not yet): [^;]*Pace/);
+  expect(line('How the team worked')).toContain('touched: Tools & process');
 });

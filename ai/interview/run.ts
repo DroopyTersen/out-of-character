@@ -17,6 +17,7 @@ const fixtures = only ? interviewFixtures.filter(item => item.id === only) : int
 if (!fixtures.length) throw new Error('Unknown interview fixture.');
 
 const rows = [];
+const failures: { fixtureId: string; error: string }[] = [];
 for (const fixture of fixtures) {
   try {
     const input = { scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', transcript: fixture.transcript,
@@ -44,11 +45,11 @@ for (const fixture of fixtures) {
   } catch (error) {
     // Provider errors may contain request metadata. Keep them out of the terminal.
     console.error(`${fixture.id}: evaluation failed (${error instanceof Error ? error.name : 'unavailable'}).`);
+    failures.push({ fixtureId: fixture.id, error: error instanceof Error ? error.name : 'unavailable' });
     process.exitCode = 1;
-    break;
   }
 }
 await mkdir(dirname(output), { recursive: true, mode: 0o700 });
-await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), rubricVersion: INTERVIEW_RUBRIC_VERSION, rows }, null, 2) + '\n', { mode: 0o600 });
+await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: new Date().toISOString(), rubricVersion: INTERVIEW_RUBRIC_VERSION, rows, failures }, null, 2) + '\n', { mode: 0o600 });
 if (rows.some(row => row.checks.some(check => !check.passed))) process.exitCode = 1;
 console.log(`Saved ${rows.length} measured synthetic fixture results to ${output}.`);

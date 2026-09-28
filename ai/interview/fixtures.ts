@@ -19,6 +19,43 @@ export type InterviewFixture = {
 
 export const interviewFixtures: InterviewFixture[] = [
   {
+    id: 'team-speed-not-client-pace', description: 'A fast prototype and unfamiliar client staff do not establish approvals or access.',
+    transcript: dialogue([
+      ['client', 'What was the first part of the project like?'],
+      ['trainee', 'We built a working booking prototype in two days. The client staff had never worked with a software team and were surprised by our rough screen. I do not know how long their reviews took or how our environment access was arranged.'],
+    ]), expected: { heard: ['project-delivery'], unheard: ['client-pace', 'client-access'] },
+  },
+  {
+    id: 'missing-role-without-effect', description: 'A missing role alone does not demonstrate a staffing problem or an improvement.',
+    transcript: dialogue([
+      ['client', 'Did you have a business analyst on the team?'],
+      ['trainee', 'No, there was no business analyst. I do not know whether having one would have changed anything. I am not saying that was a problem.'],
+    ]), expected: { heard: [], unheard: ['process-improve', 'process-resourcing'] },
+  },
+  {
+    id: 'vendor-story-skipped', description: 'An early closing skips an unresolved vendor ownership story.',
+    transcript: dialogue([
+      ['client', 'Is there anything else before we finish?'],
+      ['trainee', 'There was something else. The other delivery team had never built an API before, and deciding which team should own each piece got awkward.'],
+      ['client', 'Okay, we have covered the whole picture. Any final thoughts?'],
+    ]), expected: { heard: ['client-coordination'], unheard: [], present: ['missed-thread'], researchUseful: false },
+  },
+  {
+    id: 'staffing-story-skipped', description: 'A new handoff and staffing consequence deserves attention rather than another closing question.',
+    transcript: dialogue([
+      ['client', 'Anything to add before we wrap up?'],
+      ['trainee', 'Actually, we had no analyst, so I was doing the requirements work and development. A planned handoff to Priya was coming in week six, and the requirements still only existed in my head. That made the last week pretty tense.'],
+      ['client', 'Thanks, that gives us everything. Anything else?'],
+    ]), expected: { heard: ['process-resourcing', 'process-communication'], unheard: [], present: ['missed-thread'] },
+  },
+  {
+    id: 'story-still-developing', description: 'The same useful staffing detail is still being told; Sam has not skipped it yet.',
+    transcript: dialogue([
+      ['client', 'What was the handoff like?'],
+      ['trainee', 'We had no analyst, so I was doing requirements and development. A planned handoff to Priya was coming in week six. The requirements still only existed in my head. Let me explain what we did about that.'],
+    ]), expected: { heard: ['process-resourcing'], unheard: [], absent: ['missed-thread'] },
+  },
+  {
     id: 'terse-three-weeks', description: 'A contextual two-word duration is real access evidence.',
     transcript: dialogue([
       ['client', 'How long did it take to get the staging access you needed to work?'],

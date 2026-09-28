@@ -88,11 +88,11 @@ describe('project closeout interview contracts', () => {
     expect(readInterviewAnswers(agreement.transcript, agreementAnswers).objectives.find(item => item.id === 'client-decisions')).toMatchObject({ level: 'not-yet', achieved: false });
   });
 
-  test('firm bands need high confidence, every band needs a passage, and unsupported source IDs fail', () => {
+  test('credit needs high confidence, boundaries need even odds, and both need participant evidence', () => {
     const fixture = interviewFixtures.find(item => item.id === 'vague-rant')!;
     const answers = answersFor(interviewQuestions(fixture.transcript));
     const read = () => readInterviewAnswers(fixture.transcript, answers).objectives.find(item => item.id === 'process-communication')!;
-    for (const [level, probability, expected] of [['explored', .84, 'touched'], ['explored', .85, 'explored'], ['set-aside', .6, 'touched'], ['set-aside', .9, 'set-aside'], ['touched', .3, 'touched']] as const) {
+    for (const [level, probability, expected] of [['explored', .84, 'touched'], ['explored', .85, 'explored'], ['set-aside', .49, 'touched'], ['set-aside', .5, 'set-aside'], ['set-aside', .9, 'set-aside'], ['touched', .3, 'touched']] as const) {
       cover(answers, 'process-communication', level, probability, 'p2');
       expect(read()).toMatchObject({ level: expected, achieved: expected === 'explored', evidence: { entryId: 'p2' } });
     }
@@ -119,6 +119,27 @@ describe('project closeout interview contracts', () => {
     ]);
     expect(merged[0]!.levels).toMatchObject({ touched: .55 });
     expect(mergeCoverage([reading('a', 'explored', { explored: .9 })], [reading('a', 'set-aside', { 'set-aside': .9 }, 'p8')])[0]).toMatchObject({ level: 'set-aside', evidence: { entryId: 'p8' } });
+  });
+
+  test('touched coverage holds while the topic still came up, even as mass moves toward explored', () => {
+    const previous = [reading('a', 'touched', { touched: .9 }, 'p2'), reading('b', 'explored', { explored: .9 }, 'p2')];
+    const [held, demoted] = mergeCoverage(previous, [
+      reading('a', 'not-yet', { 'not-yet': .1, touched: .3, explored: .6 }, null),
+      reading('b', 'touched', { 'not-yet': .1, touched: .5, explored: .4 }, 'p4'),
+    ]);
+    expect(held).toMatchObject({ level: 'touched', achieved: false, evidence: { entryId: 'p2' } });
+    // Only a touched prior uses P(raised); an explored prior still needs even odds for explored itself.
+    expect(demoted).toMatchObject({ level: 'touched', achieved: false, evidence: { entryId: 'p4' } });
+  });
+
+  test('a declined topic stays closed through later uncertainty, until a supported answer reopens it', () => {
+    const prior = [reading('a', 'set-aside', { 'set-aside': .9 }, 'p6')];
+    expect(mergeCoverage(prior, [reading('a', 'touched', { touched: .4, 'set-aside': .6 }, 'p8')])[0]).toMatchObject({ level: 'set-aside', achieved: false, evidence: { entryId: 'p6' } });
+    expect(mergeCoverage(prior, [reading('a', 'touched', { touched: .6, 'set-aside': .4 }, 'p8')])[0]).toMatchObject({ level: 'set-aside', evidence: { entryId: 'p6' } });
+    expect(mergeCoverage(prior, [reading('a', 'not-yet', null, null)])[0]).toEqual(prior[0]);
+    expect(mergeCoverage(prior, [reading('a', 'touched', { touched: .99, 'set-aside': .01 }, 'p8')])[0]?.levels?.['set-aside']).toBe(.9);
+    expect(mergeCoverage(prior, [reading('a', 'explored', { explored: .9 }, 'p8')])[0]).toMatchObject({ level: 'explored', evidence: { entryId: 'p8' } });
+    expect(mergeCoverage([reading('a', 'touched', { touched: .9 })], [reading('a', 'set-aside', { 'set-aside': .9 }, 'p8')])[0]).toMatchObject({ level: 'set-aside', evidence: { entryId: 'p8' } });
   });
 
   test('the coverage window retains all saved evidence and its questions beside recent dialogue', () => {

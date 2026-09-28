@@ -36,6 +36,18 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   'project-closeout': {
+    // Controlled earpiece test: a real voice session must prioritize newer speech over this older cue.
+    'fresh-disclosure': {
+      turns: 4,
+      cue: 'Ask who owned client approval before moving on.',
+      lines: {
+        project: 'We built a booking portal for an unnamed regional agency. I owned the API. We had weekly reviews, and I had planned to tell you about the approvals.',
+        disclosure: 'Actually, something more important just came back to me. Priya, our newest developer, caught a duplicate charge in the final test. The finance lead had been dismissing her questions all week. That changed how our team handled the launch.',
+        effect: 'Priya showed the finance lead two receipts for the same booking, and we paused the launch to add a duplicate check. After that the finance lead invited her to the signoff meeting. I would repeat giving a junior developer room to challenge a release.',
+        boundary: 'I do not know why the finance lead dismissed her, and I do not want to speculate about that person. That is the lesson I wanted to share. I would like to finish here.',
+      },
+      choose: ({ turn }) => ['project', 'disclosure', 'effect', 'boundary'][turn],
+    },
     'client-overview': {
       turns: 4,
       lines: {
@@ -398,6 +410,14 @@ async function respond() {
     }
     close(); return;
   }
+  if (plan.cue && turn === 1) {
+    const eventId = 'rehearsal-cue';
+    report.controlledCue = { eventId, cue: plan.cue, afterPassageId: report.transcript.at(-1)?.id ?? null, sentAt: Date.now(), acknowledgedAt: null };
+    send({ type: 'session.thinking.append', event_id: eventId, delegation_id: null, content: `PRIVATE PRODUCER CUE: ${plan.cue}` });
+    const until = Date.now() + 3000;
+    while (!report.controlledCue.acknowledgedAt && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 20));
+    if (!report.controlledCue.acknowledgedAt) throw new Error('Controlled cue was not acknowledged.');
+  }
   used.add(id);
   const clientAudioQuietMs = lastAudibleOutput ? Date.now() - lastAudibleOutput : null;
   report.turns.push({ turn: turn + 1, selected: id, inResponseTo: answer, inputStartMs: inputBytes / 48, clientAudioQuietMs });
@@ -410,6 +430,7 @@ const completed = new Promise(resolve => {
   ws.addEventListener('message', event => {
     if (typeof event.data !== 'string') return;
     const value = JSON.parse(event.data);
+    if (value.type === 'session.thinking.appended' && value.client_event_id === report.controlledCue?.eventId) report.controlledCue.acknowledgedAt = Date.now();
     if (value.type === 'session.started') {
       // Same opening request as the production session owner.
       openingSentAt = Date.now();
@@ -433,7 +454,7 @@ const completed = new Promise(resolve => {
       const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
       const changed = next.find(entry => !report.transcript.includes(entry));
       report.transcript = next;
-      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer?.transcriptChanged(changed); }
+      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null); }
     } else if (value.type === 'session.output_audio.delta') {
       const audio = Buffer.from(value.delta, 'base64');
       chunks.push(audio);

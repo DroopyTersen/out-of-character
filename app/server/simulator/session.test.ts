@@ -11,6 +11,43 @@ import { attempt, capability, request, activityPoll, fixture, waitFor } from './
 afterEach(() => setSystemTime());
 const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
 
+test('the private archive keeps consecutive probability changes, failed grades, and the final result', async () => {
+  let calls = 0;
+  const f = await fixture({ overrides: { evaluateInterview: async input => {
+    calls++;
+    if (calls === 3) throw new Error('Synthetic evaluation failure');
+    const probability = calls === 1 ? .9 : .92;
+    return { revision: input.revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, objectives: [{
+        id: 'project-delivery', level: 'explored', achieved: true, probability,
+        levels: { 'not-yet': 0, touched: 1 - probability, explored: probability, 'set-aside': 0 },
+        evidence: { entryId: 'p1', speaker: 'trainee', text: 'We built a booking portal.' },
+      }] };
+  } } });
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    for (let index = 0; index < 3; index++) {
+      setSystemTime(epoch + index * 6000);
+      f.socket.emit({ type: 'session.input_transcript.delta', delta: index ? 'I owned the import job.' : 'We built a booking portal.', start_ms: index * 6000, end_ms: index * 6000 + 1000 });
+      setSystemTime(epoch + index * 6000 + 2000);
+      await f.session.fetch(request('poll'));
+      await waitFor(() => calls === index + 1);
+      await Promise.all(f.pending);
+    }
+    await f.session.fetch(request('end'));
+    await Promise.all(f.pending);
+    const records = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string }) => item.source === 'grade');
+    expect(records.map((item: { outcome: string }) => item.outcome)).toEqual(['graded', 'graded', 'evaluation_error', 'graded']);
+    expect(records[0].objectives[0].levels).toEqual([0, .1, .9, 0]);
+    expect(records[1].objectives[0].levels).toEqual([0, .08, .92, 0]);
+    expect(records[1].objectives[0].shown).toEqual(records[0].objectives[0].shown);
+    expect(records[3].final).toBe(true);
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
 test.each(['accepted', 'rejected'] as const)('interview research %s is archived privately and cannot grade or summarize the participant', async receipt => {
   let participantInput = '', summaryInput = '';
   const lookups: Record<string, unknown>[] = [];
@@ -250,6 +287,13 @@ test('interview End re-grades coverage with its evidence in view and returns pen
     expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
     expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(final);
+    // Each grade's bands, probabilities and evidence IDs are archived privately, without passage text.
+    const grades = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string }) => item.source === 'grade');
+    expect(grades.map((item: Record<string, unknown>) => [item.final, item.outcome, item.inputCount])).toEqual([[false, 'graded', 1], [true, 'graded', 2]]);
+    expect(grades[0].objectives).toEqual([{ id: 'project-delivery', shown: ['explored', covered.evidence.entryId], graded: ['explored', covered.evidence.entryId], levels: [.01, .03, .95, .01] }]);
+    expect(grades[1].objectives).toEqual([{ id: 'project-delivery', shown: ['touched', covered.evidence.entryId], graded: ['touched', covered.evidence.entryId], levels: [.1, .7, .15, .05] }]);
+    expect(JSON.stringify(grades)).not.toContain('permit intake');
+    expect(JSON.stringify(ended)).not.toContain('"grade"');
     expect(f.row()).toBeNull();
     expect((await f.session.fetch(request('poll', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
     expect((await f.session.fetch(request('poll', ''))).status).toBe(401);
@@ -327,7 +371,8 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   await Promise.all(f.pending);
   const row = f.interviewRow()!;
   const records = JSON.parse(row.interventions_json);
-  expect(records.map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
+  expect(records.filter((record: { source: string }) => record.source !== 'grade').map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
+  expect(records.filter((record: { source: string }) => record.source === 'grade').at(-1)).toMatchObject({ final: true, outcome: 'graded', durationMs: 1 });
   expect(records[0]).toMatchObject({ outcome: 'observed', concerns: ['leading'] });
   expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted' }, check: { probability: .99 } } : {}) });
   expect(JSON.parse(row.cues_json)).toEqual([]);

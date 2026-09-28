@@ -12,6 +12,7 @@ import { archiveProvenance, writeArchive, writeReport } from './archive.server';
 import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices } from './contextual-director';
 import { InterviewProducer, producerServices } from './interview-producer';
+import { gradeObjectives, type GradeRecord } from '../../../core/interview-producer';
 import { generateReport, REPORT_PROVENANCE } from '../../../ai/simulator/report.server';
 import { idleReport, type CoachingReport, type ReportState } from '../../../core/simulator/report';
 import { SessionReport, within, type ReportArchive } from './report';
@@ -48,6 +49,8 @@ export class SimulatorSession extends DurableObject<Env> {
   private reachedLive = false;
   private contextual: ContextualDirector | undefined;
   private producer: InterviewProducer | undefined;
+  // Already bounded by MAX_LIVE_GRADES plus the final grade; retain probability-only changes too.
+  private readonly grades: GradeRecord[] = [];
   private seenEvents = new Set<string>();
   private readonly paid: typeof services;
   private report: SessionReport<CoachingReport> | SessionReport<InterviewSummaryContent> | undefined;
@@ -255,7 +258,7 @@ export class SimulatorSession extends DurableObject<Env> {
       this.lastActivity = Date.now();
       snapshot.transcript = next;
       snapshot.revision++;
-      this.producer?.transcriptChanged(changed);
+      this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null);
       if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries * .9 || transcriptCharacters(snapshot.transcript) >= TRANSCRIPT_LIMIT.characters * .9) this.capacityDeadline ??= Date.now() + 30_000;
       return;
     }
@@ -342,15 +345,22 @@ export class SimulatorSession extends DurableObject<Env> {
     const scenario = getScenario(snapshot.scenarioId);
     if (!scenario.objectives.length) return;
     this.gradeCalls++;
+    const diagnostic = { source: 'grade' as const, id: `grade-${this.gradeCalls}`, final, revision, capturedAt,
+      inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null };
     const observation = final || snapshot.interview ? undefined : this.contextual?.beginObservation({ audience: 'trainee', transcript, revision, capturedAt });
     try {
       const input = { scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision, apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) };
       if (snapshot.interview) {
         // Coverage is re-judged each time; its supporting passages stay visible as the interview grows.
         const result = await this.paid.evaluateInterview({ ...input, keepIds: coverageEvidenceIds(snapshot.interview.evaluation?.objectives ?? []) });
-        if ((!final && this.closing) || revision < (snapshot.interview.evaluation?.revision ?? 0)) return;
+        const log = { ...diagnostic, completedAt: Date.now(), durationMs: result.durationMs };
+        if ((!final && this.closing) || revision < (snapshot.interview.evaluation?.revision ?? 0)) {
+          this.grades.push({ ...log, outcome: 'stale', objectives: gradeObjectives(result.objectives, snapshot.interview.evaluation?.objectives ?? []) });
+          return;
+        }
         // Live bands resist flicker; the final re-grade replaces them, so an unsupported checkmark is withdrawn.
         const objectives = final ? result.objectives : mergeCoverage(snapshot.interview.evaluation?.objectives ?? [], result.objectives);
+        this.grades.push({ ...log, outcome: 'graded', objectives: gradeObjectives(result.objectives, objectives) });
         snapshot.interview.evaluation = { revision: result.revision, readings: result.readings, model: result.model, durationMs: result.durationMs, objectives };
         snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
         return;
@@ -367,6 +377,8 @@ export class SimulatorSession extends DurableObject<Env> {
         if (work) this.ctx.waitUntil(work);
       }
     } catch (error) {
+      if (snapshot.interview) this.grades.push({ ...diagnostic, completedAt: Date.now(),
+        outcome: this.gradeAbort.signal.aborted && !final ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
       if (this.gradeAbort.signal.aborted && !final) return;
       if (!final) this.contextual?.observe(observation, { signals: [], failure: error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
       snapshot.feedbackStatus = (snapshot.evaluation || snapshot.interview?.evaluation) ? 'delayed' : 'unavailable';
@@ -504,7 +516,8 @@ export class SimulatorSession extends DurableObject<Env> {
       // Freeze the data and its timestamp before any asynchronous work.
       const snapshot = structuredClone(this.publicSnapshot());
       const interventions = structuredClone(this.contextual?.records ?? []);
-      const producer = structuredClone(this.producer?.records ?? []);
+      // Grade diagnostics ride with the private producer records; they are never part of the public snapshot.
+      const producer = structuredClone([...(this.producer?.records ?? []), ...this.grades]);
       const director = this.producer?.summary() ?? this.contextual?.summary() ?? null;
       const capturedAt = Date.now();
       const provenance = await archiveProvenance(this.env, snapshot, director);

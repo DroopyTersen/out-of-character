@@ -1,8 +1,8 @@
-import type { CoverageLevel, InterviewBackground } from './interview';
+import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } from './interview';
 import type { DirectorSignal, DirectorUsage, INTERVIEW_CONDITIONS } from './simulator/director';
 
 /** Private producer state for the interview: Sol cues, Luna research cards and the rundown share Sam's earpiece. */
-export const PRODUCER_VERSION = 'interview-producer-v1';
+export const PRODUCER_VERSION = 'interview-producer-v2';
 export const PRODUCER_LIMITS = {
   consultations: 60, cues: 15, cueSpacing: 30_000, research: 4, lookups: 2, researchAge: 90_000, checkIn: 45_000,
   rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cuePass: .65, cardPass: .5,
@@ -24,17 +24,20 @@ export type ProducerTrigger =
 export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number };
 type Check = { probability: number | null; inputCount: number; lastInputId: string | null; usage?: DirectorUsage };
 
+/** nextSamTurnAfterId precedes the first observed Sam passage after a sent note; it does not prove cue uptake. */
 export type ProducerRecord = {
   source: 'producer'; id: string; triggers: ProducerTrigger[]; queued: boolean; model: string; effort: 'none';
   inputCount: number; lastInputId: string | null;
-  triggeredAt: number; startedAt: number; generatedAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; completedAt?: number;
+  triggeredAt: number; startedAt: number; generatedAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
   result?: { cue: string | null; evidenceIds: string[]; research: ResearchRequest | null }; usage?: DirectorUsage; check?: Check;
   outcome: 'pending' | 'none' | 'sent' | 'withheld' | 'budget' | 'spacing' | 'invalid' | 'timeout' | 'error' | 'aborted';
+  /** Why a cue was withheld: the check rejected it, or the dialogue moved while it was checked. */
+  reason?: 'check' | 'dialogue_changed';
   delivery?: NoteDelivery;
 };
 export type ResearchRecord = {
   source: 'research'; id: string; consultationId: string; request: ResearchRequest; model: string;
-  requestedAt: number; lookupAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; completedAt?: number;
+  requestedAt: number; lookupAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
   facts?: InterviewBackground['facts']; retrievedAt?: number; queries?: string[]; reason?: string; check?: Check;
   outcome: 'pending' | 'invalid' | 'duplicate' | 'budget' | 'busy' | 'unresolved' | 'expired' | 'withheld' | 'sent' | 'timeout' | 'error' | 'aborted';
   delivery?: NoteDelivery;
@@ -48,7 +51,29 @@ export type AssessmentRecord = {
   signals: DirectorSignal[]; researchProbability?: number; outcome: 'observed' | 'evaluation_error' | 'evaluation_timeout'; concerns: ProtectionCondition[];
 };
 export type DelegationRecord = { source: 'delegation'; id: string; createdAt: number; target: string | null; replied: boolean };
-export type ProducerLogRecord = ProducerRecord | ResearchRecord | RundownRecord | AssessmentRecord | DelegationRecord;
+/** Compact, named tuples keep every grade inside D1's row limit without losing either judgment's evidence. */
+export type GradeObjective = {
+  id: string;
+  shown: [level: CoverageLevel, evidenceId: string | null];
+  graded: [level: CoverageLevel, evidenceId: string | null];
+  levels: [notYet: number, touched: number, explored: number, setAside: number] | null;
+};
+export type GradeRecord = {
+  source: 'grade'; id: string; final: boolean; revision: number; capturedAt: number; completedAt: number; inputCount: number; lastInputId: string | null;
+  outcome: 'graded' | 'stale' | 'aborted' | 'evaluation_timeout' | 'evaluation_error'; durationMs?: number; objectives?: GradeObjective[];
+};
+export type ProducerLogRecord = ProducerRecord | ResearchRecord | RundownRecord | AssessmentRecord | DelegationRecord | GradeRecord;
+
+const round = (value: number) => Math.round(value * 100) / 100;
+export function gradeObjectives(graded: InterviewObjectiveReading[], shown: InterviewObjectiveReading[]): GradeObjective[] {
+  return graded.map(own => {
+    const reading = shown.find(item => item.id === own.id);
+    const levels = own.levels;
+    return { id: own.id, shown: [reading?.level ?? 'not-yet', reading?.evidence?.entryId ?? null],
+      graded: [own.level, own.evidence?.entryId ?? null],
+      levels: levels ? [round(levels['not-yet']), round(levels.touched), round(levels.explored), round(levels['set-aside'])] : null };
+  });
+}
 
 export type DeliveredInterviewBackground = InterviewBackground & { afterPassageId: string | null; status: 'accepted' | 'unknown' };
 

@@ -6,7 +6,7 @@ import type { TranscriptEntry } from '../../core/simulator/types';
 import type { ResearchKind, ResearchRequest } from '../../core/interview-producer';
 
 export const RESEARCH_MODEL = 'gpt-6-luna';
-/** Only kind, name and clue ever leave the session. */
+/** Only kind, name and clue ever leave the session; the clue is checked as spoken, not as identity-only. */
 export type ResearchLookup =
   | { status: 'found'; facts: InterviewBackground['facts']; retrievedAt: number; queries: string[] }
   | { status: 'unresolved'; reason: string; queries: string[] };
@@ -31,7 +31,9 @@ const RESEARCH_CAPS = { nameCharacters: 80, nameWords: 6, clueCharacters: 80, cl
 
 /**
  * Research may only name what the participant said: the name must be spoken in a cited participant passage,
- * and every content word of the identity clue must appear in those passages. Project details never leave.
+ * and every content word of the identity clue must appear in those passages. This proves the words were spoken,
+ * not that they describe identity: a clue made of spoken project words would pass, so the producer instructions
+ * limit clues to public identity (industry, location, website, kind of organization).
  */
 export function validateResearchRequest(request: ResearchRequest, transcript: TranscriptEntry[]):
   { ok: true; request: ResearchRequest } | { ok: false; reason: string } {

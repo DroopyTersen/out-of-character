@@ -65,9 +65,10 @@ function coverage(answers: InterviewAnswers, objectiveId: string, participant: T
     : null;
   const passage = evidence(answers, `objective:${objectiveId}:evidence`, participant);
   let level = answer.choice as CoverageLevel;
-  // Every band above not-yet needs a participant passage; the firm bands also need high confidence.
+  // Credit needs high confidence. Respect a supported boundary at even odds instead of inviting another probe.
   if (level !== 'not-yet' && !passage) level = 'not-yet';
-  if ((level === 'explored' || level === 'set-aside') && (levels?.[level] ?? 0) < .85) level = 'touched';
+  if (level === 'explored' && (levels?.explored ?? 0) < .85) level = 'touched';
+  if (level === 'set-aside' && (levels?.['set-aside'] ?? 0) < .5) level = 'touched';
   return { id: objectiveId, level, levels, probability: levels?.explored ?? null, achieved: level === 'explored', evidence: level === 'not-yet' ? null : passage };
 }
 

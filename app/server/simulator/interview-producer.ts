@@ -206,7 +206,8 @@ export class InterviewProducer {
       record.checkedAt = Date.now();
       record.check = { ...record.check, probability: checked.probability, usage: checked.usage };
       if (Date.now() - checkStartedAt >= LIMITS.check) { record.outcome = 'timeout'; return; }
-      if (checked.probability < LIMITS.cuePass || checkedDialogue !== dialogueKey(this.options.settled())) { record.outcome = 'withheld'; return; }
+      const moved = checkedDialogue !== dialogueKey(this.options.settled());
+      if (moved || checked.probability < LIMITS.cuePass) { record.outcome = 'withheld'; record.reason = moved ? 'dialogue_changed' : 'check'; return; }
       const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, `Producer cue (private): ${result.cue}`);
       record.outcome = sent ? 'sent' : 'error';
       if (sent) { this.counts.cues++; this.lastCueAt = record.sentAt = Date.now(); }
@@ -280,13 +281,16 @@ export class InterviewProducer {
     }
   }
 
-  /** Sent when a topic's band changes (throttled) and once near the target time. Factual state: no Sol or Jev call. */
+  /**
+   * Sent when a topic's band changes (throttled) and once near the target time. Factual state: no Sol or Jev call.
+   * One rundown stays reserved for the time reminder until it is sent, so coverage churn cannot use it up.
+   */
   private rundown(now: number) {
-    if (this.counts.rundowns >= LIMITS.rundowns) return;
+    const late = !this.timeRundownSent && now - this.options.startedAt >= LIMITS.rundownAt;
+    if (this.counts.rundowns >= LIMITS.rundowns - (late || this.timeRundownSent ? 0 : 1)) return;
     const coverage = this.options.coverage();
     const levels = Object.fromEntries(coverageBands(coverage).flatMap(topic => topic.objectives.map(item => [item.id, item.level])));
     const key = JSON.stringify(levels);
-    const late = !this.timeRundownSent && now - this.options.startedAt >= LIMITS.rundownAt;
     const changed = key !== (this.lastRundown?.key ?? INITIAL_LEVELS);
     if ((!late && !changed) || (this.lastRundown && now - this.lastRundown.at < LIMITS.rundownSpacing)) return;
     const elapsed = now - this.options.startedAt;
@@ -295,17 +299,20 @@ export class InterviewProducer {
     this.records.push(record);
     this.counts.rundowns++;
     const sent = this.sendNote(record, record.id, rundownText(coverage, elapsed));
-    if (!sent) record.outcome = 'error';
+    if (!sent) { record.outcome = 'error'; this.counts.rundowns--; }
     if (late && sent) this.timeRundownSent = true;
     this.lastRundown = { key: sent ? key : this.lastRundown?.key ?? INITIAL_LEVELS, at: now };
   }
 
-  /** Marks when Sam first speaks after each sent note, for latency reporting. */
-  transcriptChanged(entry: TranscriptEntry, now = Date.now()) {
+  /** Marks the next observed Sam passage after a sent note, not whether Sam acted on it. */
+  transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
     if (!this.alive || entry.speaker !== 'client' || this.samTurns.has(entry.id)) return;
     this.samTurns.add(entry.id);
     for (const record of this.records) {
-      if ((record.source === 'producer' || record.source === 'research') && record.sentAt != null && record.sentAt <= now && record.nextSamTurnAt == null) record.nextSamTurnAt = now;
+      if ((record.source === 'producer' || record.source === 'research') && record.sentAt != null && record.sentAt <= now && record.nextSamTurnAt == null) {
+        record.nextSamTurnAt = now;
+        record.nextSamTurnAfterId = previousId;
+      }
     }
   }
 
@@ -320,8 +327,9 @@ export class InterviewProducer {
         record.reason = 'delivery_rejected';
         this.researched.delete(researchKey(record.request));
       }
-      if (!accepted && record.source === 'rundown') {
+      if (!accepted && record.source === 'rundown' && record.outcome !== 'error') {
         record.outcome = 'error';
+        this.counts.rundowns--;
         if (record.reason === 'time') this.timeRundownSent = false;
         if (this.lastRundown?.at === record.sentAt) this.lastRundown = { key: INITIAL_LEVELS, at: Date.now() };
       }

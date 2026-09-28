@@ -8,7 +8,7 @@ const pages = [
   { path: '/', label: 'Game' },
   { path: '/simulator', label: 'Simulator' },
   { path: '/interview', label: 'The Debrief' },
-  { path: '/storybook', label: 'Workshop' },
+  { path: '/storybook', label: 'Debugger' },
 ];
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });

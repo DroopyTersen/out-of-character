@@ -7,11 +7,11 @@ const destinations = [
   { to: '/', label: 'Game' },
   { to: '/simulator', label: 'Simulator' },
   { to: '/interview', label: 'The Debrief' },
-  { to: '/storybook', label: 'Workshop' },
+  { to: '/storybook', label: 'Debugger', utility: true },
 ];
 
 function NavigationLinks({ onChoose }: { onChoose?: () => void }) {
-  return destinations.map(destination => <NavLink key={destination.to} to={destination.to} end={destination.to === '/'} onClick={onChoose} className={({ isActive }) => isActive ? 'site-nav-link active' : 'site-nav-link'}>{destination.label}</NavLink>);
+  return destinations.map(destination => <NavLink key={destination.to} to={destination.to} end={destination.to === '/'} onClick={onChoose} className={({ isActive }) => `site-nav-link${destination.utility ? ' site-nav-utility' : ''}${isActive ? ' active' : ''}`}>{destination.label}</NavLink>);
 }
 
 export function GameHeader({ children, simulator = false, interview = false }: { children?: ReactNode; simulator?: boolean; interview?: boolean }) {

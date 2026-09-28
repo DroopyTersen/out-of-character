@@ -100,7 +100,7 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
 
 function InterviewTopics({ interview }: { interview: InterviewSession | undefined }) {
   const heard = new Set(interview?.evaluation?.objectives.filter(item => item.achieved && item.evidence).map(item => item.id) ?? []);
-  return <section className="interview-topics sim-panel"><header><h2>Your project story</h2><p>Topics can come up in any order. There is no checklist to finish.</p></header>
+  return <section className="interview-topics sim-panel"><header><h2>Your project story</h2><p>These are suggestions. We’ll let the conversation flow naturally.</p></header>
     <div className="interview-topic-groups">{interviewTopics.map(topic => <div className="interview-topic" key={topic.id}><h3>{topic.label}</h3><ul>{topic.objectives.map(objective => <li key={objective.id} className={heard.has(objective.id) ? 'heard' : ''}><span className="interview-topic-mark" aria-hidden="true">{heard.has(objective.id) && <Check size={13} />}</span><span>{objective.label}</span></li>)}</ul></div>)}</div>
   </section>;
 }

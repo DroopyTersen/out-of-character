@@ -15,6 +15,12 @@ export const interviewReadings = [
 export type InterviewReadingId = typeof interviewReadings[number]['id'];
 
 export const interviewTopics = [
+  { id: 'project', label: 'What you delivered', objectives: [
+    { id: 'project-delivery', label: 'Deliverables & scope' },
+    { id: 'project-role', label: 'Your role' },
+    { id: 'project-contributions', label: 'Who contributed what' },
+    { id: 'project-reflection', label: 'Standouts & growth' },
+  ] },
   { id: 'client', label: 'Working with the client', objectives: [
     { id: 'client-access', label: 'Onboarding & access' },
     { id: 'client-decisions', label: 'Decisions & stakeholders' },
@@ -28,12 +34,6 @@ export const interviewTopics = [
     { id: 'process-communication', label: 'Communication & handoffs' },
     { id: 'process-tools', label: 'Tools & process' },
     { id: 'process-resourcing', label: 'Support, staffing & time' },
-  ] },
-  { id: 'project', label: 'What you delivered', objectives: [
-    { id: 'project-delivery', label: 'Deliverables & scope' },
-    { id: 'project-role', label: 'Your role' },
-    { id: 'project-contributions', label: 'Who contributed what' },
-    { id: 'project-reflection', label: 'Standouts & growth' },
   ] },
 ] as const;
 

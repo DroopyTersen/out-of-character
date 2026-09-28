@@ -1,18 +1,22 @@
 .game-header.site-header { gap: clamp(12px, 1.5vw, 24px); }
 .game-header.site-header .site-desktop-nav { display: flex; align-items: center; gap: clamp(4px, .6vw, 14px); margin-left: auto; min-height: 0; }
 .site-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; border-bottom: 2px solid transparent; color: #9db9ca; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.site-nav-utility { color: #7f9eaf; }
 .site-nav-link:hover { color: #e7faf5; }
 .site-nav-link.active { color: #44efcd; border-bottom-color: #44efcd; }
+.site-desktop-nav .site-nav-utility { margin-left: 14px; font-size: 11px; font-weight: 400; }
 .site-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .site-page-title { margin-left: 0; }
 .site-menu-trigger { display: none; }
 .site-menu-dialog { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(360px, calc(100vw - 42px)); height: 100dvh; max-height: none; padding: 24px 22px; border: 0; border-left: 1px solid #33768a; background: #092332; color: #eaf4fc; box-shadow: -18px 0 48px #010e1899; }
+.site-menu-dialog[open] { display: flex; flex-direction: column; }
 .site-menu-dialog::backdrop { background: #010e18b3; }
-.site-menu-heading { display: flex; justify-content: flex-end; padding-bottom: 28px; border-bottom: 1px solid #28566b; }
+.site-menu-heading { display: flex; flex-shrink: 0; justify-content: flex-end; padding-bottom: 28px; border-bottom: 1px solid #28566b; }
 .site-menu-heading button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #3a6c80; border-radius: 3px; background: #12384a; color: #d6eef3; }
-.site-menu-dialog nav { display: grid; gap: 6px; margin: 22px 0 0; }
-.site-menu-dialog .site-nav-link { justify-content: flex-start; min-height: 56px; padding: 12px 14px; border: 1px solid transparent; font-size: 18px; }
+.site-menu-dialog nav { display: flex; flex-direction: column; flex: 1; gap: 6px; margin: 22px 0 0; }
+.site-menu-dialog .site-nav-link { flex-shrink: 0; justify-content: flex-start; min-height: 56px; padding: 12px 14px; border: 1px solid transparent; font-size: 18px; }
 .site-menu-dialog .site-nav-link.active { border-color: #288b83; background: #103b3e; }
+.site-menu-dialog .site-nav-utility { margin-top: auto; min-height: 44px; font-size: 13px; font-weight: 400; }
 @media (max-width: 1050px) {
   .game-header.site-header .edition, .game-header.site-header .site-page-title { display: none; }
   .game-header.site-header .site-desktop-nav { gap: 0; }

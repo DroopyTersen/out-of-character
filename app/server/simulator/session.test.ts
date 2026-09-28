@@ -1,5 +1,4 @@
-import { Database } from 'bun:sqlite';
-import { afterEach, expect, mock, setSystemTime, test } from 'bun:test';
+import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
 import type { DirectorInput } from '../../../ai/simulator/director.server';
@@ -7,29 +6,9 @@ import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
 
-// Bun cannot load the Workers runtime. Substitute only its base-class/storage
-// boundary and paid network adapters; exercise the actual session owner/events.
-mock.module('cloudflare:workers', () => ({ DurableObject: class {
-  constructor(protected ctx: DurableObjectState, protected env: Env) {}
-} }));
-const { SimulatorSession } = await import('./session');
-const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
-const interviewMigration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
-const interviewInterventionsMigration = await Bun.file(new URL('../../../migrations/0003_interview_interventions.sql', import.meta.url)).text();
-const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_simulator_interventions.sql', import.meta.url)).text();
+import { attempt, capability, request, activityPoll, fixture, waitFor } from './session-fixture';
 afterEach(() => setSystemTime());
-async function waitFor(check: () => boolean) {
-  const deadline = performance.now() + 2500;
-  while (!check()) {
-    if (performance.now() > deadline) throw new Error('Timed out waiting for the session event.');
-    await new Promise(resolve => setTimeout(resolve, 25));
-  }
-}
-const capability = `Bearer ${'a'.repeat(64)}`;
-const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
 const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
-const request = (action: string, cap = capability, input = attempt) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(input) : undefined });
-const activityPoll = (active: boolean, audio = false) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio }) });
 
 test('contextual coaching runs for scored sessions and keeps actor history out of public state', async () => {
   let generations = 0;
@@ -144,91 +123,6 @@ test('actor detection stops after six submitted notes while trainee grading cont
   expect(grades).toBe(8);
   await f.session.fetch(request('end'));
 }, 15_000);
-
-function archiveDatabase() {
-  const sqlite = new Database(':memory:');
-  sqlite.exec(migration);
-  sqlite.exec(interviewMigration);
-  sqlite.exec(interventionsMigration);
-  sqlite.exec(interviewInterventionsMigration);
-  let failNext = false;
-  let held: { entered: () => void; wait: Promise<void> } | undefined;
-  const d1 = {
-    prepare: (sql: string) => ({
-      bind: (...args: (string | number | null)[]) => ({
-        run: async () => {
-          const pause = held;
-          held = undefined;
-          if (pause) { pause.entered(); await pause.wait; }
-          if (failNext) { failNext = false; throw new Error('D1 unavailable'); }
-          sqlite.prepare(sql).run(...args);
-          return { success: true };
-        },
-      }),
-    }),
-  } as unknown as D1Database;
-  const row = () => sqlite.query('SELECT * FROM simulator_attempts WHERE id = ?').get(attempt.id) as Record<string, any> | null;
-  const interviewRow = () => sqlite.query('SELECT * FROM interview_attempts WHERE id = ?').get(attempt.id) as Record<string, any> | null;
-  const holdNext = () => {
-    let entered!: () => void;
-    let release!: () => void;
-    const started = new Promise<void>(resolve => { entered = resolve; });
-    const wait = new Promise<void>(resolve => { release = resolve; });
-    held = { entered, wait };
-    return { started, release };
-  };
-  return { d1, row, interviewRow, failNext: () => { failNext = true; }, holdNext };
-}
-
-class ProviderSocket extends EventTarget {
-  readyState = 1;
-  holdClose = false;
-  sent: Record<string, unknown>[] = [];
-  send(text: string) {
-    const event = JSON.parse(text);
-    this.sent.push(event);
-    if (event.type === 'session.close' && !this.holdClose) queueMicrotask(() => this.emit({ type: 'session.closed', reason: 'close_requested', usage: { seconds: 12 }, session: { instructions: 'private actor brief' } }));
-  }
-  emit(event: unknown) { this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(event) })); }
-  close() { this.readyState = 3; this.dispatchEvent(new Event('close')); }
-}
-type FixtureOptions = {
-  pendingCreation?: Promise<void>;
-  values?: Map<string, unknown>;
-  overrides?: Partial<NonNullable<ConstructorParameters<typeof SimulatorSession>[2]>>;
-  archive?: ReturnType<typeof archiveDatabase>;
-  metadata?: boolean;
-};
-async function fixture({ pendingCreation, values = new Map<string, unknown>(), overrides = {}, archive = archiveDatabase(), metadata = true }: FixtureOptions = {}) {
-  const socket = new ProviderSocket();
-  let ready = Promise.resolve();
-  let alarm = 0;
-  let creations = 0;
-  const judged: unknown[] = [];
-  const interviewJudged: unknown[] = [];
-  const pending: Promise<unknown>[] = [];
-  const ctx = {
-    storage: { get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }, setAlarm: async (value: number) => { alarm = value; }, deleteAll: async () => values.clear() },
-    blockConcurrencyWhile: (fn: () => Promise<void>) => { ready = fn(); }, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); },
-  } as unknown as DurableObjectState;
-  const session = new SimulatorSession(ctx, {
-    OPENAI_API_KEY: 'fixture', TYPESAFE_API_KEY: 'fixture', OPENROUTER_API_KEY: 'fixture',
-    SIMULATOR_ARCHIVE: archive.d1,
-    ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
-  } as Env, {
-    createLive: async () => { creations++; await pendingCreation; return { session: { id: 'provider-private-id' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } }; },
-    attachLive: async () => socket as unknown as WebSocket,
-    evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }; },
-    evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }),
-    generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
-    recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
-    evaluateInterview: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    evaluateInterviewer: async input => ({ revision: input.revision, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    ...overrides,
-  });
-  await ready;
-  return { session, socket, values, judged, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm };
-}
 
 test('session ownership, authoritative transcript, close acknowledgment, and public projection', async () => {
   const f = await fixture();

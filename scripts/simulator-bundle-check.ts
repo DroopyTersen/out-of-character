@@ -12,6 +12,8 @@ const privateText = [
   'Write one private direction to the CLIENT ACTOR',
   'worldLimitsNotNecessarilyKnownToClient',
   'previousInterventions',
+  'You are the final coaching reviewer',
+  'privateClientContext',
   ...clients.map(client => client.behavior),
   ...interviewers.map(interviewer => interviewer.behavior),
   'Write one private direction to SAM',

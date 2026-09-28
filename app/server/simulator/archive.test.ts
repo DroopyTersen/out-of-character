@@ -1,8 +1,9 @@
+import { REPORT_PROVENANCE } from '../../../ai/simulator/report.server';
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { emptySkills, type SessionSnapshot } from '../../../core/simulator/types';
 import type { DirectorSignal, InterventionRecord } from '../../../core/simulator/director';
-import { writeArchive, type ArchiveProvenance, type ArchiveWrite } from './archive.server';
+import { writeReport, writeArchive, type ArchiveProvenance, type ArchiveWrite } from './archive.server';
 
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
 const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_simulator_interventions.sql', import.meta.url)).text();
@@ -15,7 +16,7 @@ function fixture(migrated = true) {
   const d1 = {
     prepare: (sql: string) => ({
       bind: (...args: (string | number | null)[]) => ({
-        run: async () => { sqlite.prepare(sql).run(...args); return { success: true }; },
+        run: async () => { const result = sqlite.prepare(sql).run(...args); return { success: true, meta: { changes: result.changes } }; },
       }),
     }),
   } as unknown as D1Database;
@@ -156,5 +157,23 @@ test('additive migration preserves existing rows and stores generated directions
     expect(f.row()!.evaluation_json).toBeNull();
     expect(f.row()!.transcript_json).not.toContain('Private actor direction');
     expect(JSON.parse(f.row()!.cues_json)).toEqual([]);
+  } finally { f.sqlite.close(); }
+});
+
+test('report migration and update preserve transcript evidence through late checkpoint and final writes', async () => {
+  const f = fixture();
+  try {
+    await writeArchive(f.d1, partial(2000));
+    const before = f.row();
+    f.sqlite.exec(await Bun.file(new URL('../../../migrations/0003_simulator_report.sql', import.meta.url)).text());
+    expect(f.row()).toEqual({ ...before, report_json: null });
+    const report = { ...REPORT_PROVENANCE, report: null, attempts: [{ startedAt: 2000, endedAt: 3000, failure: 'cancelled' as const, usage: null }] };
+    await writeReport(f.d1, snapshot.id, report);
+    await writeArchive(f.d1, partial(4000));
+    await writeArchive(f.d1, final(5000));
+    expect(JSON.parse(f.row()!.report_json)).toEqual(report);
+    expect(JSON.parse(f.row()!.transcript_json)).toEqual(snapshot.transcript);
+    expect(f.row()!.provenance_json).toBe(before!.provenance_json);
+    await expect(writeReport(f.d1, 'missing', report)).rejects.toThrow('Simulator report archive write failed.');
   } finally { f.sqlite.close(); }
 });

@@ -7,9 +7,10 @@ import { PerformanceStory, ResultStory } from '../storybook/performance-stories'
 import '../storybook/workshop.css';
 import { SimulatorVoiceStory } from '../storybook/simulator-voice-story';
 import { clients, publicCatalog } from '../../ai/simulator/scenarios.server';
-import { SimulatorDebriefStory, SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
+import { SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
 import { VoiceLabContent } from '../simulator/voice-lab';
 import { SimulatorBriefing } from '../simulator/briefing';
+import { SimulatorDebriefStory, ReportCompilingStory, ReportWritingStory, ReportFailedStory } from '../storybook/simulator-report-story';
 import { scenarioBriefings } from '../../core/simulator/briefings';
 import { InterviewLiveStory, InterviewSetupStory, InterviewSummaryStory } from '../storybook/interview-stories';
 import { InterviewJudgingStory } from '../storybook/interview-judging-story';
@@ -50,6 +51,9 @@ const stories = [
   { id: 'simulator-voice', label: 'Simulator audio', description: 'Replay every speaking, listening, overlap, muted, and connection state. Adjust intensity without a microphone.', component: SimulatorVoiceStory },
   { id: 'simulator-voice-lab', label: 'Voice Lab', description: 'Hear prepared voice clips for each client while viewing their portrait and personality.', component: SimulatorVoiceLabStory },
   { id: 'simulator-debrief', label: 'Simulator debrief', description: 'Successful and difficult attempts, real evidence, skill gaps, and unconfirmed finalization.', component: SimulatorDebriefStory },
+  { id: 'simulator-report-compiling', label: 'Report · compiling', description: 'Provisional scores and objectives while the report is being prepared.', component: ReportCompilingStory },
+  { id: 'simulator-report-writing', label: 'Report · streaming', description: 'Progressive prose with provisional readings; final grades remain hidden.', component: ReportWritingStory },
+  { id: 'simulator-report-failed', label: 'Report · unavailable', description: 'Retry, missing readings, lost session, and status connection errors.', component: ReportFailedStory },
   { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, historical trainee judgments, source evidence, and raw probabilities.', component: SimulatorJudgingStory },
   { id: 'interview-setup', label: 'The Debrief setup', description: 'Voice choice and private transcript notice. Start is a safe preview without a microphone.', component: InterviewSetupStory },
   { id: 'interview-live', label: 'The Debrief live', description: 'Synthetic conversation, live observations, topic threads, mute and transcript states.', component: InterviewLiveStory },

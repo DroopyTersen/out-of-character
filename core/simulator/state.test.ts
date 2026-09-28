@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { actorBrief, getClient, getScenario, publicCatalog } from '../../ai/simulator/scenarios.server';
-import { appendTranscript, buildDebrief, reconcileObjectives, settledTranscript } from './state';
-import { emptySkills, type ObjectiveReading, type TranscriptEntry } from './types';
+import { appendTranscript, reconcileObjectives, settledTranscript } from './state';
+import { type ObjectiveReading, type TranscriptEntry } from './types';
 
 describe('simulator boundaries', () => {
   test('public selection contains no private agenda, reaction rules, or evaluation criteria', () => {
@@ -103,31 +103,5 @@ describe('transcript and feedback behavior', () => {
     entries = appendTranscript(entries, { speaker: 'client', text: ' Actually, I was mistaken.', startMs: 1000, endMs: 1500 }, new Set(['p1']));
     expect(entries.map(entry => entry.text)).toEqual([judgedText, ' Actually, I was mistaken.']);
     expect(entries.map(entry => entry.id)).toEqual(['p1', 'p2']);
-  });
-  test('debrief never invents performance for unobserved skills', () => {
-    const scenario = publicCatalog().scenarios[0]!;
-    expect(buildDebrief(scenario, null).takeaways).toEqual([]);
-    const readings = emptySkills();
-    readings.listening = { value: 1, distribution: null, evidence: { entryId: 'p2', speaker: 'trainee', text: 'The features are what matter.' } };
-    const result = buildDebrief(scenario, { revision: 2, skills: readings, objectives: [], concern: null, model: 'fixture', durationMs: 0 });
-    expect(result.takeaways.map(item => [item.kind, item.labels])).toEqual([['practice', ['Listening']]]);
-    expect(result.takeaways[0]!.evidence.text).toBe('The features are what matter.');
-  });
-  test('debrief groups shared evidence while keeping strengths and practice distinct', () => {
-    const readings = emptySkills();
-    const evidence = { entryId: 'p2', speaker: 'trainee' as const, text: 'We can decide the next step after a short assessment.' };
-    readings.credibility = { value: 3.2, distribution: null, evidence };
-    readings.confidence = { value: 3.4, distribution: null, evidence };
-    readings.listening = { value: .8, distribution: null, evidence };
-    readings.guidance = { value: .2, distribution: null, evidence };
-    const evaluation = { revision: 2, skills: readings, objectives: [], concern: null, model: 'fixture', durationMs: 0 };
-    const result = buildDebrief(publicCatalog().scenarios[0]!, evaluation);
-    expect(result.takeaways.map(item => [item.kind, item.labels, item.suggestions.length])).toEqual([
-      ['keep', ['Confidence', 'Credibility'], 0],
-      ['practice', ['Guidance', 'Listening'], 2],
-    ]);
-    expect(result.takeaways.map(item => item.evidence.entryId)).toEqual(['p2', 'p2']);
-    const concerning = buildDebrief(publicCatalog().scenarios[0]!, { ...evaluation, concern: 'Unapproved commitment.' });
-    expect(concerning.takeaways.map(item => item.kind)).toEqual(['practice']);
   });
 });

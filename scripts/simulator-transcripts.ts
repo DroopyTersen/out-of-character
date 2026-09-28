@@ -28,7 +28,7 @@ export function parseArchive(row: Record<string, unknown>) {
   const {
     id, scenario_id, client_id, started_at, updated_at, ended_at,
     archive_state, session_status, finalization, feedback_status, usage_seconds, message,
-    transcript_json, evaluation_json, provenance_json, cues_json, interventions_json,
+    transcript_json, evaluation_json, provenance_json, cues_json, interventions_json, report_json,
   } = row;
   if (typeof id !== 'string' || !uuid.test(id) || typeof transcript_json !== 'string' ||
       typeof provenance_json !== 'string' || typeof cues_json !== 'string' || typeof interventions_json !== 'string') {
@@ -42,6 +42,7 @@ export function parseArchive(row: Record<string, unknown>) {
     provenance: JSON.parse(provenance_json),
     cues: JSON.parse(cues_json),
     interventions: JSON.parse(interventions_json),
+    report: typeof report_json === 'string' ? JSON.parse(report_json) : null,
   };
 }
 

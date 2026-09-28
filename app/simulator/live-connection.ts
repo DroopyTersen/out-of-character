@@ -36,6 +36,8 @@ export class LiveConnection {
 
   constructor(private callbacks: Callbacks) { this.audio.autoplay = true; }
 
+  get reportTarget() { return { id: this.id, url: `/api/simulator/sessions/${this.id}`, headers: { Authorization: `Bearer ${this.capability}` } }; }
+
   private async request(action: string, body?: unknown, keepalive = false, signal = this.controller.signal): Promise<unknown> {
     const timeout = action === 'start' ? 40_000 : action === 'poll' ? 5000 : 30_000;
     const response = await fetch(action === 'start' ? '/api/simulator/sessions' : `/api/simulator/sessions/${this.id}/${action}`, {

@@ -15,6 +15,8 @@ const privateText = [
   ...clients.map(client => client.behavior),
   ...interviewers.map(interviewer => interviewer.behavior),
   'Write one private direction to SAM',
+  'Is Sam ignoring a revealing aside',
+  'Does this exact private direction still usefully guide Sam',
 ];
 let checked = 0;
 for await (const path of new Bun.Glob('**/*.{js,json,css,html}').scan('build/client')) {

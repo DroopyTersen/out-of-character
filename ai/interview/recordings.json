@@ -1,16 +1,17 @@
 {
   "synthetic": true,
-  "historical": true,
-  "collectedAt": "2026-09-27T15:23:15.475Z",
-  "rubricVersion": "interview-rubric-v1",
-  "source": "output/interview/results-calibrated.json",
+  "collectedAt": "2026-09-27T23:51:30.303Z",
+  "rubricVersion": "interview-rubric-v2",
+  "source": "Separate synthetic participant and producer replays; no live interview data",
   "rows": [
     {
       "fixtureId": "terse-three-weeks",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 336,
         "readings": {
           "engagement": {
-            "value": 1.85,
+            "value": 1.86,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -18,7 +19,7 @@
             }
           },
           "openness": {
-            "value": 1.99,
+            "value": 2.02,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -26,7 +27,7 @@
             }
           },
           "specificity": {
-            "value": 1.86,
+            "value": 1.9,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -37,7 +38,6 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.94,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -47,96 +47,111 @@
           },
           {
             "id": "client-decisions",
-            "probability": 0.1,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.84,
-            "achieved": false,
-            "evidence": null
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "Three weeks."
+            }
           },
           {
             "id": "client-coordination",
-            "probability": 0.25,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.32,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.07,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.49,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.34,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.4,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.23,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.1,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.25,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.45,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.23,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 255
+        ]
       },
       "interviewer": {
-        "cueId": "no_hint",
-        "cueProbability": 0.78,
         "model": "jev-1.13.0",
-        "durationMs": 115
+        "durationMs": 110,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.08
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.14
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.23
+          },
+          {
+            "condition": "leading",
+            "probability": 0.09
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.12
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.09
+          }
+        ]
       }
     },
     {
       "fixtureId": "vague-yes",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 174,
         "readings": {
           "engagement": {
             "value": null,
@@ -154,105 +169,115 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.27,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.3,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.17,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.41,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.1,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.09,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.06,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.18,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.29,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.07,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.13,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.08,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 179
+        ]
       },
       "interviewer": {
-        "cueId": "avoid-leading",
-        "cueProbability": 0.87,
         "model": "jev-1.13.0",
-        "durationMs": 116
+        "durationMs": 112,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.14
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.11
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.07
+          },
+          {
+            "condition": "leading",
+            "probability": 0.83
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.71
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.48
+          }
+        ]
       }
     },
     {
       "fixtureId": "terse-expert",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 145,
         "readings": {
           "engagement": {
-            "value": 2.98,
+            "value": 3,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -260,7 +285,7 @@
             }
           },
           "openness": {
-            "value": 2,
+            "value": 2.02,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -268,7 +293,7 @@
             }
           },
           "specificity": {
-            "value": 3.53,
+            "value": 3.57,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -279,67 +304,56 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.35,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.17,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.12,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.1,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.18,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.22,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.26,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.48,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.12,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.97,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -349,7 +363,6 @@
           },
           {
             "id": "project-role",
-            "probability": 0.95,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -359,33 +372,55 @@
           },
           {
             "id": "project-contributions",
-            "probability": 0.73,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.25,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 136
+        ]
       },
       "interviewer": {
-        "cueId": "no_hint",
-        "cueProbability": 0.98,
         "model": "jev-1.13.0",
-        "durationMs": 105
+        "durationMs": 125,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.07
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.09
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.05
+          },
+          {
+            "condition": "leading",
+            "probability": 0.06
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.09
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.06
+          }
+        ]
       }
     },
     {
       "fixtureId": "vague-rant",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 186,
         "readings": {
           "engagement": {
-            "value": 0.21,
+            "value": 0.19,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -408,102 +443,112 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.03,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.07,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.21,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.02,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.17,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.19,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.13,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.22,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.03,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.06,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 155
+        ]
       },
       "interviewer": {
-        "cueId": "no_hint",
-        "cueProbability": 0.62,
         "model": "jev-1.13.0",
-        "durationMs": 117
+        "durationMs": 117,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.14
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.18
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.33
+          },
+          {
+            "condition": "leading",
+            "probability": 0.11
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.14
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.08
+          }
+        ]
       }
     },
     {
       "fixtureId": "leading-and-mm",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 165,
         "readings": {
           "engagement": {
             "value": null,
@@ -521,105 +566,129 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.06,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.03,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.07,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.06,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.03,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.04,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 132
+        ]
       },
       "interviewer": {
-        "cueId": "avoid-leading",
-        "cueProbability": 0.89,
         "model": "jev-1.13.0",
-        "durationMs": 154
+        "durationMs": 219,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.27
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.2
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.26
+          },
+          {
+            "condition": "leading",
+            "probability": 0.84
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.7
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.53
+          }
+        ]
+      },
+      "director": {
+        "decision": "started",
+        "issueId": "actor:leading:1",
+        "result": {
+          "action": "intervene",
+          "text": "Retract that assumption; ask what they directly saw affecting the release timing.",
+          "evidenceIds": [
+            "p1",
+            "p3"
+          ],
+          "model": "gpt-6-sol",
+          "durationMs": 2020
+        }
       }
     },
     {
       "fixtureId": "uncertainty",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 175,
         "readings": {
           "engagement": {
-            "value": 2.17,
+            "value": 2.13,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -627,7 +696,7 @@
             }
           },
           "openness": {
-            "value": 2.01,
+            "value": 2,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -635,7 +704,7 @@
             }
           },
           "specificity": {
-            "value": 1.85,
+            "value": 1.83,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -646,102 +715,112 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.07,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.3,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.18,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.16,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.16,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.06,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.44,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.45,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.54,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.12,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.72,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.2,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.4,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.1,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 157
+        ]
       },
       "interviewer": {
-        "cueId": "no_hint",
-        "cueProbability": 0.93,
         "model": "jev-1.13.0",
-        "durationMs": 102
+        "durationMs": 123,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.08
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.11
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.15
+          },
+          {
+            "condition": "leading",
+            "probability": 0.08
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.11
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.07
+          }
+        ]
       }
     },
     {
       "fixtureId": "explicit-boundary",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 148,
         "readings": {
           "engagement": {
             "value": null,
@@ -759,105 +838,129 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.11,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.05,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.31,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.23,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.29,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.36,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.16,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.28,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.22,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.5,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.12,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.17,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.21,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 136
+        ]
       },
       "interviewer": {
-        "cueId": "respect-boundary",
-        "cueProbability": 0.98,
         "model": "jev-1.13.0",
-        "durationMs": 93
+        "durationMs": 157,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.39
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.81
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.96
+          },
+          {
+            "condition": "leading",
+            "probability": 0.22
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.36
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.27
+          }
+        ]
+      },
+      "director": {
+        "decision": "started",
+        "issueId": "actor:boundary-pressure:1",
+        "result": {
+          "action": "intervene",
+          "text": "Respect that limit; ask what changed in the handoff process instead.",
+          "evidenceIds": [
+            "p2",
+            "p3"
+          ],
+          "model": "gpt-6-sol",
+          "durationMs": 2719
+        }
       }
     },
     {
       "fixtureId": "revealing-aside",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 129,
         "readings": {
           "engagement": {
-            "value": 2.99,
+            "value": 3,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -865,7 +968,7 @@
             }
           },
           "openness": {
-            "value": 1.93,
+            "value": 1.9,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -873,7 +976,7 @@
             }
           },
           "specificity": {
-            "value": 3.32,
+            "value": 3.34,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -884,37 +987,31 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.6,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.38,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.78,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.72,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.3,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.93,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -924,69 +1021,254 @@
           },
           {
             "id": "process-improve",
-            "probability": 0.7,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.55,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.81,
-            "achieved": false,
-            "evidence": null
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
+            }
           },
           {
             "id": "process-resourcing",
-            "probability": 0.24,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.45,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.15,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.69,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.5,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 132
+        ]
       },
       "interviewer": {
-        "cueId": "no_hint",
-        "cueProbability": 0.63,
         "model": "jev-1.13.0",
-        "durationMs": 128
+        "durationMs": 205,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.31
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.08
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.05
+          },
+          {
+            "condition": "leading",
+            "probability": 0.06
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.08
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.05
+          }
+        ]
+      },
+      "director": {
+        "decision": "no_trigger",
+        "issueId": null
+      }
+    },
+    {
+      "fixtureId": "abandoned-release-decision",
+      "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 159,
+        "readings": {
+          "engagement": {
+            "value": 2.76,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
+            }
+          },
+          "openness": {
+            "value": 3.48,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
+            }
+          },
+          "specificity": {
+            "value": 3.4,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
+            }
+          },
+          {
+            "id": "client-pace",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
+            }
+          },
+          {
+            "id": "client-friction",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
+            }
+          },
+          {
+            "id": "process-communication",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "achieved": false,
+            "evidence": null
+          }
+        ]
+      },
+      "interviewer": {
+        "model": "jev-1.13.0",
+        "durationMs": 184,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.84
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.51
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.07
+          },
+          {
+            "condition": "leading",
+            "probability": 0.07
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.09
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.07
+          }
+        ]
+      },
+      "director": {
+        "decision": "started",
+        "issueId": "actor:missed-thread:1",
+        "result": {
+          "action": "intervene",
+          "text": "Circle back to the go-live hold; ask what happened when both sides met.",
+          "evidenceIds": [
+            "p2",
+            "p3"
+          ],
+          "model": "gpt-6-sol",
+          "durationMs": 2041
+        }
       }
     },
     {
       "fixtureId": "named-hearsay",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 140,
         "readings": {
           "engagement": {
-            "value": 2.83,
+            "value": 2.75,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -994,7 +1276,7 @@
             }
           },
           "openness": {
-            "value": 2.28,
+            "value": 2.29,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -1002,7 +1284,7 @@
             }
           },
           "specificity": {
-            "value": 2.85,
+            "value": 2.82,
             "evidence": {
               "entryId": "p2",
               "speaker": "trainee",
@@ -1013,61 +1295,51 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.11,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.78,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-pace",
-            "probability": 0.5,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.62,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.64,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.23,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.64,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.82,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.49,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.93,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -1077,19 +1349,16 @@
           },
           {
             "id": "project-delivery",
-            "probability": 0.64,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-role",
-            "probability": 0.27,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.85,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -1099,27 +1368,64 @@
           },
           {
             "id": "project-reflection",
-            "probability": 0.31,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 133
+        ]
       },
       "interviewer": {
-        "cueId": "avoid-leading",
-        "cueProbability": 0.87,
         "model": "jev-1.13.0",
-        "durationMs": 115
+        "durationMs": 207,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.2
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.26
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.49
+          },
+          {
+            "condition": "leading",
+            "probability": 0.86
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.83
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.42
+          }
+        ]
+      },
+      "director": {
+        "decision": "started",
+        "issueId": "actor:leading:1",
+        "result": {
+          "action": "intervene",
+          "text": "Walk back that leap; ask what they saw the two testers handling.",
+          "evidenceIds": [
+            "p2",
+            "p3"
+          ],
+          "model": "gpt-6-sol",
+          "durationMs": 2524
+        }
       }
     },
     {
       "fixtureId": "productive-thread",
       "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 143,
         "readings": {
           "engagement": {
-            "value": 3.24,
+            "value": 3.22,
             "evidence": {
               "entryId": "p6",
               "speaker": "trainee",
@@ -1127,7 +1433,7 @@
             }
           },
           "openness": {
-            "value": 3.14,
+            "value": 3.11,
             "evidence": {
               "entryId": "p4",
               "speaker": "trainee",
@@ -1146,13 +1452,11 @@
         "objectives": [
           {
             "id": "client-access",
-            "probability": 0.11,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-decisions",
-            "probability": 0.85,
             "achieved": true,
             "evidence": {
               "entryId": "p4",
@@ -1162,55 +1466,46 @@
           },
           {
             "id": "client-pace",
-            "probability": 0.1,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-coordination",
-            "probability": 0.55,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "client-friction",
-            "probability": 0.7,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-worked",
-            "probability": 0.81,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-improve",
-            "probability": 0.58,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-communication",
-            "probability": 0.53,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-tools",
-            "probability": 0.68,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "process-resourcing",
-            "probability": 0.18,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-delivery",
-            "probability": 0.97,
             "achieved": true,
             "evidence": {
               "entryId": "p2",
@@ -1220,31 +1515,639 @@
           },
           {
             "id": "project-role",
-            "probability": 0.46,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-contributions",
-            "probability": 0.79,
             "achieved": false,
             "evidence": null
           },
           {
             "id": "project-reflection",
-            "probability": 0.71,
             "achieved": false,
             "evidence": null
           }
-        ],
-        "model": "jev-1.13.0",
-        "durationMs": 131
+        ]
       },
       "interviewer": {
-        "cueId": "no_hint",
-        "cueProbability": 0.96,
         "model": "jev-1.13.0",
-        "durationMs": 115
+        "durationMs": 176,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.07
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.09
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.05
+          },
+          {
+            "condition": "leading",
+            "probability": 0.07
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.11
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.07
+          }
+        ]
+      },
+      "director": {
+        "decision": "no_trigger",
+        "issueId": null
+      }
+    },
+    {
+      "fixtureId": "boundary-accepted",
+      "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 171,
+        "readings": {
+          "engagement": {
+            "value": 2.77,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          },
+          "openness": {
+            "value": 1.95,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I would rather not discuss that person. I can explain how we changed the handoff."
+            }
+          },
+          "specificity": {
+            "value": 2.64,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          },
+          {
+            "id": "process-improve",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          },
+          {
+            "id": "process-communication",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          },
+          {
+            "id": "process-tools",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          },
+          {
+            "id": "process-resourcing",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p4",
+              "speaker": "trainee",
+              "text": "We named one owner for every access request and checked the queue each morning."
+            }
+          },
+          {
+            "id": "project-role",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "achieved": false,
+            "evidence": null
+          }
+        ]
+      },
+      "interviewer": {
+        "model": "jev-1.13.0",
+        "durationMs": 91,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.06
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.07
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.06
+          },
+          {
+            "condition": "leading",
+            "probability": 0.06
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.09
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.07
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "question-stack",
+      "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 137,
+        "readings": {
+          "engagement": {
+            "value": null,
+            "evidence": null
+          },
+          "openness": {
+            "value": null,
+            "evidence": null
+          },
+          "specificity": {
+            "value": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We built a permit portal. I only worked on the API, so I cannot speak to the budget."
+            }
+          },
+          {
+            "id": "project-role",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "We built a permit portal. I only worked on the API, so I cannot speak to the budget."
+            }
+          },
+          {
+            "id": "project-contributions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "achieved": false,
+            "evidence": null
+          }
+        ]
+      },
+      "interviewer": {
+        "model": "jev-1.13.0",
+        "durationMs": 158,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.17
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.91
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.81
+          },
+          {
+            "condition": "leading",
+            "probability": 0.13
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.21
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.13
+          }
+        ]
+      },
+      "director": {
+        "decision": "started",
+        "issueId": "actor:question-stacking:1",
+        "result": {
+          "action": "intervene",
+          "text": "Stay with their API work; ask one concrete question about what they built.",
+          "evidenceIds": [
+            "p2",
+            "p3"
+          ],
+          "model": "gpt-6-sol",
+          "durationMs": 2265
+        }
+      }
+    },
+    {
+      "fixtureId": "invented-history",
+      "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 155,
+        "readings": {
+          "engagement": {
+            "value": 3.44,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "That is not what happened. We postponed launch because our own import test found duplicate records."
+            }
+          },
+          "openness": {
+            "value": 1.95,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "That is not what happened. We postponed launch because our own import test found duplicate records."
+            }
+          },
+          "specificity": {
+            "value": 2.3,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "That is not what happened. We postponed launch because our own import test found duplicate records."
+            }
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-decisions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-coordination",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "achieved": false,
+            "evidence": null
+          }
+        ]
+      },
+      "interviewer": {
+        "model": "jev-1.13.0",
+        "durationMs": 181,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.52
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.72
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.78
+          },
+          {
+            "condition": "leading",
+            "probability": 0.89
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.88
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.9
+          }
+        ]
+      },
+      "director": {
+        "decision": "started",
+        "issueId": "actor:invented-facts:1",
+        "result": {
+          "action": "intervene",
+          "text": "Own the mistaken claim, then ask what their import test showed.",
+          "evidenceIds": [
+            "p1",
+            "p2",
+            "p3"
+          ],
+          "model": "gpt-6-sol",
+          "durationMs": 2077
+        }
+      }
+    },
+    {
+      "fixtureId": "corrected-leading",
+      "participant": {
+        "model": "jev-1.13.0",
+        "durationMs": 135,
+        "readings": {
+          "engagement": {
+            "value": 2.03,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I cannot say that. I only saw my access arrive three weeks late."
+            }
+          },
+          "openness": {
+            "value": null,
+            "evidence": null
+          },
+          "specificity": {
+            "value": null,
+            "evidence": null
+          }
+        },
+        "objectives": [
+          {
+            "id": "client-access",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I cannot say that. I only saw my access arrive three weeks late."
+            }
+          },
+          {
+            "id": "client-decisions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-pace",
+            "achieved": true,
+            "evidence": {
+              "entryId": "p2",
+              "speaker": "trainee",
+              "text": "I cannot say that. I only saw my access arrive three weeks late."
+            }
+          },
+          {
+            "id": "client-coordination",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "client-friction",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-worked",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-improve",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-communication",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-tools",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "process-resourcing",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-delivery",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-role",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-contributions",
+            "achieved": false,
+            "evidence": null
+          },
+          {
+            "id": "project-reflection",
+            "achieved": false,
+            "evidence": null
+          }
+        ]
+      },
+      "interviewer": {
+        "model": "jev-1.13.0",
+        "durationMs": 149,
+        "signals": [
+          {
+            "condition": "missed-thread",
+            "probability": 0.07
+          },
+          {
+            "condition": "question-stacking",
+            "probability": 0.19
+          },
+          {
+            "condition": "boundary-pressure",
+            "probability": 0.09
+          },
+          {
+            "condition": "leading",
+            "probability": 0.13
+          },
+          {
+            "condition": "source-confusion",
+            "probability": 0.11
+          },
+          {
+            "condition": "invented-facts",
+            "probability": 0.12
+          }
+        ]
       }
     }
   ]

@@ -2,12 +2,17 @@ import { expect, test } from 'bun:test';
 import { directorContext, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
 import { getScenario, getClient } from './scenarios.server';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
+import { interviewDirectorInstructions, interviewRecheckInstructions } from '../interview/director.server';
 import type { DirectorRecord, DetectorRecord, ObservationRecord } from '../../core/simulator/director';
 
 const input: DirectorInput = {
   audience: 'trainee', reason: { condition: 'objective:decision', selected: true }, scenarioId: 'proposal', clientId: 'morgan',
   transcript: [{ id: 'p1', speaker: 'client', text: 'I need something for Friday.', startMs: 0, endMs: 1000 }],
   objectives: [], history: [], apiKey: 'fixture-key', signal: new AbortController().signal,
+};
+const interviewInput: DirectorInput = {
+  ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor',
+  reason: { condition: 'missed-thread', probability: .91 },
 };
 const intervention = { action: 'intervene', text: 'Ask what decision Friday supports.', evidenceIds: ['p1'] };
 const previous = (text: string, changes: Partial<DirectorRecord> = {}): DirectorRecord => ({
@@ -108,6 +113,24 @@ test('Responses request uses Sol none, strict output, no tools, and server-only 
   expect(body.tools).toBeUndefined();
   expect(JSON.stringify(body)).not.toContain(input.apiKey);
   expect(result).toMatchObject({ ...intervention, model: 'gpt-6-sol', usage: { inputTokens: 300, outputTokens: 30, cachedTokens: 100 } });
+});
+
+test('interview generation and freshness requests select Sam-specific private instructions', async () => {
+  let generated: Record<string, any> = {};
+  await generateDirector(interviewInput, async (_url, options) => {
+    generated = JSON.parse(String(options.body));
+    return Response.json(response());
+  });
+  expect(generated.instructions.startsWith(interviewDirectorInstructions)).toBe(true);
+
+  let checked: Record<string, any> = {};
+  const request = Object.assign(async (_url: string | URL | Request, options?: RequestInit) => {
+    checked = JSON.parse(String(options?.body));
+    return Response.json({ model: 'jev-1.13.0', answers: { applicable: { type: 'noul', noul: .95 } }, usage: { input_tokens: 120, output_tokens: 8 } });
+  }, { preconnect: fetch.preconnect });
+  await recheckDirector({ ...interviewInput, intervention: { ...intervention, action: 'intervene' } }, request);
+  expect(JSON.stringify(checked)).toContain(interviewRecheckInstructions);
+  expect(JSON.parse(checked.state).dialogue).toEqual([{ id: 'p1', speaker: 'sam', text: input.transcript[0]!.text }]);
 });
 
 test('incomplete, refused, non-JSON, and HTTP failures never become hints', async () => {

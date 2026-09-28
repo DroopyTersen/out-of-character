@@ -11,12 +11,11 @@ type Recording = {
   rows: {
     fixtureId: string;
     participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: { id: string; achieved: boolean; evidence: { entryId: string; speaker: string; text: string } | null }[] };
-    interviewer: { model: string; durationMs: number; signals?: DirectorSignal[]; cueId?: string };
+    interviewer: { model: string; durationMs: number; signals: DirectorSignal[] };
     director?: { decision: string; issueId?: string | null; result?: (DirectorResult & { model?: string; durationMs?: number }) | null };
   }[];
 };
 const recorded = recordings as unknown as Recording;
-const availableFixtures = interviewFixtures.filter(item => recorded.rows.some(row => row.fixtureId === item.id));
 
 function ParticipantEvidence({ evidence }: { evidence: { entryId: string; speaker: string; text: string } | null }) {
   return evidence?.speaker === 'trainee'
@@ -25,14 +24,14 @@ function ParticipantEvidence({ evidence }: { evidence: { entryId: string; speake
 }
 
 export function InterviewJudgingStory() {
-  const [id, setId] = useState(availableFixtures[0]!.id);
+  const [id, setId] = useState(interviewFixtures[0]!.id);
   const fixture = interviewFixtures.find(item => item.id === id)!;
   const row = recorded.rows.find(item => item.fixtureId === id)!;
   const heard = row.participant.objectives.filter(item => item.achieved && item.evidence?.speaker === 'trainee');
   return <>
     <div className="workshop-controls">
       <label>Synthetic interview<select value={id} onChange={event => setId(event.target.value)}>
-        {availableFixtures.map(item => <option key={item.id} value={item.id}>{item.id.replaceAll('-', ' ')}</option>)}
+        {interviewFixtures.map(item => <option key={item.id} value={item.id}>{item.id.replaceAll('-', ' ')}</option>)}
       </select></label>
     </div>
     <div className="sim-lab">
@@ -53,7 +52,7 @@ export function InterviewJudgingStory() {
           )}</div>
           <section className="sim-director-readout">
             <h3>Private interviewer direction</h3>
-            {row.interviewer.signals ? <>
+            <>
               <p>Jev observations: {row.interviewer.signals.map(signal => 'probability' in signal ? `${signal.condition.replaceAll('-', ' ')} ${(signal.probability * 100).toFixed(0)}%` : null).filter(Boolean).join(' · ')}</p>
               <p>Producer gate: <strong>{row.director?.decision ?? 'Not replayed'}</strong>{row.director?.issueId ? ` · ${row.director.issueId}` : ''}</p>
               {row.director?.result?.action === 'intervene' ? <>
@@ -62,8 +61,8 @@ export function InterviewJudgingStory() {
                   const entry = fixture.transcript.find(item => item.id === entryId);
                   return entry ? <blockquote className="sim-evidence" key={entryId}><span>{entry.speaker === 'trainee' ? 'Participant' : 'Sam'} · {entryId}</span><p>“{entry.text}”</p></blockquote> : null;
                 })}
-              </> : <p>{row.director?.result?.action === 'none' ? 'Sol chose no direction for this review.' : 'No Sol direction was generated for this recording.'}</p>}
-            </> : <p>Historical authored-cue recording. Contextual signals and Sol direction have not been measured for this fixture yet.</p>}
+              </> : <p>{row.director?.result?.action === 'none' ? 'Sol chose no direction for this review.' : !row.director ? 'This fixture has not had a Sol replay.' : row.director.decision === 'started' ? 'Sol did not return a usable direction.' : 'The gate made no Sol call for this fixture.'}</p>}
+            </>
           </section>
         </div>
         <div>

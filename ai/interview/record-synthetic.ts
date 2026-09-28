@@ -11,7 +11,8 @@ if (!jevPath || !replayDir) throw new Error('Provide --jev=<path> and --replays=
 
 const jev = JSON.parse(await readFile(jevPath, 'utf8'));
 if (jev.synthetic !== true || !Array.isArray(jev.rows)) throw new Error('Expected synthetic interview results.');
-if (jev.rows.length !== interviewFixtures.length || jev.rows.some((row: { fixtureId: string }) => !interviewFixtures.some(fixture => fixture.id === row.fixtureId))) throw new Error('Interview fixture results are incomplete.');
+const fixtureIds = new Set(jev.rows.map((row: { fixtureId: string }) => row.fixtureId));
+if (fixtureIds.size !== jev.rows.length || fixtureIds.size !== interviewFixtures.length || interviewFixtures.some(fixture => !fixtureIds.has(fixture.id))) throw new Error('Interview fixture results are incomplete or duplicated.');
 const rows = [];
 for (const row of jev.rows) {
   let replay;
@@ -20,11 +21,13 @@ for (const row of jev.rows) {
   if (replay && (replay.synthetic !== true || replay.kind !== 'interview' || replay.fixture !== row.fixtureId || replay.rows.length !== 1 || replay.rows[0].audience !== 'actor')) throw new Error(`Invalid director replay for ${row.fixtureId}.`);
   const assessment = replay?.rows[0];
   const generation = assessment?.generation?.[0];
+  const readings: Record<string, { value: number | null; evidence: unknown }> = row.participant.readings;
   rows.push({
     fixtureId: row.fixtureId,
     participant: {
       model: row.participant.model, durationMs: row.participant.durationMs,
-      readings: row.participant.readings, objectives: row.participant.objectives,
+      readings: Object.fromEntries(Object.entries(readings).map(([id, reading]) => [id, { value: reading.value, evidence: reading.evidence }])),
+      objectives: row.participant.objectives.map((item: { id: string; achieved: boolean; evidence: unknown }) => ({ id: item.id, achieved: item.achieved, evidence: item.evidence })),
     },
     interviewer: {
       model: assessment ? replay.models.detector : row.interviewer.model,
@@ -38,5 +41,5 @@ for (const row of jev.rows) {
   });
 }
 await mkdir(dirname(output), { recursive: true });
-await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: jev.collectedAt, rubricVersion: jev.rubricVersion, source: 'Bounded synthetic Jev and Sol replays', rows }, null, 2) + '\n');
+await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: jev.collectedAt, rubricVersion: jev.rubricVersion, source: 'Separate synthetic participant and producer replays; no live interview data', rows }, null, 2) + '\n');
 console.log(`Saved ${rows.length} reduced synthetic Workshop recordings to ${output}.`);

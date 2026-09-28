@@ -1,6 +1,6 @@
 # Contextual direction for The Debrief
 
-Status: implementation in progress on main through `18827cd`. The shared actor lane, interview-specific judgments and prompts, private archive migration, and legacy cue removal are implemented locally. Focused tests and paid synthetic rehearsals are underway. Not deployed.
+Status: implemented locally on `project-closeout-interviews`, with main through `18827cd` merged. The shared actor lane, interview-specific judgments and prompts, private archive migration, and legacy cue removal are complete. Synthetic Jev/Sol and both voice rehearsals passed their bounded checks. Final review and verification are recorded in `interview-progress.md`. Not deployed.
 
 ## Recommendation
 

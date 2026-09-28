@@ -1,8 +1,8 @@
 import type { InterviewReadingId } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
-import type { BooleanCondition } from '../../core/simulator/director';
+import type { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
 
-type InterviewCondition = Extract<BooleanCondition, 'missed-thread' | 'question-stacking' | 'boundary-pressure' | 'leading' | 'source-confusion' | 'invented-facts'>;
+type InterviewCondition = (typeof INTERVIEW_CONDITIONS)[number];
 
 function dialogue(lines: readonly (readonly [TranscriptEntry['speaker'], string])[]): TranscriptEntry[] {
   return lines.map(([speaker, text], index) => ({ id: `p${index + 1}`, speaker, text, startMs: index * 12_000, endMs: index * 12_000 + 10_000 }));

@@ -3,6 +3,7 @@ import type { Experimental_EvaluationQuestion } from 'ai';
 import { interviewReadings, interviewTopics, INTERVIEW_SCENARIO_ID } from '../../core/interview';
 import { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
 import { interviewFixtures } from './fixtures';
+import recordings from './recordings.json';
 import { readInterviewAnswers, readInterviewerSignals, type InterviewAnswers } from './evaluate.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
 import { interviewerBrief, interviewOpening, interviewScenario, interviewers } from './scenario.server';
@@ -16,6 +17,9 @@ function answersFor(questions: Record<string, Experimental_EvaluationQuestion>):
 }
 
 describe('project closeout interview contracts', () => {
+  test('the Workshop has exactly one recording for every selectable fixture', () => {
+    expect(recordings.rows.map(row => row.fixtureId).sort()).toEqual(interviewFixtures.map(fixture => fixture.id).sort());
+  });
   test('one authored Sam serves both voices and the original 14 subtopics', () => {
     expect(interviewScenario.id).toBe(INTERVIEW_SCENARIO_ID);
     expect(interviewScenario.objectives.map(item => item.id)).toEqual(interviewTopics.flatMap(topic => topic.objectives.map(item => item.id)));

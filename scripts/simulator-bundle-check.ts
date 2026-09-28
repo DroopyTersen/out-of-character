@@ -16,11 +16,12 @@ const privateText = [
   'privateClientContext',
   ...clients.map(client => client.behavior),
   ...interviewers.map(interviewer => interviewer.behavior),
-  'Write one private direction to SAM',
+  'You are the producer for Sam, the interviewer',
+  'Write a cue like a producer in a news anchor',
   'Is Sam overlooking or abandoning a participant-supplied thread',
-  'Would a quick public-information lookup materially improve',
+  'Would a quick public-information lookup help Sam understand',
   'Do not infer any private project history, events, motives',
-  'Does this exact private direction still usefully guide Sam',
+  'Given the latest dialogue, would this private producer note',
   'Write a comprehensive, readable internal project-closeout summary',
 ];
 let checked = 0;

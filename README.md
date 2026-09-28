@@ -8,10 +8,13 @@ Targets desktop Chrome on macOS and iOS Safari. [Open the game](https://outofcha
 
 ```sh
 bun install
+bunx wrangler d1 migrations apply SIMULATOR_ARCHIVE --local
 bun run dev
 bun run check
 bun run deploy
 ```
+
+Keep the Cloudflare Vite plugin and Wrangler on compatible runtime versions when updating either dependency. They share local storage under `.wrangler/state`; using an older runtime after a newer one can cause an alarm-table schema error. Align the tooling before resetting local data.
 
 For local paid services, copy `.dev.vars.example` to the ignored `.dev.vars` and provide `TYPESAFE_API_KEY` and `OPENROUTER_API_KEY`. Cloudflare-hosted Deepgram Flux handles streaming transcription through the Worker AI binding. Luna through OpenRouter generates scenes, and Jev supplies every gameplay judgment. No separate speech API key is needed. Deployment uses the dedicated personal-account Worker in `wrangler.jsonc`; upload the two secrets with Wrangler and retain `PAID_SERVICES_ENABLED=true` to enable paid requests.
 
@@ -55,11 +58,13 @@ See [simulator acceptance](docs/solutioning/simulator-acceptance.md) for reprodu
 
 ## The Debrief
 
-`/interview` is a project-closeout conversation with Sam. After a brief project introduction, Sam follows firsthand experiences, wins, frustrations and lessons. The suggested topics are optional. Jev shows participant observations and detects when a private GPT-6 Sol direction could help Sam listen or follow up better.
+`/interview` is a project-closeout conversation with Sam. After a brief project introduction, Sam follows firsthand experiences, wins, frustrations and lessons across the project, the client, and the delivery team. Jev shows participant readings out of four and topic coverage with probabilities: not yet, touched, explored, or set aside. Sam receives private coverage rundowns. GPT-6 Sol checks in periodically, considers Jev's observations, and supplies useful direction or requests public background from GPT-6 Luna. Participant boundaries and worthwhile stories take priority over completing every topic.
 
 After End, GPT-6 Sol with medium reasoning streams an internal summary through the same report lifecycle as the simulator. Only completed, validated text is copyable and saved; a failed attempt offers one explicit retry. The transcript is saved independently in the private interview table. Leaving the screen cancels unfinished summary generation.
 
 Use `/storybook/interview-summary` and **Replay stream** to preview preparing, writing and completed states without a paid call. `ACCEPTANCE_URL=http://127.0.0.1:5174 node scripts/interview-summary-acceptance.mjs` checks the real screen and streaming hook with substituted provider boundaries. See [the streaming plan](docs/solutioning/interview-streaming-plan.md) and [progress](docs/solutioning/interview-progress.md).
+
+`/storybook/interview-judging` shows recorded synthetic Jev probabilities and producer decisions. `/storybook/interview-timeline` interleaves dialogue, producer consultations, research and coverage notes; it can load an interview archive JSON file locally without uploading it. The same timeline is available with `bun scripts/interview-timeline.ts <archive.json>`.
 
 - [Product requirements](docs/solutioning/consultancy-party-game-prd.md)
 - [Technical design](docs/solutioning/out-of-character-tech-design.md)

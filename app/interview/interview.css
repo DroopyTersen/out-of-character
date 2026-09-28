@@ -89,7 +89,7 @@
 .interview-reading > div:first-child { display: grid; gap: 6px; font-size: 14px; }
 .interview-reading strong { color: #e0eef4; font-weight: 600; }
 .interview-reading > div:first-child span { color: #acd5d2; font-size: 12px; }
-.interview-reading small { display: block; color: #8cacbd; font-size: 12px; line-height: 1.45; margin-top: 9px; }
+.interview-reading > small { display: block; color: #8cacbd; font-size: 12px; line-height: 1.45; margin-top: 9px; }
 .interview-reading-evidence { border-top: 1px solid #285269; margin-top: 18px; padding-top: 12px; color: #a6cbd8; font-size: 12px; }
 .interview-reading-evidence summary { cursor: pointer; min-height: 28px; }
 .interview-reading-evidence > div { margin-top: 13px; }
@@ -102,6 +102,30 @@
 .interview-topic li.heard { color: #d7eee9; }
 .interview-topic-mark { display: grid; place-items: center; flex: 0 0 17px; width: 17px; height: 17px; border: 1px solid #5a8192; border-radius: 50%; margin-top: 1px; }
 .interview-topic li.heard .interview-topic-mark { color: #082b30; border-color: #44efcd; background: #44efcd; }
+.interview-topic li[data-level=touched] { color: #c3dde2; }
+.interview-topic li[data-level=touched] .interview-topic-mark, .interview-topic-legend li[data-level=touched] .interview-topic-mark { border-color: #44efcd; background: linear-gradient(90deg, #44efcd 50%, transparent 50%); }
+.interview-topic li[data-level=set-aside] { color: #a9c1cc; }
+.interview-topic li[data-level=set-aside] .interview-topic-mark, .interview-topic-legend li[data-level=set-aside] .interview-topic-mark { color: #0b2835; border-color: #9bb7c4; background: #9bb7c4; }
+.interview-topic-legend li[data-level=explored] .interview-topic-mark { color: #082b30; border-color: #44efcd; background: #44efcd; }
+.interview-topic-confidence { margin-left: auto; padding-left: 6px; color: #8fb2c3; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.interview-topic-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; list-style: none; margin: -8px 0 15px; padding: 0; color: #93b1c3; font-size: 11px; }
+.interview-topic-legend li { display: flex; align-items: center; gap: 6px; }
+.interview-topic-legend .interview-topic-mark { flex-basis: 13px; width: 13px; height: 13px; margin: 0; }
+.interview-reading-score { display: inline; margin-left: 7px; color: #8fb2c3; font-size: 11px; font-variant-numeric: tabular-nums; }
+.interview-timeline { display: grid; gap: 0; list-style: none; margin: 18px 0 0; padding: 0; }
+.interview-timeline li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 10px 0 10px 10px; border-left: 3px solid #2e6074; border-bottom: 1px solid #1d4155; }
+.interview-timeline li[data-lane=producer] { border-left-color: #44efcd; }
+.interview-timeline li[data-lane=research] { border-left-color: #efba57; }
+.interview-timeline li[data-lane=rundown] { border-left-color: #8fa8ff; }
+.interview-timeline li[data-lane=assessment], .interview-timeline li[data-lane=delegation] { border-left-color: #5a8192; }
+.interview-timeline time { color: #8fb2c3; font-size: 12px; font-variant-numeric: tabular-nums; }
+.interview-timeline p { margin: 0; color: #c8dfe6; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.interview-timeline li[data-lane=dialogue] p { color: #9fbccb; }
+.interview-timeline-title { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.interview-timeline-title strong { color: #e0eef4; font-weight: 600; }
+.interview-timeline-title span { color: #8fb2c3; font-size: 11px; font-variant-numeric: tabular-nums; }
+.interview-timeline-title .interview-timeline-outcome { color: #9fdccf; border: 1px solid #31556b; padding: 0 6px; }
+.interview-timeline small { display: block; color: #8fb2c3; font-size: 11px; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
 .interview-summary { max-width: 960px; }
 .interview-summary-header { padding: 55px 0 30px; }
 .interview-summary-header h1 { margin: 0 0 13px; font-size: clamp(44px, 5vw, 70px); }
@@ -127,7 +151,7 @@
 @media (max-width: 1150px) {
   .interview-live-grid { grid-template-columns: minmax(300px, .78fr) minmax(0, 1.22fr); gap: 16px; }
   .interview-reading-list { grid-template-columns: 1fr; gap: 14px; }
-  .interview-reading small { display: none; }
+  .interview-reading > small { display: none; }
   .interview-topic-groups { gap: 12px; }
 }
 @media (max-width: 800px) {

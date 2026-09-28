@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { evaluateClient, evaluateTrainee } from './evaluate.server';
-import { evaluateInterviewer } from '../interview/evaluate.server';
+import { evaluateInterview, evaluateInterviewer } from '../interview/evaluate.server';
+import { checkCue, generateProducer } from '../interview/producer.server';
 import { interviewFixtures } from '../interview/fixtures';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
 import { DIRECTOR_MODEL, generateDirector } from './director.server';
@@ -10,6 +11,7 @@ import { simulatorChallenges } from './challenge-fixtures';
 import { simulatorBlindFixtures } from './blind-fixtures';
 import { simulatorCatalogFixtures } from './catalog-fixtures';
 import { DirectorGate, DIRECTOR_VERSION, type DirectorAudience, type DirectorSignal } from '../../core/simulator/director';
+import { CHECK_IN_SIGNALS, PRODUCER_LIMITS, PRODUCER_VERSION, PROTECTION_CONDITIONS, type ProducerTrigger } from '../../core/interview-producer';
 import { JEV_MODEL } from '../judging';
 
 // This opt-in development replay uses synthetic fixtures. It is not a live
@@ -25,20 +27,47 @@ const compare = process.argv.includes('--compare');
 const turns = process.argv.includes('--every-turn') ? fixture.transcript.map((_, index) => index + 1).filter(length => fixture.transcript.slice(0, length).some(entry => entry.speaker === 'trainee')) : [fixture.transcript.length];
 if (turns.length > 24) throw new Error('Replay is limited to 24 snapshots; choose a shorter fixture.');
 const output = process.argv.find(arg => arg.startsWith('--output='))?.slice(9) || `output/director-replay-${fixture.id}.json`;
-const report = { synthetic: true, fixture: fixture.id, kind: interviewFixture ? 'interview' : 'simulator', collectedAt: new Date().toISOString(), version: DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: DIRECTOR_MODEL }, compare, rows: [] as Record<string, unknown>[] };
-const gate = new DirectorGate(!!interviewFixture);
+const report = { synthetic: true, fixture: fixture.id, kind: interviewFixture ? 'interview' : 'simulator', collectedAt: new Date().toISOString(), version: interviewFixture ? PRODUCER_VERSION : DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: DIRECTOR_MODEL }, compare, rows: [] as Record<string, unknown>[] };
+const gate = new DirectorGate();
+
+/** The interview replays one producer check-in per snapshot, with any signals as reasons. Research is not looked up. */
+async function replayInterview(turn: number) {
+  const transcript = fixture!.transcript.slice(0, turn);
+  const input = { scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', transcript, revision: turn, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(30_000) };
+  const [interviewer, graded] = await Promise.all([evaluateInterviewer({ ...input, deliveredBackground: interviewFixture!.deliveredBackground }), evaluateInterview(input)]);
+  const probability = (condition: string) => { const signal = interviewer.signals.find(item => item.condition === condition); return signal && 'probability' in signal ? signal.probability : 0; };
+  const triggers: ProducerTrigger[] = [
+    ...PROTECTION_CONDITIONS.filter(condition => probability(condition) >= .6).map(condition => ({ kind: 'concern' as const, condition, probability: probability(condition) })),
+    { kind: 'check-in' },
+    ...Object.entries(CHECK_IN_SIGNALS).flatMap(([condition, threshold]) => {
+      const value = condition === 'research' ? interviewer.researchProbability ?? 0 : probability(condition);
+      return value >= threshold ? [{ kind: 'signal' as const, condition: condition as keyof typeof CHECK_IN_SIGNALS, probability: value }] : [];
+    }),
+  ];
+  const row: Record<string, unknown> = { turn, audience: 'producer', signals: interviewer.signals, researchProbability: interviewer.researchProbability, triggers,
+    coverage: graded.objectives.map(({ id, level }) => ({ id, level })), detectorDurationMs: interviewer.durationMs, detectorUsage: interviewer.usage, eligible: true, generation: [] };
+  report.rows.push(row);
+  const now = transcript.at(-1)!.endMs;
+  for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
+    const started = performance.now();
+    const result = await generateProducer({ clientId: 'sam-cedar', transcript, coverage: graded.objectives, startedAt: 0, now, triggers, history: [],
+      budget: { cuesLeft: PRODUCER_LIMITS.cues, researchLeft: PRODUCER_LIMITS.research, lookupsInFlight: 0 }, apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
+    const durationMs = Math.round(performance.now() - started);
+    const check = result.cue ? await checkCue({ transcript, coverage: graded.objectives, startedAt: 0, now, history: [], cue: result.cue, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(10_000) }) : null;
+    (row.generation as unknown[]).push({ effort, durationMs, ...result, check });
+  }
+}
+
 try {
-  for (const turn of turns) {
+  if (interviewFixture) for (const turn of turns) await replayInterview(turn);
+  else for (const turn of turns) {
     const transcript = fixture.transcript.slice(0, turn);
-    const scenarioId = interviewFixture ? INTERVIEW_SCENARIO_ID : simulatorFixture!.scenarioId;
-    const clientId = interviewFixture ? 'sam-cedar' : simulatorFixture!.clientId;
+    const scenarioId = simulatorFixture!.scenarioId;
+    const clientId = simulatorFixture!.clientId;
     const input = { scenarioId, clientId, transcript, revision: turn, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(30_000) };
-    const [trainee, actor] = interviewFixture
-      ? [null, await evaluateInterviewer({ ...input, deliveredBackground: interviewFixture.deliveredBackground })]
-      : await Promise.all([evaluateTrainee(input), evaluateClient(input)]);
-    const audiences: { audience: DirectorAudience; signals: DirectorSignal[]; durationMs: number; usage: unknown }[] = interviewFixture
-      ? [{ audience: 'actor', signals: actor.signals, durationMs: actor.durationMs, usage: actor.usage }]
-      : [{ audience: 'trainee', signals: trainee!.signals, durationMs: trainee!.durationMs, usage: trainee!.usage }, { audience: 'actor', signals: actor.signals, durationMs: actor.durationMs, usage: actor.usage }];
+    const [trainee, actor] = await Promise.all([evaluateTrainee(input), evaluateClient(input)]);
+    const audiences: { audience: DirectorAudience; signals: DirectorSignal[]; durationMs: number; usage: unknown }[] = [
+      { audience: 'trainee', signals: trainee.signals, durationMs: trainee.durationMs, usage: trainee.usage }, { audience: 'actor', signals: actor.signals, durationMs: actor.durationMs, usage: actor.usage }];
     for (const { audience, signals, durationMs, usage } of audiences) {
       gate.observe(audience, signals);
       const now = transcript.at(-1)!.endMs;
@@ -51,7 +80,7 @@ try {
         row.issueId = issue.id;
         for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
           const started = performance.now();
-          const result = await generateDirector({ audience, reason: issue.signal, scenarioId, clientId, transcript, objectives: trainee?.objectives ?? [], history: [], apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
+          const result = await generateDirector({ audience, reason: issue.signal, scenarioId, clientId, transcript, objectives: trainee.objectives, history: [], apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
           (row.generation as unknown[]).push({ effort, durationMs: Math.round(performance.now() - started), ...result });
         }
       });

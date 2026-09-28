@@ -1,7 +1,7 @@
 import type { InterviewReadingId } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import type { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
-import type { DeliveredInterviewBackground } from '../../core/simulator/director';
+import type { DeliveredInterviewBackground } from '../../core/interview-producer';
 
 type InterviewCondition = (typeof INTERVIEW_CONDITIONS)[number];
 

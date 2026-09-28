@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { emptyInterviewReadings, interviewTopics, type InterviewBackground, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
+import { emptyInterviewReadings, interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
 import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
 import { illustrativeLevels } from './simulator-voice-story';
 import { streamedReportView } from '../simulator/use-report';
@@ -9,7 +9,7 @@ import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type Int
 import '../simulator/simulator.css';
 import '../interview/interview.css';
 
-const transcript: TranscriptEntry[] = [
+export const transcript: TranscriptEntry[] = [
   { id: 's1', speaker: 'client', text: 'What was the project about? Start wherever it makes sense to you.', startMs: 0, endMs: 5300 },
   { id: 'u1', speaker: 'trainee', text: 'We built a small inspection prototype so field teams could capture notes in one place. I was the technical lead.', startMs: 5400, endMs: 14300 },
   { id: 's2', speaker: 'client', text: 'What part of that work felt most important to you?', startMs: 14600, endMs: 19000 },
@@ -42,8 +42,12 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, summary: In
     },
     objectives: interviewTopics.flatMap(topic => topic.objectives.map(objective => {
       const entry = evidenceByObjective[objective.id];
-      const achieved = !!entry && has(entry.id);
-      return { id: objective.id, probability: achieved ? .95 : null, achieved, evidence: achieved ? { entryId: entry.id, speaker: entry.speaker, text: entry.text } : null };
+      const heard = !!entry && has(entry.id);
+      // One lighter band shows the difference between touched and explored.
+      const level: CoverageLevel = !heard ? 'not-yet' : objective.id === 'project-reflection' ? 'touched' : 'explored';
+      const explored = level === 'explored' ? .93 : level === 'touched' ? .35 : .02;
+      const levels = { 'not-yet': level === 'not-yet' ? .96 : level === 'touched' ? .11 : .02, touched: level === 'touched' ? .53 : .04, explored, 'set-aside': .01 };
+      return { id: objective.id, level, levels, probability: explored, achieved: level === 'explored', evidence: heard ? { entryId: entry.id, speaker: entry.speaker, text: entry.text } : null };
     })),
     model: 'workshop-fixture', durationMs: 0,
   };

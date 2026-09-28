@@ -1,14 +1,11 @@
 import { DIRECTOR_MODEL, DirectorOutputError, generateDirector, recheckDirector, type DirectorInput } from '../../../ai/simulator/director.server';
 import { JEV_MODEL } from '../../../ai/judging';
-import { lookupInterviewBackground, normalizeResearchName, prepareInterviewResearch, RESEARCH_MODEL } from '../../../ai/interview/research.server';
-import { INTERVIEW_SCENARIO_ID, type InterviewBackground } from '../../../core/interview';
-import { DirectorGate, DIRECTOR_LIMITS, DIRECTOR_VERSION, MATERIAL_CONCERN, publicHint, deliveredInterviewBackground, type DirectorAudience, type DirectorIssue, type DirectorSignal, type DirectorRecord, type ObservationRecord, type InterventionRecord, type DirectorSummary, type ResearchRecord } from '../../../core/simulator/director';
+import { DirectorGate, DIRECTOR_LIMITS, DIRECTOR_VERSION, MATERIAL_CONCERN, publicHint, type DirectorAudience, type DirectorIssue, type DirectorSignal, type DirectorRecord, type ObservationRecord, type InterventionRecord, type DirectorSummary } from '../../../core/simulator/director';
 import type { LiveHint, ObjectiveReading, TranscriptEntry } from '../../../core/simulator/types';
 
-export const directorServices = { generateDirector, recheckDirector, prepareInterviewResearch, lookupInterviewBackground };
-export const RESEARCH_LIMITS = { threshold: .5, attempts: 3, notes: 2, age: 25_000 };
+export const directorServices = { generateDirector, recheckDirector };
 type Observation = { audience: DirectorAudience; transcript: TranscriptEntry[]; revision: number; capturedAt: number };
-type ObservationResult = { signals: DirectorSignal[]; researchProbability?: number; model?: string; failure?: 'evaluation_error' | 'evaluation_timeout' };
+type ObservationResult = { signals: DirectorSignal[]; model?: string; failure?: 'evaluation_error' | 'evaluation_timeout' };
 type RecordedObservation = Observation & { record: ObservationRecord };
 type Options = {
   scenarioId: string; clientId: string; objectives: () => ObjectiveReading[];
@@ -16,25 +13,19 @@ type Options = {
   settled: () => TranscriptEntry[]; isFresh: (transcript: TranscriptEntry[]) => boolean; send: (event: Record<string, unknown>) => boolean;
 };
 
-/** Owns optional interventions, never audio, grades or the session snapshot. */
+/** Owns optional simulator interventions, never audio, grades or the session snapshot. The interview uses InterviewProducer. */
 export class ContextualDirector {
-  private gate: DirectorGate;
+  private gate = new DirectorGate();
   readonly records: InterventionRecord[] = [];
   private abort = new AbortController();
   private lastConcern: string | undefined;
   private hint: LiveHint | null = null;
-  private research = { active: false, busy: false, attempts: 0, notes: 0, targets: new Set<string>() };
-  private lastActorCue: number | undefined;
 
-  constructor(private options: Options) { this.gate = new DirectorGate(options.scenarioId === INTERVIEW_SCENARIO_ID); }
+  constructor(private options: Options) {}
 
   private get alive() { return !this.abort.signal.aborted; }
   get canObserveActor() { return this.alive && this.gate.hasCapacity('actor'); }
   summary(): DirectorSummary { return { model: DIRECTOR_MODEL, effort: 'none', version: DIRECTOR_VERSION, ...this.gate.usage }; }
-  background() { return deliveredInterviewBackground(this.records); }
-  publicBackground(): InterviewBackground[] {
-    return this.background().filter(item => item.status === 'accepted').map(({ id, target, facts, retrievedAt }) => ({ id, target, facts, retrievedAt }));
-  }
 
   coaching(now = Date.now()): LiveHint | null {
     const hint = this.hint;
@@ -63,7 +54,6 @@ export class ContextualDirector {
     const record = observation.record;
     record.completedAt = now;
     record.signals = result.signals;
-    record.researchProbability = result.researchProbability;
     record.model = result.model ?? JEV_MODEL;
     if (result.failure) { record.outcome = result.failure; return; }
     if (!this.options.isFresh(observation.transcript)) { record.outcome = 'stale'; return; }
@@ -73,57 +63,7 @@ export class ContextualDirector {
     const review = this.gate.review(observation.audience, now, observation.revision, issue => this.run(observation, issue));
     record.outcome = review.decision;
     record.issueId = review.issueId;
-    const research = this.considerResearch(observation, result.researchProbability);
-    if (review.work || research) return Promise.all([review.work, research]).then(() => {});
-  }
-
-  private researchSlotOpen(now: number) {
-    return this.alive && !this.gate.actorBusy && this.gate.hasCapacity('actor') && this.research.notes < RESEARCH_LIMITS.notes
-      && (this.lastActorCue == null || now - this.lastActorCue >= DIRECTOR_LIMITS.cooldown);
-  }
-
-  private considerResearch(observation: RecordedObservation, probability: number | undefined): Promise<void> | undefined {
-    if (this.options.scenarioId !== INTERVIEW_SCENARIO_ID || observation.audience !== 'actor' || probability == null || !Number.isFinite(probability)) return;
-    if (probability < .5) this.research.active = false;
-    if (probability < RESEARCH_LIMITS.threshold || probability > 1 || this.research.active || this.research.busy || this.research.attempts >= RESEARCH_LIMITS.attempts || !this.researchSlotOpen(Date.now())) return;
-    this.research.active = true;
-    this.research.busy = true;
-    this.research.attempts++;
-    return this.runResearch(observation, probability).finally(() => { this.research.busy = false; });
-  }
-
-  private async runResearch(observation: RecordedObservation, probability: number) {
-    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, observationId: observation.record.id,
-      revision: observation.revision, snapshotAt: observation.capturedAt, startedAt: Date.now(), model: RESEARCH_MODEL, probability, outcome: 'pending' };
-    this.records.push(record);
-    const expiry = observation.capturedAt + RESEARCH_LIMITS.age;
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(Math.max(1, expiry - Date.now()))]);
-    const input = { apiKey: this.options.openaiKey, signal };
-    try {
-      const target = await this.options.services.prepareInterviewResearch({ ...input, transcript: observation.transcript, alreadyResearched: [...this.research.targets] });
-      if (!this.alive) return;
-      if (signal.aborted || Date.now() >= expiry) { record.outcome = 'timeout'; return; }
-      if (!target) { record.outcome = 'none'; return; }
-      record.target = target;
-      const key = `${target.kind}:${normalizeResearchName(target.name)}`;
-      if (this.research.targets.has(key)) { record.outcome = 'duplicate'; return; }
-      const result = await this.options.services.lookupInterviewBackground({ ...input, target });
-      if (!this.alive) return;
-      if (signal.aborted || Date.now() >= expiry) { record.outcome = 'timeout'; return; }
-      if (!result) { this.research.targets.add(key); record.outcome = 'none'; return; }
-      Object.assign(record, result);
-      if (!this.researchSlotOpen(Date.now())) { record.outcome = 'blocked'; return; }
-      record.delivery = { eventId: record.id, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' };
-      const content = `PUBLIC BACKGROUND, retrieved ${new Date(result.retrievedAt).toISOString()}. This is current public information about ${target.name}, not evidence about this project. Use it only where it helps a neutral question now or later; do not pivot to it or interrupt a developing story. Do not lecture, infer project events, contradict their account, or read this note aloud.\n${result.facts.map(fact => `${fact.text} (${fact.url})`).join('\n')}`;
-      const sent = this.gate.sendNote(() => this.options.send({ type: 'session.thinking.append', event_id: record.id, delegation_id: null, content }));
-      record.outcome = sent ? 'sent' : 'error';
-      if (sent) { this.research.targets.add(key); record.deliveredAt = Date.now(); this.research.notes++; }
-    } catch (error) {
-      if (!this.alive) return;
-      record.outcome = signal.aborted || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name)) ? 'timeout' : 'error';
-    } finally {
-      if (this.alive) record.completedAt = Date.now();
-    }
+    return review.work;
   }
 
   private recordBase(observation: RecordedObservation, issue: DirectorIssue, now: number) {
@@ -193,7 +133,7 @@ export class ContextualDirector {
         record.delivery = { eventId, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' };
         const sent = this.gate.sendNote(() => this.options.send({ type: 'session.thinking.append', event_id: eventId, delegation_id: null, content: result.text }));
         record.outcome = sent ? 'sent' : 'error';
-        if (sent) this.lastActorCue = record.deliveredAt = Date.now();
+        if (sent) record.deliveredAt = Date.now();
       }
     } catch (error) {
       if (!this.alive) return;
@@ -205,8 +145,8 @@ export class ContextualDirector {
 
   providerEvent(id: string, accepted: boolean) {
     if (!this.alive) return;
-    const record = this.records.find(item => (item.source === 'director' || item.source === 'research') && item.delivery?.eventId === id);
-    if ((record?.source === 'director' || record?.source === 'research') && record.delivery) {
+    const record = this.records.find(item => item.source === 'director' && item.delivery?.eventId === id);
+    if (record?.source === 'director' && record.delivery) {
       record.delivery.status = accepted ? 'accepted' : 'rejected';
       record.delivery.acknowledgedAt = Date.now();
     }

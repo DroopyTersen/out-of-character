@@ -1,30 +1,23 @@
-import { lookupInterviewBackground, prepareInterviewResearch } from '../ai/interview/research.server';
+import { lookupInterviewBackground } from '../ai/interview/research.server';
+import type { ResearchKind } from '../core/interview-producer';
 
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to run this bounded synthetic provider smoke.');
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) throw new Error('OPENAI_API_KEY is required.');
 
-const scenarios = [
-  { label: 'client business overview', text: 'Our client was REI. We built a returns portal on Azure. I owned the import job.' },
-  { label: 'technical gap after client overview', text: 'Our client was REI. I designed an identity flow around the EU eIDAS framework. Qualified electronic signatures had a specific public meaning that shaped our choice.', alreadyResearched: ['organization:rei'] },
-  { label: 'public term gap', text: 'Our county flood team used the USGS 3D Elevation Program, or 3DEP, to decide which places to survey first. The program coverage shaped the tradeoff we made.' },
-  { label: 'private discussion', text: 'I changed an internal project budget after a private conversation with a coworker.' },
+// Synthetic public names only. The producer chooses the name and clue; this checks the lookup's identity handling.
+const scenarios: { label: string; kind: ResearchKind; name: string; clue: string | null }[] = [
+  { label: 'client business overview', kind: 'organization', name: 'REI', clue: 'outdoor retailer' },
+  { label: 'public technical term', kind: 'term', name: 'eIDAS', clue: 'EU electronic signatures' },
+  { label: 'public program', kind: 'product', name: '3DEP', clue: 'USGS elevation program' },
+  { label: 'ambiguous name without clue', kind: 'organization', name: 'Summit', clue: null },
 ];
 
 for (const scenario of scenarios) {
-  const signal = AbortSignal.timeout(25_000);
-  const transcript = [{ id: 'p1', speaker: 'trainee' as const, text: scenario.text, startMs: 0, endMs: 4000 }];
   const started = performance.now();
   try {
-    const target = await prepareInterviewResearch({ transcript, alreadyResearched: scenario.alreadyResearched, apiKey, signal });
-    const preparationMs = Math.round(performance.now() - started);
-    if (!target) {
-      console.log(JSON.stringify({ scenario: scenario.label, preparationMs, target: null }));
-      continue;
-    }
-    const result = await lookupInterviewBackground({ target, apiKey, signal });
-    console.log(JSON.stringify({ scenario: scenario.label, preparationMs, totalMs: Math.round(performance.now() - started),
-      target: { kind: target.kind, name: target.name }, queries: result?.queries ?? [], facts: result?.facts ?? [] }));
+    const result = await lookupInterviewBackground({ target: { kind: scenario.kind, name: scenario.name }, clue: scenario.clue, apiKey, signal: AbortSignal.timeout(25_000) });
+    console.log(JSON.stringify({ scenario: scenario.label, totalMs: Math.round(performance.now() - started), ...result }));
   } catch (error) {
     console.log(JSON.stringify({ scenario: scenario.label, elapsedMs: Math.round(performance.now() - started), error: error instanceof Error ? error.name : 'UnknownError' }));
   }

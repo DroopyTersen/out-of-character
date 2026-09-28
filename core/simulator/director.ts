@@ -1,5 +1,4 @@
 import type { LiveHint } from './types';
-import type { InterviewBackground } from '../interview';
 
 export type DirectorAudience = 'trainee' | 'actor';
 export const ACTOR_CONDITIONS = ['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const;
@@ -19,9 +18,7 @@ const valid = (signal: DirectorSignal) => 'selected' in signal || (Number.isFini
 const thresholds: Partial<Record<DirectorCondition, number>> = { mistake: .85, stalled: .8, overprobing: .5 };
 const eligible = (signal: DirectorSignal) => 'selected' in signal ? signal.selected : valid(signal) && signal.probability >= (thresholds[signal.condition] ?? .6);
 const probability = (signal: DirectorSignal) => 'probability' in signal ? signal.probability : 0;
-const interviewPriority: Partial<Record<DirectorCondition, number>> = { 'boundary-pressure': 0, leading: 1, 'source-confusion': 1, 'invented-facts': 1, 'question-stacking': 2 };
-const prioritized = (audience: DirectorAudience, signals: DirectorSignal[], interview = false) => audience === 'actor'
-  ? [...signals].sort((a, b) => (interview ? (interviewPriority[a.condition] ?? 3) - (interviewPriority[b.condition] ?? 3) : 0) || probability(b) - probability(a)) : signals;
+const prioritized = (audience: DirectorAudience, signals: DirectorSignal[]) => audience === 'actor' ? [...signals].sort((a, b) => probability(b) - probability(a)) : signals;
 export const selectDirectorSignal = (signals: DirectorSignal[], audience: DirectorAudience) => prioritized(audience, signals).find(eligible);
 export type GateSkip = 'busy' | 'budget' | 'note_cap' | 'cooldown' | 'no_trigger' | 'waiting_for_progress';
 export type GateReview = { decision: 'started'; issueId: string; work: Promise<void> } | { decision: GateSkip; issueId?: never; work?: never };
@@ -32,10 +29,7 @@ export class DirectorGate {
   private counts = { calls: { trainee: 0, actor: 0 }, rechecks: 0, notes: 0 };
   private episode = 0;
 
-  constructor(private interview = false) {}
-
   get usage() { return { callsByAudience: { ...this.counts.calls }, rechecks: this.counts.rechecks, notes: this.counts.notes }; }
-  get actorBusy() { return this.lanes.actor.busy; }
   hasCapacity(audience: DirectorAudience) {
     return this.counts.calls[audience] < DIRECTOR_LIMITS.calls[audience] && (audience === 'trainee' || this.counts.notes < DIRECTOR_LIMITS.notes);
   }
@@ -43,7 +37,7 @@ export class DirectorGate {
   observe(audience: DirectorAudience, signals: DirectorSignal[]) {
     const state = this.lanes[audience];
     state.current = [];
-    for (const signal of prioritized(audience, signals, this.interview)) {
+    for (const signal of prioritized(audience, signals)) {
       if (!valid(signal)) continue;
       state.current.push(signal.condition);
       let issue = state.issues.get(signal.condition);
@@ -124,27 +118,10 @@ export type DirectorRecord = RecordBase & {
 };
 export type ObservationRecord = {
   source: 'observation'; id: string; audience: DirectorAudience; revision: number; snapshotAt: number; completedAt?: number;
-  model: string; signals: DirectorSignal[]; researchProbability?: number; inputCount: number; lastInputId: string | null;
+  model: string; signals: DirectorSignal[]; inputCount: number; lastInputId: string | null;
   outcome: GateReview['decision'] | 'pending' | 'aborted' | 'stale' | 'expired' | 'evaluation_error' | 'evaluation_timeout'; issueId?: string;
 };
-export type ResearchRecord = {
-  source: 'research'; id: string; observationId: string; revision: number; snapshotAt: number; startedAt: number; completedAt?: number;
-  model: string; probability: number; target?: InterviewBackground['target'] & { passageId: string };
-  facts?: InterviewBackground['facts']; retrievedAt?: number; queries?: string[]; deliveredAt?: number;
-  outcome: 'pending' | 'sent' | 'none' | 'duplicate' | 'blocked' | 'timeout' | 'error' | 'aborted';
-  delivery?: DirectorRecord['delivery'];
-};
-export type InterventionRecord = ObservationRecord | DetectorRecord | DirectorRecord | ResearchRecord;
-export type DeliveredInterviewBackground = InterviewBackground & { afterPassageId: string | null; status: 'accepted' | 'unknown' };
-
-/** Only notes actually sent can explain Sam's public claims; rejected drafts cannot. */
-export function deliveredInterviewBackground(records: InterventionRecord[]): DeliveredInterviewBackground[] {
-  return records.flatMap(item => {
-    if (item.source !== 'research' || item.outcome !== 'sent' || !item.target || !item.facts?.length || item.retrievedAt == null || !item.delivery || item.delivery.status === 'rejected') return [];
-    return [{ id: item.id, target: { kind: item.target.kind, name: item.target.name }, facts: item.facts, retrievedAt: item.retrievedAt,
-      afterPassageId: item.delivery.afterPassageId, status: item.delivery.status }];
-  }).slice(-2);
-}
+export type InterventionRecord = ObservationRecord | DetectorRecord | DirectorRecord;
 export type DirectorSummary = { model: string; effort: 'none'; version: string; callsByAudience: Record<DirectorAudience, number>; rechecks: number; notes: number };
 
 export const publicHint = (issue: DirectorIssue, text: string, evidenceIds: string[], now: number): LiveHint => ({

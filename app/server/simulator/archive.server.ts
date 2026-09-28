@@ -4,6 +4,7 @@ import { actorBrief, getClient, getScenario, openingInstruction } from '../../..
 import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
+import type { ProducerSummary } from '../../../core/interview-producer';
 import type { ReportArchive } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
@@ -20,7 +21,8 @@ export type ArchiveProvenance = {
   openingDigest: string;
   workerId: string | null;
   workerTag: string | null;
-  contextualDirector: DirectorSummary | null;
+  /** The simulator's director, or the interview's producer. */
+  contextualDirector: DirectorSummary | ProducerSummary | null;
 };
 
 export type ArchiveWrite = {
@@ -28,7 +30,7 @@ export type ArchiveWrite = {
   interventions: InterventionRecord[];
 };
 
-export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, contextualDirector: DirectorSummary | null): Promise<ArchiveProvenance> {
+export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, contextualDirector: DirectorSummary | ProducerSummary | null): Promise<ArchiveProvenance> {
   const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
   const digest = async (text: string) => {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));

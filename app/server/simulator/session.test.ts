@@ -1,7 +1,8 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
-import type { DirectorInput } from '../../../ai/simulator/director.server';
+import { PRODUCER_VERSION } from '../../../core/interview-producer';
+import type { producerServices } from './interview-producer';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
@@ -12,12 +13,15 @@ const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId:
 
 test.each(['accepted', 'rejected'] as const)('interview research %s is archived privately and cannot grade or summarize the participant', async receipt => {
   let participantInput = '', summaryInput = '';
+  const lookups: Record<string, unknown>[] = [];
   const fact = { text: 'PUBLIC BACKGROUND FACT', url: 'https://www.usgs.gov/3d-elevation-program', title: 'USGS 3DEP' };
   const f = await fixture({ overrides: {
     evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: .9, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     evaluateInterview: async input => { participantInput = JSON.stringify(input); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    prepareInterviewResearch: async input => ({ kind: 'term', name: '3DEP', passageId: input.transcript[0]!.id }),
-    lookupInterviewBackground: async () => ({ facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }),
+    // The producer names what to research on its scheduled check-in after Sam's turn.
+    generateProducer: async input => ({ cue: null, evidenceIds: [], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 },
+      research: input.triggers.some(item => item.kind === 'check-in') ? { kind: 'term', name: '3DEP', clue: null, passageIds: [input.transcript.find(entry => entry.speaker === 'trainee')!.id] } : null }),
+    lookupInterviewBackground: async input => { lookups.push(input); return { status: 'found', facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }; },
     summarizeInterview: (input, done) => { summaryInput = JSON.stringify(input); return new ReadableStream({ start(controller) {
       const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
     } }); },
@@ -25,9 +29,13 @@ test.each(['accepted', 'rejected'] as const)('interview research %s is archived 
   setSystemTime(1_800_000_000_000);
   await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
-  setSystemTime(1_800_000_002_000);
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did that involve?', start_ms: 1000, end_ms: 2000 });
+  setSystemTime(1_800_000_030_000); await f.session.fetch(request('poll'));
+  setSystemTime(1_800_000_046_000); await f.session.fetch(request('poll'));
   await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('research-')));
+  expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, apiKey: 'fixture', signal: expect.any(AbortSignal) }]);
   const note = f.socket.sent.find(event => String(event.event_id).startsWith('research-'))!;
+  expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
   const before = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(before.interview.background).toEqual([]);
   f.socket.emit(receipt === 'accepted' ? { type: 'session.thinking.appended', client_event_id: note.event_id } : { type: 'error', error: { client_event_id: note.event_id } });
@@ -41,7 +49,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s is archived 
   expect(participantInput).not.toContain('PUBLIC BACKGROUND FACT');
   expect(summaryInput).not.toContain('PUBLIC BACKGROUND FACT');
   const research = JSON.parse(f.interviewRow()!.interventions_json).find((item: any) => item.source === 'research');
-  expect(research).toMatchObject({ outcome: 'sent', delivery: { status: receipt }, facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'] });
+  expect(research).toMatchObject({ outcome: receipt === 'accepted' ? 'sent' : 'error', delivery: { status: receipt }, facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'] });
   expect(f.row()).toBeNull();
 }, 10_000);
 
@@ -178,17 +186,21 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(f.socket.readyState).toBe(3);
 });
 
-test('interview End preserves covered topics and returns pending before one summary completes', async () => {
+test('interview End re-grades coverage with its evidence in view and returns pending before one summary completes', async () => {
   let releaseSummary: ((text: string) => void) | undefined;
   const summarized: { speaker: string; text: string }[][] = [];
-  const interviewJudged: { achievedIds: string[]; transcript: { speaker: string; text: string }[] }[] = [];
+  const interviewJudged: { keepIds: string[]; transcript: { speaker: string; text: string }[] }[] = [];
   const f = await fixture({ overrides: {
     evaluateInterview: async input => {
-      interviewJudged.push({ achievedIds: [...(input.achievedIds ?? [])], transcript: input.transcript });
+      interviewJudged.push({ keepIds: [...(input.keepIds ?? [])], transcript: input.transcript });
       const passage = input.transcript[0]!;
+      const evidence = { entryId: passage.id, speaker: passage.speaker, text: passage.text };
+      // The final re-grade sees the whole interview and may withdraw a live checkmark.
+      const reading = interviewJudged.length === 1
+        ? { level: 'explored' as const, levels: { 'not-yet': .01, touched: .03, explored: .95, 'set-aside': .01 }, achieved: true, probability: .95 }
+        : { level: 'touched' as const, levels: { 'not-yet': .1, touched: .7, explored: .15, 'set-aside': .05 }, achieved: false, probability: .15 };
       return {
-        revision: input.revision, readings: emptyInterviewReadings(),
-        objectives: input.achievedIds?.includes('project-delivery') ? [] : [{ id: 'project-delivery', achieved: true, probability: .99, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }],
+        revision: input.revision, readings: emptyInterviewReadings(), objectives: [{ id: 'project-delivery', ...reading, evidence }],
         model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {},
       };
     },
@@ -207,8 +219,8 @@ test('interview End preserves covered topics and returns pending before one summ
     await Promise.all(f.pending);
     const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     const covered = live.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
-    expect(covered).toMatchObject({ achieved: true, evidence: { speaker: 'trainee', text: 'We built a permit intake portal.' } });
-    expect(interviewJudged[0]!.achievedIds).toEqual([]);
+    expect(covered).toMatchObject({ level: 'explored', achieved: true, evidence: { speaker: 'trainee', text: 'We built a permit intake portal.' } });
+    expect(interviewJudged[0]!.keepIds).toEqual([]);
     ending = f.session.fetch(request('end'));
     expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
     f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen resolved our access issue.', start_ms: 2000, end_ms: 2900 });
@@ -224,9 +236,10 @@ test('interview End preserves covered topics and returns pending before one summ
     expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.judged).toHaveLength(0);
     expect(interviewJudged).toHaveLength(2);
-    expect(interviewJudged[1]!.achievedIds).toEqual(['project-delivery']);
+    expect(interviewJudged[1]!.keepIds).toEqual([covered.evidence.entryId]);
     expect(interviewJudged[1]!.transcript.map(entry => entry.text)).toEqual(['We built a permit intake portal.', 'Jen resolved our access issue.']);
-    expect(ended.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(covered);
+    const final = ended.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
+    expect(final).toMatchObject({ level: 'touched', achieved: false, evidence: covered.evidence });
     await Promise.all(f.pending);
     expect(summarized).toHaveLength(0);
     expect((await f.session.fetch(request('report', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
@@ -236,7 +249,7 @@ test('interview End preserves covered topics and returns pending before one summ
     expect(summarized).toHaveLength(1);
     expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
-    expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(covered);
+    expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(final);
     expect(f.row()).toBeNull();
     expect((await f.session.fetch(request('poll', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
     expect((await f.session.fetch(request('poll', ''))).status).toBe(401);
@@ -275,15 +288,15 @@ test('a failed interview summary remains unavailable while the participant trans
   expect(f.row()).toBeNull();
 });
 
-test.each(['intervene', 'none'] as const)('interview producer %s stays private and uses only the actor lane', async action => {
-  const inputs: DirectorInput[] = [];
+test.each(['cue', 'none'] as const)('interview producer %s stays private and is summoned once by a new protection concern', async action => {
+  const inputs: Parameters<typeof producerServices.generateProducer>[0][] = [];
   let summarized = '';
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateDirector: async input => {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }, { condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateProducer: async input => {
       inputs.push(input);
-      const result = action === 'none' ? { action, text: null, evidenceIds: [] as [] } : { action, text: 'PRIVATE: Return to the missing access owner.', evidenceIds: [input.transcript[0]!.id] };
-      return { ...result, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      const cue = action === 'none' ? null : 'PRIVATE: Ask an open question about the access owner.';
+      return { cue, evidenceIds: cue ? [input.transcript[0]!.id] : [], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
     summarizeInterview: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
       const report = { text: 'The participant described an access delay.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
@@ -297,8 +310,8 @@ test.each(['intervene', 'none'] as const)('interview producer %s stays private a
   setSystemTime(1_800_000_002_000);
   await waitFor(() => inputs.length === 1);
   await Promise.all(f.pending);
-  expect(inputs[0]!.audience).toBe('actor');
-  expect(inputs[0]!.objectives).toEqual([]);
+  expect(inputs[0]!.triggers).toEqual([{ kind: 'concern', condition: 'leading', probability: .99 }]);
+  expect(inputs[0]!.coverage).toEqual(expect.any(Array));
   const cues = f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
   expect(cues).toHaveLength(action === 'none' ? 0 : 1);
   if (cues[0]) f.socket.emit({ type: 'session.thinking.appended', client_event_id: cues[0].event_id });
@@ -314,12 +327,11 @@ test.each(['intervene', 'none'] as const)('interview producer %s stays private a
   await Promise.all(f.pending);
   const row = f.interviewRow()!;
   const records = JSON.parse(row.interventions_json);
-  expect(records).toHaveLength(2);
-  expect(records.every((record: { audience: string }) => record.audience === 'actor')).toBe(true);
-  expect(records.find((record: { source: string }) => record.source === 'director').outcome).toBe(action === 'none' ? 'none' : 'sent');
-  if (action === 'intervene') expect(records.find((record: { source: string }) => record.source === 'director').delivery.status).toBe('accepted');
+  expect(records.map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
+  expect(records[0]).toMatchObject({ outcome: 'observed', concerns: ['leading'] });
+  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted' }, check: { probability: .99 } } : {}) });
   expect(JSON.parse(row.cues_json)).toEqual([]);
-  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ callsByAudience: { actor: 1, trainee: 0 } });
+  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'none', consultations: 1, cues: action === 'none' ? 0 : 1 });
   expect(summarized).not.toContain('PRIVATE:');
   expect(summarized).not.toContain('interventions');
   expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
@@ -330,9 +342,9 @@ test('End freezes an unfinished interview direction without delaying its summary
   let release!: () => void;
   const f = await fixture({ overrides: {
     evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateDirector: async input => {
+    generateProducer: async input => {
       await new Promise<void>(resolve => { release = resolve; });
-      return { action: 'intervene', text: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      return { cue: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
   } });
   setSystemTime(1_800_000_000_000);
@@ -344,7 +356,7 @@ test('End freezes an unfinished interview direction without delaying its summary
   await (await f.session.fetch(request('report'))).text();
   await waitFor(() => f.interviewRow()?.summary_status === 'ready');
   const archived = f.interviewRow()!;
-  expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'director').outcome).toBe('aborted');
+  expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'producer').outcome).toBe('aborted');
   release(); await Promise.all(f.pending);
   expect(f.interviewRow()).toEqual(archived);
   expect(f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'))).toHaveLength(0);

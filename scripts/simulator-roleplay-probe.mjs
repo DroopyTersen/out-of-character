@@ -6,9 +6,10 @@ import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server
 import { evaluateInterview, evaluateInterviewer } from '../ai/interview/evaluate.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
-import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
-import { appendTranscript } from '../core/simulator/state.ts';
+import { coverageEvidenceIds, INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
+import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
+import { InterviewProducer, producerServices } from '../app/server/simulator/interview-producer.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
 // real GPT-Live supplies the client and Jev gates contextual private directions from Sol.
@@ -323,23 +324,52 @@ const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0
 const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
 report.controlledResearchTrigger = exerciseResearch;
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
-let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
+let pacing, producerTimer, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
 const observations = [];
 const used = new Set();
 const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
-const contextual = new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
-report.interventions = contextual?.records ?? [];
-const close = () => { if (closing) return; closing = true; contextual?.close(); clearInterval(pacing); send({ type: 'session.close' }); };
+let coverage = [];
+const passageUpdatedAt = new Map();
+const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
+const startedAt = Date.now();
+const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
+const producer = isInterview ? new InterviewProducer({ clientId, startedAt, coverage: () => coverage, openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices, settled, send }) : null;
+const directions = producer ?? contextual;
+report.interventions = directions.records;
+const close = () => { if (closing) return; closing = true; directions.close(); clearInterval(producerTimer); clearInterval(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
+  if (producer) {
+    if (!producer.canObserve) return;
+    const capturedAt = Date.now();
+    const input = { scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) };
+    try {
+      const [judged, graded] = await Promise.allSettled([
+        evaluateInterviewer({ ...input, deliveredBackground: producer.background() }),
+        evaluateInterview({ ...input, keepIds: coverageEvidenceIds(coverage) }),
+      ]);
+      if (closing) return;
+      if (graded.status === 'fulfilled') coverage = mergeCoverage(coverage, graded.value.objectives);
+      else report.errors.push(`Participant grading failed (${graded.reason.name}).`);
+      if (judged.status === 'rejected') throw judged.reason;
+      const judgment = judged.value;
+      report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability,
+        ...(exerciseResearch && afterTurn === 2 ? { suppliedResearchProbability: 1 } : {}) });
+      producer.observe({ transcript, capturedAt, signals: judgment.signals, model: judgment.model,
+        researchProbability: exerciseResearch && afterTurn === 2 ? 1 : judgment.researchProbability });
+      producer.tick();
+    } catch (error) {
+      producer.observe({ transcript, capturedAt, signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
+      report.directions.push({ afterTurn, unavailable: true, error: error.name });
+    }
+    return;
+  }
   if (!contextual.canObserveActor) return;
   const observation = contextual.beginObservation({ audience: 'actor', transcript, revision: transcript.length, capturedAt: Date.now() });
   try {
-    const evaluate = isInterview ? evaluateInterviewer : evaluateClient;
-    const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), ...(isInterview ? { deliveredBackground: contextual.background() } : {}) });
+    const judgment = await evaluateClient({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500) });
     report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability });
-    if (exerciseResearch && afterTurn === 2 && observation) observation.record.testOverride = { researchProbability: { measured: judgment.researchProbability, supplied: 1 } };
-    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model, researchProbability: exerciseResearch && afterTurn === 2 ? 1 : judgment.researchProbability });
+    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model });
   } catch (error) {
     contextual.observe(observation, { signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
@@ -362,7 +392,7 @@ async function respond() {
       // Measure Sam's reply after the last possible note without proposing an
       // unobservable new note at the moment the rehearsal closes.
       try {
-        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), ...(isInterview ? { deliveredBackground: contextual.background() } : {}) });
+        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), deliveredBackground: producer.background() });
         report.finalObservation = { signals: result.signals, model: result.model, durationMs: result.durationMs };
       } catch (error) { report.finalObservation = { unavailable: true, error: error.name }; }
     }
@@ -384,6 +414,7 @@ const completed = new Promise(resolve => {
       // Same opening request as the production session owner.
       openingSentAt = Date.now();
       send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: opening });
+      if (producer) producerTimer = setInterval(() => producer.tick(), 1000);
       pacing = setInterval(() => {
         let audio = Buffer.alloc(960);
         if (clip) {
@@ -399,7 +430,10 @@ const completed = new Promise(resolve => {
       }, 20);
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       if (value.type === 'session.output_transcript.delta') lastOutput = Date.now();
-      report.transcript = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
+      const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
+      const changed = next.find(entry => !report.transcript.includes(entry));
+      report.transcript = next;
+      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer?.transcriptChanged(changed); }
     } else if (value.type === 'session.output_audio.delta') {
       const audio = Buffer.from(value.delta, 'base64');
       chunks.push(audio);
@@ -415,7 +449,7 @@ const completed = new Promise(resolve => {
     } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
       report.openingAcknowledged = true;
     } else if (value.type === 'session.thinking.appended') {
-      contextual?.providerEvent(value.client_event_id, true);
+      directions.providerEvent(value.client_event_id, true);
       const guard = report.delegations.find(item => item.eventId === value.client_event_id);
       if (guard) guard.acknowledged = true;
     } else if (value.type === 'session.delegation.created') {
@@ -427,13 +461,14 @@ const completed = new Promise(resolve => {
         // so a recovered request is not mistaken for perfect prompt adherence.
         const eventId = `role-guard-${report.delegations.length}`;
         report.delegations.push({ eventId, afterTurn: turn, acknowledged: false });
-        send({ type: 'session.thinking.append', event_id: eventId, delegation_id: value.delegation.id, content: NO_EXTERNAL_TASK });
+        const replied = send({ type: 'session.thinking.append', event_id: eventId, delegation_id: value.delegation.id, content: NO_EXTERNAL_TASK });
+        producer?.delegation(value.delegation.id, value.delegation.target, replied);
       }
     } else if (value.type === 'session.closed') {
       report.finalized = true; report.usageSeconds = value.usage?.seconds ?? null; resolve();
     } else if (value.type === 'error') {
       const eventId = value.error?.client_event_id;
-      if (typeof eventId === 'string' && /^(cue|research)-/.test(eventId)) contextual?.providerEvent(eventId, false);
+      if (typeof eventId === 'string' && /^(cue|research|rundown)-/.test(eventId)) directions.providerEvent(eventId, false);
       else report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
     }
   });
@@ -444,12 +479,13 @@ try {
   await completed;
   if (report.finalized && report.transcript.some(entry => entry.speaker === 'trainee')) {
     const evaluate = isInterview ? evaluateInterview : evaluateTrainee;
-    report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
+    report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000), ...(producer ? { keepIds: coverageEvidenceIds(coverage) } : {}) });
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
-  contextual?.close(); clearTimeout(deadline); clearInterval(pacing); ws.close();
+  directions.close(); clearTimeout(deadline); clearInterval(producerTimer); clearInterval(pacing); ws.close();
   await Promise.all(observations);
+  if (producer) { await producer.settle(); report.producer = producer.summary(); }
   if (report.delegations.some(item => !item.acknowledged)) report.errors.push('Actor role direction was not acknowledged.');
   await writeFile(`${output}/client-audio.pcm`, Buffer.concat(chunks));
   await chmod(`${output}/client-audio.pcm`, 0o600);

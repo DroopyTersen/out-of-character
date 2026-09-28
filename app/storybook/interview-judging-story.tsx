@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { interviewFixtures } from '../../ai/interview/fixtures';
 import recordings from '../../ai/interview/recordings.json';
-import { interviewReadings, interviewTopics, type InterviewReadingId } from '../../core/interview';
-import type { DirectorResult, DirectorSignal } from '../../core/simulator/director';
+import { COVERAGE_LEVEL_LABELS, interviewReadings, interviewTopics, type InterviewObjectiveReading, type InterviewReadingId } from '../../core/interview';
+import { PRODUCER_LIMITS, type ResearchRequest } from '../../core/interview-producer';
+import type { DirectorSignal } from '../../core/simulator/director';
 import { formatTime } from '../simulator/conversation';
 import '../simulator/simulator.css';
 
@@ -10,9 +11,9 @@ type Recording = {
   collectedAt: string; rubricVersion: string; source: string;
   rows: {
     fixtureId: string;
-    participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: { id: string; achieved: boolean; evidence: { entryId: string; speaker: string; text: string } | null }[] };
+    participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: InterviewObjectiveReading[] };
     interviewer: { model: string; durationMs: number; signals: DirectorSignal[]; researchProbability?: number };
-    director?: { decision: string; issueId?: string | null; result?: (DirectorResult & { model?: string; durationMs?: number }) | null };
+    producer?: { model: string; durationMs: number; cue: string | null; evidenceIds: string[]; research: ResearchRequest | null; checkProbability: number | null };
   }[];
 };
 const recorded = recordings as unknown as Recording;
@@ -27,7 +28,6 @@ export function InterviewJudgingStory() {
   const [id, setId] = useState(interviewFixtures[0]!.id);
   const fixture = interviewFixtures.find(item => item.id === id)!;
   const row = recorded.rows.find(item => item.fixtureId === id)!;
-  const heard = row.participant.objectives.filter(item => item.achieved && item.evidence?.speaker === 'trainee');
   return <>
     <div className="workshop-controls">
       <label>Synthetic interview<select value={id} onChange={event => setId(event.target.value)}>
@@ -54,15 +54,16 @@ export function InterviewJudgingStory() {
             <h3>Private interviewer direction</h3>
             <>
               <p>Jev observations: {row.interviewer.signals.map(signal => 'probability' in signal ? `${signal.condition.replaceAll('-', ' ')} ${(signal.probability * 100).toFixed(0)}%` : null).filter(Boolean).join(' · ')}</p>
-              {row.interviewer.researchProbability != null && <p>Public lookup useful: {(row.interviewer.researchProbability * 100).toFixed(0)}%. This separate signal can request preparation; it is not a Sol concern.</p>}
-              <p>Producer gate: <strong>{row.director?.decision ?? 'Not replayed'}</strong>{row.director?.issueId ? ` · ${row.director.issueId}` : ''}</p>
-              {row.director?.result?.action === 'intervene' ? <>
-                <blockquote className="sim-evidence"><span>Recorded Sol direction{row.director.result.model ? ` · ${row.director.result.model}` : ''}</span><p>“{row.director.result.text}”</p></blockquote>
-                {row.director.result.evidenceIds.map(entryId => {
+              {row.interviewer.researchProbability != null && <p>Public lookup useful: {(row.interviewer.researchProbability * 100).toFixed(0)}%. Sol considers this at its next check-in.</p>}
+              {row.producer?.cue ? <>
+                <blockquote className="sim-evidence"><span>Recorded Sol direction · {row.producer.model} · {row.producer.durationMs} ms</span><p>“{row.producer.cue}”</p></blockquote>
+                <p>Delivery check: {row.producer.checkProbability == null ? 'Unavailable' : `${Math.round(row.producer.checkProbability * 100)}% · ${row.producer.checkProbability >= PRODUCER_LIMITS.cuePass ? 'Would send' : 'Withheld'}`}. Synthetic replay; no voice session.</p>
+                {row.producer.evidenceIds.map(entryId => {
                   const entry = fixture.transcript.find(item => item.id === entryId);
                   return entry ? <blockquote className="sim-evidence" key={entryId}><span>{entry.speaker === 'trainee' ? 'Participant' : 'Sam'} · {entryId}</span><p>“{entry.text}”</p></blockquote> : null;
                 })}
-              </> : <p>{row.director?.result?.action === 'none' ? 'Sol chose no direction for this review.' : !row.director ? 'This fixture has not had a Sol replay.' : row.director.decision === 'started' ? 'Sol did not return a usable direction.' : 'The gate made no Sol call for this fixture.'}</p>}
+              </> : <p>{row.producer ? 'Sol chose no direction for this check-in.' : 'This fixture has not had a Sol replay.'}</p>}
+              {row.producer?.research && <p>Requested lookup: {row.producer.research.name}{row.producer.research.clue && ` · ${row.producer.research.clue}`}. No web lookup runs in this replay.</p>}
             </>
           </section>
         </div>
@@ -77,17 +78,21 @@ export function InterviewJudgingStory() {
             </section>;
           })}</div>
           <section className="sim-director-readout">
-            <h3>Topics heard from the participant</h3>
-            {heard.length ? interviewTopics.map(topic => {
-              const items = topic.objectives.filter(objective => heard.some(item => item.id === objective.id));
-              return items.length ? <div key={topic.id}>
+            <h3>Topic coverage from the participant</h3>
+            <p className="sim-muted">Marks require participant evidence and sufficient confidence. The raw probabilities below may favor a level that has not met those checks.</p>
+            {interviewTopics.map(topic => {
+              return <div key={topic.id}>
                 <h4>{topic.label}</h4>
-                {items.map(objective => <div key={objective.id}>
-                  <p>✓ {objective.label}</p>
-                  <ParticipantEvidence evidence={heard.find(item => item.id === objective.id)!.evidence} />
-                </div>)}
-              </div> : null;
-            }) : <p>No topic was credited from participant evidence in this recording.</p>}
+                {topic.objectives.map(objective => {
+                  const reading = row.participant.objectives.find(item => item.id === objective.id)!;
+                  return <div key={objective.id}>
+                    <p>{objective.label} · {COVERAGE_LEVEL_LABELS[reading.level]}</p>
+                    {reading.levels && <p className="sim-muted">{Object.entries(reading.levels).map(([level, probability]) => `${COVERAGE_LEVEL_LABELS[level as keyof typeof COVERAGE_LEVEL_LABELS]} ${Math.round(probability * 100)}%`).join(' · ')}</p>}
+                    {reading.evidence && <ParticipantEvidence evidence={reading.evidence} />}
+                  </div>;
+                })}
+              </div>;
+            })}
           </section>
         </div>
       </div>

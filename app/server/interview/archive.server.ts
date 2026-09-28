@@ -1,14 +1,14 @@
 import type { InterviewSession } from '../../../core/interview';
 import type { SessionSnapshot } from '../../../core/simulator/types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
-import type { InterventionRecord } from '../../../core/simulator/director';
+import type { ProducerLogRecord } from '../../../core/interview-producer';
 
 export type InterviewArchiveWrite = {
   state: 'partial' | 'final';
   capturedAt: number;
   snapshot: SessionSnapshot & { interview: InterviewSession };
   provenance: ArchiveProvenance;
-  interventions: InterventionRecord[];
+  interventions: ProducerLogRecord[];
 };
 
 /** Interview rows stay outside routine simulator transcript exports. */

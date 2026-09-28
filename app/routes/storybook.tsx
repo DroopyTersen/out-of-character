@@ -14,6 +14,7 @@ import { SimulatorDebriefStory, ReportCompilingStory, ReportWritingStory, Report
 import { scenarioBriefings } from '../../core/simulator/briefings';
 import { InterviewBackgroundDeliveredStory, InterviewBackgroundSkippedStory, InterviewLiveStory, InterviewSetupStory, InterviewSummaryStory } from '../storybook/interview-stories';
 import { InterviewJudgingStory } from '../storybook/interview-judging-story';
+import { InterviewTimelineStory } from '../storybook/interview-timeline-story';
 
 export const loader = () => ({
   simulatorCatalog: publicCatalog(),
@@ -61,6 +62,7 @@ const stories = [
   { id: 'interview-background-skipped', label: 'The Debrief · lookup skipped', description: 'Synthetic conversation where no public background is delivered. No model or search call.', component: InterviewBackgroundSkippedStory },
   { id: 'interview-summary', label: 'The Debrief summary', description: 'Synthetic internal summary, pending and unavailable states, copy and transcript access.', component: InterviewSummaryStory },
   { id: 'interview-judging', label: 'The Debrief analysis', description: 'Recorded Jev readings, participant evidence, heard topics, and private interviewer cue from synthetic fixtures.', component: InterviewJudgingStory },
+  { id: 'interview-timeline', label: 'The Debrief producer timeline', description: 'Synthetic or locally loaded producer log: dialogue, cues, research cards, rundowns and latency in one order. No model or search call.', component: InterviewTimelineStory },
   { id: 'draw', label: 'Complete draw', description: 'Idle, landing, scene timing, failure, and connection states.', component: DrawStory },
   { id: 'reel', label: 'Character reel', description: 'Replay the actual reel with a chosen landing character.', component: ReelStory },
   { id: 'gallery', label: 'Character gallery', description: 'All 42 personas, backstories, judge-facing descriptions, and individual artwork.', component: GalleryStory },

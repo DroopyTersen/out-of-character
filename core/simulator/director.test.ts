@@ -127,21 +127,3 @@ test('recheck and submission caps prevent execution beyond their budgets', async
   expect(gate.hasCapacity('trainee')).toBe(true);
   expect(gate.usage).toEqual({ callsByAudience: { trainee: 0, actor: 0 }, rechecks: 60, notes: 6 });
 });
-
-test('interview boundaries and accuracy outrank stronger story signals without changing simulator ordering', async () => {
-  const signals = [
-    { condition: 'overprobing' as const, probability: .99 },
-    { condition: 'source-confusion' as const, probability: .85 },
-    { condition: 'boundary-pressure' as const, probability: .65 },
-  ];
-  const reviewed: string[] = [];
-  for (const interview of [true, false]) {
-    const gate = new DirectorGate(interview);
-    gate.observe('actor', signals);
-    await gate.review('actor', 1000, 1, async issue => { reviewed.push(issue.signal.condition); }).work;
-  }
-  expect(reviewed).toEqual(['boundary-pressure', 'overprobing']);
-  const gate = new DirectorGate(true);
-  gate.observe('actor', signals.map(signal => signal.condition === 'boundary-pressure' ? { ...signal, probability: .1 } : signal));
-  await gate.review('actor', 1000, 1, async issue => { expect(issue.signal.condition).toBe('source-confusion'); }).work;
-});

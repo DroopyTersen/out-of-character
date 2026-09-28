@@ -238,3 +238,57 @@ Limitations: synthetic provider runs are short rehearsals, not proof of every re
 - The full gate already passed on the same application code (271 tests / 6,720 assertions); rebuilt for deployment and repeated the 26-asset private-prompt boundary check. Eight live route/health/catalog requests returned 200, and 23 served bundle assets matched the local build. All 12 navigation and nine interview screen/viewport checks passed at 1440, 390, and 320 px.
 - A real Gleam browser/WebRTC interview passed: audible spontaneous opening, participant transcription, confirmed End, successful streamed summary, ended microphone, and closed peer. Its exact synthetic attempt was verified in preview D1 with a final three-passage transcript, ready summary matching the browser, one private observation, the deployed Worker ID/tag, and rubric v4. Missing and incorrect capabilities returned 401 and 403 with valid requests.
 - Production deployment history, served asset URLs, and health remained unchanged. No production migration/deployment, branch merge, or push occurred. Evidence: ignored `output/interview-research-preview-deploy/`. Mobile checks use browser viewports; this deployment rehearsal does not add a physical-phone microphone test or another public-research uptake measurement.
+
+## Participant feedback — producer and coverage rework, September 28, 2026
+
+- A real interview's participant feedback (14 items: missed client context, broad or repeated questions, an unclear wrap-up, lost momentum, weak steering between topics, and no research on the named client) led to plan v3. It incorporates a colleague review. The plan and diagnosis stay in ignored `output/`; this entry records only the implemented design.
+- **Sol is the producer.** `InterviewProducer` replaces the interview path of the contextual director. The old interview director is removed, and `ContextualDirector` now rejects interview scenarios. Sol runs at reasoning effort `none`. It sees the purpose, the clock, the coverage bands with P(explored) and each band's passage, its own past cues and their outcomes, the research log, and the full dialogue. It returns a short private cue, research requests, or nothing.
+  - One consultation runs at a time. Triggers that arrive meanwhile merge into one queued follow-up.
+  - Check-ins happen at most every 45 s after a Sam turn. Non-urgent signals (missed thread, question stacking, overprobing, research) are listed as reasons on the next check-in and never trigger one themselves.
+  - Protection concerns start an episode at ≥ 0.6, end below 0.5, and skip cue spacing.
+  - A Jev delivery check scores every cue against the latest settled transcript; a cue below 0.65 is withheld. Cue and consultation budgets and spacing are enforced in code.
+- **Research through Sol.**
+  - A request names what the participant actually said and cites the participant passages it came from. An optional identity clue must also come from the participant's words.
+  - Validation rejects repeats, requests over budget (4), and new requests while 2 lookups are in flight. A timeout or error frees the target so it can be retried.
+  - Results can arrive out of order. A card passes a Jev card check (≥ 0.5) before Sam receives it, and results older than 90 s expire.
+  - When a lookup is unresolved or a card is withheld, Sol is consulted again and can cue a clarifying question.
+  - Only accepted cards appear as public background.
+- **Coverage depth.**
+  - Each topic is judged explicitly as not yet, touched, explored or set aside, and every level above not yet needs a participant passage. Explored and set aside each need ≥ 0.85 for that level.
+  - Live grades re-judge every topic. A prior band holds while the current reading still gives it at least 0.5, so a band neither flickers nor stays after its support is gone.
+  - Supporting passages, with the Sam question before each, are carried into every 16k-character grading window.
+  - The end-of-interview re-grade replaces live coverage outright, so an unsupported checkmark can be withdrawn. Rubric version: `interview-rubric-v5`.
+- **Rundown.** Sam gets a private rundown when a band changes (at most every 15 s) and once near the 25-minute mark. It lists topic levels and elapsed/target time only, with no probabilities.
+- **UI.**
+  - Topics show their band: a half mark for touched, a check for explored, a dash for set aside. Beside each is the confidence in that band (P(explored), P(set aside), or for touched, the chance the topic came up at all).
+  - Readings show their score out of 4 beside the label.
+- **Debug timeline.**
+  - `core/interview-timeline.ts` orders dialogue, Sol consultations, research, rundowns, assessments and delegations, with per-step latency.
+  - Views: the Workshop story "The Debrief producer timeline" (synthetic, or a locally loaded archive row) and `bun scripts/interview-timeline.ts <row.json>`. Neither makes a network or model call.
+  - The archive stores the full producer log, and provenance includes p50/p90 latency.
+- Verification: `bun test` passed 274 tests / 6,802 assertions, and type checking is clean. The UI bands were checked in the Workshop at desktop and 375 px widths.
+- Not yet run, because each needs explicit approval:
+  - paid director replays (`ai/simulator/director-replay.ts`);
+  - the research smoke test;
+  - Jev fixture recordings;
+  - targeted live rehearsals;
+  - the full-length acceptance interview.
+
+  The Debugger's existing recordings predate the level-based coverage. Still open: grade latency against its 3 s timeout now that every topic is re-judged. No commit, push, deployment or database change.
+
+## Producer handoff fixes and verification — September 28, 2026
+
+- Fixed the ordinary `bun run dev` startup. The Cloudflare Vite plugin and the root Wrangler used different workerd versions against the same local state; the newer runtime had added an alarm-table column that the older runtime could not write. Updated the plugin to 1.62.0 and Wrangler to 4.143.0 so they use the same runtime. Backed up the local SQLite databases, preserved all four existing interview attempts unchanged, and applied only existing local D1 migrations. Dev startup works before and after those migrations. No local state was cleared and no hosted database was changed.
+- Closed delivery races in the producer: an expired generation or check cannot send a note, and a transcript change during a cue/card check withholds that result. Failed, expired, or rejected research deliveries may use a remaining attempt later. A failed or rejected time rundown can retry after the existing spacing. Provider-rejected research is excluded from public background and archived as an error.
+- Removed the extra 4k budget that could silently drop saved participant evidence from coverage grading. The window now contains recent dialogue plus every saved supporting passage and its preceding Sam question, within the existing session transcript limit. Clarified that a concise answer can satisfy a topic and that uncertainty about a separate issue does not erase supplied facts. The 0.85 threshold for explored/set-aside stays unchanged.
+- Clarified the touched percentage as confidence that the topic came up, rather than confidence in an exact depth. The Debugger shows all four raw probabilities and explains that evidence and confidence checks can yield a different displayed band. Refreshed all 31 synthetic recordings for rubric v5 and replaced the obsolete interview-director replay format with producer results. Public background now displays every accepted card within the existing research budget.
+- Updated the voice rehearsal to use the actual `InterviewProducer`, settled dialogue, coverage, and provider acknowledgments. Participant grading and interviewer assessment run independently, so a failed grade cannot suppress a valid producer observation. Restored the explicit early client-name follow-up after a rehearsal exposed a regression in Sam's brief.
+- The complete `bun run check` passed: **277 tests / 7,299 assertions**, type checking, production build, privacy checks over 26 client assets, and Worker deployment dry run. Deterministic tests cover deadline overruns, changed dialogue during delivery checks, failed/rejected delivery retries, evidence retention, and the archive contract. This gate does not deploy anything.
+- Paid verification is now complete for the bounded checks left open above:
+  - All 31 real Jev fixture requests succeeded; **28/31 fixtures and 120/123 authored semantic checks passed**. Three concrete-answer cases remain conservatively touched instead of explored (named hearsay, an accepted boundary, and a corrected leading question). Their explored probabilities were 0.78, 0.84, and 0.69. These misses remain visible in the saved results; thresholds were not lowered to make the fixtures pass.
+  - Three long-transcript requests retained all 14 saved evidence passages, returned all 14 topic judgments, and completed in **292–382 ms**, below the 3 s grading deadline. This verifies input size and evidence retention, not the quality of a full-length interview.
+  - Six real Jev delivery checks passed the authored expectations: allow a useful cue, withhold already-addressed and declined-topic cues, allow a relevant research card after a topic change, and withhold cards after an identity correction or a boundary.
+  - Three Sol replays exercised dry-thread direction, a respected boundary, and an early client lookup. Four Luna smoke cases returned cited public background or an unresolved result for an ambiguous organization.
+- Two real voice rehearsals verified coverage rundowns and naturally requested client research reaching the existing voice session with acknowledgments. The first completed without errors; the second confirmed Sam asks for the missing client name next and moves away from a declined client topic. That second run had one intermediate `AI_InvalidResponseDataError` from participant grading; voice, producer work, and the final grade continued. Replaying its three intermediate grading snapshots succeeded in 152–329 ms. The failure was not reproduced, so its cause remains unconfirmed.
+- Responsive setup, live, and summary checks passed at 1440, 390, and 320 px, and both judging/timeline Debugger views passed at desktop and mobile widths. A real local browser/WebRTC interview passed audible opening, synthetic microphone transcription, confirmed End, streamed summary completion, and microphone/peer cleanup with no errors. Its exact final transcript, summary, rubric v5, and producer provenance were read back from local D1; the saved summary matched the browser.
+- Evidence remains in ignored `output/interview-finish-2026-09-28/` and the two labeled synthetic roleplay directories. No full-length human acceptance interview or physical-phone microphone test was performed. No preview/production deployment, remote database migration, branch push, or merge was performed.

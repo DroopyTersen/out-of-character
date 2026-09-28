@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, RotateCcw, Volume2 } from 'lucide-react';
-import { interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
+import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Volume2 } from 'lucide-react';
+import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import type { AudioLevels } from '../simulator/audio-levels';
 import { formatTime } from '../simulator/conversation';
@@ -89,7 +89,7 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
       const value = reading?.value;
       const observation = value == null ? 'Not yet observed' : labels[item.id][Math.round(Math.max(0, Math.min(4, value)))];
       return <div className="interview-reading" key={item.id}>
-        <div><strong>{item.label}</strong><span>{observation}</span></div>
+        <div><strong>{item.label}</strong><span>{observation}{value != null && <small className="interview-reading-score" aria-label={`score ${value.toFixed(1)} of 4`}>{value.toFixed(1)}/4</small>}</span></div>
         <small>{item.description}</small>
       </div>;
     })}</div>
@@ -100,15 +100,28 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
   </section>;
 }
 
+const percent = (value: number) => `${Math.round(value * 100)}%`;
+
 function InterviewTopics({ interview }: { interview: InterviewSession | undefined }) {
-  const heard = new Set(interview?.evaluation?.objectives.filter(item => item.achieved && item.evidence).map(item => item.id) ?? []);
-  return <section className="interview-topics sim-panel"><header><h2>Your project story</h2><p>These are suggestions. We’ll let the conversation flow naturally.</p></header>
-    <div className="interview-topic-groups">{interviewTopics.map(topic => <div className="interview-topic" key={topic.id}><h3>{topic.label}</h3><ul>{topic.objectives.map(objective => <li key={objective.id} className={heard.has(objective.id) ? 'heard' : ''}><span className="interview-topic-mark" aria-hidden="true">{heard.has(objective.id) && <Check size={13} />}</span><span>{objective.label}</span></li>)}</ul></div>)}</div>
+  const readings = new Map(interview?.evaluation?.objectives.filter(item => item.evidence).map(item => [item.id, item]) ?? []);
+  return <section className="interview-topics sim-panel"><header><h2>Your project story</h2><p>These are suggestions. We’ll let the conversation flow naturally.</p>
+    <ul className="interview-topic-legend" aria-label="Topic marks">{(['touched', 'explored', 'set-aside'] as const).map(level => <li key={level} data-level={level}><span className="interview-topic-mark" aria-hidden="true">{level === 'explored' ? <Check size={11} /> : level === 'set-aside' ? <Minus size={11} /> : null}</span>{COVERAGE_LEVEL_LABELS[level]}</li>)}<li className="interview-topic-legend-note">% = how sure the reading is</li></ul></header>
+    <div className="interview-topic-groups">{interviewTopics.map(topic => <div className="interview-topic" key={topic.id}><h3>{topic.label}</h3><ul>{topic.objectives.map(objective => {
+      const reading = readings.get(objective.id);
+      const level = reading?.level ?? 'not-yet';
+      const confidence = coverageConfidence(reading);
+      const confidenceLabel = confidence == null ? '' : `${percent(confidence)} confidence ${level === 'touched' ? 'the topic came up; depth is still uncertain' : `it is ${COVERAGE_LEVEL_LABELS[level].toLowerCase()}`}`;
+      return <li key={objective.id} data-level={level} className={level === 'explored' ? 'heard' : ''}>
+        <span className="interview-topic-mark" aria-hidden="true">{level === 'explored' ? <Check size={13} /> : level === 'set-aside' ? <Minus size={13} /> : null}</span>
+        <span>{objective.label}<span className="sim-announcement">: {COVERAGE_LEVEL_LABELS[level]}{confidenceLabel && `, ${confidenceLabel}`}</span></span>
+        {confidence != null && <small className="interview-topic-confidence" aria-hidden="true" title={confidenceLabel}>{percent(confidence)}</small>}
+      </li>;
+    })}</ul></div>)}</div>
   </section>;
 }
 
 function InterviewBackgroundFacts({ notes }: { notes: InterviewBackground[] }) {
-  return <div className="interview-background-list">{notes.slice(0, 2).map(note => <div className="interview-background-note" key={note.id}>
+  return <div className="interview-background-list">{notes.map(note => <div className="interview-background-note" key={note.id}>
     <div className="interview-background-meta"><strong>{note.target.name}</strong><time dateTime={new Date(note.retrievedAt).toISOString()}>Retrieved {new Date(note.retrievedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time></div>
     {note.facts.slice(0, 2).map((fact, index) => <p key={`${note.id}-${index}`}>{fact.text} <a href={fact.url} target="_blank" rel="noopener noreferrer">{fact.title} · {new URL(fact.url).hostname}</a></p>)}
   </div>)}</div>;

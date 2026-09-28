@@ -1,10 +1,11 @@
 import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
 import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationQuestion } from 'ai';
 import { JEV_MODEL } from '../judging';
-import { emptyInterviewReadings, interviewReadings, type InterviewEvaluation } from '../../core/interview';
+import { COVERAGE_LEVELS, emptyInterviewReadings, interviewReadings, isBackchannel, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../core/interview';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import type { TranscriptEntry } from '../../core/simulator/types';
-import { INTERVIEW_CONDITIONS, type DeliveredInterviewBackground, type DirectorSignal } from '../../core/simulator/director';
+import { INTERVIEW_CONDITIONS, type DirectorSignal } from '../../core/simulator/director';
+import { PRODUCER_LIMITS, type DeliveredInterviewBackground } from '../../core/interview-producer';
 import { evidenceBatches } from '../simulator/rubric';
 import { interviewScenario, interviewers } from './scenario.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
@@ -18,7 +19,8 @@ type Input = {
   revision: number;
   apiKey: string;
   signal?: AbortSignal;
-  achievedIds?: string[];
+  /** Passage IDs that support saved coverage; they stay visible to Jev after leaving the recent window. */
+  keepIds?: string[];
   deliveredBackground?: DeliveredInterviewBackground[];
 };
 
@@ -53,10 +55,23 @@ function evidence(answers: InterviewAnswers, key: string, participant: Transcrip
   // The chosen ID must still resolve to a real participant passage. Jev never supplies quotation text.
   if (!selected) return null;
   const passage = findEvidence(participant, (selected as { id: string }).id);
-  return passage && !/^(?:mm+|hmm+|uh[- ]?huh|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i.test(passage.text.trim()) ? passage : null;
+  return passage && !isBackchannel(passage.text) ? passage : null;
 }
 
-export function readInterviewAnswers(transcript: TranscriptEntry[], answers: InterviewAnswers, achievedIds: string[] = []): Pick<InterviewEvaluation, 'readings' | 'objectives'> {
+function coverage(answers: InterviewAnswers, objectiveId: string, participant: TranscriptEntry[]): InterviewObjectiveReading {
+  const answer = choice(answers, `objective:${objectiveId}`, [...COVERAGE_LEVELS]);
+  const levels = answer.probabilities
+    ? Object.fromEntries(COVERAGE_LEVELS.map(level => [level, validProbability(answer.probabilities![level] ?? NaN) ? answer.probabilities![level]! : 0])) as Record<CoverageLevel, number>
+    : null;
+  const passage = evidence(answers, `objective:${objectiveId}:evidence`, participant);
+  let level = answer.choice as CoverageLevel;
+  // Every band above not-yet needs a participant passage; the firm bands also need high confidence.
+  if (level !== 'not-yet' && !passage) level = 'not-yet';
+  if ((level === 'explored' || level === 'set-aside') && (levels?.[level] ?? 0) < .85) level = 'touched';
+  return { id: objectiveId, level, levels, probability: levels?.explored ?? null, achieved: level === 'explored', evidence: level === 'not-yet' ? null : passage };
+}
+
+export function readInterviewAnswers(transcript: TranscriptEntry[], answers: InterviewAnswers): Pick<InterviewEvaluation, 'readings' | 'objectives'> {
   const participant = transcript.filter(entry => entry.speaker === 'trainee');
   const readings = emptyInterviewReadings();
   for (const reading of interviewReadings) {
@@ -65,14 +80,7 @@ export function readInterviewAnswers(transcript: TranscriptEntry[], answers: Int
     const passage = evidence(answers, `reading:${reading.id}:evidence`, participant);
     if (observed && passage) readings[reading.id] = { value: value.score, distribution: value.probabilities ?? null, evidence: passage };
   }
-  const objectives = interviewScenario.objectives.map(objective => {
-    if (achievedIds.includes(objective.id)) return { id: objective.id, probability: null, achieved: true, evidence: null };
-    const probability = booleanProbability(answers, `objective:${objective.id}`);
-    const passage = evidence(answers, `objective:${objective.id}:evidence`, participant);
-    const achieved = probability >= .85 && passage != null;
-    return { id: objective.id, probability, achieved, evidence: achieved ? passage : null };
-  });
-  return { readings, objectives };
+  return { readings, objectives: interviewScenario.objectives.map(objective => coverage(answers, objective.id, participant)) };
 }
 
 function validate(input: Input) {
@@ -83,7 +91,7 @@ function validate(input: Input) {
 }
 
 /** Preserve recent passage IDs while keeping a Jev request bounded as an interview grows. */
-function recentTranscript(entries: TranscriptEntry[], characterLimit: number): TranscriptEntry[] {
+export function recentTranscript(entries: TranscriptEntry[], characterLimit: number): TranscriptEntry[] {
   let length = 0;
   let start = entries.length;
   while (start > 0 && length + entries[start - 1]!.text.length <= characterLimit) {
@@ -93,6 +101,27 @@ function recentTranscript(entries: TranscriptEntry[], characterLimit: number): T
   return entries.slice(start);
 }
 
+/**
+ * The recent window plus each kept passage and the Sam turn before it, in transcript order,
+ * so coverage heard early in a long interview can still be re-judged against its evidence.
+ */
+export function coverageWindow(entries: TranscriptEntry[], keepIds: string[] = [], characterLimit = 16_000) {
+  const recent = recentTranscript(entries, characterLimit);
+  const included = new Set(recent.map(entry => entry.id));
+  // At most one saved passage per topic, within the session's transcript limit.
+  // Never drop its evidence just because several other topics were explored later.
+  const kept = new Set(keepIds);
+  for (let index = 0; index < entries.length; index++) {
+    if (!kept.has(entries[index]!.id)) continue;
+    included.add(entries[index]!.id);
+    let question = index - 1;
+    while (question >= 0 && entries[question]!.speaker === 'trainee') question--;
+    if (question >= 0) included.add(entries[question]!.id);
+  }
+  const transcript = entries.filter(entry => included.has(entry.id));
+  return { transcript, earlierDialogueOmitted: transcript.length < entries.length };
+}
+
 function state(entries: TranscriptEntry[]) {
   return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: entries.map(({ id, speaker, text }) => [id, speaker === 'trainee' ? 'participant' : 'sam', text]) };
 }
@@ -100,14 +129,14 @@ function state(entries: TranscriptEntry[]) {
 export async function evaluateInterview(input: Input) {
   validate(input);
   const started = performance.now();
-  const transcript = recentTranscript(input.transcript, 16_000);
+  const { transcript, earlierDialogueOmitted } = coverageWindow(input.transcript, input.keepIds);
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: state(transcript), questions: interviewQuestions(transcript, input.achievedIds),
+    state: { ...state(transcript), earlierDialogueOmitted }, questions: interviewQuestions(transcript),
     abortSignal: input.signal, maxRetries: 0,
   });
   return {
-    ...readInterviewAnswers(transcript, result.answers, input.achievedIds),
+    ...readInterviewAnswers(transcript, result.answers),
     revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };
@@ -129,7 +158,7 @@ export function interviewerState(transcript: TranscriptEntry[], deliveredBackgro
   return {
     ...state(recent),
     earlierDialogueOmitted: recent.length < transcript.length,
-    deliveredBackground: deliveredBackground.slice(-2).map(({ target, facts, retrievedAt, afterPassageId, status }) => ({
+    deliveredBackground: deliveredBackground.slice(-PRODUCER_LIMITS.research).map(({ target, facts, retrievedAt, afterPassageId, status }) => ({
       target, facts, retrievedAt, afterPassageId, status,
     })),
   };

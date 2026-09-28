@@ -7,9 +7,10 @@ import { PerformanceStory, ResultStory } from '../storybook/performance-stories'
 import '../storybook/workshop.css';
 import { SimulatorVoiceStory } from '../storybook/simulator-voice-story';
 import { clients, publicCatalog } from '../../ai/simulator/scenarios.server';
-import { SimulatorDebriefStory, SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
+import { SimulatorJudgingStory, SimulatorLiveStory, SimulatorSelectionStory } from '../storybook/simulator-stories';
 import { VoiceLabContent } from '../simulator/voice-lab';
 import { SimulatorBriefing } from '../simulator/briefing';
+import { SimulatorDebriefStory, ReportCompilingStory, ReportWritingStory, ReportFailedStory } from '../storybook/simulator-report-story';
 import { scenarioBriefings } from '../../core/simulator/briefings';
 
 export const loader = () => ({
@@ -48,6 +49,9 @@ const stories = [
   { id: 'simulator-voice', label: 'Simulator audio', description: 'Replay every speaking, listening, overlap, muted, and connection state. Adjust intensity without a microphone.', component: SimulatorVoiceStory },
   { id: 'simulator-voice-lab', label: 'Voice Lab', description: 'Hear prepared voice clips for each client while viewing their portrait and personality.', component: SimulatorVoiceLabStory },
   { id: 'simulator-debrief', label: 'Simulator debrief', description: 'Successful and difficult attempts, real evidence, skill gaps, and unconfirmed finalization.', component: SimulatorDebriefStory },
+  { id: 'simulator-report-compiling', label: 'Report · compiling', description: 'Provisional scores and objectives while the report is being prepared.', component: ReportCompilingStory },
+  { id: 'simulator-report-writing', label: 'Report · streaming', description: 'Progressive prose with provisional readings; final grades remain hidden.', component: ReportWritingStory },
+  { id: 'simulator-report-failed', label: 'Report · unavailable', description: 'Retry, missing readings, lost session, and status connection errors.', component: ReportFailedStory },
   { id: 'simulator-judging', label: 'Simulator Jev lab', description: 'Authored transcripts, historical trainee judgments, source evidence, and raw probabilities.', component: SimulatorJudgingStory },
   { id: 'draw', label: 'Complete draw', description: 'Idle, landing, scene timing, failure, and connection states.', component: DrawStory },
   { id: 'reel', label: 'Character reel', description: 'Replay the actual reel with a chosen landing character.', component: ReelStory },

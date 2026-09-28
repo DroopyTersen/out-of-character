@@ -63,6 +63,10 @@ export type ObjectiveReading = {
   achieved: boolean;
   evidence: Evidence | null;
 };
+export type FeedbackAssessment = {
+  skills: Record<SkillId, Pick<SkillReading, 'value' | 'evidence'>>;
+  objectives: Pick<ObjectiveReading, 'id' | 'achieved' | 'evidence'>[];
+};
 export type TraineeEvaluation = {
   revision: number;
   skills: Record<SkillId, SkillReading>;

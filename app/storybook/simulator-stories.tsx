@@ -4,7 +4,6 @@ import { emptySkills, type Catalog } from '../../core/simulator/types';
 import { happyHourFixture, recordedAttempt, simulatorFixtures } from './simulator-recordings';
 import { SimulatorSelection } from '../simulator/selection';
 import { SimulatorConversation, SimulatorTranscript } from '../simulator/conversation';
-import { SimulatorDebrief } from '../simulator/debrief';
 import { SimulatorObjectives, SimulatorSkills } from '../simulator/feedback';
 import '../simulator/simulator.css';
 import { illustrativeLevels } from './simulator-voice-story';
@@ -251,74 +250,6 @@ export function SimulatorLiveStory() {
         onAudio={() => {}}
         onContinue={() => setWarningPreview('none')}
       />
-    </>
-  );
-}
-
-export function SimulatorDebriefStory() {
-  const catalog = useCatalog();
-  const conversations = [...simulatorFixtures, happyHourFixture];
-  const [id, setId] = useState('earned-discovery');
-  const [unconfirmed, setUnconfirmed] = useState(false);
-  const [finalFeedback, setFinalFeedback] = useState<'current' | 'delayed' | 'unavailable'>('current');
-  const [action, setAction] = useState<string | null>(null);
-  const fixture = conversations.find((item) => item.id === id)!;
-  const { snapshot, scenario, client } = recordedAttempt(catalog, fixture, fixture.transcript.length);
-  snapshot.status = 'ended';
-  snapshot.finalization = unconfirmed ? 'unconfirmed' : 'confirmed';
-  snapshot.usageSeconds = fixture.transcript.length * 12;
-  if (unconfirmed) snapshot.message = 'Practice ended, but the voice service did not confirm finalization.';
-  snapshot.feedbackStatus = finalFeedback;
-  if (finalFeedback === 'unavailable') snapshot.evaluation = null;
-  return (
-    <>
-      <div className="workshop-controls">
-        <label>
-          Attempt
-          <select value={id} onChange={(event) => setId(event.target.value)}>
-            {conversations.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <input type="checkbox" checked={unconfirmed} onChange={(event) => setUnconfirmed(event.target.checked)} />
-          Unconfirmed ending
-        </label>
-        <label>
-          Final feedback
-          <select
-            value={finalFeedback}
-            onChange={(event) => setFinalFeedback(event.target.value as typeof finalFeedback)}
-          >
-            <option value="current">Complete</option>
-            <option value="delayed">Incomplete (latest available)</option>
-            <option value="unavailable">Unavailable</option>
-          </select>
-        </label>
-      </div>
-      <SimulatorDebrief
-        scenario={scenario}
-        client={client}
-        snapshot={snapshot}
-        onRetry={() =>
-          setAction(
-            'In the app, this starts a fresh attempt with the same client and scenario. No session opens in this preview.',
-          )
-        }
-        onChoose={() =>
-          setAction(
-            'In the app, this returns to scenario and client selection. Use the Simulator selection story to explore that screen.',
-          )
-        }
-      />
-      {action && (
-        <p className="sim-notice" role="status">
-          {action}
-        </p>
-      )}
     </>
   );
 }

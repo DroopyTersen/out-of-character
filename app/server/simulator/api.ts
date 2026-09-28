@@ -30,8 +30,9 @@ export async function handleSimulator(request: Request, env: Env): Promise<Respo
       if (!parsed.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
       return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(parsed.data.id)).fetch(new Request('https://session/start', { method: 'POST', headers: request.headers, body: JSON.stringify(parsed.data) }));
     }
-    const match = url.pathname.match(/^\/api\/simulator\/sessions\/([^/]+)\/(poll|ready|end)$/);
+    const match = url.pathname.match(/^\/api\/simulator\/sessions\/([^/]+)\/(poll|ready|end|report)$/);
     if (!match || !uuid.safeParse(match[1]).success) return simulatorJson({ error: 'Unknown simulator route.' }, 404);
+    if (match[2] === 'report' && !liveAvailable(env)) return simulatorJson({ error: 'Final reviews are currently unavailable.' }, 503);
     let body: string | undefined;
     if (match[2] === 'poll' && request.body) {
       const activity = activitySchema.safeParse(await boundedJson(request, 256));
@@ -39,7 +40,7 @@ export async function handleSimulator(request: Request, env: Env): Promise<Respo
       body = JSON.stringify(activity.data);
     }
     // Poll/end continue through a kill switch so already-running sessions can close.
-    return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(match[1]!)).fetch(new Request(`https://session/${match[2]}`, { method: 'POST', headers: request.headers, body }));
+    return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(match[1]!)).fetch(new Request(`https://session/${match[2]}`, { method: 'POST', headers: request.headers, body, ...(match[2] === 'report' ? { signal: request.signal } : {}) }));
   } catch (error) {
     return simulatorJson({ error: error instanceof BodyError ? error.message : 'The simulator connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);
   }

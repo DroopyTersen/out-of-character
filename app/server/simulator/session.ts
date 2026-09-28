@@ -5,11 +5,14 @@ import { appendTranscript, reconcileObjectives, settledTranscript, TRANSCRIPT_LI
 import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, type SessionSnapshot, type SessionWarning } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { activitySchema, simulatorJson, startSchema } from './api';
-import { archiveProvenance, writeArchive } from './archive.server';
+import { archiveProvenance, writeArchive, writeReport } from './archive.server';
 import { ContextualDirector, directorServices } from './contextual-director';
+import { generateReport } from '../../../ai/simulator/report.server';
+import { idleReport, type ReportState } from '../../../core/simulator/report';
+import { SessionReport, within, type ReportArchive } from './report';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
-const services = { createLive, attachLive, evaluateTrainee, evaluateClient, ...directorServices };
+const services = { createLive, attachLive, evaluateTrainee, evaluateClient, generateReport, ...directorServices };
 const GRADE_INTERVAL_MS = 5000;
 const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
 
@@ -40,6 +43,9 @@ export class SimulatorSession extends DurableObject<Env> {
   private reachedLive = false;
   private contextual: ContextualDirector | undefined;
   private seenEvents = new Set<string>();
+  private report: SessionReport | undefined;
+  private finalArchive: Promise<void> | undefined;
+  private reportArchive = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env, private readonly paid = services) {
     super(ctx, env);
@@ -66,6 +72,12 @@ export class SimulatorSession extends DurableObject<Env> {
       if (!this.lease.closed) this.ctx.waitUntil(this.closeOrphan());
       return simulatorJson({ error: 'This practice session was interrupted. Start a new attempt.' }, 410);
     }
+    if (action === '/report') return this.startReport(request);
+    // Terminal reads must not refresh a lease, heartbeat, or live state.
+    if (this.snapshot.status === 'ended' || this.snapshot.status === 'interrupted') {
+      const report = action === '/poll' && this.report ? await this.report.read() : this.reportState();
+      return simulatorJson({ ...this.publicSnapshot(), report });
+    }
     this.lastSeen = Date.now();
     if (action === '/poll' && request.body) {
       const activity = activitySchema.parse(await request.json());
@@ -87,6 +99,36 @@ export class SimulatorSession extends DurableObject<Env> {
 
   private publicSnapshot(): SessionSnapshot {
     return { ...this.snapshot!, coaching: this.contextual?.coaching() ?? null };
+  }
+
+  private reportState(): ReportState {
+    if (!this.snapshot || !getScenario(this.snapshot.scenarioId).objectives.length || !this.snapshot.transcript.some(item => item.speaker === 'trainee' && item.text.trim())) {
+      return { status: 'ineligible', starts: 0, report: null, failure: null };
+    }
+    return this.report?.state ?? idleReport();
+  }
+
+  private async startReport(request: Request): Promise<Response> {
+    if (this.closing) {
+      try { await within(this.closing, 40_000); }
+      catch { return simulatorJson({ error: 'The conversation is still closing.' }, 409); }
+    }
+    if (!this.snapshot || !['ended', 'interrupted'].includes(this.snapshot.status)) return simulatorJson({ error: 'End the conversation before requesting its report.' }, 409);
+    if (this.reportState().status === 'ineligible') return simulatorJson({ error: 'There is not enough scored conversation to review.' }, 422);
+    this.report ??= new SessionReport({ snapshot: structuredClone(this.publicSnapshot()), interventions: structuredClone(this.contextual?.records ?? []), apiKey: this.env.OPENAI_API_KEY! }, archive => {
+      this.reportArchive = this.reportArchive.then(() => this.saveReport(archive));
+      this.ctx.waitUntil(this.reportArchive);
+    }, this.paid.generateReport);
+    return this.report.start(request);
+  }
+
+  private async saveReport(archive: ReportArchive) {
+    try {
+      if (this.finalArchive) await within(this.finalArchive, 15_000).catch(() => {});
+      await writeReport(this.env.SIMULATOR_ARCHIVE, this.snapshot!.id, archive);
+    } catch {
+      console.warn('Simulator report archive save failed', { id: this.snapshot?.id, category: 'report' });
+    }
   }
 
   private async start(request: Request, capability: string): Promise<Response> {
@@ -341,7 +383,10 @@ export class SimulatorSession extends DurableObject<Env> {
     this.lease!.closed = snapshot.finalization === 'confirmed' || !this.lease!.providerId;
     await this.ctx.storage.put('lease', this.lease);
     await this.ctx.storage.setAlarm(Date.now() + (this.lease!.closed ? 300_000 : 15_000));
-    if (this.reachedLive) this.ctx.waitUntil(this.saveArchive('final'));
+    if (this.reachedLive) {
+      this.finalArchive = this.saveArchive('final');
+      this.ctx.waitUntil(this.finalArchive);
+    }
   }
 
   private closeOrphan(): Promise<void> {

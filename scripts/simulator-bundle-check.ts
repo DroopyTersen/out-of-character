@@ -11,6 +11,8 @@ const privateText = [
   'Write one private direction to the CLIENT ACTOR',
   'worldLimitsNotNecessarilyKnownToClient',
   'previousInterventions',
+  'You are the final coaching reviewer',
+  'privateClientContext',
   ...clients.map(client => client.behavior),
 ];
 let checked = 0;

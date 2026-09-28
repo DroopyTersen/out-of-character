@@ -176,12 +176,6 @@ details[open] > summary > .sim-disclosure { transform: rotate(180deg); }
 .sim-outcome[data-empty=true] .sim-outcome-count { border-color: #2c566c; }
 .sim-debrief-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 50px; }
 .sim-debrief-grid > .sim-skills { border-left: 1px solid #21465c; padding-left: 35px; }
-.sim-takeaways h2 { font-size: 22px; margin-bottom: 25px; }
-.sim-takeaways article { margin-bottom: 25px; }
-.sim-takeaways article > .eyebrow { font-size: 11px; letter-spacing: 1.5px; }
-.sim-takeaways article > p { margin-top: 10px; font-size: 16px; line-height: 1.5; }
-.sim-takeaways .sim-evidence { font-size: 16px; color: #c4d8e7; }
-.sim-takeaways { margin-bottom: 30px; }
 .sim-debrief-actions { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 38px 0; }
 .sim-debrief-actions .quiet-button { min-height: 44px; font-size: 14px; }
 .sim-debrief-transcript { border-top: 1px solid #21465c; padding: 18px 0; margin-bottom: 30px; color: #a7c4d9; }
@@ -434,3 +428,83 @@ p.sim-lab-check-details { padding: 12px 0; }
 .sim-session-warning { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 0 0 20px; padding: 16px 20px; border: 1px solid #b39251; border-radius: 8px; background: #26302e; color: #f2dbad; }
 .sim-session-warning p { margin: 4px 0 0; font-size: 14px; }
 .sim-session-warning button { flex-shrink: 0; padding: 10px 16px; border: 1px solid #dcc18c; border-radius: 6px; color: #fff0d0; background: #3c4134; }
+
+/* Post-session feedback and the provisional/final assessment share one layout. */
+.sim-debrief { max-width: 1280px; }
+.sim-debrief > .sim-heading { padding-block: 24px; }
+.sim-report { border: 1px solid #2c566c; border-radius: 6px; background: radial-gradient(ellipse at top left, #0c3542 0, #072432 65%); padding: 28px; margin-bottom: 36px; }
+.sim-report-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.sim-report-heading img { width: 44px; height: 54px; object-fit: contain; image-rendering: pixelated; }
+.sim-report-heading > div { flex: 1; }
+.sim-report-heading h2 { font-family: 'Chakra Petch', sans-serif; font-size: 24px; margin: 8px 0 0; }
+.sim-report-heading .eyebrow { font-size: 10px; }
+.sim-report-spinner { color: #44efcd; flex-shrink: 0; animation: sim-report-spin 1.3s linear infinite; }
+@keyframes sim-report-spin { to { transform: rotate(360deg); } }
+.sim-report-overview { font-size: 20px; line-height: 1.55; max-width: 78ch; }
+.sim-report-pending { margin: 0; min-height: 40px; }
+.sim-report-points { margin-top: 28px; max-width: 85ch; }
+.sim-report h3 { font-size: 17px; font-weight: 600; color: #dcecf2; margin: 0 0 12px; }
+.sim-report-points article + article { margin-top: 22px; }
+.sim-report-points p, .sim-report-next p { line-height: 1.6; margin: 0; }
+.sim-report-alternative { margin-top: 12px !important; padding: 12px 16px; border-left: 2px solid #35778a; background: #092c3a; }
+.sim-report-alternative span { display: block; color: #8aafc0; font-size: 12px; margin-bottom: 4px; }
+.sim-report-evidence { margin-top: 10px; }
+.sim-report-evidence summary { cursor: pointer; color: #9ebccc; font-size: 14px; min-height: 44px; padding: 12px 0; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: #40697b; }
+.sim-report-evidence summary:hover { color: #dcecf2; }
+.sim-report-evidence .sim-evidence { margin-top: 8px; }
+.sim-report-next { position: relative; margin-top: 28px; padding-top: 24px; border-top: 1px solid #2c566c; }
+.sim-report-next > svg { color: #44efcd; position: absolute; top: 26px; left: 0; }
+.sim-report-next h3 { padding-left: 28px; }
+.sim-report[data-failed=true] { border-color: #816343; }
+.sim-report[data-failed=true] .sim-report-heading h2 { color: #edcfac; }
+.sim-report > .quiet-button { margin-top: 16px; }
+.sim-assessment { margin-bottom: 32px; }
+.sim-assessment-heading { margin-bottom: 24px; }
+.sim-assessment-heading h2 { font-family: 'Chakra Petch', sans-serif; font-size: 24px; margin: 0 0 7px; }
+.sim-assessment-heading p { color: #91afbf; font-size: 15px; margin: 0; }
+.sim-assessment[data-final=false] .sim-feedback-status { color: #9dbbce; }
+.sim-assessment[data-final=false] .sim-feedback-status i { background: #719db5; }
+.sim-debrief .sim-skill[data-unobserved=true] .sim-skill-track > span { display: none; }
+.sim-debrief-transcript { margin-bottom: 8px; }
+.sim-debrief-transcript > summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; list-style: none; }
+.sim-debrief-transcript > summary::-webkit-details-marker { display: none; }
+.sim-debrief-transcript[open] > summary > svg { transform: rotate(180deg); }
+.sim-debrief-transcript > summary:hover { color: #dcecf2; }
+.sim-debrief-actions { margin-block: 24px 36px; }
+@media (min-width: 1100px) {
+ .sim-debrief-content { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+ .sim-report, .sim-assessment { margin-bottom: 28px; }
+ .sim-assessment { border: 1px solid #2c566c; border-radius: 6px; padding: 28px; background: #061f2c; }
+ .sim-debrief-grid { grid-template-columns: 1fr; gap: 26px; }
+ .sim-debrief-grid > .sim-skills { order: -1; padding: 0 0 24px; border: 0; border-bottom: 1px solid #21465c; }
+ .sim-debrief .sim-section-heading h2 { font-size: 22px; }
+ .sim-debrief .sim-skill-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+ .sim-debrief .sim-skill summary { font-size: 16px; gap: 7px 5px; }
+ .sim-debrief .sim-skill strong { font-size: 20px; }
+ .sim-debrief .sim-objectives li { font-size: 16px; }
+}
+@media (max-width: 767px) {
+ .sim-report { padding: 20px; margin-bottom: 30px; }
+ .sim-report-heading { gap: 10px; margin-bottom: 16px; }
+ .sim-report-heading img { width: 34px; height: 44px; }
+ .sim-report-heading h2 { font-size: 18px; line-height: 1.35; }
+ .sim-report-heading .eyebrow { font-size: 9px; letter-spacing: 1.5px; }
+ .sim-report-spinner { width: 20px; }
+ .sim-report-pending { font-size: 15px; line-height: 1.6; }
+ .sim-report-overview { font-size: 18px; }
+ .sim-report-points { margin-top: 24px; }
+ .sim-report > .quiet-button { min-height: 44px; width: 100%; justify-content: center; }
+ .sim-assessment-heading h2 { font-size: 21px; }
+ .sim-debrief-grid > .sim-skills { order: -1; padding: 0 0 24px; border: 0; border-bottom: 1px solid #21465c; }
+ .sim-debrief .sim-skill-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 20px; }
+ .sim-debrief .sim-skill { min-width: 0; }
+ .sim-debrief .sim-skill summary { font-size: 16px; gap: 8px 5px; grid-template-columns: minmax(0, 1fr) auto 12px; min-height: 48px; }
+ .sim-debrief .sim-skill strong { font-size: 19px; }
+ .sim-debrief .sim-disclosure { width: 12px; }
+ .sim-debrief .sim-skills .sim-section-heading { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+ .sim-debrief .sim-section-heading h2 { font-size: 20px; }
+ .sim-debrief .sim-feedback-status { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+ .sim-debrief .sim-skills .sim-section-heading > .sim-scale { grid-column: 2; grid-row: 1; margin: 0; }
+}
+@media (max-width: 359px) { .sim-debrief .sim-skill summary { font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { .sim-report-spinner { animation: none; } }

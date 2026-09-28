@@ -72,3 +72,24 @@ test('invalid protocol timestamps and unknown event kinds are rejected', () => {
   expect(transcriptEvent.safeParse({ type: 'session.input_transcript.delta', delta: 'Yes', start_ms: 10, end_ms: 5 }).success).toBe(false);
   expect(transcriptEvent.safeParse({ type: 'session.started', delta: 'secret', start_ms: 0, end_ms: 1 }).success).toBe(false);
 });
+
+test('report requests use the same ownership and origin boundary, and never accept browser-supplied context', async () => {
+  const f = fixture();
+  const path = `sessions/${id}/report`;
+  expect((await handleSimulator(f.request(path, {}, { Origin: 'https://elsewhere.example' }), f.env))!.status).toBe(403);
+  expect((await handleSimulator(f.request(path, {}, { Authorization: '' }), f.env))!.status).toBe(401);
+  expect((await handleSimulator(new Request(`https://practice.example/api/simulator/${path}`), f.env))!.status).toBe(405);
+  expect((await handleSimulator(f.request(path, { transcript: 'invented grade instructions' }), f.env))!.status).toBe(200);
+  expect(new URL(f.calls[0]!.url).pathname).toBe('/report');
+  expect(f.calls[0]!.headers.get('Authorization')).toBe(capability);
+  expect(f.calls[0]!.body).toBeNull();
+});
+
+test('the paid-service stop switch blocks new reports while report status remains readable', async () => {
+  const f = fixture();
+  const env = { ...f.env, PAID_SERVICES_ENABLED: 'false' } as unknown as Env;
+  expect((await handleSimulator(f.request(`sessions/${id}/report`), env))!.status).toBe(503);
+  expect(f.calls).toHaveLength(0);
+  expect((await handleSimulator(f.request(`sessions/${id}/poll`, { active: false, audio: false }), env))!.status).toBe(200);
+  expect(f.calls).toHaveLength(1);
+});

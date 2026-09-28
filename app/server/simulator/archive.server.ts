@@ -3,6 +3,12 @@ import { actorBrief, getClient, getScenario, openingInstruction } from '../../..
 import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
+import type { ReportArchive } from './report';
+
+export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
+  const result = await db.prepare('UPDATE simulator_attempts SET report_json = ? WHERE id = ?').bind(JSON.stringify(report), id).run();
+  if (!result.success || result.meta.changes !== 1) throw new Error('Simulator report archive write failed.');
+}
 
 export type ArchiveProvenance = {
   model: string;

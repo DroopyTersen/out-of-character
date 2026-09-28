@@ -117,8 +117,10 @@ export function readInterviewerSignals(answers: InterviewAnswers): DirectorSigna
   return INTERVIEW_CONDITIONS.map(condition => ({ condition, probability: booleanProbability(answers, `director:${condition}`) }));
 }
 
-export function readResearchProbability(answers: InterviewAnswers): number {
-  return booleanProbability(answers, 'research:useful');
+export function readResearchProbability(answers: InterviewAnswers): number | undefined {
+  const answer = answers['research:useful'];
+  // An optional research failure must not suppress a valid corrective concern.
+  return answer?.type === 'boolean' && validProbability(answer.probability) ? answer.probability : undefined;
 }
 
 /** Outside facts are visible only to Sam's interviewer assessment, never participant scoring. */

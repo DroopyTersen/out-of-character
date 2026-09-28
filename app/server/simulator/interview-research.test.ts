@@ -109,6 +109,27 @@ test.each(['busy', 'recent'] as const)('a finished lookup is dropped when Sol ha
   expect(f.records()[0]?.outcome).toBe('blocked');
   expect(f.sent.filter(item => String(item.event_id).startsWith('research-'))).toEqual([]);
   producer.resolve(cue); await direction;
+  // A new signal episode may use another attempt after the correction settles.
+  // No retry is started automatically when the displaced result is dropped.
+  expect(f.counts().searches).toBe(1);
+  f.advance(); await f.observe();
+  expect(f.counts().searches).toBe(2);
+  expect(f.records().at(-1)?.outcome).toBe('sent');
+});
+
+test.each(['none', 'error', 'timeout'] as const)('lookup %s keeps its attempt budget and follows the target reuse rule', async outcome => {
+  let lookups = 0;
+  const f = fixture({ lookupInterviewBackground: async () => {
+    if (++lookups > 1) return found;
+    if (outcome === 'error') throw new Error('Provider unavailable');
+    if (outcome === 'timeout') throw new DOMException('Timed out', 'TimeoutError');
+    return null;
+  } });
+  await f.observe(); await f.observe(.1); f.advance(); await f.observe();
+  expect(f.records()[0]?.outcome).toBe(outcome);
+  expect(f.counts().preparations).toBe(2);
+  expect(f.counts().searches).toBe(outcome === 'none' ? 1 : 2);
+  expect(f.records().at(-1)?.outcome).toBe(outcome === 'none' ? 'duplicate' : 'sent');
 });
 
 test('research expiry includes the Jev delay and discards late provider success', async () => {

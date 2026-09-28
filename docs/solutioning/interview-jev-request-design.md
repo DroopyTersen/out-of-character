@@ -1,6 +1,6 @@
 # Interview Jev request design
 
-Draft contract for [the story and research plan](interview-story-and-research-plan.md). This specifies proposed payloads; it does not change the running evaluator. Examples and probabilities below are illustrative, not provider results.
+Implemented contract for [the story and research plan](interview-story-and-research-plan.md). Examples and probabilities below are illustrative; measured fixtures and verification are recorded in [progress](interview-progress.md).
 
 ## One shared request
 
@@ -156,9 +156,9 @@ There is no generated explanation, recommended interview question, or search que
 
 1. Validate answers and reject stale observations. Missing or failed answers are unavailable, never zeros.
 2. Among eligible interview concerns, prioritize boundaries and source accuracy over conversational polish; request at most one Sol review. Sol can return `none`.
-3. Consider a qualifying research signal under its separate small attempt budget. Suppress duplicate accepted targets after preparation. Research never blocks corrective direction.
+3. Consider a qualifying research signal under its separate small attempt budget. One attempt is one preparation call; a new episode requires the probability to fall below 0.5. Suppress duplicate accepted targets after preparation. Research never blocks corrective direction.
 4. Apply existing cooldowns, one-outstanding-work rules, cancellation, and the shared note cap outside the model.
 
-The current interviewer review threshold is 0.60. Treat that as the existing baseline, not proof of calibration for new wording. Choose any separate research threshold from synthetic cases before activating it. Keep the current 2.5-second assessment timeout for the first latency comparison; do not silently stretch the live loop to accommodate extra questions.
+The implementation keeps the existing 0.60 interviewer threshold except for overprobing, which requests Sol's second opinion at 0.50. Research requests Luna preparation at 0.50. The paired synthetic cases support these initial referral settings; they are not calibrated guarantees, and both downstream models may decline. The assessment timeout remains 2.5 seconds. Public research expires 25 seconds after the observation was captured, including the Jev assessment time.
 
 Minimum paired cases: missed lead versus followed lead; unnecessary inventory versus participant-led technical detail; redundant probing versus needed clarification; useful public context gap versus company name alone; public background already supplied; participant boundary; current public information incorrectly applied to an older project; and missing earlier transcript context. Test the resulting routed behavior as well as each probability.

@@ -36,7 +36,7 @@ for (const fixture of fixtures) {
       ...((participant && fixture.expected.blankReadings?.map(id => ({ name: `blank:${id}`, passed: participant.readings[id].value == null }))) || []),
       ...(fixture.expected.present?.map(id => ({ name: `present:${id}`, passed: (signalProbability(id) ?? 0) >= (id === 'overprobing' ? .5 : .6) })) ?? []),
       ...(fixture.expected.absent?.map(id => ({ name: `absent:${id}`, passed: (signalProbability(id) ?? 1) < (id === 'overprobing' ? .5 : .6) })) ?? []),
-      ...(fixture.expected.researchUseful === undefined ? [] : [{ name: 'research:useful', passed: fixture.expected.researchUseful ? interviewer.researchProbability >= .5 : interviewer.researchProbability < .5 }]),
+      ...(fixture.expected.researchUseful === undefined ? [] : [{ name: 'research:useful', passed: interviewer.researchProbability != null && (fixture.expected.researchUseful ? interviewer.researchProbability >= .5 : interviewer.researchProbability < .5) }]),
       ...(participant?.objectives.filter(item => item.achieved).map(item => ({ name: `source:${item.id}`, passed: item.evidence?.speaker === 'trainee' && fixture.transcript.some(entry => entry.id === item.evidence?.entryId && entry.text === item.evidence.text) })) ?? []),
     ];
     rows.push({ fixtureId: fixture.id, participant, interviewer, checks });

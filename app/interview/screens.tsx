@@ -110,7 +110,7 @@ function InterviewTopics({ interview }: { interview: InterviewSession | undefine
 function InterviewBackgroundFacts({ notes }: { notes: InterviewBackground[] }) {
   return <div className="interview-background-list">{notes.slice(0, 2).map(note => <div className="interview-background-note" key={note.id}>
     <div className="interview-background-meta"><strong>{note.target.name}</strong><time dateTime={new Date(note.retrievedAt).toISOString()}>Retrieved {new Date(note.retrievedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time></div>
-    {note.facts.slice(0, 2).map((fact, index) => <p key={`${note.id}-${index}`}>{fact.text} <a href={fact.url} target="_blank" rel="noopener noreferrer">{fact.title}</a></p>)}
+    {note.facts.slice(0, 2).map((fact, index) => <p key={`${note.id}-${index}`}>{fact.text} <a href={fact.url} target="_blank" rel="noopener noreferrer">{fact.title} · {new URL(fact.url).hostname}</a></p>)}
   </div>)}</div>;
 }
 

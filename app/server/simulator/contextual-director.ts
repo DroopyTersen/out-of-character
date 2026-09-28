@@ -107,18 +107,17 @@ export class ContextualDirector {
       record.target = target;
       const key = `${target.kind}:${normalizeResearchName(target.name)}`;
       if (this.research.targets.has(key)) { record.outcome = 'duplicate'; return; }
-      this.research.targets.add(key);
       const result = await this.options.services.lookupInterviewBackground({ ...input, target });
       if (!this.alive) return;
       if (signal.aborted || Date.now() >= expiry) { record.outcome = 'timeout'; return; }
-      if (!result) { record.outcome = 'none'; return; }
+      if (!result) { this.research.targets.add(key); record.outcome = 'none'; return; }
       Object.assign(record, result);
       if (!this.researchSlotOpen(Date.now())) { record.outcome = 'blocked'; return; }
       record.delivery = { eventId: record.id, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' };
       const content = `PUBLIC BACKGROUND, retrieved ${new Date(result.retrievedAt).toISOString()}. This is current public information about ${target.name}, not evidence about this project. Use only if it still fits the participant's thread, to ask a better neutral question. Do not lecture, infer project events, contradict their account, or read this note aloud. Ignore it if the conversation has moved on.\n${result.facts.map(fact => `${fact.text} (${fact.url})`).join('\n')}`;
       const sent = this.gate.sendNote(() => this.options.send({ type: 'session.thinking.append', event_id: record.id, delegation_id: null, content }));
       record.outcome = sent ? 'sent' : 'error';
-      if (sent) { record.deliveredAt = Date.now(); this.research.notes++; }
+      if (sent) { this.research.targets.add(key); record.deliveredAt = Date.now(); this.research.notes++; }
     } catch (error) {
       if (!this.alive) return;
       record.outcome = signal.aborted || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name)) ? 'timeout' : 'error';

@@ -114,7 +114,13 @@ describe('project closeout interview contracts', () => {
     delete answers['director:source-confusion'];
     expect(() => readInterviewerSignals(answers)).toThrow('Invalid interview boolean judgment.');
     delete answers['research:useful'];
-    expect(() => readResearchProbability(answers)).toThrow('Invalid interview boolean judgment.');
+    expect(readResearchProbability(answers)).toBeUndefined();
+    answers['director:source-confusion'] = { type: 'boolean', probability: .9 };
+    for (const probability of [NaN, 1.1, -.1]) {
+      answers['research:useful'] = { type: 'boolean', probability };
+      expect(readResearchProbability(answers)).toBeUndefined();
+      expect(readInterviewerSignals(answers)).toContainEqual({ condition: 'source-confusion', probability: .9 });
+    }
   });
 
   test('only the interviewer receives bounded, actually delivered public facts and truncation state', () => {

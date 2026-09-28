@@ -24,6 +24,10 @@ const clientId = option('client') ?? 'morgan';
 const approach = option('plan') ?? (process.argv.includes('--poor') ? 'poor' : 'good');
 const label = option('label');
 const maxSeconds = Number(option('max-seconds') ?? 180);
+// Explicit isolation test: a synthetic positive trigger exercises real research
+// delivery without claiming that Jev chose it in a natural conversation.
+const exerciseResearch = process.argv.includes('--exercise-research');
+if (exerciseResearch && (!isInterview || approach !== 'research')) throw new Error('--exercise-research requires the interview research plan.');
 if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > 300) throw new Error('--max-seconds must be an integer from 60 to 300.');
 
 const offer = 'Our SharePoint and adoption team could run a short assessment of document ownership and how people would actually use the process. It would be separately scoped and paid, outside the current release. Would something like that be useful?';
@@ -307,6 +311,7 @@ const briefDigest = createHash('sha256').update(session.instructions).digest('he
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
 const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
+report.controlledResearchTrigger = exerciseResearch;
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
 let pacing, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
 const chunks = [];
@@ -323,7 +328,8 @@ async function observeClient(afterTurn, transcript) {
     const evaluate = isInterview ? evaluateInterviewer : evaluateClient;
     const judgment = await evaluate({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), ...(isInterview ? { deliveredBackground: contextual.background() } : {}) });
     report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability });
-    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model, researchProbability: judgment.researchProbability });
+    if (exerciseResearch && afterTurn === 2 && observation) observation.record.testOverride = { researchProbability: { measured: judgment.researchProbability, supplied: 1 } };
+    await contextual.observe(observation, { signals: judgment.signals, model: judgment.model, researchProbability: exerciseResearch && afterTurn === 2 ? 1 : judgment.researchProbability });
   } catch (error) {
     contextual.observe(observation, { signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
     report.directions.push({ afterTurn, unavailable: true, error: error.name });

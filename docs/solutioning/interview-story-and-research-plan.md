@@ -2,6 +2,8 @@
 
 Status: reviewed proposal; implementation has not started. Based on `project-closeout-interviews` at `78f7d60` (includes main through `3819e6a`). Companion context: [streaming plan](interview-streaming-plan.md), [progress and verification](interview-progress.md), and [existing director design](interview-contextual-director-plan.md).
 
+Concrete payload draft: [Jev state, questions, criteria, and routing](interview-jev-request-design.md).
+
 ## Outcome
 
 Sam should discover what mattered to someone who worked on the project. A short orientation should lead into useful experiences, rather than an inventory of requirements, architecture, and delivery phases. Sam should also be able to benefit from an occasional public-information lookup while the conversation continues.

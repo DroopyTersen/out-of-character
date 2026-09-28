@@ -92,7 +92,7 @@ const researchTranscript: TranscriptEntry[] = [
 const researchBackground: InterviewBackground[] = [{
   id: 'synthetic-osm-background',
   target: { kind: 'product', name: 'OpenStreetMap' },
-  facts: [{ text: 'OpenStreetMap is maintained by a community of mappers.', url: 'https://www.openstreetmap.org/about', title: 'OpenStreetMap · About' }],
+  facts: [{ text: 'OpenStreetMap is maintained by a community of mappers.', url: 'https://www.openstreetmap.org/about', title: 'About OpenStreetMap' }],
   retrievedAt: Date.UTC(2026, 8, 27, 12),
 }];
 

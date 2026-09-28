@@ -156,7 +156,7 @@ There is no generated explanation, recommended interview question, or search que
 
 1. Validate answers and reject stale observations. Missing or failed answers are unavailable, never zeros.
 2. Among eligible interview concerns, prioritize boundaries and source accuracy over conversational polish; request at most one Sol review. Sol can return `none`.
-3. Consider a qualifying research signal under its separate small attempt budget. One attempt is one preparation call; a new episode requires the probability to fall below 0.5. Suppress duplicate accepted targets after preparation. Research never blocks corrective direction.
+3. Consider a qualifying research signal under its separate small attempt budget. One attempt is one preparation call; a new episode requires the probability to fall below 0.5. Suppress targets already sent or found conclusively empty. Research never blocks corrective direction.
 4. Apply existing cooldowns, one-outstanding-work rules, cancellation, and the shared note cap outside the model.
 
 The implementation keeps the existing 0.60 interviewer threshold except for overprobing, which requests Sol's second opinion at 0.50. Research requests Luna preparation at 0.50. The paired synthetic cases support these initial referral settings; they are not calibrated guarantees, and both downstream models may decline. The assessment timeout remains 2.5 seconds. Public research expires 25 seconds after the observation was captured, including the Jev assessment time.

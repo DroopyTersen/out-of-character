@@ -226,7 +226,7 @@ export class SimulatorSession extends DurableObject<Env> {
       return;
     }
     if (snapshot.status === 'ending') return;
-    if (event.type === 'session.thinking.appended' && typeof event.client_event_id === 'string') this.contextual?.providerEvent(event.client_event_id, true);
+    if (event.type === 'session.instructions.appended' && typeof event.client_event_id === 'string') this.contextual?.providerEvent(event.client_event_id, true);
     if (event.type === 'session.delegation.created') {
       const delegation = event.delegation as { id?: unknown; target?: unknown } | undefined;
       if (delegation?.target === 'client' && typeof delegation.id === 'string') {

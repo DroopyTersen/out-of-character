@@ -35,13 +35,13 @@ const completed = new Promise(resolve => {
       send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: `Begin this meeting now in English: ${getScenario('sharepoint').opening} Then listen.` });
       pacing = setInterval(() => {
         ticks++;
-        if (cueEnabled && ticks === 300) send({ type: 'session.thinking.append', event_id: 'probe-cue', delegation_id: null, content: cue });
+        if (cueEnabled && ticks === 300) send({ type: 'session.instructions.append', event_id: 'probe-cue', delegation_id: null, content: cue });
         let chunk = Buffer.alloc(960);
         if (ticks > 450 && offset < pcm.length) { chunk = pcm.subarray(offset, Math.min(offset + 960, pcm.length)); offset += chunk.length; }
         send({ type: 'session.input_audio.append', audio: chunk.toString('base64') });
         if (ticks > 450 + Math.ceil(pcm.length / 960) + 650) close();
       }, 20);
-    } else if (value.type === 'session.thinking.appended' && value.client_event_id === 'probe-cue') {
+    } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'probe-cue') {
       report.cueAcknowledged = true;
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       report.transcript = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });

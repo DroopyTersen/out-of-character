@@ -342,10 +342,10 @@ const completed = new Promise(resolve => {
         if (!firstAudibleOutput) report.openingLatencyMs = lastAudibleOutput - openingSentAt;
         firstAudibleOutput ||= lastAudibleOutput;
       }
-    } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
-      report.openingAcknowledged = true;
+    } else if (value.type === 'session.instructions.appended') {
+      if (value.client_event_id === 'opening') report.openingAcknowledged = true;
+      else contextual.providerEvent(value.client_event_id, true);
     } else if (value.type === 'session.thinking.appended') {
-      contextual.providerEvent(value.client_event_id, true);
       const guard = report.delegations.find(item => item.eventId === value.client_event_id);
       if (guard) guard.acknowledged = true;
     } else if (value.type === 'session.delegation.created') {

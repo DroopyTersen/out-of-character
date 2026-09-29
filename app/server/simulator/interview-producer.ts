@@ -4,7 +4,7 @@ import { DirectorOutputError, SOL_MODEL } from '../../../ai/simulator/sol.server
 import { JEV_MODEL } from '../../../ai/judging';
 import { coverageBands, isBackchannel, type CoverageLevel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import {
-  CHECK_IN_SIGNALS, deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION, PROTECTION_CONDITIONS,
+  CHECK_IN_SIGNALS, deliveredBackground, PRODUCER_LIMITS, producerDirection, producerLatency, PRODUCER_VERSION, PROTECTION_CONDITIONS,
   type AssessmentRecord, type CueFollowThrough, type InterviewCue, type NoteDelivery, type ProducerLogRecord, type ProducerRecord, type ProducerSummary, type ProducerTrigger,
   type ProtectionCondition, type ResearchRecord, type ResearchRequest, type RundownRecord,
 } from '../../../core/interview-producer';
@@ -45,7 +45,7 @@ export function rundownText(coverage: Pick<InterviewObjectiveReading, 'id' | 'le
     });
     return groups.length ? [`${topic.label}: ${groups.join('; ')}.`] : [];
   });
-  return [`RUNDOWN (replaces earlier rundowns). About ${minutes} of ${LIMITS.targetMinutes} minutes.`, ...areas].join('\n');
+  return [`RUNDOWN (replaces earlier rundowns). About ${minutes} minutes elapsed.`, ...areas].join('\n');
 }
 
 export function researchCard(request: Pick<ResearchRequest, 'kind' | 'name'>, facts: InterviewBackground['facts'], retrievedAt: number): string {
@@ -86,7 +86,8 @@ export class InterviewProducer {
     const cue = this.currentCue;
     if (!cue?.result?.cue || cue.delivery?.status !== 'accepted' || cue.delivery.endMs == null) return;
     const judgment = cue.followThrough;
-    if (judgment && ['followed', 'retired'].includes(judgment.outcome) && judgment.probabilities[judgment.outcome] >= LIMITS.followThroughPass) return;
+    if (judgment && judgment.probabilities[judgment.outcome] >= LIMITS.followThroughPass
+      && (['followed', 'retired'].includes(judgment.outcome) || (judgment.outcome === 'missed' && cue.triggers.some(item => item.kind === 'cue-recovery')))) return;
     return { id: cue.id, text: cue.result.cue, evidenceIds: [...cue.result.evidenceIds], afterPassageId: cue.delivery.afterPassageId, endMs: cue.delivery.endMs };
   }
   publicBackground(): InterviewBackground[] {
@@ -145,8 +146,8 @@ export class InterviewProducer {
     if (!this.alive) return;
     this.rundown(now);
     const cue = this.currentCue;
-    if (cue?.followThrough && !cue.recoveryUsed && this.recoveryApplies(cue.id) && cue.followThrough?.lastInputId === this.options.settled().at(-1)?.id
-      && this.lastCueAt != null && now - this.lastCueAt >= LIMITS.cueSpacing && this.counts.consultations < LIMITS.consultations) {
+    if (cue?.followThrough && !cue.recoveryUsed && this.recoveryApplies(cue.id) && cue.followThrough.lastInputId === this.options.settled().at(-1)?.id
+      && this.lastCueAt != null && now - this.lastCueAt >= LIMITS.cueSpacing && this.counts.cues < LIMITS.cues && this.counts.consultations < LIMITS.consultations) {
       cue.recoveryUsed = true;
       this.trigger([{ kind: 'cue-recovery', cueId: cue.id, probability: cue.followThrough.probabilities.missed }], now);
       return;
@@ -240,14 +241,15 @@ export class InterviewProducer {
       if (Date.now() - checkStartedAt >= LIMITS.check) { record.outcome = 'timeout'; return; }
       const moved = checkedDialogue !== dialogueKey(this.options.settled());
       if (moved || checked.probability < LIMITS.cuePass) { record.outcome = 'withheld'; record.reason = moved ? 'dialogue_changed' : 'check'; return; }
-      if (record.triggers.some(item => item.kind === 'cue-recovery' && !this.recoveryApplies(item.cueId))) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
-      const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, `Producer direction — next suitable interviewing move: ${result.cue}`, 'session.instructions.append');
+      if (record.triggers.every(item => item.kind === 'cue-recovery' && !this.recoveryApplies(item.cueId))) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
+      const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, producerDirection(result.cue), 'session.instructions.append');
       record.outcome = sent ? 'sent' : 'error';
       if (sent) { this.counts.cues++; this.lastCueAt = record.sentAt = Date.now(); this.currentCue = record; }
     } catch (error) {
       if (!this.alive) return;
       record.outcome = error instanceof DirectorOutputError ? 'invalid' : signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
+      if (record.outcome !== 'sent' && record.triggers.some(item => item.kind === 'cue-recovery' && item.cueId === this.currentCue?.id)) this.currentCue = null;
       if (this.alive) record.completedAt = Date.now();
     }
   }

@@ -38,6 +38,7 @@ for (const row of jev.rows) {
       durationMs: assessment ? assessment.detectorDurationMs : row.interviewer.durationMs,
       signals: assessment ? assessment.signals : row.interviewer.signals,
       researchProbability: row.interviewer.researchProbability,
+      ...(row.interviewer.followThrough ? { followThrough: row.interviewer.followThrough } : {}),
     },
     ...(generation ? { producer: {
       model: generation.model, durationMs: generation.durationMs, cue: generation.cue,

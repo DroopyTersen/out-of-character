@@ -158,17 +158,23 @@ export function readResearchProbability(answers: InterviewAnswers): number | und
 export function cueResponseIds(transcript: TranscriptEntry[], cue: InterviewCue): string[] {
   const after = cue.afterPassageId == null ? -1 : transcript.findIndex(entry => entry.id === cue.afterPassageId);
   if ((cue.afterPassageId != null && after < 0) || cue.evidenceIds.some(id => !transcript.some(entry => entry.id === id))) return [];
-  return recentTranscript(transcript.slice(after + 1), 12_000).filter(entry => entry.speaker === 'client' && entry.startMs >= cue.endMs && !isBackchannel(entry.text)).map(entry => entry.id);
+  // Jev can freeze a passage while Sam is still talking; a new ID need not be a new turn.
+  // A substantive participant reply after receipt gives us a conservative response boundary.
+  const reply = transcript.findIndex((entry, index) => index > after && entry.speaker === 'trainee' && entry.endMs >= cue.endMs
+    && entry.endMs - entry.startMs > 200 && !isBackchannel(entry.text));
+  if (reply < 0) return [];
+  // Allow the 200 ms timestamp overlap observed at normal Live turn handoffs.
+  const responseStart = Math.max(cue.endMs, transcript[reply]!.endMs - 200);
+  return recentTranscript(transcript.slice(reply + 1), 12_000).filter(entry => entry.speaker === 'client' && entry.startMs >= responseStart && !isBackchannel(entry.text)).map(entry => entry.id);
 }
 
 /** An optional cue judgment must not suppress the other interviewer checks. */
-export function readCueFollowThrough(answers: InterviewAnswers, transcript: TranscriptEntry[], cue?: InterviewCue): CueFollowThrough | undefined {
+export function readCueFollowThrough(answers: InterviewAnswers, cue?: InterviewCue, responseIds: string[] = []): CueFollowThrough | undefined {
   const answer = answers['cue:follow-through'];
   if (!cue || answer?.type !== 'choice' || !CUE_OUTCOMES.includes(answer.choice as CueOutcome) || !answer.probabilities
     || CUE_OUTCOMES.some(key => !validProbability(answer.probabilities![key] ?? NaN))) return;
   const probabilities = Object.fromEntries(CUE_OUTCOMES.map(key => [key, answer.probabilities![key]!])) as Record<CueOutcome, number>;
   if (Math.abs(Object.values(probabilities).reduce((sum, value) => sum + value, 0) - 1) > .02) return;
-  const responseIds = cueResponseIds(transcript, cue);
   // Receipt alone cannot prove Sam had a chance to follow or miss an instruction.
   if (!responseIds.length && (answer.choice === 'followed' || answer.choice === 'missed')) return;
   return { cueId: cue.id, outcome: answer.choice as CueOutcome, probabilities, responseIds };
@@ -190,12 +196,13 @@ export function interviewerState(transcript: TranscriptEntry[], deliveredBackgro
 export async function evaluateInterviewer(input: Input) {
   validate(input);
   const started = performance.now();
+  const context = interviewerState(input.transcript, input.deliveredBackground, input.cue);
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: interviewerState(input.transcript, input.deliveredBackground, input.cue), questions: interviewerQuestions(!!input.cue),
+    state: context, questions: interviewerQuestions(!!context.producerDirection?.responseIds.length),
     abortSignal: input.signal, maxRetries: 0,
   });
-  const followThrough = readCueFollowThrough(result.answers, input.transcript, input.cue);
+  const followThrough = readCueFollowThrough(result.answers, input.cue, context.producerDirection?.responseIds);
   return { signals: readInterviewerSignals(result.answers), researchProbability: readResearchProbability(result.answers), ...(followThrough ? { followThrough } : {}), revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers };
 }

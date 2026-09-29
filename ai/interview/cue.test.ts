@@ -20,18 +20,18 @@ test('only later substantive Sam passages can show follow-through, even when a p
   expect(cueResponseIds(transcript, { ...cue, endMs: 13_000 })).toEqual([]);
   expect(cueResponseIds(transcript, { ...cue, afterPassageId: 'missing' })).toEqual([]);
   expect(cueResponseIds(transcript, { ...cue, evidenceIds: ['missing'] })).toEqual([]);
-  expect(readCueFollowThrough(answer('missed'), transcript.slice(0, 4), cue)).toBeUndefined();
-  expect(readCueFollowThrough(answer('followed'), transcript, cue)).toMatchObject({ cueId: 'cue-1', outcome: 'followed', responseIds: ['p5'] });
+  expect(readCueFollowThrough(answer('missed'), cue, cueResponseIds(transcript.slice(0, 4), cue))).toBeUndefined();
+  expect(readCueFollowThrough(answer('followed'), cue, cueResponseIds(transcript, cue))).toMatchObject({ cueId: 'cue-1', outcome: 'followed', responseIds: ['p5'] });
 });
 
 test('optional follow-through failure does not create a judgment and absent cues cost no question', () => {
   expect(interviewerQuestions()['cue:follow-through']).toBeUndefined();
   expect(interviewerQuestions(true)['cue:follow-through']?.type).toBe('choice');
-  expect(readCueFollowThrough(answer('followed'), transcript)).toBeUndefined();
-  expect(readCueFollowThrough({}, transcript, cue)).toBeUndefined();
+  expect(readCueFollowThrough(answer('followed'))).toBeUndefined();
+  expect(readCueFollowThrough({}, cue, ['p5'])).toBeUndefined();
   const invalid = answer('missed');
   invalid['cue:follow-through'] = { type: 'choice', choice: 'missed', probabilities: { missed: 1 } };
-  expect(readCueFollowThrough(invalid, transcript, cue)).toBeUndefined();
+  expect(readCueFollowThrough(invalid, cue, ['p5'])).toBeUndefined();
 });
 
 test('a long conversation retains the direction source and delivery anchor in its bounded assessment', () => {
@@ -42,4 +42,42 @@ test('a long conversation retains the direction source and delivery anchor in it
   expect(ids).toContain('p2'); expect(ids).toContain('p3');
   expect(ids).toContain('later-29'); expect(ids).not.toContain('later-0');
   expect(state.producerDirection).toMatchObject({ id: 'cue-1', evidenceIds: ['p2'], afterPassageId: 'p3' });
+});
+
+
+test('a newly frozen fragment of an ongoing Sam utterance is not a fresh interviewing opportunity', () => {
+  const fragment: TranscriptEntry = { id: 'p4-fragment', speaker: 'client', text: 'and thank you for your time.', startMs: 9000, endMs: 10_000 };
+  const talking = [...transcript.slice(0, 3), fragment];
+  expect(cueResponseIds(talking, cue)).toEqual([]);
+  expect(readCueFollowThrough(answer('missed'), cue, cueResponseIds(talking, cue))).toBeUndefined();
+  expect(cueResponseIds([...talking, ...transcript.slice(3)], cue)).toEqual(['p5']);
+});
+
+test('a direction received during the participant answer can be followed by the next Sam question', () => {
+  const duringAnswer = { ...cue, endMs: 10_500 };
+  expect(cueResponseIds(transcript, duringAnswer)).toEqual(['p5']);
+  expect(readCueFollowThrough(answer('followed'), duringAnswer, cueResponseIds(transcript, duringAnswer))?.outcome).toBe('followed');
+});
+
+test('late-arriving overlap is not a new response, while a normal 200ms turn handoff counts', () => {
+  const overlap = { id: 'late-fragment', speaker: 'client' as const, text: 'and anything else?', startMs: 8500, endMs: 9500 };
+  const reply = { ...transcript[3]!, startMs: 9000, endMs: 10_000 };
+  const next = { ...transcript[4]!, startMs: 9800 };
+  expect(cueResponseIds([...transcript.slice(0, 3), reply, overlap], cue)).toEqual([]);
+  expect(cueResponseIds([...transcript.slice(0, 3), reply, overlap, next], cue)).toEqual(['p5']);
+});
+
+test('a trailing participant word cannot make an ongoing Sam answer eligible', () => {
+  const reply = { ...transcript[3]!, endMs: 11_900 };
+  const talking: TranscriptEntry[] = [...transcript.slice(0, 3), reply,
+    { id: 'p5', speaker: 'client', text: 'That', startMs: 11_800, endMs: 12_000 },
+    { id: 'p6', speaker: 'trainee', text: 'day.', startMs: 12_000, endMs: 12_200 },
+    { id: 'p7', speaker: 'client', text: 'sounds good. Anything else?', startMs: 12_200, endMs: 15_000 },
+  ];
+  const arrivedDuringSpeech = { ...cue, afterPassageId: 'p4', endMs: 11_950 };
+  expect(cueResponseIds(talking, arrivedDuringSpeech)).toEqual([]);
+  expect(cueResponseIds([...talking,
+    { id: 'p8', speaker: 'trainee', text: 'That was the highlight.', startMs: 16_000, endMs: 18_000 },
+    { id: 'p9', speaker: 'client', text: 'How did the handoff work?', startMs: 18_000, endMs: 20_000 },
+  ], arrivedDuringSpeech)).toEqual(['p9']);
 });

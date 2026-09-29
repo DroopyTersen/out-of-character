@@ -1,7 +1,7 @@
 import type { InterviewReadingId } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import type { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
-import type { DeliveredInterviewBackground } from '../../core/interview-producer';
+import type { CueOutcome, InterviewCue, DeliveredInterviewBackground } from '../../core/interview-producer';
 
 type InterviewCondition = (typeof INTERVIEW_CONDITIONS)[number];
 
@@ -14,10 +14,56 @@ export type InterviewFixture = {
   description: string;
   transcript: TranscriptEntry[];
   deliveredBackground?: DeliveredInterviewBackground[];
-  expected: { heard: string[]; unheard: string[]; present?: InterviewCondition[]; absent?: InterviewCondition[]; researchUseful?: boolean; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
+  cue?: InterviewCue;
+  expected: { noCueAssessment?: boolean; followThrough?: CueOutcome; heard: string[]; unheard: string[]; present?: InterviewCondition[]; absent?: InterviewCondition[]; researchUseful?: boolean; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
 };
 
 export const interviewFixtures: InterviewFixture[] = [
+  {
+    id: 'client-testers-not-delivery-staff', description: 'Client staff feedback is not a contribution by our delivery team.',
+    transcript: dialogue([
+      ['client', 'Who on the client side used the application?'],
+      ['trainee', 'Two client dispatchers tested the booking screen and sent comments. I do not know who else was on our delivery team.'],
+    ]), expected: { heard: [], unheard: ['project-contributions', 'process-resourcing'] },
+  },
+  {
+    id: 'client-cloud-gap-not-team-resourcing', description: 'Client infrastructure readiness does not establish an internal staffing effect.',
+    transcript: dialogue([
+      ['client', 'What was getting into their environment like?'],
+      ['trainee', 'The client had no cloud environment and their IT team could not configure it. We needed their security lead to create our accounts before we could deploy. I cannot comment on our own staffing.'],
+    ]), expected: { heard: ['client-access'], unheard: ['process-resourcing'] },
+  },
+  {
+    id: 'attributed-handoff-effect', description: 'An attributed concrete practice and consequence can answer the handoff topic.',
+    transcript: dialogue([
+      ['client', 'How did the delivery team hand over work?'],
+      ['trainee', 'Priya told me our incoming developer lacked the runbook, so he spent two days rediscovering how to deploy. She handled the handoff; I was not present, so this is her account.'],
+      ['client', 'Understood, that is Priya’s account. What part did you work on yourself?'],
+    ]), expected: { heard: ['process-communication'], unheard: ['project-role'], absent: ['source-confusion', 'boundary-pressure'] },
+  },
+  {
+    id: 'vague-handoff-report', description: 'A vague secondhand verdict does not establish the handoff practice or effect.',
+    transcript: dialogue([
+      ['client', 'How was the handoff?'],
+      ['trainee', 'The client lead said it was awkward. I was not around and do not know what happened.'],
+    ]), expected: { heard: [], unheard: ['process-communication'] },
+  },
+  {
+    id: 'senior-guidance-skipped', description: 'A pleasant generic pivot misses the practical meaning of senior guidance.',
+    transcript: dialogue([
+      ['client', 'How did you get past the early uncertainty?'],
+      ['trainee', 'It took some senior client management. That made a big difference.'],
+      ['client', 'That sounds helpful. Anything else you would like to mention?'],
+    ]), expected: { heard: [], unheard: [], present: ['missed-thread'] },
+  },
+  {
+    id: 'quiet-win-mechanism-supplied', description: 'A concise practice with its useful effect does not need mechanical probing.',
+    transcript: dialogue([
+      ['client', 'What made the vendor handoff work?'],
+      ['trainee', 'We agreed an example payload together and ran it in both systems before either team coded. That caught the mismatched date format early.'],
+      ['client', 'Useful. How did you prepare the incoming developer later?'],
+    ]), expected: { heard: ['client-coordination'], unheard: [], absent: ['missed-thread', 'overprobing'] },
+  },
   {
     id: 'team-speed-not-client-pace', description: 'A fast prototype and unfamiliar client staff do not establish approvals or access.',
     transcript: dialogue([
@@ -317,3 +363,31 @@ export const interviewFixtures: InterviewFixture[] = [
     expected: { heard: [], unheard: [], present: ['source-confusion'] },
   },
 ];
+
+
+const handoffCue: InterviewCue = { id: 'synthetic-cue', text: 'Return to the vendor handoff: ask what made it work.', evidenceIds: ['p2'], afterPassageId: 'p3', endMs: 35_000 };
+const cueCases: { id: string; outcome: CueOutcome; participant: string; sam: string }[] = [
+  { id: 'cue-followed', outcome: 'followed', participant: 'That was the highlight for me.', sam: 'How did you make the handoff between your team and the vendor work?' },
+  { id: 'cue-missed', outcome: 'missed', participant: 'That was the highlight for me.', sam: 'Great, we have everything. Thanks for the interview.' },
+  { id: 'cue-deferred', outcome: 'deferred', participant: 'Before that, our newest developer spotted duplicate payments right before launch. It changed how we handled release approval.', sam: 'What did she notice that made you stop the release?' },
+  { id: 'cue-deferred-quiet-success', outcome: 'deferred', participant: 'Something else worth explaining: our support team started attending design reviews. Calls after launch dropped by half, which surprised everyone.', sam: 'What did support bring to those reviews that changed the design?' },
+  { id: 'cue-deferred-accessibility', outcome: 'deferred', participant: 'Actually, a screen-reader user tried the pilot and could not finish a booking. We changed the rollout after hearing her experience.', sam: 'What did you change about the rollout after that test?' },
+  { id: 'cue-already-answered', outcome: 'retired', participant: 'The handoff worked because we jointly tested an example payload before coding. It caught a date-format mismatch early; that was the whole trick.', sam: 'That explains it. What else should a future team know?' },
+  { id: 'cue-boundary', outcome: 'retired', participant: 'I do not want to discuss the vendor. I would like to finish here.', sam: 'Of course. Thank you for sharing what you could.' },
+];
+for (const item of cueCases) interviewFixtures.push({
+  id: item.id, description: `Synthetic producer direction: ${item.outcome}.`, cue: handoffCue,
+  transcript: dialogue([
+    ['client', 'What was a highlight of the project?'],
+    ['trainee', 'We built a booking portal. The handoff with the vendor went really well.'],
+    ['client', 'What else went well?'],
+    ['trainee', item.participant], ['client', item.sam],
+  ]), expected: { heard: [], unheard: [], followThrough: item.outcome },
+});
+interviewFixtures.push({
+  id: 'cue-in-flight', description: 'A question already underway at context delivery is not a missed instruction.', cue: { ...handoffCue, endMs: 60_000 },
+  transcript: dialogue([
+    ['client', 'What was a highlight of the project?'], ['trainee', 'The vendor handoff went really well.'],
+    ['client', 'What else went well?'], ['trainee', 'That was the highlight.'], ['client', 'Anything else?'],
+  ]), expected: { heard: [], unheard: [], noCueAssessment: true },
+});

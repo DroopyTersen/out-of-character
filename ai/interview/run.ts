@@ -23,13 +23,15 @@ for (const fixture of fixtures) {
     const input = { scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', transcript: fixture.transcript,
       revision: fixture.transcript.length, apiKey, signal: AbortSignal.timeout(30_000) };
     const participant = interviewerOnly ? null : await evaluateInterview(input);
-    const interviewer = await evaluateInterviewer({ ...input, deliveredBackground: fixture.deliveredBackground, signal: AbortSignal.timeout(30_000) });
+    const interviewer = await evaluateInterviewer({ ...input, deliveredBackground: fixture.deliveredBackground, cue: fixture.cue, signal: AbortSignal.timeout(30_000) });
     const signalProbability = (id: string) => {
       const signal = interviewer.signals.find(item => item.condition === id);
       return signal && 'probability' in signal ? signal.probability : null;
     };
     const heard = participant?.objectives.filter(item => item.achieved).map(item => item.id) ?? [];
     const checks = [
+      ...(fixture.expected.noCueAssessment ? [{ name: 'cue:no-response-opportunity', passed: interviewer.followThrough == null && interviewer.answers['cue:follow-through'] == null }] : []),
+      ...(fixture.expected.followThrough ? [{ name: 'cue:follow-through', passed: interviewer.followThrough?.outcome === fixture.expected.followThrough && interviewer.followThrough.probabilities[fixture.expected.followThrough] >= .6 }] : []),
       ...(participant ? fixture.expected.heard.map(id => ({ name: `heard:${id}`, passed: heard.includes(id) })) : []),
       ...(participant ? fixture.expected.unheard.map(id => ({ name: `unheard:${id}`, passed: !heard.includes(id) })) : []),
       ...((participant && fixture.expected.highReadings?.map(id => ({ name: `high:${id}`, passed: (participant.readings[id].value ?? -1) >= 2.5 }))) || []),

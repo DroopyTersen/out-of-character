@@ -14,6 +14,10 @@ The interview should turn broad judgments into useful examples, practices and le
 
 Run targeted timing, supersession, recovery, boundary, archive and summary tests; refresh anonymized Jev recordings; run real Sol replays; rehearse a quiet participant and controlled directions through real voice. Judge actual subsequent questions and listen to the audio. Provider receipt is not proof of use. Finish with the full check and WebRTC/streamed-summary/private-archive acceptance, then publish only to the existing isolated interview preview.
 
-## Checkpoint 1
+## Review refinements
 
-Implemented prompts, instruction delivery/receipts, latest-cue evaluation, bounded recovery, private rundown and diagnostic timeline. Typecheck passed. Initial targeted run: 77 tests passed; new follow-through tests: 31 passed. Synthetic recordings and paid voice verification remain pending for rubric v7. The small follow-through judgment is diagnostic and does not score the participant.
+Instruction delivery now repeats the essential priority rules: first finish a fresh useful story, apply the latest relevant direction once, and respect an answered question, a boundary or a request to stop. It must not trigger speech merely on receipt. The same wrapper is used in the voice rehearsal.
+
+Timing checks require a substantive participant-to-Sam exchange, exclude one-frame trailing words, and allow the small timestamp overlap observed at ordinary turn boundaries. An exhausted recovery stops being reassessed, while an independent boundary correction survives a stale recovery in the same consultation. Session tests cover both accepted and rejected instruction events and private archive wiring.
+
+Synthetic recordings were refreshed for rubric v7. Real voice rehearsals cover quiet answers, new disclosures, already-answered questions, cues arriving during speech, supersession, and explicit stops. Provider receipt alone is never counted as behavioral success. Jev remains probabilistic: conservative coverage and cue-delivery decisions are recorded as limitations, not made to pass by lowering thresholds. The follow-through judgment is diagnostic and does not score the participant.

@@ -34,7 +34,7 @@ const gate = new DirectorGate();
 async function replayInterview(turn: number) {
   const transcript = fixture!.transcript.slice(0, turn);
   const input = { scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', transcript, revision: turn, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(30_000) };
-  const [interviewer, graded] = await Promise.all([evaluateInterviewer({ ...input, deliveredBackground: interviewFixture!.deliveredBackground }), evaluateInterview(input)]);
+  const [interviewer, graded] = await Promise.all([evaluateInterviewer({ ...input, deliveredBackground: interviewFixture!.deliveredBackground, cue: interviewFixture!.cue }), evaluateInterview(input)]);
   const probability = (condition: string) => { const signal = interviewer.signals.find(item => item.condition === condition); return signal && 'probability' in signal ? signal.probability : 0; };
   const triggers: ProducerTrigger[] = [
     ...PROTECTION_CONDITIONS.filter(condition => probability(condition) >= .6).map(condition => ({ kind: 'concern' as const, condition, probability: probability(condition) })),

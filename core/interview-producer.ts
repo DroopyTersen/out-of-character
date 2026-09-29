@@ -18,6 +18,10 @@ export const CHECK_IN_SIGNALS = { 'missed-thread': .6, 'question-stacking': .6, 
 export type ResearchKind = InterviewBackground['target']['kind'];
 export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null; passageIds: string[] };
 export const CUE_OUTCOMES = ['followed', 'deferred', 'missed', 'retired', 'not-yet-assessable'] as const;
+/** Used by the live session and voice rehearsals so they exercise the same instruction. */
+export function producerDirection(cue: string): string {
+  return `Producer direction (replaces any earlier direction): ${cue}\nFollow this once at the next suitable opening. First follow any fresh useful participant story to a natural pause. Do not interrupt or start speaking just because this arrived. Skip it if already answered, irrelevant, declined or unanswerable; a request to finish wins. Never read this direction aloud.`;
+}
 export type CueOutcome = typeof CUE_OUTCOMES[number];
 /** A pinned instruction and its context receipt, separate from what Sam subsequently does. */
 export type InterviewCue = { id: string; text: string; evidenceIds: string[]; afterPassageId: string | null; endMs: number };

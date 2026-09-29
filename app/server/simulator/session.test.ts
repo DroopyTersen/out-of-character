@@ -1,7 +1,7 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
-import { PRODUCER_VERSION } from '../../../core/interview-producer';
+import { PRODUCER_VERSION, type InterviewCue } from '../../../core/interview-producer';
 import type { producerServices } from './interview-producer';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
@@ -384,6 +384,58 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   expect(summarized).not.toContain('interventions');
   expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
   expect(f.row()).toBeNull();
+}, 10_000);
+
+test.each(['accepted', 'rejected'] as const)('interview instruction %s receipt controls follow-through and recovery', async receipt => {
+  const epoch = 1_800_000_000_000;
+  const interviewerInputs: { cue?: InterviewCue }[] = [];
+  const producerTriggers: Parameters<typeof producerServices.generateProducer>[0]['triggers'][] = [];
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => {
+      interviewerInputs.push(input);
+      return { revision: input.revision, researchProbability: 0, signals: interviewerInputs.length === 1 ? [{ condition: 'leading', probability: .99 }] : [],
+        ...(input.cue ? { followThrough: { cueId: input.cue.id, outcome: 'missed' as const,
+          probabilities: { followed: .01, deferred: .01, missed: .96, retired: .01, 'not-yet-assessable': .01 }, responseIds: ['p4'] } } : {}),
+        model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} };
+    },
+    generateProducer: async input => {
+      producerTriggers.push(input.triggers);
+      const cue = producerTriggers.length === 1 ? 'PRIVATE: Ask who owned the access handoff.' : null;
+      return { cue, evidenceIds: cue ? ['p1'] : [], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+    },
+  } });
+  setSystemTime(epoch);
+  await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
+  setSystemTime(epoch + 2000);
+  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('cue-')));
+  const eventId = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))!.event_id;
+  f.socket.emit(receipt === 'accepted'
+    ? { type: 'session.instructions.appended', client_event_id: eventId, start_ms: 2000, end_ms: 2400 }
+    : { type: 'error', error: { client_event_id: eventId } });
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Our lead coordinated it.', start_ms: 3000, end_ms: 4000 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Can you describe their role?', start_ms: 5000, end_ms: 6000 });
+  setSystemTime(epoch + 13_000);
+  await f.session.fetch(request('poll'));
+  await waitFor(() => interviewerInputs.length >= 2);
+  await Promise.all(f.pending);
+  if (receipt === 'accepted') expect(interviewerInputs[1]!.cue).toMatchObject({ id: expect.stringMatching(/^producer-/),
+    text: 'PRIVATE: Ask who owned the access handoff.', evidenceIds: ['p1'], afterPassageId: 'p2', endMs: 2400 });
+  else expect(interviewerInputs[1]!.cue).toBeUndefined();
+  setSystemTime(epoch + 33_000);
+  await f.session.fetch(request('poll'));
+  if (receipt === 'accepted') await waitFor(() => producerTriggers.some(triggers => triggers.some(trigger => trigger.kind === 'cue-recovery')));
+  await Promise.all(f.pending);
+  await f.session.fetch(request('end'));
+  await Promise.all(f.pending);
+  const records = JSON.parse(f.interviewRow()!.interventions_json);
+  const cue = records.find((item: { source: string }) => item.source === 'producer');
+  expect(cue.delivery.status).toBe(receipt);
+  expect(cue.followThrough?.outcome).toBe(receipt === 'accepted' ? 'missed' : undefined);
+  expect(producerTriggers.some(triggers => triggers.some(trigger => trigger.kind === 'cue-recovery'))).toBe(receipt === 'accepted');
+  const snapshot = await (await f.session.fetch(request('poll'))).json();
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE:');
 }, 10_000);
 
 test('End freezes an unfinished interview direction without delaying its summary', async () => {

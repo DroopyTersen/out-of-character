@@ -7,6 +7,7 @@ import { evaluateInterview, evaluateInterviewer } from '../ai/interview/evaluate
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { coverageEvidenceIds, INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
+import { producerDirection } from '../core/interview-producer.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
 import { InterviewProducer, producerServices } from '../app/server/simulator/interview-producer.ts';
@@ -36,6 +37,60 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   'project-closeout': {
+    quiet: {
+      turns: 10,
+      lines: {
+        project: 'We built a booking portal for an unnamed regional agency. I led the API work.',
+        purpose: 'It let residents book appointments without calling the office.',
+        win: 'Working with the website vendor went smoothly.',
+        vendor: 'We jointly tested an example payload before either team coded. It caught a date format mismatch early.',
+        challenge: 'The client was new to software projects. It took some senior client management.',
+        guidance: 'Our lead replaced the big signoff document with a weekly working demo. The client could point at a real screen and explain what was wrong.',
+        change: 'They spotted that cancellations needed a confirmation step. We changed that before launch.',
+        handoff: 'I handed the API work to Priya in week six.',
+        prepare: 'Priya deployed from my runbook while I watched. She found a missing environment variable, so we fixed the instructions before I left.',
+        scope: 'The client had no cloud environment. That setup had not been included in our estimate.',
+        effect: 'We had to move two days of feature work to the following week. Next time I would check environment readiness before estimating.',
+        enough: 'Nothing else comes to mind about that.',
+        stop: 'That is all I can add. I would like to finish now.',
+      },
+      choose({ turn, answer, used }) {
+        if (!turn) return 'project';
+        if (turn >= 9 || /anything (else|important).*miss|final thoughts|wrap up|before we finish/i.test(answer)) return 'stop';
+        const choices = [
+          ['vendor', /vendor|payload|date format|handoff.*website/i],
+          ['guidance', /senior|client management|working demo|sign.?off|uncertainty/i],
+          ['change', /feedback|changed.*build|demo.*(change|example)|example.*demo/i],
+          ['prepare', /prepare|runbook|Priya|handover|handoff/i],
+          ['effect', /environment|estimate|cloud|scope|two days/i],
+          ['purpose', /goal|purpose|trying to|residents|appointments/i],
+          ['win', /worked well|went well|proud|highlight|success|repeat/i],
+          ['challenge', /hard|challeng|friction|difficult|client.*like|working with/i],
+          ['handoff', /team|who else|contribut|colleague/i],
+          ['scope', /surpris|different|improve|planning/i],
+        ];
+        return choices.find(([id, pattern]) => !used.has(id) && pattern.test(answer))?.[0] ?? 'enough';
+      },
+    },
+    'cue-in-flight': {
+      turns: 4, cue: 'Ask who made the final launch approval decision.', cueDuringSpeech: true,
+      lines: {
+        project: 'We built a booking portal for an unnamed agency. I led the API. We had a final launch approval meeting.',
+        reply: 'The implementation itself was straightforward. The important piece was getting the launch approved.',
+        owner: 'The operations director Elena made the final launch decision. She required a passing rehearsal with the service desk.',
+        stop: 'The rehearsal passed, and Elena approved the launch that afternoon. That is the whole story. I would like to finish.',
+      },
+      choose: ({ turn, answer }) => turn === 0 ? 'project' : turn === 3 ? 'stop' : /who|approv|decision|sign.?off/i.test(answer) ? 'owner' : 'reply',
+    },
+    'cue-answered': {
+      turns: 3, cue: 'Ask who made the final launch approval decision.',
+      lines: {
+        project: 'We built a booking portal for an unnamed agency. I led the API. We had a final launch approval meeting.',
+        answer: 'The operations director Elena made the final launch decision. She watched a passing service desk rehearsal and approved it that afternoon.',
+        stop: 'That is all I know about it, and I would like to finish here.',
+      },
+      choose: ({ turn }) => ['project', 'answer', 'stop'][turn],
+    },
     // Controlled earpiece test: a real voice session must prioritize newer speech over this older cue.
     'fresh-disclosure': {
       turns: 4,
@@ -357,7 +412,7 @@ async function observeClient(afterTurn, transcript) {
     const input = { scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) };
     try {
       const [judged, graded] = await Promise.allSettled([
-        evaluateInterviewer({ ...input, deliveredBackground: producer.background() }),
+        evaluateInterviewer({ ...input, cue: producer.cue(), deliveredBackground: producer.background() }),
         evaluateInterview({ ...input, keepIds: coverageEvidenceIds(coverage) }),
       ]);
       if (closing) return;
@@ -365,9 +420,9 @@ async function observeClient(afterTurn, transcript) {
       else report.errors.push(`Participant grading failed (${graded.reason.name}).`);
       if (judged.status === 'rejected') throw judged.reason;
       const judgment = judged.value;
-      report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability,
+      report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability, followThrough: judgment.followThrough,
         ...(exerciseResearch && afterTurn === 2 ? { suppliedResearchProbability: 1 } : {}) });
-      producer.observe({ transcript, capturedAt, signals: judgment.signals, model: judgment.model,
+      producer.observe({ transcript, capturedAt, signals: judgment.signals, model: judgment.model, followThrough: judgment.followThrough,
         researchProbability: exerciseResearch && afterTurn === 2 ? 1 : judgment.researchProbability });
       producer.tick();
     } catch (error) {
@@ -387,6 +442,11 @@ async function observeClient(afterTurn, transcript) {
     report.directions.push({ afterTurn, unavailable: true, error: error.name });
   }
 }
+function sendControlledCue() {
+  const eventId = 'rehearsal-cue';
+  report.controlledCue = { eventId, cue: plan.cue, afterPassageId: report.transcript.at(-1)?.id ?? null, sentAt: Date.now(), acknowledgedAt: null, followThrough: 'Manual review; this controlled cue is outside the producer loop.', duringSpeech: !!plan.cueDuringSpeech };
+  send({ type: 'session.instructions.append', event_id: eventId, delegation_id: null, content: producerDirection(plan.cue) });
+}
 async function respond() {
   deciding = true;
   const spoken = report.transcript.filter(entry => entry.speaker === 'client');
@@ -404,16 +464,14 @@ async function respond() {
       // Measure Sam's reply after the last possible note without proposing an
       // unobservable new note at the moment the rehearsal closes.
       try {
-        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), deliveredBackground: producer.background() });
-        report.finalObservation = { signals: result.signals, model: result.model, durationMs: result.durationMs };
+        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), deliveredBackground: producer.background(), cue: producer.cue() });
+        report.finalObservation = { signals: result.signals, followThrough: result.followThrough, model: result.model, durationMs: result.durationMs };
       } catch (error) { report.finalObservation = { unavailable: true, error: error.name }; }
     }
     close(); return;
   }
-  if (plan.cue && turn === 1) {
-    const eventId = 'rehearsal-cue';
-    report.controlledCue = { eventId, cue: plan.cue, afterPassageId: report.transcript.at(-1)?.id ?? null, sentAt: Date.now(), acknowledgedAt: null };
-    send({ type: 'session.thinking.append', event_id: eventId, delegation_id: null, content: `PRIVATE PRODUCER CUE: ${plan.cue}` });
+  if (plan.cue && !plan.cueDuringSpeech && turn === 1) {
+    sendControlledCue();
     const until = Date.now() + 3000;
     while (!report.controlledCue.acknowledgedAt && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 20));
     if (!report.controlledCue.acknowledgedAt) throw new Error('Controlled cue was not acknowledged.');
@@ -430,7 +488,7 @@ const completed = new Promise(resolve => {
   ws.addEventListener('message', event => {
     if (typeof event.data !== 'string') return;
     const value = JSON.parse(event.data);
-    if (value.type === 'session.thinking.appended' && value.client_event_id === report.controlledCue?.eventId) report.controlledCue.acknowledgedAt = Date.now();
+    if (value.type === 'session.instructions.appended' && value.client_event_id === report.controlledCue?.eventId) Object.assign(report.controlledCue, { acknowledgedAt: Date.now(), startMs: value.start_ms, endMs: value.end_ms });
     if (value.type === 'session.started') {
       // Same opening request as the production session owner.
       openingSentAt = Date.now();
@@ -450,7 +508,10 @@ const completed = new Promise(resolve => {
         if (!clip && !deciding && readyForReply) void respond().catch(() => { report.errors.push('Rehearsal step failed.'); close(); });
       }, 20);
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
-      if (value.type === 'session.output_transcript.delta') lastOutput = Date.now();
+      if (value.type === 'session.output_transcript.delta') {
+        lastOutput = Date.now();
+        if (plan.cueDuringSpeech && turn === 1 && !clip && !report.controlledCue) sendControlledCue();
+      }
       const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
       const changed = next.find(entry => !report.transcript.includes(entry));
       report.transcript = next;
@@ -469,8 +530,8 @@ const completed = new Promise(resolve => {
       }
     } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
       report.openingAcknowledged = true;
-    } else if (value.type === 'session.thinking.appended') {
-      directions.providerEvent(value.client_event_id, true);
+    } else if (value.type === 'session.thinking.appended' || value.type === 'session.instructions.appended') {
+      directions.providerEvent(value.client_event_id, true, { startMs: value.start_ms, endMs: value.end_ms });
       const guard = report.delegations.find(item => item.eventId === value.client_event_id);
       if (guard) guard.acknowledged = true;
     } else if (value.type === 'session.delegation.created') {

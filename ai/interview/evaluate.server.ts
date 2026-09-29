@@ -163,9 +163,12 @@ export function cueResponseIds(transcript: TranscriptEntry[], cue: InterviewCue)
   const reply = transcript.findIndex((entry, index) => index > after && entry.speaker === 'trainee' && entry.endMs >= cue.endMs
     && entry.endMs - entry.startMs > 200 && !isBackchannel(entry.text));
   if (reply < 0) return [];
-  // Allow the 200 ms timestamp overlap observed at normal Live turn handoffs.
-  const responseStart = Math.max(cue.endMs, transcript[reply]!.endMs - 200);
-  return recentTranscript(transcript.slice(reply + 1), 12_000).filter(entry => entry.speaker === 'client' && entry.startMs >= responseStart && !isBackchannel(entry.text)).map(entry => entry.id);
+  // Live handoffs overlap the reply's end by up to ~600 ms. A frozen remainder of
+  // Sam's ongoing turn starts earlier, with the reply itself.
+  const { startMs, endMs } = transcript[reply]!;
+  const responseStart = Math.max(cue.endMs, endMs - 1000);
+  return recentTranscript(transcript.slice(reply + 1), 12_000).filter(entry => entry.speaker === 'client' && entry.startMs > startMs
+    && entry.startMs >= responseStart && !isBackchannel(entry.text)).map(entry => entry.id);
 }
 
 /** An optional cue judgment must not suppress the other interviewer checks. */

@@ -59,7 +59,7 @@ test('a direction received during the participant answer can be followed by the 
   expect(readCueFollowThrough(answer('followed'), duringAnswer, cueResponseIds(transcript, duringAnswer))?.outcome).toBe('followed');
 });
 
-test('late-arriving overlap is not a new response, while a normal 200ms turn handoff counts', () => {
+test('late-arriving overlap 1.5s before the reply ends is not a new response, while a normal turn handoff counts', () => {
   const overlap = { id: 'late-fragment', speaker: 'client' as const, text: 'and anything else?', startMs: 8500, endMs: 9500 };
   const reply = { ...transcript[3]!, startMs: 9000, endMs: 10_000 };
   const next = { ...transcript[4]!, startMs: 9800 };
@@ -80,4 +80,28 @@ test('a trailing participant word cannot make an ongoing Sam answer eligible', (
     { id: 'p8', speaker: 'trainee', text: 'That was the highlight.', startMs: 16_000, endMs: 18_000 },
     { id: 'p9', speaker: 'client', text: 'How did the handoff work?', startMs: 18_000, endMs: 20_000 },
   ], arrivedDuringSpeech)).toEqual(['p9']);
+});
+
+test('observed 400-600ms Live handoff overlap counts as a response opportunity', () => {
+  const early = { ...cue, endMs: 224_600 };
+  const reply: TranscriptEntry = { id: 'p4', speaker: 'trainee', text: 'The client had never run a software project, so we explained each release step.', startMs: 215_000, endMs: 242_800 };
+  for (const startMs of [242_200, 242_400]) {
+    const next: TranscriptEntry = { id: 'p5', speaker: 'client', text: 'Who on their side signed off each release?', startMs, endMs: 248_000 };
+    expect(cueResponseIds([...transcript.slice(0, 3), reply, next], early)).toEqual(['p5']);
+  }
+});
+
+test('a short reply cannot make a remainder that started with it eligible', () => {
+  const reply: TranscriptEntry = { id: 'p4', speaker: 'trainee', text: 'Twice, yes.', startMs: 10_000, endMs: 10_800 };
+  const remainder: TranscriptEntry = { id: 'p5', speaker: 'client', text: 'and what else changed?', startMs: 10_000, endMs: 11_000 };
+  const next: TranscriptEntry = { id: 'p6', speaker: 'client', text: 'What prompted the second one?', startMs: 10_400, endMs: 12_000 };
+  expect(cueResponseIds([...transcript.slice(0, 3), reply, remainder], cue)).toEqual([]);
+  expect(cueResponseIds([...transcript.slice(0, 3), reply, remainder, next], cue)).toEqual(['p6']);
+});
+
+test('backchannels and a direction received between turns do not manufacture a response', () => {
+  const nod: TranscriptEntry = { id: 'p5', speaker: 'client', text: 'Mm-hmm.', startMs: 10_900, endMs: 11_200 };
+  expect(cueResponseIds([...transcript.slice(0, 4), nod], cue)).toEqual([]);
+  // After the reply ended, Sam's next question may answer the participant rather than the direction.
+  expect(cueResponseIds(transcript, { ...cue, endMs: 11_500 })).toEqual([]);
 });

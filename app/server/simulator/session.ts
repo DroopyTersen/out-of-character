@@ -263,9 +263,12 @@ export class SimulatorSession extends DurableObject<Env> {
       return;
     }
     if (snapshot.status === 'ending') return;
-    if (event.type === 'session.thinking.appended' && typeof event.client_event_id === 'string') {
-      this.contextual?.providerEvent(event.client_event_id, true);
-      this.producer?.providerEvent(event.client_event_id, true);
+    if ((event.type === 'session.thinking.appended' || event.type === 'session.instructions.appended') && typeof event.client_event_id === 'string') {
+      if (event.type === 'session.thinking.appended') this.contextual?.providerEvent(event.client_event_id, true);
+      this.producer?.providerEvent(event.client_event_id, true, {
+        ...(typeof event.start_ms === 'number' && Number.isFinite(event.start_ms) ? { startMs: event.start_ms } : {}),
+        ...(typeof event.end_ms === 'number' && Number.isFinite(event.end_ms) ? { endMs: event.end_ms } : {}),
+      });
     }
     if (event.type === 'session.delegation.created') {
       const delegation = event.delegation as { id?: unknown; target?: unknown } | undefined;
@@ -405,8 +408,9 @@ export class SimulatorSession extends DurableObject<Env> {
     const failure = (error: unknown) => error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' as const : 'evaluation_error' as const;
     if (snapshot.interview) {
       try {
-        const result = await this.paid.evaluateInterviewer({ ...input, deliveredBackground: this.producer?.background() ?? [] });
-        this.producer?.observe({ transcript, capturedAt, signals: result.signals, researchProbability: result.researchProbability, model: result.model });
+        const cue = this.producer?.cue();
+        const result = await this.paid.evaluateInterviewer({ ...input, cue, deliveredBackground: this.producer?.background() ?? [] });
+        this.producer?.observe({ transcript, capturedAt, signals: result.signals, researchProbability: result.researchProbability, followThrough: result.followThrough, model: result.model });
       } catch (error) {
         this.producer?.observe({ transcript, capturedAt, signals: [], failure: failure(error) });
       } finally { this.directing = false; }

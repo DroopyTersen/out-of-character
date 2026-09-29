@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { InterviewProducer, producerServices, rundownText } from './interview-producer';
-import { PRODUCER_LIMITS, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
+import { CUE_OUTCOMES, PRODUCER_LIMITS, type CueFollowThrough, type CueOutcome, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
 import type { CoverageLevel, InterviewObjectiveReading } from '../../../core/interview';
 import type { DirectorSignal } from '../../../core/simulator/director';
 import type { TranscriptEntry } from '../../../core/simulator/types';
@@ -43,9 +43,9 @@ function fixture(overrides: Partial<Services> = {}) {
       lookupInterviewBackground: async input => { calls.lookup.push(input); return overrides.lookupInterviewBackground ? overrides.lookupInterviewBackground(input) : { status: 'found', facts, retrievedAt: Date.now(), queries: ['OpenStreetMap about'] }; },
     },
   });
-  const say = (speaker: 'client' | 'trainee', text: string) => { transcript = [...transcript, { id: `p${transcript.length + 1}`, speaker, text, startMs: 0, endMs: 1000 }]; };
+  const say = (speaker: 'client' | 'trainee', text: string) => { transcript = [...transcript, { id: `p${transcript.length + 1}`, speaker, text, startMs: Date.now() - epoch, endMs: Date.now() - epoch + 1000 }]; };
   const advance = (ms: number) => setSystemTime(Date.now() + ms);
-  const observe = (signals: DirectorSignal[], researchProbability?: number) => producer.observe({ transcript: [...transcript], capturedAt: Date.now(), signals, researchProbability });
+  const observe = (signals: DirectorSignal[], researchProbability?: number, followThrough?: CueFollowThrough) => producer.observe({ transcript: [...transcript], capturedAt: Date.now(), signals, researchProbability, followThrough });
   const setLevel = (id: string, level: CoverageLevel) => {
     coverage = [...coverage.filter(item => item.id !== id), { id, level, levels: null, probability: .9, achieved: level === 'explored', evidence: null }];
   };
@@ -272,7 +272,7 @@ test('every cue is checked against the latest dialogue; spacing and the cue budg
   expect(f.calls.cue).toHaveLength(PRODUCER_LIMITS.cues + 1);
   const cues = f.sent.filter(item => String(item.event_id).startsWith('cue-'));
   expect(cues).toHaveLength(PRODUCER_LIMITS.cues);
-  expect(cues[0]).toEqual({ type: 'session.thinking.append', event_id: expect.stringMatching(/^cue-/), delegation_id: null, content: 'Producer cue (private): Cue 2' });
+  expect(cues[0]).toEqual({ type: 'session.instructions.append', event_id: expect.stringMatching(/^cue-/), delegation_id: null, content: 'Producer direction — next suitable interviewing move: Cue 2' });
 });
 
 test('the rundown is sent only when a band changes, throttled, plus once near the target time', () => {
@@ -295,7 +295,7 @@ test('the rundown is sent only when a band changes, throttled, plus once near th
   f.producer.tick();
   f.producer.tick();
   expect(rundowns()).toHaveLength(2);
-  expect(rundowns()[1]!.content).toContain('explored: Deliverables & scope');
+  expect(rundowns()[1]!.content).not.toContain('Deliverables & scope');
   expect(rundowns()[1]!.content).toContain('set aside: Onboarding & access');
 
   f.advance(PRODUCER_LIMITS.rundownAt);
@@ -497,7 +497,8 @@ test('rundown text lists every area and marks untouched topics', () => {
   const text = rundownText([{ id: 'process-tools', level: 'explored' }], 12 * 60_000);
   expect(text.split('\n')).toHaveLength(4);
   expect(text).toContain('About 12 of 30 minutes.');
-  expect(text).toContain('How the team worked: explored: Tools & process; not yet: What worked well');
+  expect(text).toContain('How the team worked: not yet: What worked well');
+  expect(text).not.toContain('Tools & process');
 });
 
 test('rundown text reports a declined topic as set aside, not as a gap to revisit', () => {
@@ -506,4 +507,106 @@ test('rundown text reports a declined topic as set aside, not as a gap to revisi
   expect(line('Working with the client')).toMatch(/set aside: [^;]*Pace/);
   expect(line('Working with the client')).not.toMatch(/(touched|not yet): [^;]*Pace/);
   expect(line('How the team worked')).toContain('touched: Tools & process');
+});
+
+
+async function directedFixture(overrides: Partial<Services> = {}) {
+  const f = fixture({ generateProducer: async () => generated('Ask how the vendor handoff worked.'), ...overrides });
+  f.observe([concern('leading')]);
+  await f.producer.settle();
+  const record = f.of('producer')[0]!;
+  f.producer.providerEvent(record.delivery!.eventId, true, { startMs: 4000, endMs: 5000 });
+  return { ...f, record };
+}
+function followThrough(f: Awaited<ReturnType<typeof directedFixture>>, outcome: CueOutcome, probability = .95): CueFollowThrough {
+  return { cueId: f.producer.cue()!.id, outcome, responseIds: [f.transcript().at(-1)!.id],
+    probabilities: Object.fromEntries(CUE_OUTCOMES.map(key => [key, key === outcome ? probability : (1 - probability) / 4])) as Record<CueOutcome, number> };
+}
+
+test('a missed instruction waits for cue spacing, recovers once, and cannot start a replacement chain', async () => {
+  const f = await directedFixture();
+  f.advance(10_000); f.say('client', 'Anything else before we finish?');
+  f.observe([], undefined, followThrough(f, 'missed'));
+  f.producer.tick();
+  expect(f.calls.generate).toHaveLength(1);
+  f.advance(19_999); f.producer.tick();
+  expect(f.calls.generate).toHaveLength(1);
+  f.advance(1); f.producer.tick();
+  await f.producer.settle();
+  expect(f.calls.generate[1]!.triggers).toEqual([{ kind: 'cue-recovery', cueId: f.record.id, probability: .95 }]);
+  const replacement = f.of('producer')[1]!;
+  expect(replacement).toMatchObject({ outcome: 'sent', recoveryUsed: true });
+  expect(f.record.recoveryUsed).toBe(true);
+  f.producer.providerEvent(replacement.delivery!.eventId, true, { endMs: 31_000 });
+  f.advance(30_000); f.say('client', 'That should wrap things up.');
+  f.observe([], undefined, followThrough(f, 'missed'));
+  f.producer.tick(); f.producer.tick();
+  expect(f.calls.generate).toHaveLength(2);
+  expect(f.of('assessment').at(-1)!.followThrough).toMatchObject({ cueId: replacement.id, outcome: 'missed' });
+});
+
+test.each(['followed', 'deferred', 'retired', 'not-yet-assessable'] as const)('%s direction does not summon a correction', async outcome => {
+  const f = await directedFixture();
+  f.advance(30_000); f.say('client', 'How did you divide responsibility with the vendor?');
+  f.observe([], undefined, followThrough(f, outcome)); f.producer.tick();
+  expect(f.calls.generate).toHaveLength(1);
+  expect(!!f.producer.cue()).toBe(outcome !== 'followed' && outcome !== 'retired');
+});
+
+test('uncertain misses, stale dialogue and old-cue assessments do not request recovery', async () => {
+  const f = await directedFixture();
+  f.advance(30_000); f.say('client', 'Anything else?');
+  f.observe([], undefined, followThrough(f, 'missed', .55)); f.producer.tick();
+  expect(f.calls.generate).toHaveLength(1);
+  const oldTranscript = [...f.transcript()];
+  const missed = followThrough(f, 'missed');
+  f.say('trainee', 'Actually, the whole story started with a release decision.');
+  f.producer.observe({ transcript: oldTranscript, capturedAt: Date.now(), signals: [], followThrough: missed }); f.producer.tick();
+  expect(f.calls.generate).toHaveLength(1);
+  f.observe([concern('boundary-pressure')]); await f.producer.settle();
+  f.producer.observe({ transcript: f.transcript(), capturedAt: Date.now(), signals: [], followThrough: missed });
+  expect(f.of('producer')[1]!.followThrough).toBeUndefined();
+});
+
+test('unacknowledged or rejected instructions cannot be assessed, and receipt does not imply follow-through', async () => {
+  const f = fixture({ generateProducer: async () => generated('Ask about the handoff.') });
+  f.observe([concern('leading')]); await f.producer.settle();
+  const record = f.of('producer')[0]!;
+  expect(f.producer.cue()).toBeUndefined();
+  f.producer.providerEvent(record.delivery!.eventId, true);
+  expect(f.producer.cue()).toBeUndefined(); // No comparable session timeline supplied.
+  f.producer.providerEvent(record.delivery!.eventId, true, { endMs: 5000 });
+  expect(f.producer.cue()).toMatchObject({ id: record.id, endMs: 5000 });
+  expect(record.followThrough).toBeUndefined();
+  f.producer.providerEvent(record.delivery!.eventId, false);
+  expect(f.producer.cue()).toBeUndefined();
+});
+
+test('a queued recovery is dropped when another cue supersedes it; unrelated queued work survives', async () => {
+  const pending = deferred<Generated>();
+  let calls = 0;
+  const f = await directedFixture({ generateProducer: async () => ++calls === 2 ? pending.promise : generated('Ask about ownership.') });
+  f.advance(30_000); f.say('client', 'Anything else?');
+  f.observe([], undefined, followThrough(f, 'missed'));
+  f.observe([concern('boundary-pressure')]); // Another consultation is already running.
+  f.producer.tick(); // Queue one recovery behind it.
+  f.observe([concern('invented-facts')]); // Merge an independent protection concern.
+  pending.resolve(generated('Respect their boundary and ask about the offered alternative.'));
+  await f.producer.settle();
+  expect(f.calls.generate).toHaveLength(3);
+  expect(f.calls.generate[2]!.triggers).toEqual([{ kind: 'concern', condition: 'invented-facts', probability: .8 }]);
+});
+
+test('recovery in flight cannot send after the direction is retired or the interview ends', async () => {
+  for (const end of [false, true]) {
+    const pending = deferred<Generated>(); let count = 0;
+    const f = await directedFixture({ generateProducer: async () => ++count === 1 ? generated('Ask about the handoff.') : pending.promise });
+    f.advance(30_000); f.say('client', 'Anything else?');
+    f.observe([], undefined, followThrough(f, 'missed')); f.producer.tick();
+    if (end) f.producer.close();
+    else { f.say('trainee', 'I do not want to talk about the handoff.'); f.observe([], undefined, followThrough(f, 'retired')); }
+    pending.resolve(generated('Return to the handoff.')); await f.producer.settle();
+    expect(f.sent.filter(event => event.type === 'session.instructions.append')).toHaveLength(1);
+    expect(f.of('producer')[1]!.outcome).toBe(end ? 'aborted' : 'withheld');
+  }
 });

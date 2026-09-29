@@ -15,6 +15,7 @@ const span = (from: number | undefined, to: number | undefined) => from != null 
 const parts = (entries: [string, number | undefined, number | undefined][]) =>
   entries.flatMap(([label, from, to]) => { const ms = span(from, to); return ms == null ? [] : [{ label, ms }]; });
 const trigger = (item: ProducerTrigger) => item.kind === 'check-in' ? 'check-in'
+  : item.kind === 'cue-recovery' ? `cue recovery ${item.cueId} ${item.probability.toFixed(2)}`
   : item.kind === 'research' ? `research ${item.status}` : `${item.condition} ${item.probability.toFixed(2)}`;
 const band = (level: GradeObjective['shown'][0]) => COVERAGE_LEVEL_LABELS[level].toLowerCase();
 const odds = (levels: GradeObjective['levels']) => levels ? ` (${COVERAGE_LEVELS.map((level, index) => `${level[0]} ${levels[index]!.toFixed(2)}`).join(' ')})` : '';
@@ -63,6 +64,7 @@ export function producerTimeline({ startedAt, transcript, records }: { startedAt
     } else if (record.source === 'assessment') {
       const signals = record.signals.flatMap(item => 'probability' in item && item.probability >= .5 ? [`${item.condition} ${item.probability.toFixed(2)}`] : []);
       if (record.researchProbability != null && record.researchProbability >= .5) signals.push(`research ${record.researchProbability.toFixed(2)}`);
+      if (record.followThrough) signals.push(`cue ${record.followThrough.cueId}: ${record.followThrough.outcome} ${record.followThrough.probabilities[record.followThrough.outcome].toFixed(2)} · Sam ${record.followThrough.responseIds.join(', ') || 'no eligible passage'}`);
       rows.push({ id: record.id, lane: 'assessment', atMs: at(record.snapshotAt), title: `Assessment · through ${record.lastInputId ?? 'start'}`,
         detail: signals.join(', ') || null, outcome: record.concerns.length ? `${record.outcome} · concern ${record.concerns.join(', ')}` : record.outcome,
         latencyMs: span(record.snapshotAt, record.completedAt), parts: [] });

@@ -358,7 +358,10 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   expect(inputs[0]!.coverage).toEqual(expect.any(Array));
   const cues = f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
   expect(cues).toHaveLength(action === 'none' ? 0 : 1);
-  if (cues[0]) f.socket.emit({ type: 'session.thinking.appended', client_event_id: cues[0].event_id });
+  if (cues[0]) {
+    expect(cues[0].type).toBe('session.instructions.append');
+    f.socket.emit({ type: 'session.instructions.appended', client_event_id: cues[0].event_id, start_ms: 2000, end_ms: 2400 });
+  }
   const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(snapshot.coaching).toBeNull();
   expect(snapshot.evaluation).toBeNull();
@@ -374,7 +377,7 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   expect(records.filter((record: { source: string }) => record.source !== 'grade').map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
   expect(records.filter((record: { source: string }) => record.source === 'grade').at(-1)).toMatchObject({ final: true, outcome: 'graded', durationMs: 1 });
   expect(records[0]).toMatchObject({ outcome: 'observed', concerns: ['leading'] });
-  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted' }, check: { probability: .99 } } : {}) });
+  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted', startMs: 2000, endMs: 2400 }, check: { probability: .99 } } : {}) });
   expect(JSON.parse(row.cues_json)).toEqual([]);
   expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'none', consultations: 1, cues: action === 'none' ? 0 : 1 });
   expect(summarized).not.toContain('PRIVATE:');

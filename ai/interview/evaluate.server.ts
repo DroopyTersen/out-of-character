@@ -5,7 +5,7 @@ import { COVERAGE_LEVELS, emptyInterviewReadings, interviewReadings, isBackchann
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import { INTERVIEW_CONDITIONS, type DirectorSignal } from '../../core/simulator/director';
-import { PRODUCER_LIMITS, type DeliveredInterviewBackground } from '../../core/interview-producer';
+import { CUE_OUTCOMES, PRODUCER_LIMITS, type CueFollowThrough, type CueOutcome, type DeliveredInterviewBackground, type InterviewCue } from '../../core/interview-producer';
 import { evidenceBatches } from '../simulator/rubric';
 import { interviewScenario, interviewers } from './scenario.server';
 import { interviewQuestions, interviewerQuestions } from './rubric';
@@ -22,6 +22,7 @@ type Input = {
   /** Passage IDs that support saved coverage; they stay visible to Jev after leaving the recent window. */
   keepIds?: string[];
   deliveredBackground?: DeliveredInterviewBackground[];
+  cue?: InterviewCue;
 };
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
@@ -154,11 +155,32 @@ export function readResearchProbability(answers: InterviewAnswers): number | und
 }
 
 /** Outside facts are visible only to Sam's interviewer assessment, never participant scoring. */
-export function interviewerState(transcript: TranscriptEntry[], deliveredBackground: DeliveredInterviewBackground[] = []) {
-  const recent = recentTranscript(transcript, 12_000);
+export function cueResponseIds(transcript: TranscriptEntry[], cue: InterviewCue): string[] {
+  const after = cue.afterPassageId == null ? -1 : transcript.findIndex(entry => entry.id === cue.afterPassageId);
+  if ((cue.afterPassageId != null && after < 0) || cue.evidenceIds.some(id => !transcript.some(entry => entry.id === id))) return [];
+  return recentTranscript(transcript.slice(after + 1), 12_000).filter(entry => entry.speaker === 'client' && entry.startMs >= cue.endMs && !isBackchannel(entry.text)).map(entry => entry.id);
+}
+
+/** An optional cue judgment must not suppress the other interviewer checks. */
+export function readCueFollowThrough(answers: InterviewAnswers, transcript: TranscriptEntry[], cue?: InterviewCue): CueFollowThrough | undefined {
+  const answer = answers['cue:follow-through'];
+  if (!cue || answer?.type !== 'choice' || !CUE_OUTCOMES.includes(answer.choice as CueOutcome) || !answer.probabilities
+    || CUE_OUTCOMES.some(key => !validProbability(answer.probabilities![key] ?? NaN))) return;
+  const probabilities = Object.fromEntries(CUE_OUTCOMES.map(key => [key, answer.probabilities![key]!])) as Record<CueOutcome, number>;
+  if (Math.abs(Object.values(probabilities).reduce((sum, value) => sum + value, 0) - 1) > .02) return;
+  const responseIds = cueResponseIds(transcript, cue);
+  // Receipt alone cannot prove Sam had a chance to follow or miss an instruction.
+  if (!responseIds.length && (answer.choice === 'followed' || answer.choice === 'missed')) return;
+  return { cueId: cue.id, outcome: answer.choice as CueOutcome, probabilities, responseIds };
+}
+
+export function interviewerState(transcript: TranscriptEntry[], deliveredBackground: DeliveredInterviewBackground[] = [], cue?: InterviewCue) {
+  const kept = cue ? [...cue.evidenceIds, ...(cue.afterPassageId ? [cue.afterPassageId] : [])] : [];
+  const window = coverageWindow(transcript, kept, 12_000);
   return {
-    ...state(recent),
-    earlierDialogueOmitted: recent.length < transcript.length,
+    ...state(window.transcript),
+    earlierDialogueOmitted: window.earlierDialogueOmitted,
+    ...(cue ? { producerDirection: { ...cue, responseIds: cueResponseIds(window.transcript, cue) } } : {}),
     deliveredBackground: deliveredBackground.slice(-PRODUCER_LIMITS.research).map(({ target, facts, retrievedAt, afterPassageId, status }) => ({
       target, facts, retrievedAt, afterPassageId, status,
     })),
@@ -170,9 +192,10 @@ export async function evaluateInterviewer(input: Input) {
   const started = performance.now();
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: interviewerState(input.transcript, input.deliveredBackground), questions: interviewerQuestions(),
+    state: interviewerState(input.transcript, input.deliveredBackground, input.cue), questions: interviewerQuestions(!!input.cue),
     abortSignal: input.signal, maxRetries: 0,
   });
-  return { signals: readInterviewerSignals(result.answers), researchProbability: readResearchProbability(result.answers), revision: input.revision, model: result.response.modelId,
+  const followThrough = readCueFollowThrough(result.answers, input.transcript, input.cue);
+  return { signals: readInterviewerSignals(result.answers), researchProbability: readResearchProbability(result.answers), ...(followThrough ? { followThrough } : {}), revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers };
 }

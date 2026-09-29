@@ -2,10 +2,11 @@ import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } fr
 import type { DirectorSignal, DirectorUsage, INTERVIEW_CONDITIONS } from './simulator/director';
 
 /** Private producer state for the interview: Sol cues, Luna research cards and the rundown share Sam's earpiece. */
-export const PRODUCER_VERSION = 'interview-producer-v2';
+export const PRODUCER_VERSION = 'interview-producer-v3';
 export const PRODUCER_LIMITS = {
   consultations: 60, cues: 15, cueSpacing: 30_000, research: 4, lookups: 2, researchAge: 90_000, checkIn: 45_000,
   rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cuePass: .65, cardPass: .5,
+  followThroughPass: .8,
 };
 type InterviewCondition = typeof INTERVIEW_CONDITIONS[number];
 /** A new episode of one of these consults the producer promptly and skips cue spacing. */
@@ -16,12 +17,22 @@ export const CHECK_IN_SIGNALS = { 'missed-thread': .6, 'question-stacking': .6, 
 
 export type ResearchKind = InterviewBackground['target']['kind'];
 export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null; passageIds: string[] };
+export const CUE_OUTCOMES = ['followed', 'deferred', 'missed', 'retired', 'not-yet-assessable'] as const;
+export type CueOutcome = typeof CUE_OUTCOMES[number];
+/** A pinned instruction and its context receipt, separate from what Sam subsequently does. */
+export type InterviewCue = { id: string; text: string; evidenceIds: string[]; afterPassageId: string | null; endMs: number };
+export type CueFollowThrough = {
+  cueId: string; outcome: CueOutcome; probabilities: Record<CueOutcome, number>;
+  /** Settled passages eligible to demonstrate a response after estimated context delivery. */
+  responseIds: string[];
+};
 export type ProducerTrigger =
   | { kind: 'check-in' }
+  | { kind: 'cue-recovery'; cueId: string; probability: number }
   | { kind: 'concern'; condition: ProtectionCondition; probability: number }
   | { kind: 'signal'; condition: keyof typeof CHECK_IN_SIGNALS; probability: number }
   | { kind: 'research'; researchId: string; status: 'sent' | 'withheld' | 'unresolved' };
-export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number };
+export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number; startMs?: number; endMs?: number };
 type Check = { probability: number | null; inputCount: number; lastInputId: string | null; usage?: DirectorUsage };
 
 /** nextSamTurnAfterId precedes the first observed Sam passage after a sent note; it does not prove cue uptake. */
@@ -34,6 +45,9 @@ export type ProducerRecord = {
   /** Why a cue was withheld: the check rejected it, or the dialogue moved while it was checked. */
   reason?: 'check' | 'dialogue_changed';
   delivery?: NoteDelivery;
+  followThrough?: CueFollowThrough & { lastInputId: string | null };
+  /** Also inherited by a replacement, preventing an automatic recovery chain. */
+  recoveryUsed?: boolean;
 };
 export type ResearchRecord = {
   source: 'research'; id: string; consultationId: string; request: ResearchRequest; model: string;
@@ -49,6 +63,7 @@ export type RundownRecord = {
 export type AssessmentRecord = {
   source: 'assessment'; id: string; snapshotAt: number; completedAt: number; model: string; inputCount: number; lastInputId: string | null;
   signals: DirectorSignal[]; researchProbability?: number; outcome: 'observed' | 'evaluation_error' | 'evaluation_timeout'; concerns: ProtectionCondition[];
+  followThrough?: CueFollowThrough;
 };
 export type DelegationRecord = { source: 'delegation'; id: string; createdAt: number; target: string | null; replied: boolean };
 /** Compact, named tuples keep every grade inside D1's row limit without losing either judgment's evidence. */

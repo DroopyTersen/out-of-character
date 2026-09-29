@@ -17,6 +17,8 @@ import { InterviewProducer, producerServices } from '../app/server/simulator/int
 // A plan chooses each trainee line from what the client has actually said so far.
 // Usage: bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid
 //   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--max-seconds=180]
+// Interview rehearsals may run up to 480 seconds. The participant answers only
+// after Sam asks something; a longer silence is reported as dead air.
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded paid rehearsal.');
 if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -30,7 +32,10 @@ const maxSeconds = Number(option('max-seconds') ?? 180);
 // delivery without claiming that Jev chose it in a natural conversation.
 const exerciseResearch = process.argv.includes('--exercise-research');
 if (exerciseResearch && (!isInterview || approach !== 'research')) throw new Error('--exercise-research requires the interview research plan.');
-if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > 300) throw new Error('--max-seconds must be an integer from 60 to 300.');
+const maxAllowed = isInterview ? 480 : 300;
+if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > maxAllowed) throw new Error(`--max-seconds must be an integer from 60 to ${maxAllowed}.`);
+// A real participant waits after a bare acknowledgment instead of rescuing the interviewer.
+const DEAD_AIR_MS = 8000;
 
 const offer = 'Our SharePoint and adoption team could run a short assessment of document ownership and how people would actually use the process. It would be separately scoped and paid, outside the current release. Would something like that be useful?';
 const negotiated = /free|no charge|no cost|no extra|include|existing project|current project|throw in|budget|cost|price|how much|cheaper|discount|spend/i;
@@ -143,6 +148,37 @@ const plans = {
         enough: 'That is really the story. I do not have more detail on that fix. The other thing I would repeat is giving junior developers direct access to the people using their work.',
       },
       choose: ({ turn }) => ['project', 'story', 'effect', 'enough'][turn],
+    },
+    // Multi-topic continuity: an older cue arrives as a fresh client story starts,
+    // then a knowledge limit, a tradeoff, client roles and a request to finish.
+    continuity: {
+      turns: 9, cue: 'Ask how they prepared Dana for the handoff.',
+      lines: {
+        project: 'We built a stock count app for an unnamed regional grocery chain. I was the delivery lead for the first eight weeks. Dana took over from me before launch because I went on leave.',
+        disclosure: 'Actually, something more useful comes to mind first. Their night shift supervisor, Rosa, tested every build on the store floor. She rejected our first release because the scanner screen timed out while people were lifting cases. After we fixed that, she sent us one real problem every week.',
+        effect: 'We gave Rosa a direct line to our tester and fixed her top issue before each Friday review. By the pilot, the store managers trusted the counts because they had watched night staff use it.',
+        handoff: 'Dana joined my client calls for three weeks and ran the last two Friday reviews while I was still there. I was on leave by launch, so I cannot tell you how things went after that.',
+        correction: 'She did not take over any decisions while I was there. I still made those until my last day. The calls were so the client would know her.',
+        repeat: 'As I said, I was on leave by then, so I cannot speak to that.',
+        devices: 'The client had no spare scanners for testing, so we bought six out of our own budget. It kept testing moving, but we dropped the reporting screen from the first release to pay for them.',
+        reporting: 'The store managers were disappointed at first. We showed them the counts in a spreadsheet each week until the screen shipped in the second release.',
+        roles: 'Their operations director approved each release. The store managers mostly followed her lead, and Rosa was the person whose opinion changed their minds.',
+        stop: 'That is what I can share. I would like to finish here.',
+      },
+      choose({ turn, answer, used }) {
+        if (turn < 2) return ['project', 'disclosure'][turn];
+        if (turn >= 8) return 'stop';
+        if (used.has('handoff') && /how did (the )?launch|launch (go|went)|go.?live|after you (left|went)|while you were (away|out|on leave)|once (dana|she) (took over|stepped|was on her own)/i.test(answer)) return 'repeat';
+        const matches = [
+          ['correction', /decision|took over|authority/i],
+          ['handoff', /hand.?off|dana|prepar|before you (left|went)/i],
+          ['reporting', /report|screen|drop|disappoint|tradeoff|trade.?off|cost/i],
+          ['roles', /who|client side|their team|stakeholder|sign.?off|approv/i],
+          ['effect', /rosa|night|timeout|scanner|what changed|what happened|after that/i],
+        ];
+        return matches.find(([id, pattern]) => !used.has(id) && (id !== 'reporting' || used.has('devices')) && pattern.test(answer))?.[0]
+          ?? ['effect', 'handoff', 'devices', 'reporting', 'roles'].find(id => !used.has(id)) ?? 'stop';
+      },
     },
     rehearsal: {
       turns: 3,
@@ -399,7 +435,7 @@ const { client: _permissions, ...session } = liveConfiguration(scenarioId, clien
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
-const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], errors: [] };
+const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], deadAir: [], errors: [] };
 report.controlledResearchTrigger = exerciseResearch;
 const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
 let pacing, producerTimer, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
@@ -458,11 +494,14 @@ function sendControlledCue() {
   report.controlledCue = { eventId, cue: plan.cue, afterPassageId: report.transcript.at(-1)?.id ?? null, sentAt: Date.now(), acknowledgedAt: null, followThrough: 'Manual review; this controlled cue is outside the producer loop.', duringSpeech: !!plan.cueDuringSpeech };
   send({ type: 'session.instructions.append', event_id: eventId, delegation_id: null, content: producerDirection(plan.cue) });
 }
+// After an interview participant asks to finish, Sam's reply ends the rehearsal.
+const finished = () => isInterview && used.has('stop');
+const samSinceLastLine = () => report.transcript.filter(entry => entry.speaker === 'client').slice(outputStart).map(entry => entry.text).join(' ');
 async function respond() {
   deciding = true;
   const spoken = report.transcript.filter(entry => entry.speaker === 'client');
-  const answer = spoken.slice(outputStart).map(entry => entry.text).join(' ');
-  const id = turn < plan.turns ? plan.choose({ turn, answer, heard: spoken.map(entry => entry.text).join(' '), used }) : null;
+  const answer = samSinceLastLine();
+  const id = turn < plan.turns && !finished() ? plan.choose({ turn, answer, heard: spoken.map(entry => entry.text).join(' '), used }) : null;
   // For interviews, finish a private review before the next participant line.
   // The final Sam reply is left unprompted so an earlier note has a fair response window.
   if (turn && (!isInterview || id)) {
@@ -515,7 +554,15 @@ const completed = new Promise(resolve => {
         inputBytes += audio.length;
         const interruptOpening = approach === 'interruption' && turn === 0 && firstAudibleOutput > 0 && Date.now() - firstAudibleOutput >= 6000 && Date.now() - lastAudibleOutput < 250;
         const yielded = lastAudibleOutput > inputEnded && lastOutput > inputEnded && Date.now() - Math.max(lastOutput, lastAudibleOutput) > 2500 && Date.now() - inputEnded > 3000;
-        const readyForReply = approach === 'interruption' && turn === 0 ? interruptOpening : yielded;
+        let readyForReply = approach === 'interruption' && turn === 0 ? interruptOpening : yielded;
+        if (readyForReply && !clip && !deciding && isInterview && turn < plan.turns && !finished() && !samSinceLastLine().includes('?')) {
+          const quietMs = Date.now() - Math.max(lastOutput, lastAudibleOutput);
+          readyForReply = quietMs > DEAD_AIR_MS;
+          if (readyForReply) {
+            report.deadAir.push({ afterTurn: turn, quietMs, sam: samSinceLastLine() });
+            report.errors.push(`Sam asked nothing for ${Math.round(quietMs / 1000)} s after participant turn ${turn}.`);
+          }
+        }
         if (!clip && !deciding && readyForReply) void respond().catch(() => { report.errors.push('Rehearsal step failed.'); close(); });
       }, 20);
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {

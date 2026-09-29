@@ -1,6 +1,48 @@
 # Project closeout interview progress
 
-## Current update — cue delivery and useful follow-ups
+## Current update — conversational continuity and grounded follow-ups, September 29, 2026
+
+A private test-interview review, kept in ignored `output/`, found several problems:
+- Sam left finished answers with only an acknowledgment.
+- An older direction was asked over a fresh story.
+- A period the participant had not seen was asked about again.
+- A cue treated speaking time as decision authority.
+- Client-side coverage was credited from the consultant's own decisions.
+- A real cue response was excluded by a 200 ms overlap tolerance.
+
+The voice rehearsal hid dead air by supplying the next line after 2.5 s of silence.
+
+- **Sam.**
+  - After a finished answer the next move is Sam's: a question, a segue with a question, or a clear close. A listening acknowledgment is still fine while a story develops.
+  - A direction may predate the current answer, so a newer useful point gets a real follow-up first; a paraphrase is not one.
+  - A direction is one move. An answer, contradiction, or knowledge limit resolves it without banning its theme.
+  - A knowledge limit covers that event or period only. Other angles, such as preparation before leaving, stay open.
+  - Sam learns client-side people and roles when it fits the conversation, not as a roster.
+- **Sol** (`interview-producer-v5`).
+  - Cue premises must be supported; otherwise Sol asks a neutral question or gives no cue.
+  - "Return to" recovers only a passed-over consequential detail.
+  - Sol corrects a re-ask of an unanswerable question before the participant complains, by comparing actual answers and limits.
+  - A specific missing role can justify a cue.
+- **Coverage.**
+  - `client-decisions` is about people, authority, and decision behavior on the customer's side.
+  - Rubric `interview-rubric-v8`: boundary pressure now includes a later re-ask of an unavailable event or period. Asking a different, answerable angle is not pressure.
+- **Cue response timing.**
+  - A response may start up to 1,000 ms before the reply ends, and must start after it began. Measured genuine handoffs start 0–600 ms early; non-genuine overlaps start 5.6 s or more early.
+  - In-flight fragments, trailing words, and backchannels stay excluded.
+- **Replay and rehearsal.**
+  - Interview director replay passes a fixture's earlier cue to Sol as sent history, so retirement can be replayed.
+  - The interview rehearsal participant waits after a bare acknowledgment and reports more than 8 s of silence as dead air.
+  - A multi-topic continuity plan exercises a fresh story, a knowledge limit, a tradeoff, client roles, and a finish request, with an eight-minute cap.
+- **Verification.**
+  - Jev ran 62 fictional fixtures: 56 passed, and 203 of 210 checks passed. All 12 new fixtures passed. The remaining failures are six conservative pre-existing checks at values matching v7.
+  - Sol replays covered six behaviors: wrong-party versus client-side decisions, an unavailable outcome, a contradicted premise, an answered handoff followed by a fresh client story, a useful unresolved tradeoff, and a concise quiet win (which got no cue).
+  - Six real voice rehearsals ran: three Cedar and three Gleam, each about three minutes.
+    - With the committed prompts, all four runs had no dead air and no "Hello" rescue. Sam accepted the knowledge limit, learned client roles, followed up the tradeoff, and honored the finish request.
+    - In four of six runs Sam still asked an older direction before a fresh story. One run repeated a followed direction, and a cue arriving in silence can still prompt a brief vocalization.
+    - A stronger "spent once asked" wording coincided with dead air in both voices and is not committed.
+  - This is bounded synthetic verification with a scripted participant, not a human acceptance interview. There was no merge, push, or deployment.
+
+## Cue delivery and useful follow-ups
 
 The [cue delivery update](interview-steering-plan.md#cue-delivery-update) supersedes earlier delivery-check descriptions below. Sol directions reach Sam without a final Jev veto, and private Simulator actor cues bypass their changed-dialogue recheck. Public trainee hints and research identity checks retain their checks. A queued or in-flight recovery survives useful deferral, but not retirement or supersession.
 

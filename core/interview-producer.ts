@@ -2,10 +2,10 @@ import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } fr
 import type { DirectorSignal, DirectorUsage, INTERVIEW_CONDITIONS } from './simulator/director';
 
 /** Private producer state for the interview: Sol cues, Luna research cards and the rundown share Sam's earpiece. */
-export const PRODUCER_VERSION = 'interview-producer-v3';
+export const PRODUCER_VERSION = 'interview-producer-v4';
 export const PRODUCER_LIMITS = {
   consultations: 60, cues: 15, cueSpacing: 30_000, research: 4, lookups: 2, researchAge: 90_000, checkIn: 45_000,
-  rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cuePass: .65, cardPass: .5,
+  rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cardPass: .5,
   followThroughPass: .8,
 };
 type InterviewCondition = typeof INTERVIEW_CONDITIONS[number];
@@ -20,7 +20,7 @@ export type ResearchRequest = { kind: ResearchKind; name: string; clue: string |
 export const CUE_OUTCOMES = ['followed', 'deferred', 'missed', 'retired', 'not-yet-assessable'] as const;
 /** Used by the live session and voice rehearsals so they exercise the same instruction. */
 export function producerDirection(cue: string): string {
-  return `Producer direction (replaces any earlier direction): ${cue}\nFollow this once at the next suitable opening. First follow any fresh useful participant story to a natural pause. Do not interrupt or start speaking just because this arrived. Skip it if already answered, irrelevant, declined or unanswerable; a request to finish wins. Never read this direction aloud.`;
+  return `Producer direction (replaces any earlier direction): ${cue}\nFollow this once at the next suitable opening. First follow any fresh useful participant story to a natural pause. Ask one question per turn; do not tack this onto a question about a newer story. Do not interrupt or start speaking just because this arrived. Skip it if already answered, irrelevant, declined or unanswerable; a request to finish wins. Never read this direction aloud.`;
 }
 export type CueOutcome = typeof CUE_OUTCOMES[number];
 /** A pinned instruction and its context receipt, separate from what Sam subsequently does. */
@@ -44,9 +44,11 @@ export type ProducerRecord = {
   source: 'producer'; id: string; triggers: ProducerTrigger[]; queued: boolean; model: string; effort: 'none';
   inputCount: number; lastInputId: string | null;
   triggeredAt: number; startedAt: number; generatedAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
-  result?: { cue: string | null; evidenceIds: string[]; research: ResearchRequest | null }; usage?: DirectorUsage; check?: Check;
+  result?: { cue: string | null; evidenceIds: string[]; research: ResearchRequest | null }; usage?: DirectorUsage;
+  /** Historical delivery checks, retained for reading older archives. New cues go straight to Sam. */
+  check?: Check;
   outcome: 'pending' | 'none' | 'sent' | 'withheld' | 'budget' | 'spacing' | 'invalid' | 'timeout' | 'error' | 'aborted';
-  /** Why a cue was withheld: the check rejected it, or the dialogue moved while it was checked. */
+  /** An obsolete recovery, or a historical delivery-check rejection. */
   reason?: 'check' | 'dialogue_changed';
   delivery?: NoteDelivery;
   followThrough?: CueFollowThrough & { lastInputId: string | null };

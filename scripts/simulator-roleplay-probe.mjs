@@ -72,6 +72,17 @@ const plans = {
         return choices.find(([id, pattern]) => !used.has(id) && pattern.test(answer))?.[0] ?? 'enough';
       },
     },
+    // A finished lesson need not be repeated; a later concrete tradeoff deserves a precise follow-up.
+    'follow-up-depth': {
+      turns: 4,
+      lines: {
+        project: 'We built an appointment reminder tool for an unnamed community health organization. I led delivery and the API work. The useful handoff change was having the incoming engineer release from my guide while I watched. She found incorrect permissions, so we fixed the guide. Her next release worked without me.',
+        tradeoff: 'Another change was a weekly support review. It cut duplicate questions, but urgent billing cases sometimes sat in that weekly queue for days.',
+        effect: 'People tried to bypass the queue through chat, but nobody owned those messages. We made a separate urgent lane with a named daily responder. That kept the weekly review useful without making urgent cases wait.',
+        stop: 'That is the full story I can speak to. I would like to finish here.',
+      },
+      choose: ({ turn }) => ['project', 'tradeoff', 'effect', 'stop'][turn],
+    },
     'cue-in-flight': {
       turns: 4, cue: 'Ask who made the final launch approval decision.', cueDuringSpeech: true,
       lines: {

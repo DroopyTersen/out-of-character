@@ -31,14 +31,13 @@ function fixture(overrides: Partial<Services> = {}) {
   let coverage: InterviewObjectiveReading[] = [];
   let connected = true;
   const sent: Record<string, any>[] = [];
-  const calls = { generate: [] as Parameters<Services['generateProducer']>[0][], cue: [] as Parameters<Services['checkCue']>[0][],
+  const calls = { generate: [] as Parameters<Services['generateProducer']>[0][],
     card: [] as Parameters<Services['checkCard']>[0][], lookup: [] as Parameters<Services['lookupInterviewBackground']>[0][] };
   const producer = new InterviewProducer({
     clientId: 'sam-cedar', startedAt: epoch, openaiKey: 'openai-fixture', typesafeKey: 'typesafe-fixture',
     settled: () => transcript, coverage: () => coverage, send: event => { if (!connected) return false; sent.push(event); return true; },
     services: {
       generateProducer: async input => { calls.generate.push(input); return overrides.generateProducer ? overrides.generateProducer(input) : generated(null); },
-      checkCue: async input => { calls.cue.push(input); return overrides.checkCue ? overrides.checkCue(input) : { probability: .99, usage }; },
       checkCard: async input => { calls.card.push(input); return overrides.checkCard ? overrides.checkCard(input) : { probability: .99, usage }; },
       lookupInterviewBackground: async input => { calls.lookup.push(input); return overrides.lookupInterviewBackground ? overrides.lookupInterviewBackground(input) : { status: 'found', facts, retrievedAt: Date.now(), queries: ['OpenStreetMap about'] }; },
     },
@@ -238,7 +237,7 @@ test('research requests are validated, deduplicated, capped and retried only aft
   await f.producer.settle();
 });
 
-test('every cue is checked against the latest dialogue; spacing and the cue budget apply except for concerns', async () => {
+test('directions arrive despite a new story; spacing and cue budgets still apply', async () => {
   const first = deferred<Generated>();
   let count = 0;
   const f = fixture({
@@ -247,32 +246,32 @@ test('every cue is checked against the latest dialogue; spacing and the cue budg
       if (count === 1) return first.promise;
       return Promise.resolve(generated(`Cue ${count}`, count === 2 ? request('Mapbox') : null));
     },
-    checkCue: async input => ({ probability: input.cue === 'Cue 1' ? .5 : .9, usage }),
   });
   f.observe([concern('boundary-pressure')]);
-  f.say('trainee', 'I would rather not name the vendor.');
-  first.resolve(generated('Cue 1'));
+  f.say('trainee', 'There was another surprise: the launch rehearsal caught a missing access role.');
+  f.say('client', 'How did the team catch that?');
+  first.resolve(generated('Return to the vendor handoff; ask what made it work.'));
   await f.producer.settle();
-  expect(f.calls.cue[0]).toMatchObject({ cue: 'Cue 1', apiKey: 'typesafe-fixture' });
-  expect(f.calls.cue[0]!.transcript.at(-1)!.id).toBe('p3');
-  expect(f.of('producer')[0]).toMatchObject({ outcome: 'withheld', reason: 'check', check: { probability: .5, lastInputId: 'p3' } });
-  expect(f.sent).toHaveLength(0);
+  expect(f.of('producer')[0]).toMatchObject({ outcome: 'sent', lastInputId: 'p2', delivery: { afterPassageId: 'p4' } });
+  expect(f.of('producer')[0]!.check).toBeUndefined();
+  expect(f.of('producer')[0]!.checkedAt).toBeUndefined();
+  expect(f.sent).toHaveLength(1);
+  expect(f.sent[0]).toMatchObject({ type: 'session.instructions.append', content: expect.stringContaining('Return to the vendor handoff; ask what made it work.') });
+  expect(f.calls.card).toHaveLength(0);
 
   // A check-in cue, then its research card's follow-up inside the spacing window, then a concern that skips spacing.
   const checkIn = () => { f.say('client', `Question ${f.transcript().length}?`); f.advance(PRODUCER_LIMITS.checkIn); f.producer.tick(); return f.producer.settle(); };
   await checkIn();
   f.observe([concern('leading')]);
   await f.producer.settle();
-  expect(f.of('producer').map(item => [item.triggers[0]!.kind, item.outcome])).toEqual([['concern', 'withheld'], ['check-in', 'sent'], ['research', 'spacing'], ['concern', 'sent']]);
-  expect(f.of('producer').map(item => item.check?.probability ?? null)).toEqual([.5, .9, null, .9]);
+  expect(f.of('producer').map(item => [item.triggers[0]!.kind, item.outcome])).toEqual([['concern', 'sent'], ['check-in', 'sent'], ['research', 'spacing'], ['concern', 'sent']]);
 
   while (f.of('producer').filter(item => item.outcome === 'sent').length < PRODUCER_LIMITS.cues) await checkIn();
   await checkIn();
   expect(f.of('producer').at(-1)!.outcome).toBe('budget');
-  expect(f.calls.cue).toHaveLength(PRODUCER_LIMITS.cues + 1);
   const cues = f.sent.filter(item => String(item.event_id).startsWith('cue-'));
   expect(cues).toHaveLength(PRODUCER_LIMITS.cues);
-  expect(cues[0]).toEqual({ type: 'session.instructions.append', event_id: expect.stringMatching(/^cue-/), delegation_id: null, content: expect.stringContaining('Cue 2') });
+  expect(cues[1]).toEqual({ type: 'session.instructions.append', event_id: expect.stringMatching(/^cue-/), delegation_id: null, content: expect.stringContaining('Cue 2') });
 });
 
 test('the rundown is sent only when a band changes, throttled, plus once near the target time', () => {
@@ -405,41 +404,35 @@ test('close aborts pending work and ignores late results', async () => {
   f.producer.delegation('delegation-1', 'client', true);
   expect(f.of('producer')).toHaveLength(1);
   expect(f.of('producer')[0]).toMatchObject({ outcome: 'aborted' });
-  expect(f.calls.cue).toHaveLength(0);
   expect(f.sent).toHaveLength(0);
   expect(f.producer.canObserve).toBe(false);
   expect(f.producer.records.some(item => item.source === 'delegation')).toBe(false);
 });
 
-test('a participant correction during a delivery check prevents the stale note from being sent', async () => {
-  for (const kind of ['cue', 'card'] as const) {
-    const pending = deferred<{ probability: number; usage: typeof usage }>();
-    let count = 0;
-    const f = fixture({
-      generateProducer: async () => count++ ? generated(null) : kind === 'cue' ? generated('Ask about the mapping vendor.') : generated(null, request('Mapbox')),
-      ...(kind === 'cue' ? { checkCue: () => pending.promise } : { checkCard: () => pending.promise }),
-    });
-    f.observe([concern('leading')]);
-    await flush();
-    f.say('trainee', 'Actually I meant a different product, and I would rather not discuss the vendor.');
-    pending.resolve({ probability: .99, usage });
-    await f.producer.settle();
-    expect(f.sent).toHaveLength(0);
-    const record = kind === 'cue' ? f.of('producer')[0] : f.of('research')[0];
-    expect(record!.outcome).toBe('withheld');
-    expect(record!.reason).toBe('dialogue_changed');
-    expect(f.producer.publicBackground()).toEqual([]);
-  }
+test('a participant correction during a research identity check prevents the stale card from being sent', async () => {
+  const pending = deferred<{ probability: number; usage: typeof usage }>();
+  let count = 0;
+  const f = fixture({
+    generateProducer: async () => count++ ? generated(null) : generated(null, request('Mapbox')),
+    checkCard: () => pending.promise,
+  });
+  f.observe([concern('leading')]);
+  await flush();
+  f.say('trainee', 'Actually I meant a different product, and I would rather not discuss the vendor.');
+  pending.resolve({ probability: .99, usage });
+  await f.producer.settle();
+  expect(f.sent).toHaveLength(0);
+  expect(f.of('research')[0]).toMatchObject({ outcome: 'withheld', reason: 'dialogue_changed' });
+  expect(f.producer.publicBackground()).toEqual([]);
 });
 
 test('results that complete past generation, check, or research deadlines cannot send a note', async () => {
-  for (const step of ['generation', 'cue', 'card', 'unresolved'] as const) {
+  for (const step of ['generation', 'card', 'unresolved'] as const) {
     const f = fixture({
       generateProducer: async () => {
         if (step === 'generation') f.advance(PRODUCER_LIMITS.generation);
         return step === 'card' || step === 'unresolved' ? generated(null, request('Mapbox')) : generated('Ask about the handoff.');
       },
-      checkCue: async () => { f.advance(PRODUCER_LIMITS.check); return { probability: .99, usage }; },
       checkCard: async () => { f.advance(PRODUCER_LIMITS.check); return { probability: .99, usage }; },
       lookupInterviewBackground: async () => {
         if (step === 'unresolved') { f.advance(PRODUCER_LIMITS.researchAge); return { status: 'unresolved', reason: 'Ambiguous identity.', queries: [] }; }
@@ -610,6 +603,26 @@ test('recovery in flight cannot send after the direction is retired or the inter
     expect(f.sent.filter(event => event.type === 'session.instructions.append')).toHaveLength(1);
     expect(f.of('producer')[1]!.outcome).toBe(end ? 'aborted' : 'withheld');
   }
+});
+
+for (const queued of [false, true]) test(`a new story can defer a ${queued ? 'queued' : 'in-flight'} recovery without withholding its direction`, async () => {
+  const pending = deferred<Generated>(); let count = 0;
+  const f = await directedFixture({ generateProducer: async () => {
+    count++;
+    return count === 1 ? generated('Ask about the handoff.') : count === 2 ? pending.promise : generated('Return to the handoff; ask how the team prepared it.');
+  } });
+  f.advance(30_000); f.say('client', 'Anything else?');
+  f.observe([], undefined, followThrough(f, 'missed'));
+  if (queued) f.observe([concern('source-confusion')]);
+  f.producer.tick();
+  f.say('trainee', 'One more thing: a junior developer caught a duplicate payment before launch.');
+  f.say('client', 'What did they notice?');
+  f.observe([], undefined, followThrough(f, 'deferred'));
+  pending.resolve(generated(queued ? null : 'Return to the handoff; ask how the team prepared it.'));
+  await f.producer.settle();
+  expect(f.sent.filter(event => event.type === 'session.instructions.append')).toHaveLength(2);
+  expect(f.calls.generate).toHaveLength(queued ? 3 : 2);
+  expect(f.of('producer').at(-1)).toMatchObject({ outcome: 'sent', queued, recoveryUsed: true, delivery: { afterPassageId: f.transcript().at(-1)!.id } });
 });
 
 test('a retired recovery does not suppress a queued boundary correction', async () => {

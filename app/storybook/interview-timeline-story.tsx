@@ -9,8 +9,7 @@ import '../interview/interview.css';
 
 const startedAt = Date.UTC(2026, 0, 5, 15);
 const at = (seconds: number) => startedAt + seconds * 1000;
-const check = (probability: number, lastInputId: string) => ({ probability, inputCount: 4, lastInputId });
-/** Synthetic dialogue, grades, an unresolved lookup, a withheld follow-up, a sent cue and rundowns. */
+/** Synthetic dialogue, grades, an unresolved lookup, a declined follow-up, a sent cue and rundowns. */
 const records: ProducerLogRecord[] = [
   { source: 'grade', id: 'grade-1', final: false, revision: 2, capturedAt: at(15), completedAt: at(15.3), inputCount: 2, lastInputId: 'u1', outcome: 'graded', durationMs: 300,
     objectives: [{ id: 'project-delivery', shown: ['explored', 'u1'], graded: ['explored', 'u1'], levels: [.01, .03, .95, .01] }] },
@@ -28,12 +27,11 @@ const records: ProducerLogRecord[] = [
   { source: 'assessment', id: 'assessment-2', snapshotAt: at(40), completedAt: at(42.6), model: 'jev-1.13.0', inputCount: 6, lastInputId: 'u3',
     signals: [{ condition: 'missed-thread', probability: .64 }, { condition: 'leading', probability: .06 }], researchProbability: .2, outcome: 'observed', concerns: [] },
   { source: 'producer', id: 'producer-2', triggers: [{ kind: 'research', researchId: 'research-1', status: 'unresolved' }, { kind: 'signal', condition: 'missed-thread', probability: .64 }],
-    queued: false, model: 'gpt-6-sol', effort: 'none', inputCount: 6, lastInputId: 'u3', triggeredAt: at(47.9), startedAt: at(47.9), generatedAt: at(49.2), checkedAt: at(50.1),
-    completedAt: at(50.1), outcome: 'withheld', reason: 'check', check: check(.41, 'u3'),
-    result: { cue: 'If it fits, ask which offline tool the inspectors compared it with.', evidenceIds: ['u2'], research: null } },
+    queued: false, model: 'gpt-6-sol', effort: 'none', inputCount: 6, lastInputId: 'u3', triggeredAt: at(47.9), startedAt: at(47.9), generatedAt: at(49.2),
+    completedAt: at(49.2), outcome: 'none', result: { cue: null, evidenceIds: [], research: null } },
   { source: 'producer', id: 'producer-3', triggers: [{ kind: 'check-in' }], queued: true, model: 'gpt-6-sol', effort: 'none', inputCount: 6, lastInputId: 'u3',
-    triggeredAt: at(48.5), startedAt: at(50.1), generatedAt: at(51.3), checkedAt: at(52), sentAt: at(52.1), nextSamTurnAt: at(54.2), nextSamTurnAfterId: 'u3', completedAt: at(52.1), outcome: 'sent',
-    check: check(.83, 'u3'), result: { cue: 'Ask what the client did with the synthetic-data caveat.', evidenceIds: ['u3'], research: null },
+    triggeredAt: at(48.5), startedAt: at(50.1), generatedAt: at(51.3), sentAt: at(51.3), nextSamTurnAt: at(54.2), nextSamTurnAfterId: 'u3', completedAt: at(51.3), outcome: 'sent',
+    result: { cue: 'Ask what the client did with the synthetic-data caveat.', evidenceIds: ['u3'], research: null },
     delivery: { eventId: 'cue-3', afterPassageId: 'u3', status: 'accepted' } },
   { source: 'rundown', id: 'rundown-2', sentAt: at(60), reason: 'change', elapsedMinutes: 1,
     levels: { 'project-delivery': 'explored', 'project-role': 'explored', 'project-reflection': 'touched', 'client-access': 'explored' }, outcome: 'sent',

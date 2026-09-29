@@ -1,4 +1,4 @@
-import { checkCard, checkCue, generateProducer } from '../../../ai/interview/producer.server';
+import { checkCard, generateProducer } from '../../../ai/interview/producer.server';
 import { lookupInterviewBackground, RESEARCH_MODEL, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
 import { DirectorOutputError, SOL_MODEL } from '../../../ai/simulator/sol.server';
 import { JEV_MODEL } from '../../../ai/judging';
@@ -11,7 +11,7 @@ import {
 import type { DirectorSignal } from '../../../core/simulator/director';
 import type { TranscriptEntry } from '../../../core/simulator/types';
 
-export const producerServices = { generateProducer, checkCue, checkCard, lookupInterviewBackground };
+export const producerServices = { generateProducer, checkCard, lookupInterviewBackground };
 type Options = {
   clientId: string; startedAt: number; openaiKey: string; typesafeKey: string; services: typeof producerServices;
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
@@ -117,7 +117,7 @@ export class InterviewProducer {
     if (input.followThrough && input.followThrough.cueId === this.currentCue?.id && this.currentCue && dialogueKey(input.transcript) === dialogueKey(this.options.settled())) {
       this.currentCue.followThrough = { ...input.followThrough, lastInputId: input.transcript.at(-1)?.id ?? null };
     }
-    // A late assessment still describes recent dialogue; Sol and the cue check see the latest.
+    // A late assessment still describes recent dialogue; Sol sees the latest when consulted.
     this.signals = input.signals;
     this.researchProbability = input.researchProbability;
     const concerns: ProducerTrigger[] = [];
@@ -169,7 +169,7 @@ export class InterviewProducer {
   }
 
   private start(triggers: ProducerTrigger[], triggeredAt: number, queued: boolean) {
-    triggers = triggers.filter(item => item.kind !== 'cue-recovery' || this.recoveryApplies(item.cueId));
+    triggers = triggers.filter(item => item.kind !== 'cue-recovery' || item.cueId === this.cue()?.id);
     if (!triggers.length) return;
     const transcript = [...this.options.settled()];
     if (!transcript.length) return;
@@ -225,23 +225,9 @@ export class InterviewProducer {
       if (this.counts.cues >= LIMITS.cues) { record.outcome = 'budget'; return; }
       const urgent = record.triggers.some(item => item.kind === 'concern');
       if (!urgent && this.lastCueAt != null && Date.now() - this.lastCueAt < LIMITS.cueSpacing) { record.outcome = 'spacing'; return; }
-      const latest = [...this.options.settled()];
-      const checkedDialogue = dialogueKey(latest);
-      const checkStartedAt = Date.now();
-      const checkSignal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.check)]);
-      record.check = { probability: null, inputCount: latest.length, lastInputId: latest.at(-1)?.id ?? null };
-      const checked = await services.checkCue({
-        transcript: latest, coverage: this.options.coverage(), startedAt, now: Date.now(), history: this.records, cue: result.cue,
-        apiKey: this.options.typesafeKey, signal: checkSignal,
-      });
-      if (!this.alive) return;
-      checkSignal.throwIfAborted();
-      record.checkedAt = Date.now();
-      record.check = { ...record.check, probability: checked.probability, usage: checked.usage };
-      if (Date.now() - checkStartedAt >= LIMITS.check) { record.outcome = 'timeout'; return; }
-      const moved = checkedDialogue !== dialogueKey(this.options.settled());
-      if (moved || checked.probability < LIMITS.cuePass) { record.outcome = 'withheld'; record.reason = moved ? 'dialogue_changed' : 'check'; return; }
-      if (record.triggers.every(item => item.kind === 'cue-recovery' && !this.recoveryApplies(item.cueId))) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
+      // A deferred direction is still active. Cancel only a retired or superseded recovery.
+      if (record.triggers.every(item => item.kind === 'cue-recovery' && item.cueId !== this.cue()?.id)) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
+      // Sam receives the direction even if speech continued while Sol was writing it.
       const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, producerDirection(result.cue), 'session.instructions.append');
       record.outcome = sent ? 'sent' : 'error';
       if (sent) { this.counts.cues++; this.lastCueAt = record.sentAt = Date.now(); this.currentCue = record; }

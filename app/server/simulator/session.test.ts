@@ -377,7 +377,8 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   expect(records.filter((record: { source: string }) => record.source !== 'grade').map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
   expect(records.filter((record: { source: string }) => record.source === 'grade').at(-1)).toMatchObject({ final: true, outcome: 'graded', durationMs: 1 });
   expect(records[0]).toMatchObject({ outcome: 'observed', concerns: ['leading'] });
-  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted', startMs: 2000, endMs: 2400 }, check: { probability: .99 } } : {}) });
+  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted', startMs: 2000, endMs: 2400 } } : {}) });
+  expect(records[1].check).toBeUndefined();
   expect(JSON.parse(row.cues_json)).toEqual([]);
   expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'none', consultations: 1, cues: action === 'none' ? 0 : 1 });
   expect(summarized).not.toContain('PRIVATE:');

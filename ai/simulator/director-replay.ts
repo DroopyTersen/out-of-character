@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { evaluateClient, evaluateTrainee } from './evaluate.server';
 import { evaluateInterview, evaluateInterviewer } from '../interview/evaluate.server';
-import { checkCue, generateProducer } from '../interview/producer.server';
+import { generateProducer } from '../interview/producer.server';
 import { interviewFixtures } from '../interview/fixtures';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
 import { DIRECTOR_MODEL, generateDirector } from './director.server';
@@ -53,8 +53,7 @@ async function replayInterview(turn: number) {
     const result = await generateProducer({ clientId: 'sam-cedar', transcript, coverage: graded.objectives, startedAt: 0, now, triggers, history: [],
       budget: { cuesLeft: PRODUCER_LIMITS.cues, researchLeft: PRODUCER_LIMITS.research, lookupsInFlight: 0 }, apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
     const durationMs = Math.round(performance.now() - started);
-    const check = result.cue ? await checkCue({ transcript, coverage: graded.objectives, startedAt: 0, now, history: [], cue: result.cue, apiKey: process.env.TYPESAFE_API_KEY!, signal: AbortSignal.timeout(10_000) }) : null;
-    (row.generation as unknown[]).push({ effort, durationMs, ...result, check });
+    (row.generation as unknown[]).push({ effort, durationMs, ...result });
   }
 }
 

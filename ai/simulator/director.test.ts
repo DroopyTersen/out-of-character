@@ -86,10 +86,10 @@ test('incomplete, refused, non-JSON, and HTTP failures never become hints', asyn
   await expect(generateDirector(input, (async () => new Response('private provider detail', { status: 429 })))).rejects.toThrow('Director request failed (429).');
 });
 
-test('freshness checks reach Jev for both audiences with and without an optional briefing', async () => {
+test('trainee hint freshness checks reach Jev with and without an optional briefing', async () => {
   // Substitute paid HTTP only; the real SDK validates and serializes the context.
   const transcript = [...input.transcript, { id: 'p2', speaker: 'trainee' as const, text: 'What decision will this support?', startMs: 1000, endMs: 2000 }];
-  for (const audience of ['trainee', 'actor'] as const) for (const scenarioId of ['sharepoint', 'proposal']) {
+  for (const scenarioId of ['sharepoint', 'proposal']) {
     let requests = 0;
     const request = Object.assign(async (url: string | URL | Request, options?: RequestInit) => {
       requests++;
@@ -97,10 +97,10 @@ test('freshness checks reach Jev for both audiences with and without an optional
       expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer fixture-key');
       const body = JSON.parse(String(options?.body));
       const state = typeof body.state === 'string' ? JSON.parse(body.state) : body.state;
-      expect(state).toMatchObject({ audience, proposedIntervention: intervention, dialogue: [{ id: 'p1', text: input.transcript[0]!.text }, { id: 'p2', text: transcript[1]!.text }] });
+      expect(state).toMatchObject({ audience: 'trainee', proposedIntervention: intervention, dialogue: [{ id: 'p1', text: input.transcript[0]!.text }, { id: 'p2', text: transcript[1]!.text }] });
       return Response.json({ model: 'jev-1.13.0', answers: { applicable: { type: 'noul', noul: .08 } }, usage: { input_tokens: 120, output_tokens: 8 } });
     }, { preconnect: fetch.preconnect });
-    const result = await recheckDirector({ ...input, audience, scenarioId, transcript, intervention: { ...intervention, action: 'intervene' } }, request);
+    const result = await recheckDirector({ ...input, audience: 'trainee', scenarioId, transcript, intervention: { ...intervention, action: 'intervene' } }, request);
     expect(requests).toBe(1);
     expect(result).toEqual({ probability: .08, usage: { inputTokens: 120, outputTokens: 8 } });
   }

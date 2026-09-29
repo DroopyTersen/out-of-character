@@ -152,6 +152,25 @@ test('one successful recheck may publish, but another settled change discards wi
   }
 });
 
+test('actor cues arrive after new speech or a changed drift assessment without a Jev veto', async () => {
+  for (const reassess of [false, true]) {
+    const pending = deferred<typeof result>();
+    let rechecks = 0;
+    const f = fixture({ generateDirector: () => pending.promise, recheckDirector: async () => { rechecks++; throw new Error('Actor cues must not be rechecked.'); } });
+    const work = f.observe([{ condition: 'role', probability: .99 }], 'actor');
+    f.snapshot.transcript.push(passage('p3', 'trainee', 'Let me explain the deployment options.'));
+    f.snapshot.revision++;
+    if (reassess) await f.observe([{ condition: 'role', probability: .1 }], 'actor');
+    pending.resolve({ ...result, text: 'Ask the consultant to own the delivery recommendation.' });
+    await work;
+    expect(rechecks).toBe(0);
+    expect(f.sent).toHaveLength(1);
+    expect(f.sent[0]).toMatchObject({ type: 'session.thinking.append', content: 'Ask the consultant to own the delivery recommendation.' });
+    expect(f.director.records.find(row => row.source === 'director')).toMatchObject({ outcome: 'sent', delivery: { afterPassageId: 'p3' } });
+    expect(f.director.coaching()).toBeNull();
+  }
+});
+
 test('a slower director response can publish after twelve seconds when still relevant', async () => {
   for (const audience of ['trainee', 'actor'] as const) {
     const pending = deferred<typeof result>();
@@ -253,7 +272,8 @@ test('actor cue history marks delivery after newer dialogue, not the older gener
   setSystemTime(epoch + 1000);
   pending.resolve(result);
   await work;
-  expect(f.director.records.find(row => row.source === 'director')).toMatchObject({ lastInputId: 'p2', deliveredAt: epoch + 1000, recheck: { lastInputId: 'p3' }, delivery: { afterPassageId: 'p3' } });
+  expect(f.director.records.find(row => row.source === 'director')).toMatchObject({ lastInputId: 'p2', deliveredAt: epoch + 1000, delivery: { afterPassageId: 'p3' } });
+  expect(f.director.records.find(row => row.source === 'director')?.recheck).toBeUndefined();
 });
 
 test('closing aborts generation and freezes terminal records despite a late completion', async () => {

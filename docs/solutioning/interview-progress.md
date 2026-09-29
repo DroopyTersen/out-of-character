@@ -1,5 +1,11 @@
 # Project closeout interview progress
 
+## Current update — cue delivery and useful follow-ups
+
+The [cue delivery update](interview-steering-plan.md#cue-delivery-update) supersedes earlier delivery-check descriptions below. Sol directions reach Sam without a final Jev veto, and private Simulator actor cues bypass their changed-dialogue recheck. Public trainee hints and research identity checks retain their checks. A queued or in-flight recovery survives useful deferral, but not retirement or supersession.
+
+Sam and Sol now aim to elicit a concrete lesson the participant has not yet articulated. Do not ask for the same practice and effect again as advice or a takeaway; keep probing a different unresolved decision, tradeoff, contradiction, or consequence grounded in their words. Producer cues need that specific gap or a concrete interviewing correction, not generic coverage or routine orientation. A pending cue must not be tacked onto a question about a fresh story. There is no minimum duration or insight quota.
+
 ## Checkpoint 0 — scope and foundation
 
 - Goal created for the approved POC, including implementation, checkpoint reviews and two design loops on each major screen.

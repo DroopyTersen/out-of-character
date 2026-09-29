@@ -103,11 +103,12 @@ export class ContextualDirector {
       record.model = model;
       if (signal.aborted || Date.now() >= expiry) { record.outcome = 'timeout'; return; }
       if (result.action === 'none') { record.outcome = 'none'; record.readyAt = Date.now(); return; }
-      if (!this.options.isFresh(observation.transcript)) {
+      // Public hints must still fit now. The actor interprets private direction in the live conversation.
+      if (observation.audience === 'trainee' && !this.options.isFresh(observation.transcript)) {
         if (expiry - Date.now() < DIRECTOR_LIMITS.recheck) { record.outcome = 'stale'; return; }
         const transcript = [...this.options.settled()];
         const started = Date.now();
-        const recheck = this.gate.recheck(() => services.recheckDirector({ ...input, transcript, objectives: this.options.objectives(), apiKey: this.options.typesafeKey, intervention: result, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(DIRECTOR_LIMITS.recheck)]) }));
+        const recheck = this.gate.recheck(() => services.recheckDirector({ ...input, audience: 'trainee', transcript, objectives: this.options.objectives(), apiKey: this.options.typesafeKey, intervention: result, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(DIRECTOR_LIMITS.recheck)]) }));
         if (!recheck) { record.outcome = 'stale'; return; }
         record.recheck = { inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null, startedAt: started, probability: null, durationMs: null };
         const checked = await recheck;
@@ -115,11 +116,10 @@ export class ContextualDirector {
         record.recheck = { ...record.recheck, probability: checked.probability, durationMs: Date.now() - started, usage: checked.usage };
         if (checked.probability < .9 || !this.options.isFresh(transcript)) { record.outcome = 'stale'; return; }
       }
-      // A choice selects work; a later choice does not resolve it. Whole-dialogue
-      // rechecking and objective achievement decide whether that draft is useful.
-      const resolved = 'selected' in issue.signal
+      // Resolve public hints from current evidence; let the actor handle an outdated private direction.
+      const resolved = observation.audience === 'trainee' && ('selected' in issue.signal
         ? this.options.objectives().some(item => `objective:${item.id}` === issue.signal.condition && item.achieved)
-        : !this.gate.current(observation.audience, issue.id);
+        : !this.gate.current('trainee', issue.id));
       if (Date.now() >= expiry || resolved) { record.outcome = 'stale'; return; }
       if (observation.audience === 'trainee' && issue.signal.condition !== 'mistake' && this.gate.concern()) { record.outcome = 'stale'; return; }
       record.readyAt = Date.now();

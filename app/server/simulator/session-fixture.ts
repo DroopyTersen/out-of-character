@@ -105,7 +105,6 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
     recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
     generateProducer: async () => ({ cue: null, evidenceIds: [], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
-    checkCue: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
     checkCard: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
     lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
     generateReport: () => { throw new Error('No report provider configured in this fixture.'); },

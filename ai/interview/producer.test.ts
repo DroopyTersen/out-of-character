@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkCard, checkCue, generateProducer, producerContext, validateProducerResult, type ProducerInput } from './producer.server';
+import { checkCard, generateProducer, producerContext, validateProducerResult, type ProducerInput } from './producer.server';
 import { PRODUCER_LIMITS, type ProducerRecord, type ResearchRecord } from '../../core/interview-producer';
 import type { TranscriptEntry } from '../../core/simulator/types';
 
@@ -84,19 +84,15 @@ test('the producer request uses Sol at effort none with strict output, no tools 
   expect(result).toMatchObject({ cue: 'Ask what dispatchers did differently afterward.', evidenceIds: ['p2'], research: null, model: 'gpt-6-sol' });
 });
 
-test('cue and card checks send Jev only what each judgment needs', async () => {
-  let cueBody: Record<string, any> = {}, cardBody: Record<string, any> = {};
+test('research identity checks send Jev the background and dialogue without coverage or private cues', async () => {
+  let cardBody: Record<string, any> = {};
   const signal = new AbortController().signal;
-  const history = [cue('Earlier cue', { delivery: { eventId: 'cue-1', afterPassageId: 'p1', status: 'accepted' } }), cue('Never sent', { outcome: 'withheld' })];
-  expect(await checkCue({ ...input, history, cue: 'Proposed cue', apiKey: 'fixture', signal }, jev(.7, body => { cueBody = body; }))).toEqual({ probability: .7, usage: { inputTokens: 120, outputTokens: 8 } });
-  const cueState = JSON.parse(cueBody.state);
-  expect(cueState).toMatchObject({ proposedCue: 'Proposed cue', earlierCues: [{ text: 'Earlier cue', afterPassageId: 'p1' }], clock: { elapsedMinutes: 12 } });
-  expect(cueState.coverage[0].topics[0]).toEqual({ label: 'Deliverables & scope', level: 'explored' });
-  expect(cueState.dialogue.map((entry: { speaker: string }) => entry.speaker)).toEqual(['sam', 'participant']);
-
-  await checkCard({ transcript, request: { kind: 'product', name: 'OpenStreetMap', clue: 'map' }, facts, apiKey: 'fixture', signal }, jev(.4, body => { cardBody = body; }));
+  expect(await checkCard({ transcript, request: { kind: 'product', name: 'OpenStreetMap', clue: 'map' }, facts, apiKey: 'fixture', signal }, jev(.4, body => { cardBody = body; })))
+    .toEqual({ probability: .4, usage: { inputTokens: 120, outputTokens: 8 } });
   const cardState = JSON.parse(cardBody.state);
   expect(cardState).toMatchObject({ requested: { kind: 'product', name: 'OpenStreetMap', clue: 'map' }, publicBackground: [{ text: facts[0]!.text, title: facts[0]!.title }] });
   expect(cardBody.state).not.toContain(facts[0]!.url);
   expect(cardState).not.toHaveProperty('coverage');
+  expect(cardState).not.toHaveProperty('earlierCues');
+  expect(cardState.dialogue.map((entry: { speaker: string }) => entry.speaker)).toEqual(['sam', 'participant']);
 });

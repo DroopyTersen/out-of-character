@@ -6,7 +6,7 @@ export const INTERVIEW_CONDITIONS = ['missed-thread', 'overprobing', 'question-s
 export type BooleanCondition = 'mistake' | 'stalled' | (typeof ACTOR_CONDITIONS)[number] | (typeof INTERVIEW_CONDITIONS)[number];
 export type DirectorSignal = { condition: BooleanCondition; probability: number } | { condition: `objective:${string}`; selected: boolean };
 export type DirectorCondition = DirectorSignal['condition'];
-export const DIRECTOR_VERSION = 'contextual-director-v2';
+export const DIRECTOR_VERSION = 'contextual-director-v3';
 export const DIRECTOR_LIMITS = { calls: { trainee: 40, actor: 20 }, rechecks: 60, notes: 6, cooldown: 20_000, reconsider: 60_000, age: 20_000, generation: 15_000, recheck: 3000, hint: 30_000 };
 export const MATERIAL_CONCERN = 'A commitment or claim may go beyond what has been established. Review it before proceeding.';
 

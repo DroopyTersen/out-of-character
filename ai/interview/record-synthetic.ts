@@ -42,10 +42,10 @@ for (const row of jev.rows) {
     },
     ...(generation ? { producer: {
       model: generation.model, durationMs: generation.durationMs, cue: generation.cue,
-      evidenceIds: generation.evidenceIds, research: generation.research, checkProbability: generation.check?.probability ?? null,
+      evidenceIds: generation.evidenceIds, research: generation.research,
     } } : {}),
   });
 }
 await mkdir(dirname(output), { recursive: true });
-await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: jev.collectedAt, rubricVersion: jev.rubricVersion, source: 'Separate synthetic participant and producer replays; no live interview data', rows }, null, 2) + '\n');
+await writeFile(output, JSON.stringify({ synthetic: true, collectedAt: jev.collectedAt, rubricVersion: jev.rubricVersion, producerVersion: PRODUCER_VERSION, source: 'Separate synthetic participant and producer replays; no live interview data', rows }, null, 2) + '\n');
 console.log(`Saved ${rows.length} reduced synthetic Workshop recordings to ${output}.`);

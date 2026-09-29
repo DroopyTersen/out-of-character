@@ -2,6 +2,7 @@
   "synthetic": true,
   "collectedAt": "2026-09-29T05:23:06.021Z",
   "rubricVersion": "interview-rubric-v7",
+  "producerVersion": "interview-producer-v4",
   "source": "Separate synthetic participant and producer replays; no live interview data",
   "rows": [
     {
@@ -1286,15 +1287,15 @@
       },
       "interviewer": {
         "model": "jev-1.13.0",
-        "durationMs": 208,
+        "durationMs": 196,
         "signals": [
           {
             "condition": "missed-thread",
-            "probability": 0.75
+            "probability": 0.76
           },
           {
             "condition": "overprobing",
-            "probability": 0.19
+            "probability": 0.2
           },
           {
             "condition": "question-stacking",
@@ -1306,7 +1307,7 @@
           },
           {
             "condition": "leading",
-            "probability": 0.04
+            "probability": 0.05
           },
           {
             "condition": "source-confusion",
@@ -1321,14 +1322,14 @@
       },
       "producer": {
         "model": "gpt-6-sol",
-        "durationMs": 2552,
-        "cue": "Ask what the senior client manager did that changed things.",
+        "durationMs": 2473,
+        "cue": "Return to what senior client management actually did to resolve the uncertainty.",
         "evidenceIds": [
+          "p1",
           "p2",
           "p3"
         ],
-        "research": null,
-        "checkProbability": 0.8
+        "research": null
       }
     },
     {
@@ -1565,11 +1566,11 @@
       },
       "interviewer": {
         "model": "jev-1.13.0",
-        "durationMs": 180,
+        "durationMs": 167,
         "signals": [
           {
             "condition": "missed-thread",
-            "probability": 0.27
+            "probability": 0.3
           },
           {
             "condition": "overprobing",
@@ -1577,7 +1578,7 @@
           },
           {
             "condition": "question-stacking",
-            "probability": 0.19
+            "probability": 0.2
           },
           {
             "condition": "boundary-pressure",
@@ -1593,18 +1594,17 @@
           },
           {
             "condition": "invented-facts",
-            "probability": 0.05
+            "probability": 0.04
           }
         ],
         "researchProbability": 0.06
       },
       "producer": {
         "model": "gpt-6-sol",
-        "durationMs": 2283,
+        "durationMs": 2257,
         "cue": null,
         "evidenceIds": [],
-        "research": null,
-        "checkProbability": null
+        "research": null
       }
     },
     {
@@ -11559,15 +11559,15 @@
       },
       "interviewer": {
         "model": "jev-1.13.0",
-        "durationMs": 234,
+        "durationMs": 184,
         "signals": [
           {
             "condition": "missed-thread",
-            "probability": 0.85
+            "probability": 0.86
           },
           {
             "condition": "overprobing",
-            "probability": 0.36
+            "probability": 0.34
           },
           {
             "condition": "question-stacking",
@@ -11608,15 +11608,14 @@
       },
       "producer": {
         "model": "gpt-6-sol",
-        "durationMs": 2551,
-        "cue": "Return to the vendor handoff: ask what made it work so well.",
+        "durationMs": 3202,
+        "cue": "Return to the vendor handoff: ask what they did that made it work.",
         "evidenceIds": [
           "p2",
-          "p4",
+          "p3",
           "p5"
         ],
-        "research": null,
-        "checkProbability": 0.62
+        "research": null
       }
     },
     {
@@ -11869,19 +11868,19 @@
       },
       "interviewer": {
         "model": "jev-1.13.0",
-        "durationMs": 208,
+        "durationMs": 203,
         "signals": [
           {
             "condition": "missed-thread",
-            "probability": 0.59
+            "probability": 0.62
           },
           {
             "condition": "overprobing",
-            "probability": 0.18
+            "probability": 0.17
           },
           {
             "condition": "question-stacking",
-            "probability": 0.3
+            "probability": 0.27
           },
           {
             "condition": "boundary-pressure",
@@ -11889,7 +11888,7 @@
           },
           {
             "condition": "leading",
-            "probability": 0.07
+            "probability": 0.06
           },
           {
             "condition": "source-confusion",
@@ -11918,11 +11917,13 @@
       },
       "producer": {
         "model": "gpt-6-sol",
-        "durationMs": 1796,
-        "cue": null,
-        "evidenceIds": [],
-        "research": null,
-        "checkProbability": null
+        "durationMs": 3005,
+        "cue": "After the detection story, ask how the duplicate payments changed release approval.",
+        "evidenceIds": [
+          "p4",
+          "p5"
+        ],
+        "research": null
       }
     },
     {
@@ -12771,23 +12772,23 @@
       },
       "interviewer": {
         "model": "jev-1.13.0",
-        "durationMs": 255,
+        "durationMs": 285,
         "signals": [
           {
             "condition": "missed-thread",
-            "probability": 0.3
+            "probability": 0.31
           },
           {
             "condition": "overprobing",
-            "probability": 0.2
+            "probability": 0.21
           },
           {
             "condition": "question-stacking",
-            "probability": 0.15
+            "probability": 0.16
           },
           {
             "condition": "boundary-pressure",
-            "probability": 0.03
+            "probability": 0.04
           },
           {
             "condition": "leading",
@@ -12795,11 +12796,11 @@
           },
           {
             "condition": "source-confusion",
-            "probability": 0.04
+            "probability": 0.05
           },
           {
             "condition": "invented-facts",
-            "probability": 0.03
+            "probability": 0.04
           }
         ],
         "researchProbability": 0.07,
@@ -12820,14 +12821,10 @@
       },
       "producer": {
         "model": "gpt-6-sol",
-        "durationMs": 2627,
-        "cue": "Ask who the booking portal client was before moving into other follow-ups.",
-        "evidenceIds": [
-          "p2",
-          "p5"
-        ],
-        "research": null,
-        "checkProbability": 0.66
+        "durationMs": 1581,
+        "cue": null,
+        "evidenceIds": [],
+        "research": null
       }
     },
     {
@@ -13064,19 +13061,19 @@
       },
       "interviewer": {
         "model": "jev-1.13.0",
-        "durationMs": 249,
+        "durationMs": 199,
         "signals": [
           {
             "condition": "missed-thread",
-            "probability": 0.36
+            "probability": 0.35
           },
           {
             "condition": "overprobing",
-            "probability": 0.2
+            "probability": 0.21
           },
           {
             "condition": "question-stacking",
-            "probability": 0.2
+            "probability": 0.18
           },
           {
             "condition": "boundary-pressure",
@@ -13113,11 +13110,10 @@
       },
       "producer": {
         "model": "gpt-6-sol",
-        "durationMs": 1497,
+        "durationMs": 1771,
         "cue": null,
         "evidenceIds": [],
-        "research": null,
-        "checkProbability": null
+        "research": null
       }
     },
     {

@@ -79,7 +79,8 @@ export async function generateDirector(input: DirectorInput, request: (url: stri
   return { ...validateDirectorResult(value, input.transcript), model, usage };
 }
 
-export async function recheckDirector(input: DirectorInput & { intervention: DirectorResult }, request?: typeof fetch) {
+/** Only public trainee hints are rechecked; actors handle private cues against the live conversation. */
+export async function recheckDirector(input: DirectorInput & { audience: 'trainee'; intervention: DirectorResult }, request?: typeof fetch) {
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey, fetch: request }).evaluationModel(JEV_MODEL),
     // Match generation's serialization; optional catalog fields may be undefined.

@@ -2,18 +2,18 @@ import { useState } from 'react';
 import { interviewFixtures } from '../../ai/interview/fixtures';
 import recordings from '../../ai/interview/recordings.json';
 import { COVERAGE_LEVEL_LABELS, interviewReadings, interviewTopics, type InterviewObjectiveReading, type InterviewReadingId } from '../../core/interview';
-import { PRODUCER_LIMITS, type ResearchRequest } from '../../core/interview-producer';
+import type { ResearchRequest } from '../../core/interview-producer';
 import type { DirectorSignal } from '../../core/simulator/director';
 import { formatTime } from '../simulator/conversation';
 import '../simulator/simulator.css';
 
 type Recording = {
-  collectedAt: string; rubricVersion: string; source: string;
+  collectedAt: string; rubricVersion: string; producerVersion: string; source: string;
   rows: {
     fixtureId: string;
     participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: InterviewObjectiveReading[] };
     interviewer: { model: string; durationMs: number; signals: DirectorSignal[]; researchProbability?: number };
-    producer?: { model: string; durationMs: number; cue: string | null; evidenceIds: string[]; research: ResearchRequest | null; checkProbability: number | null };
+    producer?: { model: string; durationMs: number; cue: string | null; evidenceIds: string[]; research: ResearchRequest | null };
   }[];
 };
 const recorded = recordings as unknown as Recording;
@@ -57,7 +57,7 @@ export function InterviewJudgingStory() {
               {row.interviewer.researchProbability != null && <p>Public lookup useful: {(row.interviewer.researchProbability * 100).toFixed(0)}%. Sol considers this at its next check-in.</p>}
               {row.producer?.cue ? <>
                 <blockquote className="sim-evidence"><span>Recorded Sol direction · {row.producer.model} · {row.producer.durationMs} ms</span><p>“{row.producer.cue}”</p></blockquote>
-                <p>Delivery check: {row.producer.checkProbability == null ? 'Unavailable' : `${Math.round(row.producer.checkProbability * 100)}% · ${row.producer.checkProbability >= PRODUCER_LIMITS.cuePass ? 'Would send' : 'Withheld'}`}. Synthetic replay; no voice session.</p>
+                <p>{recorded.producerVersion} · Sol directions go to Sam without a Jev delivery check. Synthetic replay; no voice session.</p>
                 {row.producer.evidenceIds.map(entryId => {
                   const entry = fixture.transcript.find(item => item.id === entryId);
                   return entry ? <blockquote className="sim-evidence" key={entryId}><span>{entry.speaker === 'trainee' ? 'Participant' : 'Sam'} · {entryId}</span><p>“{entry.text}”</p></blockquote> : null;

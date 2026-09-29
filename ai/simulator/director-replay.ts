@@ -11,7 +11,7 @@ import { simulatorChallenges } from './challenge-fixtures';
 import { simulatorBlindFixtures } from './blind-fixtures';
 import { simulatorCatalogFixtures } from './catalog-fixtures';
 import { DirectorGate, DIRECTOR_VERSION, type DirectorAudience, type DirectorSignal } from '../../core/simulator/director';
-import { CHECK_IN_SIGNALS, PRODUCER_LIMITS, PRODUCER_VERSION, PROTECTION_CONDITIONS, type ProducerTrigger } from '../../core/interview-producer';
+import { CHECK_IN_SIGNALS, PRODUCER_LIMITS, PRODUCER_VERSION, PROTECTION_CONDITIONS, type ProducerRecord, type ProducerTrigger } from '../../core/interview-producer';
 import { JEV_MODEL } from '../judging';
 
 // This opt-in development replay uses synthetic fixtures. It is not a live
@@ -48,9 +48,17 @@ async function replayInterview(turn: number) {
     coverage: graded.objectives.map(({ id, level }) => ({ id, level })), detectorDurationMs: interviewer.durationMs, detectorUsage: interviewer.usage, eligible: true, generation: [] };
   report.rows.push(row);
   const now = transcript.at(-1)!.endMs;
+  // A fixture's earlier direction reaches Sol as a sent past cue with Jev's follow-through judgment.
+  const cue = interviewFixture!.cue;
+  const history: ProducerRecord[] = cue && transcript.some(entry => entry.id === cue.afterPassageId) ? [{
+    source: 'producer', id: cue.id, triggers: [{ kind: 'check-in' }], queued: false, model: 'fixture', effort: 'none', inputCount: 0, lastInputId: cue.afterPassageId,
+    triggeredAt: cue.endMs, startedAt: cue.endMs, sentAt: cue.endMs, result: { cue: cue.text, evidenceIds: cue.evidenceIds, research: null }, outcome: 'sent',
+    ...(interviewer.followThrough ? { followThrough: { ...interviewer.followThrough, lastInputId: transcript.at(-1)!.id } } : {}),
+  }] : [];
+  row.pastCue = history[0] ? { text: cue!.text, followThrough: interviewer.followThrough?.outcome ?? null } : null;
   for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
     const started = performance.now();
-    const result = await generateProducer({ clientId: 'sam-cedar', transcript, coverage: graded.objectives, startedAt: 0, now, triggers, history: [],
+    const result = await generateProducer({ clientId: 'sam-cedar', transcript, coverage: graded.objectives, startedAt: 0, now, triggers, history,
       budget: { cuesLeft: PRODUCER_LIMITS.cues, researchLeft: PRODUCER_LIMITS.research, lookupsInFlight: 0 }, apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
     const durationMs = Math.round(performance.now() - started);
     (row.generation as unknown[]).push({ effort, durationMs, ...result });

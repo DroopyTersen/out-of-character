@@ -362,6 +362,87 @@ export const interviewFixtures: InterviewFixture[] = [
     deliveredBackground: [{ id: 'r1', target: { kind: 'organization', name: 'Northstar Stores' }, facts: [{ text: 'Northstar Stores currently operates 50 stores.', url: 'https://example.org/northstar', title: 'Current company profile' }], retrievedAt: 1_790_000_000_000, afterPassageId: 'p2', status: 'accepted' }],
     expected: { heard: [], unheard: [], present: ['source-confusion'] },
   },
+  {
+    id: 'delivery-team-kept-decisions', description: 'Decisions the delivery team kept for itself are not client decision-making.',
+    transcript: dialogue([
+      ['client', 'How were decisions made on the project?'],
+      ['trainee', 'Our architect and I made the data model and hosting calls. I kept making most technical decisions until I rotated off; the incoming engineer mostly sat in on calls so the client would recognize him.'],
+    ]), expected: { heard: [], unheard: ['client-decisions'] },
+  },
+  {
+    id: 'client-sponsor-authority', description: 'A client stakeholder’s actual decision role establishes client decision-making.',
+    transcript: dialogue([
+      ['client', 'Who decided when the system could go live?'],
+      ['trainee', 'Their finance director owned the go-live call. She would not approve it until her clerks had reconciled a full week of test invoices, and she moved the launch back ten days to get that.'],
+    ]), expected: { heard: ['client-decisions'], unheard: [] },
+  },
+  {
+    id: 'client-delegated-decisions', description: 'A client explicitly leaving decisions to the delivery team is client decision behavior.',
+    transcript: dialogue([
+      ['client', 'How involved was the client in the technical choices?'],
+      ['trainee', 'Hardly at all. Their IT manager told us they had nobody who could judge hosting options, so they would sign off on whatever we recommended. We picked the setup and they approved it the same day.'],
+    ]), expected: { heard: ['client-decisions'], unheard: [] },
+  },
+  {
+    id: 'speaking-time-not-authority', description: 'An incoming lead speaking more on calls does not show transferred decision authority.',
+    transcript: dialogue([
+      ['client', 'How did you prepare the incoming lead before you left?'],
+      ['trainee', 'For the last two weeks she ran the weekly client calls so they got used to her voice. I stayed on those calls in case anything came up.'],
+      ['client', 'That sounds like a smooth way to introduce her.'],
+    ]), expected: { heard: [], unheard: ['client-decisions'] },
+  },
+  {
+    id: 'other-angle-after-limit', description: 'After a knowledge limit, asking about the participant’s own preparation is not pressure.',
+    transcript: dialogue([
+      ['client', 'How did the data migration go after you moved accounts?'],
+      ['trainee', 'I do not know. I had moved to another account by then.'],
+      ['client', 'Understood. Before you moved, what did you set up for the team running it?'],
+    ]), expected: { heard: [], unheard: [], absent: ['boundary-pressure'] },
+  },
+  {
+    id: 'unavailable-outcome-reasked', description: 'Sam asks again for an outcome the participant already said they could not know.',
+    transcript: dialogue([
+      ['client', 'How did the data migration go after you moved accounts?'],
+      ['trainee', 'I do not know. I had moved to another account by then.'],
+      ['client', 'Understood. Before you moved, what did you set up for the team running it?'],
+      ['trainee', 'I wrote a cutover checklist and walked the new lead through a rehearsal twice.'],
+      ['client', 'Nice. Once you had moved on, how did the real cutover go for the new lead?'],
+    ]), expected: { heard: [], unheard: [], present: ['boundary-pressure'] },
+  },
+  {
+    id: 'fresh-client-story-after-handoff', description: 'Sam revisits an answered handoff and skips a fresh client story.',
+    transcript: dialogue([
+      ['client', 'How did you hand the reporting work to the new developer?'],
+      ['trainee', 'We paired for two weeks, then she ran the last two releases while I watched. She was fine on her own after that.'],
+      ['client', 'Good. What should a future team know about the client?'],
+      ['trainee', 'Their warehouse manager tested every release on the loading dock tablets herself. She rejected our first build because the buttons were too small to hit with gloves on. After we fixed that, she became our most useful reviewer.'],
+      ['client', 'Got it. Going back to the handoff, what else did you do to prepare the new developer?'],
+    ]), expected: { heard: [], unheard: [], present: ['missed-thread'] },
+  },
+  {
+    id: 'unresolved-tradeoff-skipped', description: 'Sam praises one side of a tradeoff and skips its unresolved cost.',
+    transcript: dialogue([
+      ['client', 'What would you repeat from this project?'],
+      ['trainee', 'Moving the stock sync from nightly to hourly. Store managers finally trusted the counts, but the hosting bill tripled and their finance team started asking questions.'],
+      ['client', 'Hourly syncs sound like a big improvement. What else would you repeat?'],
+    ]), expected: { heard: [], unheard: [], present: ['missed-thread'] },
+  },
+  {
+    id: 'acceptance-owner-missing', description: 'Recurring client feedback leaves a consequential release decision without an owner.',
+    transcript: dialogue([
+      ['client', 'How did the client give feedback on the routing tool?'],
+      ['trainee', 'Their dispatchers rated a sample of suggested routes every Friday, and we adjusted the rules against whatever they flagged. Some weeks the ratings dropped, and nobody could say whether that meant we should hold the release.'],
+      ['client', 'Weekly ratings sound like a solid rhythm. Which tools did your team use?'],
+    ]), expected: { heard: [], unheard: [], present: ['missed-thread'] },
+  },
+  {
+    id: 'concise-client-quiet-win', description: 'A concise client practice with its effect needs no extra probing.',
+    transcript: dialogue([
+      ['client', 'What worked well with the client’s team?'],
+      ['trainee', 'Their support lead joined our Friday demo each week with one real customer complaint. We fixed the top one before the next demo, so support stopped escalating the same issues.'],
+      ['client', 'That is a clear practice. What was harder about the project?'],
+    ]), expected: { heard: [], unheard: [], absent: ['missed-thread', 'overprobing'] },
+  },
 ];
 
 
@@ -369,6 +450,7 @@ const handoffCue: InterviewCue = { id: 'synthetic-cue', text: 'Return to the ven
 const cueCases: { id: string; outcome: CueOutcome; participant: string; sam: string }[] = [
   { id: 'cue-followed', outcome: 'followed', participant: 'That was the highlight for me.', sam: 'How did you make the handoff between your team and the vendor work?' },
   { id: 'cue-missed', outcome: 'missed', participant: 'That was the highlight for me.', sam: 'Great, we have everything. Thanks for the interview.' },
+  { id: 'cue-theme-without-move', outcome: 'missed', participant: 'That was the highlight for me.', sam: 'The vendor sounds great. How long has the client worked with them?' },
   { id: 'cue-deferred', outcome: 'deferred', participant: 'Before that, our newest developer spotted duplicate payments right before launch. It changed how we handled release approval.', sam: 'What did she notice that made you stop the release?' },
   { id: 'cue-deferred-quiet-success', outcome: 'deferred', participant: 'Something else worth explaining: our support team started attending design reviews. Calls after launch dropped by half, which surprised everyone.', sam: 'What did support bring to those reviews that changed the design?' },
   { id: 'cue-deferred-accessibility', outcome: 'deferred', participant: 'Actually, a screen-reader user tried the pilot and could not finish a booking. We changed the rollout after hearing her experience.', sam: 'What did you change about the rollout after that test?' },
@@ -383,6 +465,17 @@ for (const item of cueCases) interviewFixtures.push({
     ['client', 'What else went well?'],
     ['trainee', item.participant], ['client', item.sam],
   ]), expected: { heard: [], unheard: [], followThrough: item.outcome },
+});
+interviewFixtures.push({
+  id: 'cue-premise-contradicted', description: 'A newer answer contradicts the direction’s premise, retiring it.',
+  cue: { id: 'synthetic-cue', text: 'Ask which client decisions she took over during those weeks.', evidenceIds: ['p2'], afterPassageId: 'p3', endMs: 35_000 },
+  transcript: dialogue([
+    ['client', 'How did you prepare the new lead?'],
+    ['trainee', 'She shadowed my client calls for three weeks and ran the standups in the last one.'],
+    ['client', 'What else helped?'],
+    ['trainee', 'She did not take over any decisions; I still made those until my last day. The shadowing was so the client knew who she was.'],
+    ['client', 'That makes sense. What was the client’s own team like to work with?'],
+  ]), expected: { heard: [], unheard: ['client-decisions'], followThrough: 'retired' },
 });
 interviewFixtures.push({
   id: 'cue-in-flight', description: 'A question already underway at context delivery is not a missed instruction.', cue: { ...handoffCue, endMs: 60_000 },

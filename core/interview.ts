@@ -63,7 +63,7 @@ export type InterviewBackground = {
 };
 export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[] };
 
-const BACKCHANNEL = /^(?:mm+(?:[- ]?hmm+)?|hmm+|uh[- ]?huh|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i;
+const BACKCHANNEL = /^(?:mm+(?:[- ]?hm*)?|hmm+|uh[- ]?huh|ah+|oh+|['’]?kay|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i;
 export const isBackchannel = (text: string) => BACKCHANNEL.test(text.trim());
 
 /**

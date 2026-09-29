@@ -101,7 +101,9 @@ test('a short reply cannot make a remainder that started with it eligible', () =
 
 test('backchannels and a direction received between turns do not manufacture a response', () => {
   const nod: TranscriptEntry = { id: 'p5', speaker: 'client', text: 'Mm-hmm.', startMs: 10_900, endMs: 11_200 };
-  expect(cueResponseIds([...transcript.slice(0, 4), nod], cue)).toEqual([]);
+  // Live transcription truncates and varies acknowledgments.
+  for (const text of ['Mm-hmm.', 'Mm-h', 'mm.', 'Ah.', 'Oh.', "'Kay.", '’Kay.']) expect(cueResponseIds([...transcript.slice(0, 4), { ...nod, text }], cue)).toEqual([]);
+  expect(cueResponseIds([...transcript.slice(0, 4), { ...nod, text: 'Ah, what changed then?' }], cue)).toEqual(['p5']);
   // After the reply ended, Sam's next question may answer the participant rather than the direction.
   expect(cueResponseIds(transcript, { ...cue, endMs: 11_500 })).toEqual([]);
 });

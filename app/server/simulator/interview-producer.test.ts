@@ -177,7 +177,7 @@ test('a card is checked against the latest dialogue: a correction withholds it, 
   }
 });
 
-test('an unresolved lookup asks the producer to follow up; a result older than 90 s is dropped silently', async () => {
+test('an unresolved lookup is logged without consulting the producer; a result older than 90 s is dropped silently', async () => {
   const f = fixture({
     generateProducer: async () => generated(null, f.calls.generate.length === 1 ? request('Mapbox') : null),
     lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'Several products share the name.', queries: [] }),
@@ -186,7 +186,8 @@ test('an unresolved lookup asks the producer to follow up; a result older than 9
   await f.producer.settle();
   const [unresolved] = f.of('research');
   expect(unresolved).toMatchObject({ outcome: 'unresolved', reason: 'Several products share the name.' });
-  expect(f.calls.generate[1]!.triggers).toEqual([{ kind: 'research', researchId: unresolved!.id, status: 'unresolved' }]);
+  expect(f.calls.generate).toHaveLength(1);
+  expect(f.sent).toHaveLength(0);
 
   const lookup = deferred<Lookup>();
   const g = fixture({ generateProducer: async () => generated(null, g.calls.generate.length === 1 ? request('Mapbox') : null), lookupInterviewBackground: () => lookup.promise });
@@ -381,7 +382,10 @@ test('delivery acknowledgments decide which cards explain Sam’s claims and whi
   expect(f.producer.publicBackground()).toEqual([{ id: accepted!.id, target: { kind: 'product', name: 'OpenStreetMap' }, facts, retrievedAt: accepted!.retrievedAt! }]);
   expect(unknown!.delivery!.status).toBe('unknown');
 
-  f.advance(4000);
+  f.advance(2000);
+  f.producer.transcriptChanged({ id: 'p3', speaker: 'client', text: 'Mm-h', startMs: 0, endMs: 1 }, 'p2');
+  expect(accepted!.nextSamTurnAt).toBeUndefined();
+  f.advance(2000);
   f.say('client', 'What did Mapbox handle?');
   f.producer.transcriptChanged(f.transcript().at(-1)!, 'p2');
   expect(accepted!).toMatchObject({ nextSamTurnAt: Date.now(), nextSamTurnAfterId: 'p2' });

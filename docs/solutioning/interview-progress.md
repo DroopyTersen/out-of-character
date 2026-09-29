@@ -1,6 +1,17 @@
 # Project closeout interview progress
 
-## Current update — conversational continuity and grounded follow-ups, September 29, 2026
+## Current update — voice comparison follow-up, September 29, 2026
+
+A private review of two consecutive preview interviews, kept in ignored `output/`, compared the Gleam and Cedar voices. Both ran the same brief, opening, worker, model and rubric; only `audio.output.voice` differed. The conversations were confounded by the participant's behaviour, so the review found no evidence of a voice-related quality difference.
+
+- **Unresolved research no longer consults Sol** (`interview-producer-v6`). A lookup with no identity clue came back unresolved, and the resulting cue had Sam ask the participant to define the client, which derailed the interview. Sol still sees the unresolved lookup in its research log and requests again only once a fuller name or identity clue is spoken.
+- **Backchannels.** Truncated and variant acknowledgments ("Mm-h", "Ah.", "Oh.", "'Kay.") are now backchannels. Jev had judged cue follow-through on them and reported two used or correctly skipped cues as missed.
+- **Latency.** `nextSamTurnAt`, and so `cueToSam`, now marks the next substantive Sam passage rather than any Sam sound.
+- **Sam.** The client-side people line moved out of the early-orientation paragraph. It now applies when a story involves the client, because both voices asked for a client roster right after orientation.
+- **Not changed.** Cue freshness: every cue lands during an answer, and Sam's worst moves came within a second of an answer ending. No re-consult could have arrived in time. Jev's "explored" credit: the over-credit cases were arguable, Sam ignored a not-yet area in the rundown anyway, and a change would need a new rubric version and paid judge runs.
+- **Verification.** Typecheck and 314 tests pass. No paid rehearsal ran; the Sam placement change still needs a voice rehearsal with a terse participant.
+
+## Conversational continuity and grounded follow-ups, September 29, 2026
 
 A private test-interview review, kept in ignored `output/`, found several problems:
 - Sam left finished answers with only an acknowledgment.

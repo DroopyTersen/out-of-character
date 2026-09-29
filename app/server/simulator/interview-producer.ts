@@ -261,7 +261,7 @@ export class InterviewProducer {
     const { services } = this.options;
     const { kind, name, clue } = record.request;
     const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.researchAge)]);
-    const result = (status: 'sent' | 'withheld' | 'unresolved') => this.trigger([{ kind: 'research', researchId: record.id, status }], Date.now());
+    const result = (status: 'sent' | 'withheld') => this.trigger([{ kind: 'research', researchId: record.id, status }], Date.now());
     try {
       const lookup = await services.lookupInterviewBackground({ target: { kind, name }, clue, apiKey: this.options.openaiKey, signal });
       if (!this.alive) return;
@@ -269,7 +269,8 @@ export class InterviewProducer {
       record.lookupAt = Date.now();
       record.queries = lookup.queries;
       if (Date.now() - record.requestedAt >= LIMITS.researchAge) { record.outcome = 'expired'; record.reason = 'expired'; return; }
-      if (lookup.status === 'unresolved') { record.outcome = 'unresolved'; record.reason = lookup.reason; result('unresolved'); return; }
+      // Sol sees an unresolved lookup in the research log; consulting now would only prompt an orientation question.
+      if (lookup.status === 'unresolved') { record.outcome = 'unresolved'; record.reason = lookup.reason; return; }
       record.facts = lookup.facts;
       record.retrievedAt = lookup.retrievedAt;
       const transcript = [...this.options.settled()];
@@ -325,9 +326,9 @@ export class InterviewProducer {
     this.lastRundown = { key: sent ? key : this.lastRundown?.key ?? INITIAL_LEVELS, at: now };
   }
 
-  /** Marks the next observed Sam passage after a sent note, not whether Sam acted on it. */
+  /** Marks the next substantive Sam passage after a sent note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel. */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
-    if (!this.alive || entry.speaker !== 'client' || this.samTurns.has(entry.id)) return;
+    if (!this.alive || entry.speaker !== 'client' || this.samTurns.has(entry.id) || isBackchannel(entry.text)) return;
     this.samTurns.add(entry.id);
     for (const record of this.records) {
       if ((record.source === 'producer' || record.source === 'research') && record.sentAt != null && record.sentAt <= now && record.nextSamTurnAt == null) {

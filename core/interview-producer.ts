@@ -2,7 +2,7 @@ import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } fr
 import type { DirectorSignal, DirectorUsage, INTERVIEW_CONDITIONS } from './simulator/director';
 
 /** Private producer state for the interview: Sol cues, Luna research cards and the rundown share Sam's earpiece. */
-export const PRODUCER_VERSION = 'interview-producer-v5';
+export const PRODUCER_VERSION = 'interview-producer-v6';
 export const PRODUCER_LIMITS = {
   consultations: 60, cues: 15, cueSpacing: 30_000, research: 4, lookups: 2, researchAge: 90_000, checkIn: 45_000,
   rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cardPass: .5,

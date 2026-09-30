@@ -8,15 +8,17 @@ import { SimulatorConversation } from '../simulator/conversation';
 import { SimulatorDebrief } from '../simulator/debrief';
 import { SimulatorBriefing } from '../simulator/briefing';
 import { useSimulator } from '../simulator/use-simulator';
+import { useSessionReport } from '../simulator/use-report';
 import { scenarioBriefings } from '../../core/simulator/briefings';
 import { parsePracticeLink, practicePath } from '../simulator/practice-links';
+import { liveAvailable } from '../server/simulator/api';
 import '../simulator/simulator.css';
 
 export const meta = () => [{ title: 'The Simulator — Out of Character' }];
 export function loader({ context, request }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const catalog = publicCatalog();
-  return { catalog, ...parsePracticeLink(new URL(request.url).searchParams, catalog), enabled: String(env.SIMULATOR_ENABLED) === 'true' && String(env.PAID_SERVICES_ENABLED) === 'true' && !!env.OPENAI_API_KEY && !!env.TYPESAFE_API_KEY };
+  return { catalog, ...parsePracticeLink(new URL(request.url).searchParams, catalog), enabled: liveAvailable(env) };
 }
 
 export default function Simulator() {
@@ -26,7 +28,8 @@ export default function Simulator() {
   const [clientId, setClientId] = useState(initial?.clientId ?? catalog.clients[0]!.id);
   const [now, setNow] = useState(Date.now());
   const [briefingOpen, setBriefingOpen] = useState(!!initial);
-  const session = useSimulator();
+  const report = useSessionReport();
+  const session = useSimulator(report);
   useEffect(() => {
     if (session.phase !== 'live') return;
     const timer = setInterval(() => setNow(Date.now()), 500);
@@ -53,7 +56,7 @@ export default function Simulator() {
   return <div className="app-shell simulator-shell"><GameHeader simulator /><main className="game-main" ref={main}>
     {briefingOpen ? <SimulatorBriefing scenario={scenario} client={client} briefing={scenarioBriefings[scenarioId]!} enabled={enabled} onBack={() => setBriefingOpen(false)} onStart={startConversation} />
       : session.phase === 'selection' ? <><SimulatorSelection catalog={catalog} scenarioId={scenarioId} clientId={clientId} onScenario={setScenarioId} onClient={setClientId} onStart={openBriefing} enabled={enabled} error={session.error ?? (invalidLink ? 'That practice link is incomplete or unavailable. Choose a scenario and client to continue.' : null)} /><p className="sim-lab-link">Trying different voices? <Link to="/simulator/voice-lab">Open the Voice Lab →</Link></p></>
-      : session.phase === 'debrief' ? <SimulatorDebrief scenario={scenario} client={client} snapshot={session.snapshot} report={session.report} onRetryReport={session.retryReport} onCheckReport={session.checkReport} onRetry={() => session.start(scenarioId, clientId)} onChoose={session.reset} error={session.error} />
+      : session.phase === 'debrief' ? <SimulatorDebrief scenario={scenario} client={client} snapshot={session.snapshot} report={report.view} onRetryReport={report.retry} onCheckReport={report.checkStatus} onRetry={() => session.start(scenarioId, clientId)} onChoose={session.reset} error={session.error} />
         : <SimulatorConversation scenario={scenario} client={client} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, (now - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} onContinue={session.keepActive} error={session.error} />}
   </main></div>;
 }

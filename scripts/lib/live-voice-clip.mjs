@@ -1,14 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { foundryConfig, foundryUrl } from '../../ai/foundry.server.ts';
 
 const silence = Buffer.alloc(960).toString('base64'); // 20 ms of mono PCM16 at 24 kHz.
 export const hash = value => createHash('sha256').update(value).digest('hex');
 
-export function captureLiveClip({ model, voice, instructions, opening, timeoutMs = 55_000 }) {
+export function captureLiveClip({ voice, instructions, opening, timeoutMs = 55_000 }) {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket('wss://api.openai.com/v1/live/sessions', {
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    const foundry = foundryConfig(process.env);
+    const socket = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), {
+      headers: { 'api-key': foundry.apiKey },
     });
     const chunks = [], eventCounts = {};
     let bytes = 0, firstAudible = null, lastAudible = 0, lastSoundAt = 0, lastTextAt = 0;
@@ -37,7 +39,7 @@ export function captureLiveClip({ model, voice, instructions, opening, timeoutMs
     socket.addEventListener('open', () => send({
       type: 'session.start',
       session: {
-        model, instructions, delegation: { type: 'client' }, store: false,
+        model: foundry.liveModel, instructions, delegation: { type: 'client' }, store: false,
         audio: { format: { type: 'audio/pcm', rate: 24000 }, output: { voice } },
       },
     }));

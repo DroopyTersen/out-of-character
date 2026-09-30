@@ -1,8 +1,10 @@
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
+import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
+import type { ProducerSummary } from '../../../core/interview-producer';
 import type { ReportArchive } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
@@ -19,7 +21,8 @@ export type ArchiveProvenance = {
   openingDigest: string;
   workerId: string | null;
   workerTag: string | null;
-  contextualDirector: DirectorSummary | null;
+  /** The simulator's director, or the interview's producer. */
+  contextualDirector: DirectorSummary | ProducerSummary | null;
 };
 
 export type ArchiveWrite = {
@@ -27,7 +30,7 @@ export type ArchiveWrite = {
   interventions: InterventionRecord[];
 };
 
-export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, contextualDirector: DirectorSummary | null): Promise<ArchiveProvenance> {
+export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, contextualDirector: DirectorSummary | ProducerSummary | null): Promise<ArchiveProvenance> {
   const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
   const digest = async (text: string) => {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -35,7 +38,7 @@ export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, con
   };
   const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
   return {
-    model: LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
+    model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, voice: client.voice, rubricVersion: snapshot.interview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
     contextualDirector,
   };

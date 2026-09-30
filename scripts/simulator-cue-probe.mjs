@@ -1,10 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { liveConfiguration } from '../app/server/simulator/live.server.ts';
 import { getScenario } from '../ai/simulator/scenarios.server.ts';
 import { appendTranscript } from '../core/simulator/state.ts';
 
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to run this bounded provider probe.');
-if (!process.env.OPENAI_API_KEY) throw new Error('Load the ignored local credentials with --env-file=.dev.vars.');
+const foundry = foundryConfig(process.env);
 const cueEnabled = process.argv.includes('--cue');
 const output = process.env.ACCEPTANCE_OUTPUT || `output/simulator-cue-${cueEnabled ? 'on' : 'off'}`;
 const audioPath = process.env.ACCEPTANCE_AUDIO || 'output/simulator-budget.wav';
@@ -13,12 +14,12 @@ const converter = Bun.spawn(['ffmpeg', '-loglevel', 'error', '-i', audioPath, '-
 const pcm = Buffer.from(await new Response(converter.stdout).arrayBuffer());
 if (await converter.exited || !pcm.length) throw new Error('Cannot prepare the supplied audio fixture.');
 await mkdir(output, { recursive: true });
-const report = { checkedAt: new Date().toISOString(), model: 'gpt-live-1', synthetic: true, cueEnabled, cueForcedForProtocolProbe: cueEnabled, cueAcknowledged: false, finalized: false, usageSeconds: null, outputAudioBytes: 0, transcript: [], errors: [] };
+const report = { checkedAt: new Date().toISOString(), model: foundry.liveModel, synthetic: true, cueEnabled, cueForcedForProtocolProbe: cueEnabled, cueAcknowledged: false, finalized: false, usageSeconds: null, outputAudioBytes: 0, transcript: [], errors: [] };
 // Fixed synthetic instruction tests the voice protocol independently of generation.
 const cue = 'You can discuss a separately scoped assessment. Implementation still requires separate funding approval; do not approve delivery or speak for the operations director.';
-const config = liveConfiguration('sharepoint', 'morgan');
-const { client: _frontendPermissions, ...session } = config;
-const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
+const session = liveConfiguration('sharepoint', 'morgan');
+session.model = foundry.liveModel;
+const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
 let started = false, closing = false, offset = 0, ticks = 0;
 let pacing, deadline;
 const outputAudio = [];

@@ -1,4 +1,5 @@
-import { DIRECTOR_MODEL, DirectorOutputError, generateDirector, recheckDirector, type DirectorInput } from '../../../ai/simulator/director.server';
+import { DirectorOutputError, generateDirector, recheckDirector, type DirectorInput } from '../../../ai/simulator/director.server';
+import type { FoundryConfig } from '../../../ai/foundry.server';
 import { JEV_MODEL } from '../../../ai/judging';
 import { DirectorGate, DIRECTOR_LIMITS, DIRECTOR_VERSION, MATERIAL_CONCERN, publicHint, type DirectorAudience, type DirectorIssue, type DirectorSignal, type DirectorRecord, type ObservationRecord, type InterventionRecord, type DirectorSummary } from '../../../core/simulator/director';
 import type { LiveHint, ObjectiveReading, TranscriptEntry } from '../../../core/simulator/types';
@@ -9,11 +10,11 @@ type ObservationResult = { signals: DirectorSignal[]; model?: string; failure?: 
 type RecordedObservation = Observation & { record: ObservationRecord };
 type Options = {
   scenarioId: string; clientId: string; objectives: () => ObjectiveReading[];
-  openaiKey: string; typesafeKey: string; services: typeof directorServices;
+  foundry: FoundryConfig; typesafeKey: string; services: typeof directorServices;
   settled: () => TranscriptEntry[]; isFresh: (transcript: TranscriptEntry[]) => boolean; send: (event: Record<string, unknown>) => boolean;
 };
 
-/** Owns optional interventions, never audio, grades or the session snapshot. */
+/** Owns optional simulator interventions, never audio, grades or the session snapshot. The interview uses InterviewProducer. */
 export class ContextualDirector {
   private gate = new DirectorGate();
   readonly records: InterventionRecord[] = [];
@@ -25,7 +26,7 @@ export class ContextualDirector {
 
   private get alive() { return !this.abort.signal.aborted; }
   get canObserveActor() { return this.alive && this.gate.hasCapacity('actor'); }
-  summary(): DirectorSummary { return { model: DIRECTOR_MODEL, effort: 'none', version: DIRECTOR_VERSION, ...this.gate.usage }; }
+  summary(): DirectorSummary { return { model: this.options.foundry.agentModel, effort: 'low', version: DIRECTOR_VERSION, ...this.gate.usage }; }
 
   coaching(now = Date.now()): LiveHint | null {
     const hint = this.hint;
@@ -85,7 +86,7 @@ export class ContextualDirector {
 
   private async run(observation: RecordedObservation, issue: DirectorIssue) {
     const { services } = this.options;
-    const record: DirectorRecord = { ...this.recordBase(observation, issue, Date.now()), source: 'director', inputCount: observation.transcript.length, lastInputId: observation.transcript.at(-1)?.id ?? null, model: DIRECTOR_MODEL, effort: 'none', outcome: 'pending' };
+    const record: DirectorRecord = { ...this.recordBase(observation, issue, Date.now()), source: 'director', inputCount: observation.transcript.length, lastInputId: observation.transcript.at(-1)?.id ?? null, model: this.options.foundry.agentModel, effort: 'low', outcome: 'pending' };
     this.records.push(record);
     const expiry = observation.capturedAt + DIRECTOR_LIMITS.age;
     const deadline = Math.min(Date.now() + DIRECTOR_LIMITS.generation, expiry - DIRECTOR_LIMITS.recheck);
@@ -93,7 +94,7 @@ export class ContextualDirector {
     const input: DirectorInput = {
       audience: observation.audience, reason: issue.signal,
       scenarioId: this.options.scenarioId, clientId: this.options.clientId, transcript: observation.transcript,
-      objectives: this.options.objectives(), history: this.records, apiKey: this.options.openaiKey, signal,
+      objectives: this.options.objectives(), history: this.records, foundry: this.options.foundry, signal,
     };
     try {
       const { model, usage, ...result } = await services.generateDirector(input);
@@ -103,11 +104,12 @@ export class ContextualDirector {
       record.model = model;
       if (signal.aborted || Date.now() >= expiry) { record.outcome = 'timeout'; return; }
       if (result.action === 'none') { record.outcome = 'none'; record.readyAt = Date.now(); return; }
-      if (!this.options.isFresh(observation.transcript)) {
+      // Public hints must still fit now. The actor interprets private direction in the live conversation.
+      if (observation.audience === 'trainee' && !this.options.isFresh(observation.transcript)) {
         if (expiry - Date.now() < DIRECTOR_LIMITS.recheck) { record.outcome = 'stale'; return; }
         const transcript = [...this.options.settled()];
         const started = Date.now();
-        const recheck = this.gate.recheck(() => services.recheckDirector({ ...input, transcript, objectives: this.options.objectives(), apiKey: this.options.typesafeKey, intervention: result, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(DIRECTOR_LIMITS.recheck)]) }));
+        const recheck = this.gate.recheck(() => services.recheckDirector({ ...input, audience: 'trainee', transcript, objectives: this.options.objectives(), apiKey: this.options.typesafeKey, intervention: result, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(DIRECTOR_LIMITS.recheck)]) }));
         if (!recheck) { record.outcome = 'stale'; return; }
         record.recheck = { inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null, startedAt: started, probability: null, durationMs: null };
         const checked = await recheck;
@@ -115,11 +117,10 @@ export class ContextualDirector {
         record.recheck = { ...record.recheck, probability: checked.probability, durationMs: Date.now() - started, usage: checked.usage };
         if (checked.probability < .9 || !this.options.isFresh(transcript)) { record.outcome = 'stale'; return; }
       }
-      // A choice selects work; a later choice does not resolve it. Whole-dialogue
-      // rechecking and objective achievement decide whether that draft is useful.
-      const resolved = 'selected' in issue.signal
+      // Resolve public hints from current evidence; let the actor handle an outdated private direction.
+      const resolved = observation.audience === 'trainee' && ('selected' in issue.signal
         ? this.options.objectives().some(item => `objective:${item.id}` === issue.signal.condition && item.achieved)
-        : !this.gate.current(observation.audience, issue.id);
+        : !this.gate.current('trainee', issue.id));
       if (Date.now() >= expiry || resolved) { record.outcome = 'stale'; return; }
       if (observation.audience === 'trainee' && issue.signal.condition !== 'mistake' && this.gate.concern()) { record.outcome = 'stale'; return; }
       record.readyAt = Date.now();

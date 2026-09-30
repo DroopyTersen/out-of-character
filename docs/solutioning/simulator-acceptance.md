@@ -40,7 +40,7 @@ The repository gate is `bun run check`: type generation, TypeScript, Bun tests, 
 
 ## Reproduce locally
 
-Run `bun install`. Start the app with `bun run dev --host 127.0.0.1`. Copy `.dev.vars.example` to ignored `.dev.vars` and supply your own provider keys for paid checks. Local voice needs `OPENAI_API_KEY`, `TYPESAFE_API_KEY`, `PAID_SERVICES_ENABLED=true`, and `SIMULATOR_ENABLED=true`; set `SIMULATOR_DIRECTOR_ENABLED=true` to assess the client for private cues.
+Run `bun install`. Start the app with `bun run dev --host 127.0.0.1`. Copy `.dev.vars.example` to ignored `.dev.vars` and supply your own provider keys for paid checks. Local voice needs `OPENAI_API_KEY`, `TYPESAFE_API_KEY`, `PAID_SERVICES_ENABLED=true`, and `SIMULATOR_ENABLED=true`. Private contextual direction runs for scored simulator and interview sessions.
 
 Nonpaid checks:
 

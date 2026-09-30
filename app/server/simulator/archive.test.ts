@@ -3,7 +3,7 @@ import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { emptySkills, type SessionSnapshot } from '../../../core/simulator/types';
 import type { DirectorSignal, InterventionRecord } from '../../../core/simulator/director';
-import { writeReport, writeArchive, type ArchiveProvenance, type ArchiveWrite } from './archive.server';
+import { archiveProvenance, writeReport, writeArchive, type ArchiveProvenance, type ArchiveWrite } from './archive.server';
 
 const migration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
 const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_simulator_interventions.sql', import.meta.url)).text();
@@ -42,6 +42,11 @@ const partial = (capturedAt: number, changes: Partial<SessionSnapshot> = {}): Ar
 const final = (capturedAt: number, changes: Partial<SessionSnapshot> = {}): ArchiveWrite => ({
   ...partial(capturedAt, { status: 'ended', finalization: 'confirmed', feedbackStatus: 'current', ...changes }),
   state: 'final',
+});
+
+test('archive identifies the configured Live deployment and its default', async () => {
+  expect((await archiveProvenance({ AZURE_OPENAI_LIVE_MODEL: 'voice-deployment' } as Env, snapshot, null)).model).toBe('voice-deployment');
+  expect((await archiveProvenance({} as Env, snapshot, null)).model).toBe('gpt-live-1');
 });
 
 test('migration and partial upsert keep the newest checkpoint', async () => {
@@ -167,7 +172,7 @@ test('report migration and update preserve transcript evidence through late chec
     const before = f.row();
     f.sqlite.exec(await Bun.file(new URL('../../../migrations/0003_simulator_report.sql', import.meta.url)).text());
     expect(f.row()).toEqual({ ...before, report_json: null });
-    const report = { ...REPORT_PROVENANCE, report: null, attempts: [{ startedAt: 2000, endedAt: 3000, failure: 'cancelled' as const, usage: null }] };
+    const report = { ...REPORT_PROVENANCE, model: 'gpt-6.1-sol', report: null, attempts: [{ startedAt: 2000, endedAt: 3000, failure: 'cancelled' as const, usage: null }] };
     await writeReport(f.d1, snapshot.id, report);
     await writeArchive(f.d1, partial(4000));
     await writeArchive(f.d1, final(5000));

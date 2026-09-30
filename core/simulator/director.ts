@@ -2,7 +2,8 @@ import type { LiveHint } from './types';
 
 export type DirectorAudience = 'trainee' | 'actor';
 export const ACTOR_CONDITIONS = ['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const;
-export type BooleanCondition = 'mistake' | 'stalled' | (typeof ACTOR_CONDITIONS)[number];
+export const INTERVIEW_CONDITIONS = ['missed-thread', 'overprobing', 'question-stacking', 'boundary-pressure', 'leading', 'source-confusion', 'invented-facts'] as const;
+export type BooleanCondition = 'mistake' | 'stalled' | (typeof ACTOR_CONDITIONS)[number] | (typeof INTERVIEW_CONDITIONS)[number];
 export type DirectorSignal = { condition: BooleanCondition; probability: number } | { condition: `objective:${string}`; selected: boolean };
 export type DirectorCondition = DirectorSignal['condition'];
 export const DIRECTOR_VERSION = 'contextual-director-v3';
@@ -14,7 +15,8 @@ type Lane = { busy: boolean; lastStart: number | null; issues: Map<DirectorCondi
 const lane = (): Lane => ({ busy: false, lastStart: null, issues: new Map(), current: [] });
 const valid = (signal: DirectorSignal) => 'selected' in signal || (Number.isFinite(signal.probability) && signal.probability >= 0 && signal.probability <= 1);
 // Actor signals request a second opinion; Sol still decides whether to intervene.
-const eligible = (signal: DirectorSignal) => 'selected' in signal ? signal.selected : valid(signal) && signal.probability >= (signal.condition === 'mistake' ? .85 : signal.condition === 'stalled' ? .8 : .6);
+const thresholds: Partial<Record<DirectorCondition, number>> = { mistake: .85, stalled: .8, overprobing: .5 };
+const eligible = (signal: DirectorSignal) => 'selected' in signal ? signal.selected : valid(signal) && signal.probability >= (thresholds[signal.condition] ?? .6);
 const probability = (signal: DirectorSignal) => 'probability' in signal ? signal.probability : 0;
 const prioritized = (audience: DirectorAudience, signals: DirectorSignal[]) => audience === 'actor' ? [...signals].sort((a, b) => probability(b) - probability(a)) : signals;
 export const selectDirectorSignal = (signals: DirectorSignal[], audience: DirectorAudience) => prioritized(audience, signals).find(eligible);
@@ -109,7 +111,7 @@ export type DetectorRecord = RecordBase & {
   source: 'detector'; result: Extract<DirectorResult, { action: 'intervene' }>; outcome: 'published'; readyAt: number; deliveredAt: number;
 };
 export type DirectorRecord = RecordBase & {
-  source: 'director'; effort: 'none'; inputCount: number; lastInputId: string | null; result?: DirectorResult; readyAt?: number; deliveredAt?: number; completedAt?: number;
+  source: 'director'; effort: 'none' | 'low'; inputCount: number; lastInputId: string | null; result?: DirectorResult; readyAt?: number; deliveredAt?: number; completedAt?: number;
   outcome: 'pending' | 'published' | 'sent' | 'none' | 'stale' | 'invalid' | 'timeout' | 'error' | 'aborted';
   usage?: DirectorUsage; recheck?: { inputCount: number; lastInputId: string | null; startedAt: number; probability: number | null; durationMs: number | null; usage?: DirectorUsage };
   delivery?: { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number };
@@ -120,7 +122,7 @@ export type ObservationRecord = {
   outcome: GateReview['decision'] | 'pending' | 'aborted' | 'stale' | 'expired' | 'evaluation_error' | 'evaluation_timeout'; issueId?: string;
 };
 export type InterventionRecord = ObservationRecord | DetectorRecord | DirectorRecord;
-export type DirectorSummary = { model: string; effort: 'none'; version: string; callsByAudience: Record<DirectorAudience, number>; rechecks: number; notes: number };
+export type DirectorSummary = { model: string; effort: 'none' | 'low'; version: string; callsByAudience: Record<DirectorAudience, number>; rechecks: number; notes: number };
 
 export const publicHint = (issue: DirectorIssue, text: string, evidenceIds: string[], now: number): LiveHint => ({
   id: issue.id, text, kind: issue.signal.condition === 'mistake' ? 'concern' : 'hint', evidenceIds, createdAt: now, expiresAt: now + DIRECTOR_LIMITS.hint,

@@ -1,18 +1,174 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
+import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
+import { PRODUCER_VERSION, type InterviewCue } from '../../../core/interview-producer';
+import type { producerServices } from './interview-producer';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
 
 import { attempt, capability, request, activityPoll, fixture, waitFor } from './session-fixture';
 afterEach(() => setSystemTime());
+const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
+
+test.each([false, true])('an interview cue requires fresh, settled Sam output (expire: %s)', async expire => {
+  let generated = 0;
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateProducer: async () => { generated++; return { cue: 'Ask what changed in the release guide.', evidenceIds: ['p1'], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
+  } });
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  const poll = (sequence: number, outputQuietMs: number | null) => f.session.fetch(new Request('https://session/poll', {
+    method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active: false, audio: false, outputQuietMs, sequence }),
+  }));
+  const cues = () => f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We fixed the permissions before launch.', start_ms: 0, end_ms: 1000 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'That caught the mistake.', start_ms: 1000, end_ms: 2000 });
+    setSystemTime(epoch + 7000);
+    await poll(1, 0);
+    await waitFor(() => generated === 1);
+    await Promise.all(f.pending);
+    expect(cues()).toHaveLength(0);
+
+    setSystemTime(epoch + 7500);
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What happened in the rehearsal?', start_ms: 7000, end_ms: 7400 });
+    setSystemTime(epoch + 7600);
+    await poll(2, 1000);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(0); // Text is still growing despite the quiet claim.
+
+    setSystemTime(epoch + 9200);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(0); // The earlier quiet report is now stale.
+    await poll(3, null);
+    await poll(2, 60_000); // An older periodic report cannot reopen Sam's floor.
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(0);
+
+    setSystemTime(epoch + (expire ? 22_000 : 9700));
+    await poll(4, 1000);
+    if (expire) {
+      await new Promise(resolve => setTimeout(resolve, 600));
+      expect(cues()).toHaveLength(0);
+    } else await waitFor(() => cues().length === 1);
+    await f.session.fetch(request('end'));
+    await Promise.all(f.pending);
+    const record = JSON.parse(f.interviewRow()!.interventions_json).find((item: { source: string }) => item.source === 'producer');
+    expect(record).toMatchObject(expire ? { outcome: 'withheld', reason: 'no_quiet_opening' } : { outcome: 'sent' });
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
+test('long interview silence never creates an automatic turn instruction, including legacy polls', async () => {
+  const f = await fixture();
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We fixed the release guide.', start_ms: 0, end_ms: 1000 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'That helped the next release.', start_ms: 1000, end_ms: 2000 });
+    for (const elapsed of [15_000, 30_000, 45_000, 60_000]) {
+      setSystemTime(epoch + elapsed);
+      await f.session.fetch(activityPoll(false, false, 60_000));
+      await new Promise(resolve => setTimeout(resolve, 600));
+    }
+    expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening']);
+    await f.session.fetch(request('end'));
+    await Promise.all(f.pending);
+    const records = JSON.parse(f.interviewRow()!.interventions_json);
+    expect(records.some((item: { source: string }) => item.source === 'continuity')).toBe(false);
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
+test('the private archive keeps consecutive probability changes, failed grades, and the final result', async () => {
+  let calls = 0;
+  const f = await fixture({ overrides: { evaluateInterview: async input => {
+    calls++;
+    if (calls === 3) throw new Error('Synthetic evaluation failure');
+    const probability = calls === 1 ? .9 : .92;
+    return { revision: input.revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, objectives: [{
+        id: 'project-delivery', level: 'explored', achieved: true, probability,
+        levels: { 'not-yet': 0, touched: 1 - probability, explored: probability, 'set-aside': 0 },
+        evidence: { entryId: 'p1', speaker: 'trainee', text: 'We built a booking portal.' },
+      }] };
+  } } });
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    for (let index = 0; index < 3; index++) {
+      setSystemTime(epoch + index * 6000);
+      f.socket.emit({ type: 'session.input_transcript.delta', delta: index ? 'I owned the import job.' : 'We built a booking portal.', start_ms: index * 6000, end_ms: index * 6000 + 1000 });
+      setSystemTime(epoch + index * 6000 + 2000);
+      await f.session.fetch(request('poll'));
+      await waitFor(() => calls === index + 1);
+      await Promise.all(f.pending);
+    }
+    await f.session.fetch(request('end'));
+    await Promise.all(f.pending);
+    const records = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string }) => item.source === 'grade');
+    expect(records.map((item: { outcome: string }) => item.outcome)).toEqual(['graded', 'graded', 'evaluation_error', 'graded']);
+    expect(records[0].objectives[0].levels).toEqual([0, .1, .9, 0]);
+    expect(records[1].objectives[0].levels).toEqual([0, .08, .92, 0]);
+    expect(records[1].objectives[0].shown).toEqual(records[0].objectives[0].shown);
+    expect(records[3].final).toBe(true);
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
+test.each(['accepted', 'rejected'] as const)('interview research %s is archived privately and cannot grade or summarize the participant', async receipt => {
+  let participantInput = '', summaryInput = '';
+  const lookups: Record<string, unknown>[] = [];
+  const fact = { text: 'PUBLIC BACKGROUND FACT', url: 'https://www.usgs.gov/3d-elevation-program', title: 'USGS 3DEP' };
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: .9, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    evaluateInterview: async input => { participantInput = JSON.stringify(input); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
+    // The producer names what to research on its scheduled check-in after Sam's turn.
+    generateProducer: async input => ({ cue: null, evidenceIds: [], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 },
+      research: input.triggers.some(item => item.kind === 'check-in') ? { kind: 'term', name: '3DEP', clue: null, passageIds: [input.transcript.find(entry => entry.speaker === 'trainee')!.id] } : null }),
+    lookupInterviewBackground: async input => { lookups.push(input); return { status: 'found', facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }; },
+    summarizeInterview: (input, done) => { summaryInput = JSON.stringify(input); return new ReadableStream({ start(controller) {
+      const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
+    } }); },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did that involve?', start_ms: 1000, end_ms: 2000 });
+  setSystemTime(1_800_000_030_000); await f.session.fetch(request('poll'));
+  setSystemTime(1_800_000_046_000); await f.session.fetch(request('poll'));
+  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('research-')));
+  expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, foundry: expect.objectContaining({ resourceName: 'fixture-foundry', agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' }), signal: expect.any(AbortSignal) }]);
+  const note = f.socket.sent.find(event => String(event.event_id).startsWith('research-'))!;
+  expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  const before = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(before.interview.background).toEqual([]);
+  f.socket.emit(receipt === 'accepted' ? { type: 'session.thinking.appended', client_event_id: note.event_id } : { type: 'error', error: { client_event_id: note.event_id } });
+  const current = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(current.interview.background).toHaveLength(receipt === 'accepted' ? 1 : 0);
+  expect(current.message).toBeNull();
+  expect(JSON.stringify(current)).not.toContain('PRIVATE ARCHIVE QUERY');
+  expect(current.interview.evaluation.objectives.filter((item: { achieved: boolean }) => item.achieved)).toEqual([]);
+  await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text(); await Promise.all(f.pending);
+  expect(participantInput).not.toContain('PUBLIC BACKGROUND FACT');
+  expect(summaryInput).not.toContain('PUBLIC BACKGROUND FACT');
+  const research = JSON.parse(f.interviewRow()!.interventions_json).find((item: any) => item.source === 'research');
+  expect(research).toMatchObject({ outcome: receipt === 'accepted' ? 'sent' : 'error', delivery: { status: receipt }, facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'] });
+  expect(f.row()).toBeNull();
+}, 10_000);
 
 test('contextual coaching runs for scored sessions and keeps actor history out of public state', async () => {
   let generations = 0;
   const f = await fixture({ overrides: {
     evaluateTrainee: async input => ({ revision: input.revision, skills: emptySkills(), objectives: [], privateDiagnostic: 'must never enter public feedback', concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'objective:problem', selected: true }] }),
     evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] }),
-    generateDirector: async input => { generations++; return { action: 'intervene', text: input.audience === 'actor' ? 'PRIVATE: Ask the consultant to propose the scope.' : 'Ask which approval is currently blocked.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 100, outputTokens: 15 } }; },
+    generateDirector: async input => { generations++; return { action: 'intervene', text: input.audience === 'actor' ? 'PRIVATE: Ask the consultant to propose the scope.' : 'Ask which approval is currently blocked.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 100, outputTokens: 15 } }; },
   } });
   setSystemTime(1_800_000_000_000);
   await f.session.fetch(request('start'));
@@ -41,7 +197,7 @@ test('contextual coaching runs for scored sessions and keeps actor history out o
   expect(exported.interventions.find((item: any) => item.source === 'director' && item.audience === 'actor').observationId).toBe(observation.id);
   expect(JSON.stringify(current)).not.toContain(observation.id);
   expect(JSON.parse(f.row()!.cues_json)).toEqual([]);
-  expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toMatchObject({ model: 'gpt-6-sol', effort: 'none' });
+  expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toMatchObject({ model: 'gpt-6.1-sol', effort: 'low' });
 }, 10_000);
 
 test('ending the session does not wait for pending contextual generation', async () => {
@@ -50,7 +206,7 @@ test('ending the session does not wait for pending contextual generation', async
     evaluateTrainee: async input => ({ revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'stalled', probability: .99 }] }),
     generateDirector: async input => {
       await new Promise<void>(done => { release = done; });
-      return { action: 'intervene', text: 'Late advice must not appear.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      return { action: 'intervene', text: 'Late advice must not appear.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
   } });
   setSystemTime(1_800_000_000_000);
@@ -139,6 +295,248 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(JSON.stringify(result)).not.toContain('answers');
   expect(f.socket.readyState).toBe(3);
 });
+
+test('interview End re-grades coverage with its evidence in view and returns pending before one summary completes', async () => {
+  let releaseSummary: ((text: string) => void) | undefined;
+  const summarized: { speaker: string; text: string }[][] = [];
+  const interviewJudged: { keepIds: string[]; transcript: { speaker: string; text: string }[] }[] = [];
+  const f = await fixture({ overrides: {
+    evaluateInterview: async input => {
+      interviewJudged.push({ keepIds: [...(input.keepIds ?? [])], transcript: input.transcript });
+      const passage = input.transcript[0]!;
+      const evidence = { entryId: passage.id, speaker: passage.speaker, text: passage.text };
+      // The final re-grade sees the whole interview and may withdraw a live checkmark.
+      const reading = interviewJudged.length === 1
+        ? { level: 'explored' as const, levels: { 'not-yet': .01, touched: .03, explored: .95, 'set-aside': .01 }, achieved: true, probability: .95 }
+        : { level: 'touched' as const, levels: { 'not-yet': .1, touched: .7, explored: .15, 'set-aside': .05 }, achieved: false, probability: .15 };
+      return {
+        revision: input.revision, readings: emptyInterviewReadings(), objectives: [{ id: 'project-delivery', ...reading, evidence }],
+        model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {},
+      };
+    },
+    summarizeInterview: (input, done) => { summarized.push(input.transcript); return new ReadableStream({ start(controller) {
+      controller.enqueue('{\"text\":');
+      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: null }); controller.close(); releaseSummary = undefined; };
+    } }); },
+  } });
+  f.socket.holdClose = true;
+  let ending: Promise<Response> | undefined;
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We built a permit intake portal.', start_ms: 100, end_ms: 900 });
+    await waitFor(() => interviewJudged.length === 1);
+    await Promise.all(f.pending);
+    const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    const covered = live.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
+    expect(covered).toMatchObject({ level: 'explored', achieved: true, evidence: { speaker: 'trainee', text: 'We built a permit intake portal.' } });
+    expect(interviewJudged[0]!.keepIds).toEqual([]);
+    ending = f.session.fetch(request('end'));
+    expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen resolved our access issue.', start_ms: 2000, end_ms: 2900 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'I heard that no one helped.', start_ms: 1000, end_ms: 1600 });
+    await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+
+    const ended = await (await ending).json() as Record<string, any>;
+    expect(ended.status).toBe('ended');
+    expect(ended.finalization).toBe('confirmed');
+    expect(ended.interview.summary).toEqual({ status: 'pending', text: null });
+    expect(ended.evaluation).toBeNull();
+    expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['trainee', 'trainee']);
+    expect(f.judged).toHaveLength(0);
+    expect(interviewJudged).toHaveLength(2);
+    expect(interviewJudged[1]!.keepIds).toEqual([covered.evidence.entryId]);
+    expect(interviewJudged[1]!.transcript.map(entry => entry.text)).toEqual(['We built a permit intake portal.', 'Jen resolved our access issue.']);
+    const final = ended.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
+    expect(final).toMatchObject({ level: 'touched', achieved: false, evidence: covered.evidence });
+    await Promise.all(f.pending);
+    expect(summarized).toHaveLength(0);
+    expect((await f.session.fetch(request('report', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
+    const response = await f.session.fetch(request('report'));
+    const body = response.text();
+    expect((await f.session.fetch(request('report'))).status).toBe(409);
+    expect(summarized).toHaveLength(1);
+    expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee', 'trainee']);
+    expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
+    expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(final);
+    // Each grade's bands, probabilities and evidence IDs are archived privately, without passage text.
+    const grades = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string }) => item.source === 'grade');
+    expect(grades.map((item: Record<string, unknown>) => [item.final, item.outcome, item.inputCount])).toEqual([[false, 'graded', 1], [true, 'graded', 2]]);
+    expect(grades[0].objectives).toEqual([{ id: 'project-delivery', shown: ['explored', covered.evidence.entryId], graded: ['explored', covered.evidence.entryId], levels: [.01, .03, .95, .01] }]);
+    expect(grades[1].objectives).toEqual([{ id: 'project-delivery', shown: ['touched', covered.evidence.entryId], graded: ['touched', covered.evidence.entryId], levels: [.1, .7, .15, .05] }]);
+    expect(JSON.stringify(grades)).not.toContain('permit intake');
+    expect(JSON.stringify(ended)).not.toContain('"grade"');
+    expect(f.row()).toBeNull();
+    expect((await f.session.fetch(request('poll', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
+    expect((await f.session.fetch(request('poll', ''))).status).toBe(401);
+
+    expect(f.interviewRow()!.summary_text).toBeNull();
+    releaseSummary!('The participant credited Jen with resolving the access issue.');
+    expect(JSON.parse(await body)).toEqual({ text: 'The participant credited Jen with resolving the access issue.' });
+    await Promise.all(f.pending);
+    const ready = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    expect(ready.interview.summary).toEqual({ status: 'ready', text: 'The participant credited Jen with resolving the access issue.' });
+    expect(f.interviewRow()).toMatchObject({ summary_status: 'ready', summary_text: ready.interview.summary.text });
+    expect(JSON.parse(f.interviewRow()!.transcript_json)).toEqual(ended.transcript);
+    expect(f.row()).toBeNull();
+  } finally {
+    releaseSummary?.('Fallback summary.');
+    f.socket.emit({ type: 'session.closed', reason: 'close_requested' });
+    await ending;
+  }
+}, 10_000);
+
+test('a failed interview summary remains unavailable while the participant transcript stays archived', async () => {
+  const f = await fixture({ overrides: {
+    summarizeInterview: () => { throw new Error('Provider contained private request data.'); },
+  } });
+  await f.session.fetch(request('start', capability, interviewAttempt));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We shipped the migration despite the handoff delay.', start_ms: 100, end_ms: 900 });
+  await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text();
+  await Promise.all(f.pending);
+  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(snapshot.interview.summary).toEqual({ status: 'unavailable', text: null });
+  expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'unavailable', summary_text: null });
+  expect(JSON.parse(f.interviewRow()!.transcript_json)[0].text).toBe('We shipped the migration despite the handoff delay.');
+  expect(JSON.stringify(snapshot)).not.toContain('Provider contained');
+  expect(f.row()).toBeNull();
+});
+
+test.each(['cue', 'none'] as const)('interview producer %s stays private and is summoned once by a new protection concern', async action => {
+  const inputs: Parameters<typeof producerServices.generateProducer>[0][] = [];
+  let summarized = '';
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }, { condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateProducer: async input => {
+      inputs.push(input);
+      const cue = action === 'none' ? null : 'PRIVATE: Ask an open question about the access owner.';
+      return { cue, evidenceIds: cue ? [input.transcript[0]!.id] : [], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+    },
+    summarizeInterview: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
+      const report = { text: 'The participant described an access delay.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
+    } }); },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start', capability, interviewAttempt));
+  await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
+  setSystemTime(1_800_000_002_000);
+  await f.session.fetch(request('poll'));
+  await waitFor(() => inputs.length === 1);
+  await Promise.all(f.pending);
+  expect(inputs[0]!.triggers).toEqual([{ kind: 'concern', condition: 'leading', probability: .99 }]);
+  expect(inputs[0]!.coverage).toEqual(expect.any(Array));
+  const cues = f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
+  expect(cues).toHaveLength(action === 'none' ? 0 : 1);
+  if (cues[0]) {
+    expect(cues[0].type).toBe('session.instructions.append');
+    f.socket.emit({ type: 'session.instructions.appended', client_event_id: cues[0].event_id, start_ms: 2000, end_ms: 2400 });
+  }
+  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(snapshot.coaching).toBeNull();
+  expect(snapshot.evaluation).toBeNull();
+  expect(snapshot.interview.evaluation).toBeDefined();
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE:');
+  expect(JSON.stringify(snapshot)).not.toContain('signals');
+  expect(f.judged).toHaveLength(0);
+  await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text();
+  await Promise.all(f.pending);
+  const row = f.interviewRow()!;
+  const records = JSON.parse(row.interventions_json);
+  expect(records.filter((record: { source: string }) => record.source !== 'grade').map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
+  expect(records.filter((record: { source: string }) => record.source === 'grade').at(-1)).toMatchObject({ final: true, outcome: 'graded', durationMs: 1 });
+  expect(records[0]).toMatchObject({ outcome: 'observed', concerns: ['leading'] });
+  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted', startMs: 2000, endMs: 2400 } } : {}) });
+  expect(records[1].check).toBeUndefined();
+  expect(JSON.parse(row.cues_json)).toEqual([]);
+  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', consultations: 1, cues: action === 'none' ? 0 : 1 });
+  expect(summarized).not.toContain('PRIVATE:');
+  expect(summarized).not.toContain('interventions');
+  expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
+  expect(f.row()).toBeNull();
+}, 10_000);
+
+test.each(['accepted', 'rejected'] as const)('interview instruction %s receipt controls follow-through and recovery', async receipt => {
+  const epoch = 1_800_000_000_000;
+  const interviewerInputs: { cue?: InterviewCue }[] = [];
+  const producerTriggers: Parameters<typeof producerServices.generateProducer>[0]['triggers'][] = [];
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => {
+      interviewerInputs.push(input);
+      return { revision: input.revision, researchProbability: 0, signals: interviewerInputs.length === 1 ? [{ condition: 'leading', probability: .99 }] : [],
+        ...(input.cue ? { followThrough: { cueId: input.cue.id, outcome: 'missed' as const,
+          probabilities: { followed: .01, deferred: .01, missed: .96, retired: .01, 'not-yet-assessable': .01 }, responseIds: ['p4'] } } : {}),
+        model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} };
+    },
+    generateProducer: async input => {
+      producerTriggers.push(input.triggers);
+      const cue = producerTriggers.length === 1 ? 'PRIVATE: Ask who owned the access handoff.' : null;
+      return { cue, evidenceIds: cue ? ['p1'] : [], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+    },
+  } });
+  setSystemTime(epoch);
+  await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
+  setSystemTime(epoch + 2000);
+  await f.session.fetch(request('poll'));
+  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('cue-')));
+  const eventId = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))!.event_id;
+  f.socket.emit(receipt === 'accepted'
+    ? { type: 'session.instructions.appended', client_event_id: eventId, start_ms: 2000, end_ms: 2400 }
+    : { type: 'error', error: { client_event_id: eventId } });
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Our lead coordinated it.', start_ms: 3000, end_ms: 4000 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Can you describe their role?', start_ms: 5000, end_ms: 6000 });
+  setSystemTime(epoch + 13_000);
+  await f.session.fetch(request('poll'));
+  await waitFor(() => interviewerInputs.length >= 2);
+  await Promise.all(f.pending);
+  if (receipt === 'accepted') expect(interviewerInputs[1]!.cue).toMatchObject({ id: expect.stringMatching(/^producer-/),
+    text: 'PRIVATE: Ask who owned the access handoff.', evidenceIds: ['p1'], afterPassageId: 'p2', endMs: 2400 });
+  else expect(interviewerInputs[1]!.cue).toBeUndefined();
+  setSystemTime(epoch + 33_000);
+  await f.session.fetch(request('poll'));
+  if (receipt === 'accepted') await waitFor(() => producerTriggers.some(triggers => triggers.some(trigger => trigger.kind === 'cue-recovery')));
+  await Promise.all(f.pending);
+  await f.session.fetch(request('end'));
+  await Promise.all(f.pending);
+  const records = JSON.parse(f.interviewRow()!.interventions_json);
+  const cue = records.find((item: { source: string }) => item.source === 'producer');
+  expect(cue.delivery.status).toBe(receipt);
+  expect(cue.followThrough?.outcome).toBe(receipt === 'accepted' ? 'missed' : undefined);
+  expect(producerTriggers.some(triggers => triggers.some(trigger => trigger.kind === 'cue-recovery'))).toBe(receipt === 'accepted');
+  const snapshot = await (await f.session.fetch(request('poll'))).json();
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE:');
+}, 10_000);
+
+test('End freezes an unfinished interview direction without delaying its summary', async () => {
+  let release!: () => void;
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateProducer: async input => {
+      await new Promise<void>(resolve => { release = resolve; });
+      return { cue: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+    },
+  } });
+  setSystemTime(1_800_000_000_000);
+  await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
+  setSystemTime(1_800_000_002_000);
+  await waitFor(() => !!release);
+  await f.session.fetch(request('end'));
+  await (await f.session.fetch(request('report'))).text();
+  await waitFor(() => f.interviewRow()?.summary_status === 'ready');
+  const archived = f.interviewRow()!;
+  expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'producer').outcome).toBe('aborted');
+  release(); await Promise.all(f.pending);
+  expect(f.interviewRow()).toEqual(archived);
+  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'))).toHaveLength(0);
+}, 10_000);
 
 test('happy hour archives the client voice without live or final judging', async () => {
   let directed = 0;
@@ -659,16 +1057,16 @@ test('new settled dialogue marks earlier feedback delayed while reassessment is 
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Who owns the workflow?', start_ms: 0, end_ms: 1000 });
-  await new Promise(resolve => setTimeout(resolve, 1600));
+  await waitFor(() => calls === 1);
+  await Promise.all(f.pending);
   const first = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(first.feedbackStatus).toBe('current');
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Operations does, but do not contact them yet.', start_ms: 1100, end_ms: 2300 });
-  await new Promise(resolve => setTimeout(resolve, 1600));
+  // Hold the actual reassessment rather than racing a fixed timer.
+  await waitFor(() => !!release, 7000);
   const waiting = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(waiting.evaluation.revision).toBe(first.evaluation.revision);
   expect(waiting.feedbackStatus).toBe('delayed');
-  // Wait for the owner cadence to start the next request, then release its result.
-  while (!release) await new Promise(resolve => setTimeout(resolve, 100));
   release();
   await Promise.all(f.pending);
   const current = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
@@ -739,7 +1137,7 @@ test('live alarm checkpoints dialogue, then End saves the final public score and
   expect(JSON.parse(row.evaluation_json)).toEqual(ended.evaluation);
   expect(row.evaluation_json).not.toContain('answers');
   expect(row.evaluation_json).not.toContain('usage');
-  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', contextualDirector: { model: 'gpt-6-sol', effort: 'none' } });
+  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', contextualDirector: { model: 'gpt-6.1-sol', effort: 'low' } });
   const stored = JSON.stringify(row);
   expect(stored).not.toContain(capability);
   expect(stored).not.toContain('provider-private-id');

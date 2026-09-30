@@ -255,7 +255,7 @@ p.sim-lab-check-details { padding: 12px 0; }
 
 @media (max-width: 720px) {
   .sim-heading { padding: 25px 3px; }.sim-heading p { font-size: 14px; }.sim-selection-grid, .sim-live-grid, .sim-debrief-grid, .sim-lab-grid, .sim-voice-lab-grid { grid-template-columns: 1fr; gap: 20px; }.sim-live-grid > :nth-child(n+2) { border-left: 0; padding: 24px 0 0; border-top: 1px solid #21465c; }.sim-panel { padding: 18px; }.sim-session-bar { flex-wrap: wrap; gap: 12px; padding: 18px 0; }.sim-session-bar h1 { font-size: 18px; min-width: 50%; }.sim-session-bar time { margin-right: auto; }.sim-session-bar .eyebrow { padding-right: 10px; font-size: 9px; }.sim-client-stage { text-align: center; }.sim-client-stage h2 { font-size: 30px; }.sim-caption { min-height: 60px; max-height: 125px; text-align: left; font-size: 16px; }.sim-hint { min-height: 110px; }.sim-live-grid .sim-skill-list { grid-template-columns: 1fr; gap: 21px; }.sim-debrief-grid > .sim-skills { padding: 24px 0 0; border-left: 0; border-top: 1px solid #21465c; }.sim-debrief-actions { flex-direction: column; gap: 16px; }.sim-debrief-actions > button { width: min(100%, 360px); justify-content: center; }.sim-outcome strong { font-size: 19px; }.sim-brief > p { font-size: 15px; }.sim-start .arcade-button { min-width: 0; width: 100%; font-size: clamp(16px, 5.6vw, 19px); }.sim-rail-controls > span { display: none; }.sim-lab { padding: 14px; }
-  .simulator-header .brand { font-size: 17px; }.simulator-header nav { width: 100%; }.simulator-title { margin-left: auto; font-size: 16px; }
+  .simulator-header .brand { font-size: 17px; }.simulator-title { margin-left: auto; font-size: 16px; }
   .sim-heading h1 { font-size: 28px; }.sim-heading p { font-size: 16px; }
   .sim-section-heading h2 { font-size: 24px; }.sim-section-heading > span { font-size: 12px; }
   .sim-panel > .sim-section-heading { gap: 10px; }.sim-panel > .sim-section-heading h2 { font-size: clamp(18px, 5.6vw, 24px); }.sim-panel > .sim-section-heading > span { white-space: nowrap; }
@@ -269,9 +269,9 @@ p.sim-lab-check-details { padding: 12px 0; }
   .sim-hint { min-height: 95px; margin-bottom: 22px; }.sim-hint h2 { font-size: 23px; }.sim-hint p { font-size: 18px; margin-top: 10px; }.sim-objectives li { font-size: 17px; gap: 13px; }.sim-objectives ol { gap: 22px; }
   .sim-outcome { display: grid; grid-template-columns: 85px 1fr; gap: 12px; padding: 14px; }.sim-outcome > img { width: 85px; height: 112px; }.sim-outcome-copy strong { font-size: 21px; }.sim-outcome-copy .eyebrow { font-size: 8px; letter-spacing: 1px; }.sim-outcome-copy p { display: none; }.sim-outcome-count { grid-column: 1/-1; grid-template-columns: auto 1fr; gap: 15px; align-items: center; border-left: 0; border-top: 1px solid #32768b; padding: 12px 0 0; text-align: left; }.sim-outcome-count b { font-size: 30px; }.sim-outcome-count small { font-size: 20px; }
   .sim-voice-workbench { padding: 16px; }.sim-voice-workbench .sim-voice-display { display: block; }.sim-voice-workbench .sim-portrait { height: 280px; }.sim-voice-workbench .sim-speaking { font-size: 15px; }
-  .simulator-header { position: relative; height: auto; flex-basis: auto; }.simulator-header nav { flex-wrap: wrap; gap: 10px; }.sim-lab-provenance { padding: 10px; font-size: 12px; }.sim-client-card img { object-fit: cover; }
+  .simulator-header { position: relative; height: auto; flex-basis: auto; }.sim-lab-provenance { padding: 10px; font-size: 12px; }.sim-client-card img { object-fit: cover; }
   .sim-session-bar { display: grid; grid-template-columns: 1fr auto; gap: 12px; }.sim-session-bar .eyebrow { grid-column: 1; grid-row: 1; padding: 0; border: 0; font-size: 11px; }.sim-session-bar h1 { grid-column: 1/-1; grid-row: 2; font-size: 19px; }.sim-session-bar time { grid-column: 1; grid-row: 3; }.sim-session-bar .sim-end { grid-column: 2; grid-row: 3; font-size: 16px; min-height: 44px; }
-  .simulator-title { font-size: 14px; letter-spacing: 0; }.simulator-header nav { flex-wrap: nowrap; gap: 12px; }.simulator-header .workshop-link { min-height: 44px; display: inline-flex; align-items: center; }.simulator-header .workshop-link span { display: none; }.simulator-header .workshop-return { padding: 0; }
+  .simulator-title { font-size: 14px; letter-spacing: 0; }.simulator-header .workshop-link { min-height: 44px; display: inline-flex; align-items: center; }.simulator-header .workshop-link span { display: none; }.simulator-header .workshop-return { padding: 0; }
   .sim-debrief .sim-heading h1 { font-size: clamp(23px, 6.4vw, 28px); text-wrap: balance; }
 }
 
@@ -330,7 +330,7 @@ p.sim-lab-check-details { padding: 12px 0; }
   .simulator-header .brand > span { display: none; }
   .simulator-header .brand { gap: 0; }
   .simulator-header .pixel-logo { width: 30px; height: 30px; }
-  .simulator-header nav { flex: 1; width: auto; gap: 12px; margin: 0; }
+
   .simulator-header .simulator-title { order: -1; margin-left: 0; margin-right: auto; font-size: 14px; color: #eaf4fc; }
   .simulator-header .workshop-link { font-size: 10px; min-height: 44px; }
   .simulator-header .workshop-return { font-size: 10px; }
@@ -416,7 +416,7 @@ p.sim-lab-check-details { padding: 12px 0; }
   .sim-call-controls { gap: 4px; padding-inline: 12px; }
   .sim-call-controls button { padding-inline: 4px; font-size: 11px; }
   .sim-call-controls button svg { width: 16px; }
-  .simulator-header nav { gap: 8px; }
+
   .simulator-header .simulator-title { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {

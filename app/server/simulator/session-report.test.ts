@@ -76,7 +76,7 @@ test('report waits for closing, uses final transcript and Jev, and claims one ge
   expect(result.report).toMatchObject({ status: 'failed', starts: 1, failure: 'provider' });
   expect(JSON.stringify(result)).not.toContain('private');
   await Promise.all(f.pending);
-  expect(parseArchive(f.row()!).report).toMatchObject({ model: 'gpt-6-sol', effort: 'medium', report: null, attempts: [{ failure: 'provider' }] });
+  expect(parseArchive(f.row()!).report).toMatchObject({ model: 'gpt-6.1-sol', effort: 'medium', report: null, attempts: [{ failure: 'provider' }] });
 }, 10_000);
 
 test('interrupted report settles before held final storage and archives after the final row exists', async () => {

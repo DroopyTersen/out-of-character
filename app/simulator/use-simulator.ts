@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { LiveConnection } from './live-connection';
 import { silentLevels } from './audio-levels';
-import { useSessionReport } from './use-report';
+import type { ReportActions } from './use-report';
 
-export function useSimulator() {
+export function useSimulator(report: ReportActions) {
   const [phase, setPhase] = useState<'selection' | 'connecting' | 'live' | 'ending' | 'debrief'>('selection');
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +12,6 @@ export function useSimulator() {
   const [levels, setLevels] = useState(silentLevels);
   const connection = useRef<LiveConnection | null>(null);
   const generation = useRef(0);
-  const report = useSessionReport();
   // Connection callbacks outlive renders; submit with the endpoint prepared at Start.
   const reportActions = useRef(report);
   reportActions.current = report;
@@ -61,5 +60,5 @@ export function useSimulator() {
     setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels(silentLevels);
   }
   function toggleMute() { setMuted(value => { connection.current?.mute(!value); return !value; }); }
-  return { phase, snapshot, error, muted, levels, report: report.view, retryReport: report.retry, checkReport: report.checkStatus, start, end, reset, toggleMute, keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
+  return { phase, snapshot, error, muted, levels, start, end, reset, toggleMute, keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
 }

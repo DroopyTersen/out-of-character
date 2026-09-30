@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { fixtureFoundry } from '../foundry-fixture';
 import { generateReport, generationSchema, reportContext, validateReport, type ReportInput, type ReportResult } from './report.server';
 import { getScenario } from './scenarios.server';
 import { skills, emptySkills } from '../../core/simulator/types';
@@ -6,7 +7,7 @@ import type { CoachingReport } from '../../core/simulator/report';
 import type { DirectorRecord } from '../../core/simulator/director';
 
 const input: ReportInput = {
-  apiKey: 'fixture-secret', signal: new AbortController().signal, interventions: [],
+  foundry: fixtureFoundry, signal: new AbortController().signal, interventions: [],
   snapshot: { id: 'report-fixture', scenarioId: 'sharepoint', clientId: 'morgan', status: 'ended', startedAt: 0, limitSeconds: 3600,
     warning: null, revision: 3, coaching: null, feedbackStatus: 'current', message: null, finalization: 'confirmed', usageSeconds: 20,
     transcript: [
@@ -28,7 +29,7 @@ const report = (): CoachingReport => ({
 const sse = (events: unknown[]) => new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
 function events(text: string, ending: 'complete' | 'incomplete' | 'error' | 'missing' = 'complete') {
   const values: unknown[] = [
-    { type: 'response.created', response: { id: 'resp-fixture', created_at: 1, model: 'gpt-6-sol' } },
+    { type: 'response.created', response: { id: 'resp-fixture', created_at: 1, model: 'gpt-6.1-sol' } },
     { type: 'response.output_item.added', output_index: 0, item: { type: 'message', id: 'msg-1' } },
     ...Array.from({ length: Math.ceil(text.length / 57) }, (_, index) => ({ type: 'response.output_text.delta', item_id: 'msg-1', delta: text.slice(index * 57, (index + 1) * 57) })),
     { type: 'response.output_item.done', output_index: 0, item: { type: 'message', id: 'msg-1' } },
@@ -66,7 +67,7 @@ test('strict scenario schema and validator preserve unobserved skills and requir
 });
 
 test('report context contains private scenario, Jev and delivered advice without rejected drafts or credentials', () => {
-  const prior: DirectorRecord = { source: 'director', id: 'cue', observationId: 'observation', issueId: 'role', audience: 'actor', signal: { condition: 'role', probability: .9 }, revision: 2, inputCount: 2, lastInputId: 'p2', snapshotAt: 1000, gateAt: 1100, model: 'gpt-6-sol', effort: 'none', outcome: 'sent', deliveredAt: 1200, result: { action: 'intervene', text: 'Stay cautious.', evidenceIds: ['p1'] }, delivery: { eventId: 'cue-1', afterPassageId: 'p2', status: 'accepted' } };
+  const prior: DirectorRecord = { source: 'director', id: 'cue', observationId: 'observation', issueId: 'role', audience: 'actor', signal: { condition: 'role', probability: .9 }, revision: 2, inputCount: 2, lastInputId: 'p2', snapshotAt: 1000, gateAt: 1100, model: 'gpt-6.1-sol', effort: 'none', outcome: 'sent', deliveredAt: 1200, result: { action: 'intervene', text: 'Stay cautious.', evidenceIds: ['p1'] }, delivery: { eventId: 'cue-1', afterPassageId: 'p2', status: 'accepted' } };
   const context = reportContext({ ...input, interventions: [prior, { ...prior, id: 'bad', result: { action: 'intervene', text: 'Rejected cue', evidenceIds: ['p1'] }, delivery: { ...prior.delivery!, status: 'rejected' } }, { ...prior, id: 'stale', outcome: 'stale' }] });
   expect(context.privateClientContext.facts).toContain(getScenario('sharepoint').facts[0]!);
   expect(context.jev.assessment?.model).toBe('jev');
@@ -80,8 +81,9 @@ test('real SDK streams structured text with Sol medium, strict schema, no storag
   let body: Record<string, any> = {}, calls = 0;
   let result: ReportResult | undefined;
   const request = (async (url, options) => {
-    calls++; expect(String(url)).toBe('https://api.openai.com/v1/responses');
-    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer fixture-secret');
+    calls++; expect(String(url).split('?')[0]).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');
+    expect(new Headers(options?.headers).get('api-key')).toBe('fixture-secret');
+    expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     body = JSON.parse(String(options?.body));
     return sse(events(JSON.stringify(report())));
   }) as typeof fetch;
@@ -89,7 +91,7 @@ test('real SDK streams structured text with Sol medium, strict schema, no storag
   for await (const chunk of generateReport(input, value => { result = value; }, request)) { chunks++; text += chunk; }
   expect(chunks).toBeGreaterThan(2);
   expect(JSON.parse(text).overview).toBe(report().overview);
-  expect(body).toMatchObject({ model: 'gpt-6-sol', reasoning: { effort: 'medium' }, store: false, max_output_tokens: 12000, text: { format: { type: 'json_schema', strict: true } } });
+  expect(body).toMatchObject({ model: 'gpt-6.1-sol', reasoning: { effort: 'medium' }, store: false, max_output_tokens: 12000, text: { format: { type: 'json_schema', strict: true } } });
   expect(body.tools).toBeUndefined();
   expect(body.text.format.schema.properties.evaluation.properties.objectives.additionalProperties).toBe(false);
   expect(result).toMatchObject({ failure: null, usage: { inputTokens: 300, outputTokens: 100, reasoningTokens: 60, cachedTokens: 40 } });

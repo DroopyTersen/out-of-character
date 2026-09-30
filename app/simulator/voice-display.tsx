@@ -2,13 +2,13 @@ import type { CSSProperties } from 'react';
 import type { Client } from '../../core/simulator/types';
 import { SPECTRUM_BANDS, type AudioLevels } from './audio-levels';
 
-export function VoiceDisplay({ client, levels, phase, muted, compact = false }: {
-  client: Client; levels: AudioLevels; phase: 'connecting' | 'live' | 'ending'; muted: boolean; compact?: boolean;
+export function VoiceDisplay({ client, levels, phase, muted, compact = false, relationship = 'client' }: {
+  client: Client; levels: AudioLevels; phase: 'connecting' | 'live' | 'ending'; muted: boolean; compact?: boolean; relationship?: 'client' | 'interviewer';
 }) {
   const clientSpeaking = phase === 'live' && levels.output > .03;
   const traineeSpeaking = phase === 'live' && !muted && levels.input > .03;
   const state = phase !== 'live' ? phase : clientSpeaking && traineeSpeaking ? 'overlap' : clientSpeaking ? 'client' : muted ? 'muted' : traineeSpeaking ? 'trainee' : 'listening';
-  const labels = { connecting: 'Connecting to your client…', ending: 'Ending and reviewing…', client: `${client.name} is speaking`, trainee: 'Listening to you', overlap: 'Both of you are speaking', listening: 'Your client is listening', muted: 'Microphone muted' };
+  const labels = { connecting: `Connecting to your ${relationship}…`, ending: 'Ending and reviewing…', client: `${client.name} is speaking`, trainee: 'Listening to you', overlap: 'Both of you are speaking', listening: relationship === 'interviewer' ? `${client.name} is listening` : 'Your client is listening', muted: 'Microphone muted' };
   const shortLabels = { connecting: 'Connecting…', ending: 'Finishing…', client: 'Speaking', trainee: 'Listening to you', overlap: 'Both speaking', listening: 'Listening', muted: 'Mic muted' };
   return <div className="sim-voice-display" data-state={state}>
     <span className="sim-announcement" role="status">{phase === 'live' ? 'Voice session connected.' : labels[phase]}</span>

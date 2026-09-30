@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { foundryConfig } from '../ai/foundry.server.ts';
 import { readFile, writeFile } from 'node:fs/promises';
 import { clients } from '../ai/simulator/scenarios.server.ts';
 import { clientProfiles } from '../app/simulator/client-profiles.ts';
@@ -18,7 +19,8 @@ for (const id of selectedVoices) if (!liveVoices.some(voice => voice.id === id))
 if (!Number.isInteger(concurrency)) throw new Error('Concurrency must be an integer.');
 
 const manifestPath = 'scripts/voice-lab-manifest.json';
-const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, 'utf8')) : { model: LIVE_MODEL, clips: {} };
+const model = process.env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL;
+const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, 'utf8')) : { model, clips: {} };
 const instructions = client => `You are ${client.name}, a client speaking in a consultancy meeting. Play this personality with expressive, theatrical commitment while sounding like a real person. ${client.behavior} This is a short prepared voice sample, not an interactive conversation. Speak in English. Do not invent project details or say stage directions aloud.`;
 const opening = sample => `Speak now as the client. Say this paragraph once, keeping its meaning and most of its wording. Do not introduce it, explain it, or add anything afterward: ${sample}`;
 const tokens = value => value.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
@@ -37,7 +39,7 @@ function closeEnough(expected, actual) {
 }
 
 const capture = (client, voice, sample) => captureLiveClip({
-  model: LIVE_MODEL, voice, instructions: instructions(client), opening: opening(sample),
+  voice, instructions: instructions(client), opening: opening(sample),
 });
 const encode = (result, path) => encodeLiveClip(result, path);
 
@@ -48,7 +50,7 @@ for (const { client, voice } of pairs) {
   if (!sample) throw new Error(`Missing sample for ${client.id}`);
   const key = `${client.id}/${voice}`;
   const path = `public/simulator/voice-lab/${key}.mp3`;
-  const sourceHash = hash(`${LIVE_MODEL}\n${voice}\n${instructions(client)}\n${opening(sample)}`);
+  const sourceHash = hash(`${model}\n${voice}\n${instructions(client)}\n${opening(sample)}`);
   const current = manifest.clips[key];
   const audioHash = existsSync(path) ? hash(await readFile(path)) : null;
   if (process.argv.includes('--force') || current?.sourceHash !== sourceHash || current?.audioHash !== audioHash) {
@@ -60,7 +62,7 @@ if (process.argv.includes('--dry-run')) {
   process.exit(0);
 }
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to generate voice samples, or --dry-run to preview.');
-if (!process.env.OPENAI_API_KEY) throw new Error('Load OPENAI_API_KEY from the ignored local credentials file.');
+foundryConfig(process.env);
 for (const tool of ['ffmpeg', 'ffprobe']) {
   const check = Bun.spawn([tool, '-version'], { stdout: 'ignore', stderr: 'ignore' });
   if (await check.exited) throw new Error(`${tool} is required to generate voice samples.`);
@@ -91,7 +93,7 @@ async function worker() {
     if (fatal) return;
     try {
       const { seconds, audioHash } = await encode(result, path);
-      manifest.model = LIVE_MODEL;
+      manifest.model = model;
       manifest.clips[key] = { sampleHash: hash(sample), sourceHash, audioHash, transcript: result.transcript, seconds: Math.round(seconds * 10) / 10, attempts: successfulAttempt };
       writeQueue = writeQueue.then(() => writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`));
       await writeQueue;

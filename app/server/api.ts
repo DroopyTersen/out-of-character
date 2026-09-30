@@ -4,6 +4,7 @@ import { CAST_VERSION, characters, characterById } from '../../core/characters';
 import { evaluateCharacters, validateReadings, JUDGING_VERSION } from '../../ai/judging';
 import { combineReadings } from '../../core/performance';
 import { generateScene } from '../../ai/scenes';
+import { foundryConfig, foundryConfigured } from '../../ai/foundry.server';
 import { openSpeech } from './speech';
 import { findCharacterHighlights } from '../../ai/highlights';
 import { validateHighlightReview } from '../../core/highlights';
@@ -42,7 +43,7 @@ export async function handleApi(request: Request, env: Env, paid: ApiServices = 
   if (path === '/api/health' && request.method === 'GET') return Response.json({
     ok: true, castCount: characters.length, castVersion: CAST_VERSION, judgingVersion: JUDGING_VERSION,
     paidServicesEnabled: String(env.PAID_SERVICES_ENABLED) === 'true',
-    configured: { judging: !!env.TYPESAFE_API_KEY, scenes: !!env.OPENROUTER_API_KEY, speech: !!env.AI }, speech: 'cloudflare-flux',
+    configured: { judging: !!env.TYPESAFE_API_KEY, scenes: foundryConfigured(env), speech: !!env.AI }, speech: 'cloudflare-flux',
   });
   if (!['/api/judge', '/api/scene', '/api/speech', '/api/highlights'].includes(path)) return jsonError(404, 'Unknown API route.');
   if (path !== '/api/speech' && request.method !== 'POST') return jsonError(405, 'Method not allowed.');
@@ -85,9 +86,9 @@ export async function handleApi(request: Request, env: Env, paid: ApiServices = 
     }
     const parsed = sceneSchema.safeParse(body);
     if (!parsed.success) return jsonError(400, 'Invalid scene request.');
-    if (!env.OPENROUTER_API_KEY) return jsonError(503, 'Scene generation is not configured.');
+    if (!foundryConfigured(env)) return jsonError(503, 'Scene generation is not configured.');
     const { attemptId, requestId, ...input } = parsed.data;
-    const scene = await paid.scene({ ...input, apiKey: env.OPENROUTER_API_KEY, signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]) });
+    const scene = await paid.scene({ ...input, foundry: foundryConfig(env), signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]) });
     return Response.json({ attemptId, requestId, scene });
   } catch (error) {
     if (error instanceof BodyError) return jsonError(error.status, error.message);

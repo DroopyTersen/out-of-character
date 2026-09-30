@@ -1,6 +1,7 @@
 import { checkCard, generateProducer } from '../../../ai/interview/producer.server';
-import { lookupInterviewBackground, RESEARCH_MODEL, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
-import { DirectorOutputError, SOL_MODEL } from '../../../ai/simulator/sol.server';
+import { lookupInterviewBackground, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
+import { DirectorOutputError } from '../../../ai/simulator/sol.server';
+import type { FoundryConfig } from '../../../ai/foundry.server';
 import { JEV_MODEL } from '../../../ai/judging';
 import { coverageBands, isBackchannel, type CoverageLevel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import {
@@ -13,9 +14,10 @@ import type { TranscriptEntry } from '../../../core/simulator/types';
 
 export const producerServices = { generateProducer, checkCard, lookupInterviewBackground };
 type Options = {
-  clientId: string; startedAt: number; openaiKey: string; typesafeKey: string; services: typeof producerServices;
+  clientId: string; startedAt: number; foundry: FoundryConfig; typesafeKey: string; services: typeof producerServices;
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
+  canDeliverCue?: () => boolean;
 };
 export type Assessment = {
   transcript: TranscriptEntry[]; capturedAt: number; signals: DirectorSignal[]; researchProbability?: number; model?: string;
@@ -76,6 +78,7 @@ export class InterviewProducer {
   private work = new Set<Promise<void>>();
   private counts = { consultations: 0, cues: 0, research: 0, rundowns: 0 };
   private currentCue: ProducerRecord | null = null;
+  private pendingCue: ProducerRecord | null = null;
 
   constructor(private options: Options) { this.lastConsultation = options.startedAt; }
 
@@ -144,6 +147,7 @@ export class InterviewProducer {
   /** Scheduled check-in after a Sam turn, and the rundown. Called on the session tick. */
   tick(now = Date.now()) {
     if (!this.alive) return;
+    if (this.pendingCue) this.deliverCue(this.pendingCue, now);
     this.rundown(now);
     const cue = this.currentCue;
     if (cue?.followThrough && !cue.recoveryUsed && this.recoveryApplies(cue.id) && cue.followThrough.lastInputId === this.options.settled().at(-1)?.id
@@ -179,7 +183,7 @@ export class InterviewProducer {
     this.lastConsultation = now;
     this.consultedDialogue = dialogueKey(transcript);
     const record: ProducerRecord = {
-      source: 'producer', id: `producer-${crypto.randomUUID()}`, triggers, queued, model: SOL_MODEL, effort: 'none',
+      source: 'producer', id: `producer-${crypto.randomUUID()}`, triggers, queued, model: this.options.foundry.agentModel, effort: 'low',
       inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null, triggeredAt, startedAt: now, outcome: 'pending',
       ...(triggers.some(item => item.kind === 'cue-recovery') ? { recoveryUsed: true } : {}),
     };
@@ -214,7 +218,7 @@ export class InterviewProducer {
     try {
       const { model, usage, ...result } = await services.generateProducer({
         clientId: this.options.clientId, transcript, coverage: this.options.coverage(), startedAt, now: Date.now(),
-        triggers: record.triggers, history: this.records, budget: this.budget(), apiKey: this.options.openaiKey, signal,
+        triggers: record.triggers, history: this.records, budget: this.budget(), foundry: this.options.foundry, signal,
       });
       if (!this.alive) return;
       signal.throwIfAborted();
@@ -227,21 +231,42 @@ export class InterviewProducer {
       if (!urgent && this.lastCueAt != null && Date.now() - this.lastCueAt < LIMITS.cueSpacing) { record.outcome = 'spacing'; return; }
       // A deferred direction is still active. Cancel only a retired or superseded recovery.
       if (record.triggers.every(item => item.kind === 'cue-recovery' && item.cueId !== this.cue()?.id)) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
-      // Sam receives the direction even if speech continued while Sol was writing it.
-      const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, producerDirection(result.cue), 'session.instructions.append');
-      record.outcome = sent ? 'sent' : 'error';
-      if (sent) { this.counts.cues++; this.lastCueAt = record.sentAt = Date.now(); this.currentCue = record; }
+      this.deliverCue(record, Date.now());
     } catch (error) {
       if (!this.alive) return;
       record.outcome = error instanceof DirectorOutputError ? 'invalid' : signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
-      if (record.outcome !== 'sent' && record.triggers.some(item => item.kind === 'cue-recovery' && item.cueId === this.currentCue?.id)) this.currentCue = null;
-      if (this.alive) record.completedAt = Date.now();
+      if (!['sent', 'deferred'].includes(record.outcome) && record.triggers.some(item => item.kind === 'cue-recovery' && item.cueId === this.currentCue?.id)) this.currentCue = null;
+      if (this.alive && record.outcome !== 'deferred') record.completedAt = Date.now();
     }
   }
 
+  /** Behavioral appends can interrupt Sam. Wait for a measured output opening, without blocking consultations. */
+  private deliverCue(record: ProducerRecord, now: number) {
+    if (this.pendingCue && this.pendingCue !== record) {
+      this.pendingCue.outcome = 'withheld'; this.pendingCue.reason = 'superseded'; this.pendingCue.completedAt = now;
+      this.pendingCue = null;
+    }
+    if (record.deferredAt != null && now - record.deferredAt >= LIMITS.cueWait) {
+      record.outcome = 'withheld'; record.reason = 'no_quiet_opening'; record.completedAt = now; this.pendingCue = null;
+      return;
+    }
+    if (record.triggers.every(item => item.kind === 'cue-recovery' && item.cueId !== this.cue()?.id)) {
+      record.outcome = 'withheld'; record.reason = 'dialogue_changed'; record.completedAt = now; this.pendingCue = null;
+      return;
+    }
+    if (this.options.canDeliverCue && !this.options.canDeliverCue()) {
+      record.outcome = 'deferred'; record.deferredAt ??= now; this.pendingCue = record;
+      return;
+    }
+    this.pendingCue = null;
+    const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, producerDirection(record.result!.cue!), 'session.instructions.append');
+    record.outcome = sent ? 'sent' : 'error'; record.completedAt = now;
+    if (sent) { this.counts.cues++; this.lastCueAt = record.sentAt = now; this.currentCue = record; }
+  }
+
   private request(consultation: ProducerRecord, request: ResearchRequest, transcript: TranscriptEntry[]) {
-    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, consultationId: consultation.id, request, model: RESEARCH_MODEL, requestedAt: Date.now(), outcome: 'pending' };
+    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, consultationId: consultation.id, request, model: this.options.foundry.fastModel, requestedAt: Date.now(), outcome: 'pending' };
     this.records.push(record);
     const refuse = (outcome: ResearchRecord['outcome'], reason: string) => { record.outcome = outcome; record.reason = reason; record.completedAt = Date.now(); };
     const valid = validateResearchRequest(request, transcript);
@@ -263,7 +288,7 @@ export class InterviewProducer {
     const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.researchAge)]);
     const result = (status: 'sent' | 'withheld') => this.trigger([{ kind: 'research', researchId: record.id, status }], Date.now());
     try {
-      const lookup = await services.lookupInterviewBackground({ target: { kind, name }, clue, apiKey: this.options.openaiKey, signal });
+      const lookup = await services.lookupInterviewBackground({ target: { kind, name }, clue, foundry: this.options.foundry, signal });
       if (!this.alive) return;
       signal.throwIfAborted();
       record.lookupAt = Date.now();
@@ -365,7 +390,7 @@ export class InterviewProducer {
 
   summary(): ProducerSummary {
     return {
-      model: SOL_MODEL, effort: 'none', version: PRODUCER_VERSION, ...this.counts,
+      model: this.options.foundry.agentModel, effort: 'low', version: PRODUCER_VERSION, ...this.counts,
       queued: this.records.filter(item => item.source === 'producer' && item.queued).length, latency: producerLatency(this.records),
     };
   }
@@ -373,7 +398,8 @@ export class InterviewProducer {
   close() {
     this.abort.abort();
     this.queue = null;
-    for (const record of this.records) if ((record.source === 'producer' || record.source === 'research') && record.outcome === 'pending') {
+    this.pendingCue = null;
+    for (const record of this.records) if ((record.source === 'producer' || record.source === 'research') && ['pending', 'deferred'].includes(record.outcome)) {
       record.outcome = 'aborted';
       record.completedAt = Date.now();
     }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { handleApi, type ApiServices } from './api';
+import { fixtureFoundryEnv } from '../../ai/foundry-fixture';
 import { CAST_VERSION, characters } from '../../core/characters';
 import { JUDGING_VERSION } from '../../ai/judging';
 import { transcriptPassages } from '../../core/highlights';
@@ -10,7 +11,7 @@ import { openSpeech } from './speech';
 function fixture() {
   const calls: { service: string; input: unknown }[] = [];
   const env = {
-    PAID_SERVICES_ENABLED: 'true', TYPESAFE_API_KEY: 'private-judge-key', OPENROUTER_API_KEY: 'private-scene-key',
+    PAID_SERVICES_ENABLED: 'true', TYPESAFE_API_KEY: 'private-judge-key', ...fixtureFoundryEnv,
     RATE_JUDGE: { limit: async () => ({ success: true }) },
     RATE_SCENE: { limit: async () => ({ success: true }) },
     RATE_SPEECH: { limit: async () => ({ success: true }) },

@@ -1,7 +1,7 @@
 import { z } from 'zod';
+import { foundryUrl, type FoundryConfig } from '../foundry.server';
 import type { DirectorUsage } from '../../core/simulator/director';
 
-export const SOL_MODEL = 'gpt-6-sol';
 export class DirectorOutputError extends Error { constructor() { super('Director output was invalid.'); } }
 
 const responseSchema = z.object({
@@ -12,14 +12,14 @@ const responseSchema = z.object({
 
 /** One strict-JSON Sol response. The caller validates the parsed value against the dialogue it supplied. */
 export async function requestSol(input: {
-  apiKey: string; signal: AbortSignal; instructions: string; context: unknown; name: string; schema: z.ZodType; effort?: 'none' | 'low';
+  foundry: FoundryConfig; signal: AbortSignal; instructions: string; context: unknown; name: string; schema: z.ZodType; effort?: 'low' | 'medium';
 }, request: (url: string, options: RequestInit) => Promise<Response> = fetch): Promise<{ value: unknown; model: string; usage: DirectorUsage }> {
-  const effort = input.effort ?? 'none';
-  const response = await request('https://api.openai.com/v1/responses', {
+  const effort = input.effort ?? 'low';
+  const response = await request(foundryUrl(input.foundry, '/responses'), {
     method: 'POST', signal: input.signal,
-    headers: { Authorization: `Bearer ${input.apiKey}`, 'Content-Type': 'application/json' },
+    headers: { 'api-key': input.foundry.apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: SOL_MODEL, reasoning: { effort }, store: false, max_output_tokens: effort === 'none' ? 600 : 1800,
+      model: input.foundry.agentModel, reasoning: { effort }, store: false, max_output_tokens: 1800,
       instructions: input.instructions, input: JSON.stringify(input.context),
       text: { format: { type: 'json_schema', name: input.name, strict: true, schema: z.toJSONSchema(input.schema) } },
     }),

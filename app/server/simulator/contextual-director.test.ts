@@ -1,3 +1,4 @@
+import { fixtureFoundry } from '../../../ai/foundry-fixture';
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { ContextualDirector, directorServices } from './contextual-director';
 import { directorContext } from '../../../ai/simulator/director.server';
@@ -18,10 +19,10 @@ function fixture(overrides: Partial<typeof directorServices> = {}) {
   const calls: Parameters<typeof directorServices.generateDirector>[0][] = [];
   const director = new ContextualDirector({
     scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, objectives: () => snapshot.evaluation?.objectives ?? [],
-    isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(snapshot.transcript), openaiKey: 'openai-fixture', typesafeKey: 'typesafe-fixture',
+    isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(snapshot.transcript), foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture',
     settled: () => snapshot.transcript, send: value => { sent.push(value); return true; },
     services: {
-      generateDirector: async input => { calls.push(input); return { action: 'intervene', text: input.audience === 'trainee' ? 'Ask what decision Friday supports.' : 'Ask the consultant to own the delivery recommendation.', evidenceIds: ['p1'], model: 'gpt-6-sol', usage: { inputTokens: 100, outputTokens: 20 } }; },
+      generateDirector: async input => { calls.push(input); return { action: 'intervene', text: input.audience === 'trainee' ? 'Ask what decision Friday supports.' : 'Ask the consultant to own the delivery recommendation.', evidenceIds: ['p1'], model: 'gpt-6.1-sol', usage: { inputTokens: 100, outputTokens: 20 } }; },
       recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 20, outputTokens: 2 } }),
       ...overrides,
     },
@@ -34,7 +35,7 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-const result = { action: 'intervene' as const, text: 'Ask what decision Friday supports.', evidenceIds: ['p1'], model: 'gpt-6-sol', usage: { inputTokens: 100, outputTokens: 20 } };
+const result = { action: 'intervene' as const, text: 'Ask what decision Friday supports.', evidenceIds: ['p1'], model: 'gpt-6.1-sol', usage: { inputTokens: 100, outputTokens: 20 } };
 
 test('hint publication is independent from scoring, expires, and does not repeat on an idle snapshot', async () => {
   const f = fixture();

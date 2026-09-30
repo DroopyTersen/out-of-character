@@ -2,7 +2,7 @@ import { COVERAGE_LEVEL_LABELS, COVERAGE_LEVELS, interviewTopics } from './inter
 import type { GradeObjective, ProducerLogRecord, ProducerTrigger } from './interview-producer';
 import type { TranscriptEntry } from './simulator/types';
 
-export const TIMELINE_LANES = ['dialogue', 'producer', 'research', 'rundown', 'assessment', 'grade', 'delegation'] as const;
+export const TIMELINE_LANES = ['dialogue', 'producer', 'research', 'rundown', 'assessment', 'grade', 'delegation', 'continuity'] as const;
 export type TimelineLane = typeof TIMELINE_LANES[number];
 /** One debug row: offsets are from the session start; latency is the row's own span, parts break it down. */
 export type TimelineRow = {
@@ -20,6 +20,27 @@ const trigger = (item: ProducerTrigger) => item.kind === 'check-in' ? 'check-in'
 const band = (level: GradeObjective['shown'][0]) => COVERAGE_LEVEL_LABELS[level].toLowerCase();
 const odds = (levels: GradeObjective['levels']) => levels ? ` (${COVERAGE_LEVELS.map((level, index) => `${level[0]} ${levels[index]!.toFixed(2)}`).join(' ')})` : '';
 const heard = (id: string | null | undefined) => id !== undefined ? `Next observed Sam passage after ${id ?? 'start'}` : null;
+
+/** Candidate long gaps on the provider's transcript clock; a listener decides who held the floor. */
+export function interviewTurnGaps(transcript: TranscriptEntry[]) {
+  const gaps: { afterPassageId: string; beforePassageId: string; gapMs: number; sam: string; questionMark: boolean }[] = [];
+  let last: TranscriptEntry | undefined;
+  let sam = '';
+  for (const entry of [...transcript].sort((a, b) => a.startMs - b.startMs)) {
+    const extendsSpeech = !last || entry.endMs > last.endMs;
+    if (entry.speaker === 'trainee') {
+      if (last?.speaker === 'client' && entry.startMs - last.endMs >= 8000) {
+        gaps.push({ afterPassageId: last.id, beforePassageId: entry.id, gapMs: entry.startMs - last.endMs, sam, questionMark: sam.includes('?') });
+      }
+      if (extendsSpeech) sam = '';
+    } else {
+      sam += entry.text;
+    }
+    // A backchannel inside a long participant passage does not become the last speech.
+    if (extendsSpeech) last = entry;
+  }
+  return gaps;
+}
 
 /**
  * Dialogue, Sol consultations, research cards, rundowns, assessments, coverage grades and delegations in one
@@ -68,6 +89,10 @@ export function producerTimeline({ startedAt, transcript, records }: { startedAt
       rows.push({ id: record.id, lane: 'assessment', atMs: at(record.snapshotAt), title: `Assessment · through ${record.lastInputId ?? 'start'}`,
         detail: signals.join(', ') || null, outcome: record.concerns.length ? `${record.outcome} · concern ${record.concerns.join(', ')}` : record.outcome,
         latencyMs: span(record.snapshotAt, record.completedAt), parts: [] });
+    } else if (record.source === 'continuity') {
+      rows.push({ id: record.id, lane: 'continuity', atMs: at(record.sentAt), title: `Turn prompt · after ${record.afterPassageId}`,
+        detail: `${(record.quietMs / 1000).toFixed(1)} s quiet · answer ${record.participantId}`, outcome: `${record.outcome} · ${record.delivery.status}`,
+        latencyMs: record.outcome === 'resumed' || record.outcome === 'sent' ? span(record.sentAt, record.responseObservedAt) : null, parts: [] });
     } else if (record.source === 'grade') {
       // Keep probability-only changes visible as well as changes to bands or evidence.
       const moved = (record.objectives ?? []).flatMap(item => {

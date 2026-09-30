@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { foundryConfig } from '../ai/foundry.server.ts';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { scenarioBriefings } from '../core/simulator/briefings.ts';
 import { LIVE_MODEL } from '../app/server/simulator/live.server.ts';
@@ -16,13 +17,14 @@ const voice = 'ash';
 const instructions = 'You are a calm, brisk, professional colleague giving a short prerecorded handover to a consultant before a client call. Speak naturally at about 180 to 200 words per minute. This is not a client character or an interactive conversation. Read the supplied script exactly once in English, without an introduction, improvisation, or closing remark. Preserve every fact, qualification, and constraint.';
 const opening = text => `Start speaking immediately. Read the following handover aloud verbatim, once. Do not wait for a reply. Do not add or omit words:\n\n${text}`;
 const manifestPath = 'scripts/scenario-briefings-manifest.json';
-const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, 'utf8')) : { model: LIVE_MODEL, voice, clips: {} };
+const model = process.env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL;
+const manifest = existsSync(manifestPath) ? JSON.parse(await readFile(manifestPath, 'utf8')) : { model, voice, clips: {} };
 const words = text => text.toLowerCase().replace(/[’‘]/g, "'").match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
 const jobs = [];
 for (const id of ids) {
   const briefing = scenarioBriefings[id];
   const path = `public${briefing.audio}`;
-  const sourceHash = hash(`${LIVE_MODEL}\n${voice}\n${instructions}\n${opening(briefing.text)}`);
+  const sourceHash = hash(`${model}\n${voice}\n${instructions}\n${opening(briefing.text)}`);
   const current = manifest.clips[id];
   const audioHash = existsSync(path) ? hash(await readFile(path)) : null;
   if (process.argv.includes('--force') || current?.sourceHash !== sourceHash || current?.audioHash !== audioHash) {
@@ -34,7 +36,7 @@ if (process.argv.includes('--dry-run')) {
   process.exit(0);
 }
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to record briefings, or --dry-run to preview.');
-if (!process.env.OPENAI_API_KEY) throw new Error('Load OPENAI_API_KEY from the ignored local credentials file.');
+foundryConfig(process.env);
 for (const tool of ['ffmpeg', 'ffprobe']) {
   const check = Bun.spawn([tool, '-version'], { stdout: 'ignore', stderr: 'ignore' });
   if (await check.exited) throw new Error(`${tool} is required to record briefings.`);
@@ -47,14 +49,14 @@ async function worker() {
     const { id, path, text, sourceHash } = jobs[next++];
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const result = await captureLiveClip({ model: LIVE_MODEL, voice, instructions, opening: opening(text), timeoutMs: 75_000 });
+        const result = await captureLiveClip({ voice, instructions, opening: opening(text), timeoutMs: 75_000 });
         const matchesScript = JSON.stringify(words(text)) === JSON.stringify(words(result.transcript));
         const duration = trimmedPcm(result).length / 48_000;
         if (!matchesScript || duration < 8 || duration > 65) {
           throw Object.assign(new Error(`Script match: ${matchesScript}; ${duration.toFixed(1)}s (take saved privately)`), { partial: result });
         }
         const { seconds, audioHash } = await encodeLiveClip(result, path, { tempDir: 'output/briefing-temp', minSeconds: 8, maxSeconds: 65 });
-        manifest.model = LIVE_MODEL;
+        manifest.model = model;
         manifest.voice = voice;
         manifest.clips[id] = { scriptHash: hash(text), sourceHash, audioHash, transcript: result.transcript, seconds: Math.round(seconds * 10) / 10, attempts: attempt };
         writeQueue = writeQueue.then(() => writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`));

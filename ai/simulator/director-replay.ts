@@ -5,7 +5,8 @@ import { evaluateInterview, evaluateInterviewer } from '../interview/evaluate.se
 import { generateProducer } from '../interview/producer.server';
 import { interviewFixtures } from '../interview/fixtures';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
-import { DIRECTOR_MODEL, generateDirector } from './director.server';
+import { generateDirector } from './director.server';
+import { foundryConfig } from '../foundry.server';
 import { simulatorFixtures, simulatorHoldouts, simulatorValidation } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
 import { simulatorBlindFixtures } from './blind-fixtures';
@@ -22,12 +23,13 @@ const interviewFixture = interviewFixtures.find(item => item.id === id);
 const simulatorFixture = [...simulatorFixtures, ...simulatorHoldouts, ...simulatorValidation, ...simulatorChallenges, ...simulatorBlindFixtures, ...simulatorCatalogFixtures].find(item => item.id === id);
 const fixture = interviewFixture ?? simulatorFixture;
 if (!fixture) throw new Error('Select a known synthetic fixture with --fixture=<id>.');
-if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load the existing server credentials with --env-file=.dev.vars.');
+const foundry = foundryConfig(process.env);
+if (!process.env.TYPESAFE_API_KEY) throw new Error('Load the existing server credentials with --env-file=.dev.vars.');
 const compare = process.argv.includes('--compare');
 const turns = process.argv.includes('--every-turn') ? fixture.transcript.map((_, index) => index + 1).filter(length => fixture.transcript.slice(0, length).some(entry => entry.speaker === 'trainee')) : [fixture.transcript.length];
 if (turns.length > 24) throw new Error('Replay is limited to 24 snapshots; choose a shorter fixture.');
 const output = process.argv.find(arg => arg.startsWith('--output='))?.slice(9) || `output/director-replay-${fixture.id}.json`;
-const report = { synthetic: true, fixture: fixture.id, kind: interviewFixture ? 'interview' : 'simulator', collectedAt: new Date().toISOString(), version: interviewFixture ? PRODUCER_VERSION : DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: DIRECTOR_MODEL }, compare, rows: [] as Record<string, unknown>[] };
+const report = { synthetic: true, fixture: fixture.id, kind: interviewFixture ? 'interview' : 'simulator', collectedAt: new Date().toISOString(), version: interviewFixture ? PRODUCER_VERSION : DIRECTOR_VERSION, models: { detector: JEV_MODEL, director: foundry.agentModel }, compare, rows: [] as Record<string, unknown>[] };
 const gate = new DirectorGate();
 
 /** The interview replays one producer check-in per snapshot, with any signals as reasons. Research is not looked up. */
@@ -56,10 +58,10 @@ async function replayInterview(turn: number) {
     ...(interviewer.followThrough ? { followThrough: { ...interviewer.followThrough, lastInputId: transcript.at(-1)!.id } } : {}),
   }] : [];
   row.pastCue = history[0] ? { text: cue!.text, followThrough: interviewer.followThrough?.outcome ?? null } : null;
-  for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
+  for (const effort of compare ? ['low', 'medium'] as const : ['low'] as const) {
     const started = performance.now();
     const result = await generateProducer({ clientId: 'sam-cedar', transcript, coverage: graded.objectives, startedAt: 0, now, triggers, history,
-      budget: { cuesLeft: PRODUCER_LIMITS.cues, researchLeft: PRODUCER_LIMITS.research, lookupsInFlight: 0 }, apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
+      budget: { cuesLeft: PRODUCER_LIMITS.cues, researchLeft: PRODUCER_LIMITS.research, lookupsInFlight: 0 }, foundry, signal: AbortSignal.timeout(20_000) }, fetch, effort);
     const durationMs = Math.round(performance.now() - started);
     (row.generation as unknown[]).push({ effort, durationMs, ...result });
   }
@@ -85,9 +87,9 @@ try {
       const review = gate.review(audience, now, turn, async issue => {
         row.eligible = true;
         row.issueId = issue.id;
-        for (const effort of compare ? ['none', 'low'] as const : ['none'] as const) {
+        for (const effort of compare ? ['low', 'medium'] as const : ['low'] as const) {
           const started = performance.now();
-          const result = await generateDirector({ audience, reason: issue.signal, scenarioId, clientId, transcript, objectives: trainee.objectives, history: [], apiKey: process.env.OPENAI_API_KEY!, signal: AbortSignal.timeout(20_000) }, fetch, effort);
+          const result = await generateDirector({ audience, reason: issue.signal, scenarioId, clientId, transcript, objectives: trainee.objectives, history: [], foundry, signal: AbortSignal.timeout(20_000) }, fetch, effort);
           (row.generation as unknown[]).push({ effort, durationMs: Math.round(performance.now() - started), ...result });
         }
       });

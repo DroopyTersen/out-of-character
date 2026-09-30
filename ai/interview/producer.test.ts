@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { fixtureFoundry } from '../foundry-fixture';
 import { checkCard, generateProducer, producerContext, validateProducerResult, type ProducerInput } from './producer.server';
 import { PRODUCER_LIMITS, type ProducerRecord, type ResearchRecord } from '../../core/interview-producer';
 import type { TranscriptEntry } from '../../core/simulator/types';
@@ -10,20 +11,20 @@ const transcript: TranscriptEntry[] = [
 ];
 const facts = [{ text: 'OpenStreetMap is an openly licensed world map.', url: 'https://www.openstreetmap.org/about', title: 'About OpenStreetMap' }];
 const cue = (text: string, changes: Partial<ProducerRecord> = {}): ProducerRecord => ({
-  source: 'producer', id: `producer-${text}`, triggers: [{ kind: 'check-in' }], queued: false, model: 'gpt-6-sol', effort: 'none',
+  source: 'producer', id: `producer-${text}`, triggers: [{ kind: 'check-in' }], queued: false, model: 'gpt-6.1-sol', effort: 'low',
   inputCount: 2, lastInputId: 'p2', triggeredAt: startedAt, startedAt, outcome: 'sent', result: { cue: text, evidenceIds: ['p2'], research: null }, ...changes,
 });
 const research = (changes: Partial<ResearchRecord>): ResearchRecord => ({
   source: 'research', id: 'research-1', consultationId: 'producer-1', request: { kind: 'product', name: 'OpenStreetMap', clue: null, passageIds: ['p2'] },
   model: 'gpt-6-luna', requestedAt: startedAt + 60_000, outcome: 'pending', ...changes,
 });
-const input: Omit<ProducerInput, 'apiKey' | 'signal'> = {
+const input: Omit<ProducerInput, 'foundry' | 'signal'> = {
   clientId: 'sam-cedar', transcript, startedAt, now: startedAt + 12 * 60_000, triggers: [{ kind: 'check-in' }],
   coverage: [{ id: 'project-delivery', level: 'explored', levels: null, probability: .914, achieved: true, evidence: { entryId: 'p2', speaker: 'trainee', text: transcript[1]!.text } }],
   history: [], budget: { cuesLeft: 15, researchLeft: 4, lookupsInFlight: 0 },
 };
 const solResponse = (value: unknown) => ({
-  status: 'completed', model: 'gpt-6-sol', output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
+  status: 'completed', model: 'gpt-6.1-sol', output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
   usage: { input_tokens: 300, output_tokens: 30, input_tokens_details: { cached_tokens: 100 } },
 });
 const jev = (probability: number, capture: (body: Record<string, any>) => void) => Object.assign(async (_url: string | URL | Request, options?: RequestInit) => {
@@ -70,18 +71,19 @@ test('Sol sees purpose, clock, coverage bands, its own cue outcomes, the researc
   expect(() => producerContext({ ...input, transcript: [] })).toThrow('Producer transcript is outside the interview limit.');
 });
 
-test('the producer request uses Sol at effort none with strict output, no tools and server-only credentials', async () => {
+test('the producer request uses Sol at effort low with strict output, no tools and server-only credentials', async () => {
   let body: Record<string, any> = {};
-  const result = await generateProducer({ ...input, apiKey: 'fixture-key', signal: new AbortController().signal }, async (url, options) => {
-    expect(url).toBe('https://api.openai.com/v1/responses');
-    expect(new Headers(options.headers).get('Authorization')).toBe('Bearer fixture-key');
+  const result = await generateProducer({ ...input, foundry: { ...fixtureFoundry, apiKey: 'fixture-key' }, signal: new AbortController().signal }, async (url, options) => {
+    expect(url).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');
+    expect(new Headers(options.headers).get('api-key')).toBe('fixture-key');
+    expect(new Headers(options.headers).has('Authorization')).toBe(false);
     body = JSON.parse(String(options.body));
     return Response.json(solResponse({ cue: 'Ask what dispatchers did differently afterward.', evidenceIds: ['p2'], research: null }));
   });
-  expect(body).toMatchObject({ model: 'gpt-6-sol', reasoning: { effort: 'none' }, store: false, text: { format: { type: 'json_schema', strict: true } } });
+  expect(body).toMatchObject({ model: 'gpt-6.1-sol', reasoning: { effort: 'low' }, store: false, text: { format: { type: 'json_schema', strict: true } } });
   expect(body.tools).toBeUndefined();
   expect(JSON.stringify(body)).not.toContain('fixture-key');
-  expect(result).toMatchObject({ cue: 'Ask what dispatchers did differently afterward.', evidenceIds: ['p2'], research: null, model: 'gpt-6-sol' });
+  expect(result).toMatchObject({ cue: 'Ask what dispatchers did differently afterward.', evidenceIds: ['p2'], research: null, model: 'gpt-6.1-sol' });
 });
 
 test('research identity checks send Jev the background and dialogue without coverage or private cues', async () => {

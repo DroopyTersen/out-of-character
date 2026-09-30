@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { fixtureFoundry } from '../foundry-fixture';
 import { lookupInterviewBackground, normalizeResearchName, researchKey, validateResearchRequest } from './research.server';
 import type { ResearchRequest } from '../../core/interview-producer';
 
@@ -6,7 +7,7 @@ const transcript = [
   { id: 's1', speaker: 'client' as const, text: 'Did Acme Field Systems cause the delay?', startMs: 0, endMs: 1000 },
   { id: 'p1', speaker: 'trainee' as const, text: 'We connected sites at Acme—Field Systems, but the handoff was private.', startMs: 1000, endMs: 4000 },
 ];
-const input = { apiKey: 'fixture-secret', signal: new AbortController().signal };
+const input = { foundry: fixtureFoundry, signal: new AbortController().signal };
 const response = (output: unknown[]) => Response.json({
   id: 'resp-fixture', created_at: 1, model: 'gpt-6-luna', output,
   usage: { input_tokens: 100, output_tokens: 80, total_tokens: 180 },
@@ -52,7 +53,9 @@ test('repeat keys ignore formatting and treat a new clue as a new attempt', () =
 
 test('lookup sends only the public target and returns only provider-listed facts', async () => {
   let body: Record<string, any> = {};
-  const request = (async (_url: unknown, options: RequestInit) => {
+  const request = (async (url: unknown, options: RequestInit) => {
+    expect(String(url).split('?')[0]).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');
+    expect(new Headers(options.headers).get('api-key')).toBe('fixture-secret');
     body = JSON.parse(String(options.body));
     return response([search, message({ facts: [
       { text: 'Acme operates distributed field sites.', title: 'About Acme', url: 'https://acme.example/about' },

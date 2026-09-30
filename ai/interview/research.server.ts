@@ -1,11 +1,10 @@
-import { createOpenAI } from '@ai-sdk/openai';
+import { foundryProvider, type FoundryConfig } from '../foundry.server';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import type { InterviewBackground } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import type { ResearchKind, ResearchRequest } from '../../core/interview-producer';
 
-export const RESEARCH_MODEL = 'gpt-6-luna';
 /** Only kind, name and clue ever leave the session; the clue is checked as spoken, not as identity-only. */
 export type ResearchLookup =
   | { status: 'found'; facts: InterviewBackground['facts']; retrievedAt: number; queries: string[] }
@@ -64,14 +63,14 @@ function validUrl(value: string): boolean {
 }
 
 export async function lookupInterviewBackground(
-  input: { target: { kind: ResearchKind; name: string }; clue: string | null; apiKey: string; signal: AbortSignal },
+  input: { target: { kind: ResearchKind; name: string }; clue: string | null; foundry: FoundryConfig; signal: AbortSignal },
   request: typeof fetch = fetch,
 ): Promise<ResearchLookup> {
   const { kind, name } = input.target;
-  const provider = createOpenAI({ apiKey: input.apiKey, fetch: request });
+  const provider = foundryProvider(input.foundry, request);
   const result = await generateText({
-    model: provider.responses(RESEARCH_MODEL),
-    providerOptions: { openai: { reasoningEffort: 'low', store: false, maxToolCalls: 2 } },
+    model: provider.responses(input.foundry.fastModel),
+    providerOptions: { openai: { reasoningEffort: 'low', forceReasoning: true, store: false, maxToolCalls: 2 } },
     tools: { web_search: provider.tools.webSearch({ searchContextSize: 'low' }) },
     toolChoice: { type: 'tool', toolName: 'web_search' },
     output: Output.object({ schema: factsSchema }),

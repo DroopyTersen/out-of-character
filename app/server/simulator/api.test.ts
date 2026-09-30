@@ -1,3 +1,4 @@
+import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
 import { expect, test } from 'bun:test';
 import { handleSimulator } from './api';
 import { liveConfiguration, transcriptEvent } from './live.server';
@@ -7,7 +8,7 @@ const capability = `Bearer ${'a'.repeat(64)}`;
 function fixture() {
   const calls: Request[] = [];
   const env = {
-    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', OPENAI_API_KEY: 'not-a-real-key', TYPESAFE_API_KEY: 'not-a-real-key',
+    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', ...fixtureFoundryEnv, TYPESAFE_API_KEY: 'not-a-real-key',
     RATE_SIMULATOR: { limit: async () => ({ success: true }) },
     SIMULATOR_SESSIONS: { idFromName: (value: string) => value, get: () => ({ fetch: async (request: Request) => { calls.push(request); return Response.json({ accepted: true }); } }) },
   } as unknown as Env;
@@ -45,6 +46,17 @@ test('poll forwards a validated activity report and rejects malformed reports be
   expect((await handleSimulator(f.request(path, { active: true, audio: false, padding: 'x'.repeat(300) }), f.env))!.status).toBe(413);
   expect(f.calls).toHaveLength(1);
 });
+test('legacy mutual quiet is validated and discarded for already-open tabs', async () => {
+  const f = fixture();
+  const path = `sessions/${id}/poll`;
+  for (const quietMs of [null, 0, 5000, 60_000]) {
+    expect((await handleSimulator(f.request(path, { active: false, audio: false, quietMs }), f.env))!.status).toBe(200);
+    const forwarded = await f.calls.at(-1)!.json() as Record<string, unknown>;
+    expect(forwarded).toEqual({ active: false, audio: false });
+  }
+  for (const quietMs of [-1, 0.5, 60_001, '5000']) expect((await handleSimulator(f.request(path, { active: false, audio: false, quietMs }), f.env))!.status).toBe(400);
+  expect(f.calls).toHaveLength(4);
+});
 test('interview starts only with its two voices and summary polling keeps the capability boundary', async () => {
   const f = fixture();
   for (const clientId of ['sam-cedar', 'sam-gleam']) {
@@ -58,7 +70,17 @@ test('interview starts only with its two voices and summary polling keeps the ca
   expect(f.calls).toHaveLength(2);
   expect(f.calls.every(call => call.headers.get('Authorization') === capability)).toBe(true);
 });
-test('public catalog and browser data channel cannot receive actor configuration', async () => {
+test('creation accepts audio and rejects data channels before reaching the paid session', async () => {
+  const f = fixture();
+  const audio = `${f.start.sdp}m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n`;
+  for (const media of ['application 9 UDP/DTLS/SCTP webrtc-datachannel', 'video 9 UDP/TLS/RTP/SAVPF 96']) {
+    expect((await handleSimulator(f.request('sessions', { ...f.start, sdp: `${audio}m=${media}\r\n` }), f.env))!.status).toBe(400);
+  }
+  expect(f.calls).toHaveLength(0);
+  expect((await handleSimulator(f.request('sessions', { ...f.start, sdp: audio }), f.env))!.status).toBe(200);
+  expect(f.calls).toHaveLength(1);
+});
+test('public catalog cannot receive private actor configuration', async () => {
   const f = fixture();
   const response = await handleSimulator(new Request('https://practice.example/api/simulator/catalog'), f.env);
   const text = await response!.text();
@@ -78,8 +100,6 @@ test('public catalog and browser data channel cannot receive actor configuration
   expect(liveConfiguration('scope', 'harper').audio.output.voice).toBe('gleam');
   expect(liveConfiguration('scope', 'quinn').audio.output.voice).toBe('beacon');
   expect(liveConfiguration('scope', 'jamie').audio.output.voice).toBe('coral');
-  expect(config.client.data_channel.allowed_server_events).toEqual([]);
-  expect(config.client.data_channel.allowed_client_events).toEqual(['session.close']);
 });
 test('invalid protocol timestamps and unknown event kinds are rejected', () => {
   expect(transcriptEvent.safeParse({ type: 'session.input_transcript.delta', delta: 'Yes', start_ms: 10, end_ms: 5 }).success).toBe(false);

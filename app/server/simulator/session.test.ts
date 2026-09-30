@@ -11,6 +11,79 @@ import { attempt, capability, request, activityPoll, fixture, waitFor } from './
 afterEach(() => setSystemTime());
 const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
 
+test.each([false, true])('an interview cue requires fresh, settled Sam output (expire: %s)', async expire => {
+  let generated = 0;
+  const f = await fixture({ overrides: {
+    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateProducer: async () => { generated++; return { cue: 'Ask what changed in the release guide.', evidenceIds: ['p1'], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
+  } });
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  const poll = (sequence: number, outputQuietMs: number | null) => f.session.fetch(new Request('https://session/poll', {
+    method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active: false, audio: false, outputQuietMs, sequence }),
+  }));
+  const cues = () => f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We fixed the permissions before launch.', start_ms: 0, end_ms: 1000 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'That caught the mistake.', start_ms: 1000, end_ms: 2000 });
+    setSystemTime(epoch + 7000);
+    await poll(1, 0);
+    await waitFor(() => generated === 1);
+    await Promise.all(f.pending);
+    expect(cues()).toHaveLength(0);
+
+    setSystemTime(epoch + 7500);
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What happened in the rehearsal?', start_ms: 7000, end_ms: 7400 });
+    setSystemTime(epoch + 7600);
+    await poll(2, 1000);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(0); // Text is still growing despite the quiet claim.
+
+    setSystemTime(epoch + 9200);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(0); // The earlier quiet report is now stale.
+    await poll(3, null);
+    await poll(2, 60_000); // An older periodic report cannot reopen Sam's floor.
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(cues()).toHaveLength(0);
+
+    setSystemTime(epoch + (expire ? 22_000 : 9700));
+    await poll(4, 1000);
+    if (expire) {
+      await new Promise(resolve => setTimeout(resolve, 600));
+      expect(cues()).toHaveLength(0);
+    } else await waitFor(() => cues().length === 1);
+    await f.session.fetch(request('end'));
+    await Promise.all(f.pending);
+    const record = JSON.parse(f.interviewRow()!.interventions_json).find((item: { source: string }) => item.source === 'producer');
+    expect(record).toMatchObject(expire ? { outcome: 'withheld', reason: 'no_quiet_opening' } : { outcome: 'sent' });
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
+test('long interview silence never creates an automatic turn instruction, including legacy polls', async () => {
+  const f = await fixture();
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We fixed the release guide.', start_ms: 0, end_ms: 1000 });
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'That helped the next release.', start_ms: 1000, end_ms: 2000 });
+    for (const elapsed of [15_000, 30_000, 45_000, 60_000]) {
+      setSystemTime(epoch + elapsed);
+      await f.session.fetch(activityPoll(false, false, 60_000));
+      await new Promise(resolve => setTimeout(resolve, 600));
+    }
+    expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening']);
+    await f.session.fetch(request('end'));
+    await Promise.all(f.pending);
+    const records = JSON.parse(f.interviewRow()!.interventions_json);
+    expect(records.some((item: { source: string }) => item.source === 'continuity')).toBe(false);
+  } finally { await f.session.fetch(request('end')); }
+}, 10_000);
+
 test('the private archive keeps consecutive probability changes, failed grades, and the final result', async () => {
   let calls = 0;
   const f = await fixture({ overrides: { evaluateInterview: async input => {
@@ -56,7 +129,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s is archived 
     evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: .9, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     evaluateInterview: async input => { participantInput = JSON.stringify(input); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
     // The producer names what to research on its scheduled check-in after Sam's turn.
-    generateProducer: async input => ({ cue: null, evidenceIds: [], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 },
+    generateProducer: async input => ({ cue: null, evidenceIds: [], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 },
       research: input.triggers.some(item => item.kind === 'check-in') ? { kind: 'term', name: '3DEP', clue: null, passageIds: [input.transcript.find(entry => entry.speaker === 'trainee')!.id] } : null }),
     lookupInterviewBackground: async input => { lookups.push(input); return { status: 'found', facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }; },
     summarizeInterview: (input, done) => { summaryInput = JSON.stringify(input); return new ReadableStream({ start(controller) {
@@ -70,7 +143,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s is archived 
   setSystemTime(1_800_000_030_000); await f.session.fetch(request('poll'));
   setSystemTime(1_800_000_046_000); await f.session.fetch(request('poll'));
   await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('research-')));
-  expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, apiKey: 'fixture', signal: expect.any(AbortSignal) }]);
+  expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, foundry: expect.objectContaining({ resourceName: 'fixture-foundry', agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' }), signal: expect.any(AbortSignal) }]);
   const note = f.socket.sent.find(event => String(event.event_id).startsWith('research-'))!;
   expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
   const before = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
@@ -95,7 +168,7 @@ test('contextual coaching runs for scored sessions and keeps actor history out o
   const f = await fixture({ overrides: {
     evaluateTrainee: async input => ({ revision: input.revision, skills: emptySkills(), objectives: [], privateDiagnostic: 'must never enter public feedback', concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'objective:problem', selected: true }] }),
     evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] }),
-    generateDirector: async input => { generations++; return { action: 'intervene', text: input.audience === 'actor' ? 'PRIVATE: Ask the consultant to propose the scope.' : 'Ask which approval is currently blocked.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 100, outputTokens: 15 } }; },
+    generateDirector: async input => { generations++; return { action: 'intervene', text: input.audience === 'actor' ? 'PRIVATE: Ask the consultant to propose the scope.' : 'Ask which approval is currently blocked.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 100, outputTokens: 15 } }; },
   } });
   setSystemTime(1_800_000_000_000);
   await f.session.fetch(request('start'));
@@ -124,7 +197,7 @@ test('contextual coaching runs for scored sessions and keeps actor history out o
   expect(exported.interventions.find((item: any) => item.source === 'director' && item.audience === 'actor').observationId).toBe(observation.id);
   expect(JSON.stringify(current)).not.toContain(observation.id);
   expect(JSON.parse(f.row()!.cues_json)).toEqual([]);
-  expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toMatchObject({ model: 'gpt-6-sol', effort: 'none' });
+  expect(JSON.parse(f.row()!.provenance_json).contextualDirector).toMatchObject({ model: 'gpt-6.1-sol', effort: 'low' });
 }, 10_000);
 
 test('ending the session does not wait for pending contextual generation', async () => {
@@ -133,7 +206,7 @@ test('ending the session does not wait for pending contextual generation', async
     evaluateTrainee: async input => ({ revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [{ condition: 'stalled', probability: .99 }] }),
     generateDirector: async input => {
       await new Promise<void>(done => { release = done; });
-      return { action: 'intervene', text: 'Late advice must not appear.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      return { action: 'intervene', text: 'Late advice must not appear.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
   } });
   setSystemTime(1_800_000_000_000);
@@ -340,7 +413,7 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
     generateProducer: async input => {
       inputs.push(input);
       const cue = action === 'none' ? null : 'PRIVATE: Ask an open question about the access owner.';
-      return { cue, evidenceIds: cue ? [input.transcript[0]!.id] : [], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      return { cue, evidenceIds: cue ? [input.transcript[0]!.id] : [], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
     summarizeInterview: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
       const report = { text: 'The participant described an access delay.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
@@ -352,6 +425,7 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
   setSystemTime(1_800_000_002_000);
+  await f.session.fetch(request('poll'));
   await waitFor(() => inputs.length === 1);
   await Promise.all(f.pending);
   expect(inputs[0]!.triggers).toEqual([{ kind: 'concern', condition: 'leading', probability: .99 }]);
@@ -380,7 +454,7 @@ test.each(['cue', 'none'] as const)('interview producer %s stays private and is 
   expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted', startMs: 2000, endMs: 2400 } } : {}) });
   expect(records[1].check).toBeUndefined();
   expect(JSON.parse(row.cues_json)).toEqual([]);
-  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'none', consultations: 1, cues: action === 'none' ? 0 : 1 });
+  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', consultations: 1, cues: action === 'none' ? 0 : 1 });
   expect(summarized).not.toContain('PRIVATE:');
   expect(summarized).not.toContain('interventions');
   expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
@@ -402,7 +476,7 @@ test.each(['accepted', 'rejected'] as const)('interview instruction %s receipt c
     generateProducer: async input => {
       producerTriggers.push(input.triggers);
       const cue = producerTriggers.length === 1 ? 'PRIVATE: Ask who owned the access handoff.' : null;
-      return { cue, evidenceIds: cue ? ['p1'] : [], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      return { cue, evidenceIds: cue ? ['p1'] : [], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
   } });
   setSystemTime(epoch);
@@ -410,6 +484,7 @@ test.each(['accepted', 'rejected'] as const)('interview instruction %s receipt c
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
   setSystemTime(epoch + 2000);
+  await f.session.fetch(request('poll'));
   await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('cue-')));
   const eventId = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))!.event_id;
   f.socket.emit(receipt === 'accepted'
@@ -445,7 +520,7 @@ test('End freezes an unfinished interview direction without delaying its summary
     evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     generateProducer: async input => {
       await new Promise<void>(resolve => { release = resolve; });
-      return { cue: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], research: null, model: 'gpt-6-sol', usage: { inputTokens: 1, outputTokens: 1 } };
+      return { cue: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
     },
   } });
   setSystemTime(1_800_000_000_000);
@@ -1053,7 +1128,7 @@ test('live alarm checkpoints dialogue, then End saves the final public score and
   expect(JSON.parse(row.evaluation_json)).toEqual(ended.evaluation);
   expect(row.evaluation_json).not.toContain('answers');
   expect(row.evaluation_json).not.toContain('usage');
-  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', contextualDirector: { model: 'gpt-6-sol', effort: 'none' } });
+  expect(JSON.parse(row.provenance_json)).toMatchObject({ workerId: 'test-worker', workerTag: 'test-release', contextualDirector: { model: 'gpt-6.1-sol', effort: 'low' } });
   const stored = JSON.stringify(row);
   expect(stored).not.toContain(capability);
   expect(stored).not.toContain('provider-private-id');

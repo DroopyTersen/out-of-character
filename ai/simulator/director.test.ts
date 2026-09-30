@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { fixtureFoundry } from '../foundry-fixture';
 import { directorContext, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
 import { getScenario, getClient } from './scenarios.server';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
@@ -7,16 +8,16 @@ import type { DirectorRecord, DetectorRecord } from '../../core/simulator/direct
 const input: DirectorInput = {
   audience: 'trainee', reason: { condition: 'objective:decision', selected: true }, scenarioId: 'proposal', clientId: 'morgan',
   transcript: [{ id: 'p1', speaker: 'client', text: 'I need something for Friday.', startMs: 0, endMs: 1000 }],
-  objectives: [], history: [], apiKey: 'fixture-key', signal: new AbortController().signal,
+  objectives: [], history: [], foundry: { ...fixtureFoundry, apiKey: 'fixture-key' }, signal: new AbortController().signal,
 };
 const intervention = { action: 'intervene', text: 'Ask what decision Friday supports.', evidenceIds: ['p1'] };
 const previous = (text: string, changes: Partial<DirectorRecord> = {}): DirectorRecord => ({
   source: 'director', id: 'cue-prior', observationId: 'observation-prior', issueId: 'hint:objective:decision', audience: 'trainee', signal: { condition: 'objective:decision', selected: true },
-  revision: 1, inputCount: 1, lastInputId: 'p1', snapshotAt: 1000, gateAt: 1100, model: 'gpt-6-sol', effort: 'none',
+  revision: 1, inputCount: 1, lastInputId: 'p1', snapshotAt: 1000, gateAt: 1100, model: 'gpt-6.1-sol', effort: 'low',
   result: { action: 'intervene', text, evidenceIds: ['p1'] }, outcome: 'published', ...changes,
 });
 const response = (value: unknown = intervention, overrides: Record<string, unknown> = {}) => ({
-  status: 'completed', model: 'gpt-6-sol', output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
+  status: 'completed', model: 'gpt-6.1-sol', output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(value) }] }],
   usage: { input_tokens: 300, output_tokens: 30, input_tokens_details: { cached_tokens: 100 } }, ...overrides,
 });
 
@@ -63,20 +64,21 @@ test('output contract rejects fabricated evidence, unsolicited fields, empty hin
   expect(validateDirectorResult({ action: 'none', text: null, evidenceIds: [] }, input.transcript).action).toBe('none');
 });
 
-test('Responses request uses Sol none, strict output, no tools, and server-only credentials', async () => {
+test('Responses request uses Sol low, strict output, no tools, and server-only credentials', async () => {
   // Only the external HTTP boundary is substituted; serialization/parsing/validation are real.
   let body: Record<string, any> = {};
   const request = (async (url: string | URL | Request, options?: RequestInit) => {
-    expect(url).toBe('https://api.openai.com/v1/responses');
-    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer fixture-key');
+    expect(url).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');
+    expect(new Headers(options?.headers).get('api-key')).toBe('fixture-key');
+    expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     body = JSON.parse(String(options?.body));
     return Response.json(response());
   });
   const result = await generateDirector(input, request);
-  expect(body).toMatchObject({ model: 'gpt-6-sol', reasoning: { effort: 'none' }, store: false, text: { format: { type: 'json_schema', strict: true } } });
+  expect(body).toMatchObject({ model: 'gpt-6.1-sol', reasoning: { effort: 'low' }, store: false, text: { format: { type: 'json_schema', strict: true } } });
   expect(body.tools).toBeUndefined();
-  expect(JSON.stringify(body)).not.toContain(input.apiKey);
-  expect(result).toMatchObject({ ...intervention, model: 'gpt-6-sol', usage: { inputTokens: 300, outputTokens: 30, cachedTokens: 100 } });
+  expect(JSON.stringify(body)).not.toContain(input.foundry.apiKey);
+  expect(result).toMatchObject({ ...intervention, model: 'gpt-6.1-sol', usage: { inputTokens: 300, outputTokens: 30, cachedTokens: 100 } });
 });
 
 test('incomplete, refused, non-JSON, and HTTP failures never become hints', async () => {
@@ -100,7 +102,7 @@ test('trainee hint freshness checks reach Jev with and without an optional brief
       expect(state).toMatchObject({ audience: 'trainee', proposedIntervention: intervention, dialogue: [{ id: 'p1', text: input.transcript[0]!.text }, { id: 'p2', text: transcript[1]!.text }] });
       return Response.json({ model: 'jev-1.13.0', answers: { applicable: { type: 'noul', noul: .08 } }, usage: { input_tokens: 120, output_tokens: 8 } });
     }, { preconnect: fetch.preconnect });
-    const result = await recheckDirector({ ...input, audience: 'trainee', scenarioId, transcript, intervention: { ...intervention, action: 'intervene' } }, request);
+    const result = await recheckDirector({ ...input, apiKey: 'fixture-key', audience: 'trainee', scenarioId, transcript, intervention: { ...intervention, action: 'intervene' } }, request);
     expect(requests).toBe(1);
     expect(result).toEqual({ probability: .08, usage: { inputTokens: 120, outputTokens: 8 } });
   }

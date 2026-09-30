@@ -11,13 +11,14 @@ import { useSimulator } from '../simulator/use-simulator';
 import { useSessionReport } from '../simulator/use-report';
 import { scenarioBriefings } from '../../core/simulator/briefings';
 import { parsePracticeLink, practicePath } from '../simulator/practice-links';
+import { liveAvailable } from '../server/simulator/api';
 import '../simulator/simulator.css';
 
 export const meta = () => [{ title: 'The Simulator — Out of Character' }];
 export function loader({ context, request }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const catalog = publicCatalog();
-  return { catalog, ...parsePracticeLink(new URL(request.url).searchParams, catalog), enabled: String(env.SIMULATOR_ENABLED) === 'true' && String(env.PAID_SERVICES_ENABLED) === 'true' && !!env.OPENAI_API_KEY && !!env.TYPESAFE_API_KEY };
+  return { catalog, ...parsePracticeLink(new URL(request.url).searchParams, catalog), enabled: liveAvailable(env) };
 }
 
 export default function Simulator() {

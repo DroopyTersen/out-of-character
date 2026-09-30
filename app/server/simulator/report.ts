@@ -5,7 +5,7 @@ import { simulatorJson } from './api';
 
 type Attempt = { startedAt: number; endedAt: number; failure: ReportFailure | null; usage: ReportResult['usage'] };
 export type SettledReport<T> = { report: T | null; attempts: Attempt[] };
-export type ReportArchive = typeof REPORT_PROVENANCE & SettledReport<CoachingReport>;
+export type ReportArchive = typeof REPORT_PROVENANCE & { model: string } & SettledReport<CoachingReport>;
 
 /** One bounded review, plus one explicit retry. No live-session resources are retained. */
 export class SessionReport<T = CoachingReport> {

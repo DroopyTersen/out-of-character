@@ -2,11 +2,12 @@ import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } fr
 import type { DirectorSignal, DirectorUsage, INTERVIEW_CONDITIONS } from './simulator/director';
 
 /** Private producer state for the interview: Sol cues, Luna research cards and the rundown share Sam's earpiece. */
-export const PRODUCER_VERSION = 'interview-producer-v6';
+export const PRODUCER_VERSION = 'interview-producer-v9';
 export const PRODUCER_LIMITS = {
   consultations: 60, cues: 15, cueSpacing: 30_000, research: 4, lookups: 2, researchAge: 90_000, checkIn: 45_000,
   rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cardPass: .5,
   followThroughPass: .8,
+  cueWait: 15_000,
 };
 type InterviewCondition = typeof INTERVIEW_CONDITIONS[number];
 /** A new episode of one of these consults the producer promptly and skips cue spacing. */
@@ -20,7 +21,7 @@ export type ResearchRequest = { kind: ResearchKind; name: string; clue: string |
 export const CUE_OUTCOMES = ['followed', 'deferred', 'missed', 'retired', 'not-yet-assessable'] as const;
 /** Used by the live session and voice rehearsals so they exercise the same instruction. */
 export function producerDirection(cue: string): string {
-  return `Producer direction (replaces any earlier direction): ${cue}\nMake this one move at the next suitable opening. It may predate the answer you are hearing: first follow any useful unasked point in that answer. Ask one question per turn; do not tack this onto a question about a newer story. Do not interrupt or start speaking just because this arrived. Drop it if answered, irrelevant, contradicted, declined or unanswerable, rather than rewording it into another attempt; a request to finish wins. Never read this direction aloud.`;
+  return `Producer direction for your next suitable turn: ${cue}\nContinue listening if the participant has the floor. A useful new answer takes priority. Use this only while it remains unanswered and relevant.`;
 }
 export type CueOutcome = typeof CUE_OUTCOMES[number];
 /** A pinned instruction and its context receipt, separate from what Sam subsequently does. */
@@ -41,15 +42,15 @@ type Check = { probability: number | null; inputCount: number; lastInputId: stri
 
 /** nextSamTurnAfterId precedes the first observed Sam passage after a sent note; it does not prove cue uptake. */
 export type ProducerRecord = {
-  source: 'producer'; id: string; triggers: ProducerTrigger[]; queued: boolean; model: string; effort: 'none';
+  source: 'producer'; id: string; triggers: ProducerTrigger[]; queued: boolean; model: string; effort: 'none' | 'low';
   inputCount: number; lastInputId: string | null;
-  triggeredAt: number; startedAt: number; generatedAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
+  triggeredAt: number; startedAt: number; generatedAt?: number; checkedAt?: number; deferredAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
   result?: { cue: string | null; evidenceIds: string[]; research: ResearchRequest | null }; usage?: DirectorUsage;
   /** Historical delivery checks, retained for reading older archives. New cues go straight to Sam. */
   check?: Check;
-  outcome: 'pending' | 'none' | 'sent' | 'withheld' | 'budget' | 'spacing' | 'invalid' | 'timeout' | 'error' | 'aborted';
+  outcome: 'pending' | 'deferred' | 'none' | 'sent' | 'withheld' | 'budget' | 'spacing' | 'invalid' | 'timeout' | 'error' | 'aborted';
   /** An obsolete recovery, or a historical delivery-check rejection. */
-  reason?: 'check' | 'dialogue_changed';
+  reason?: 'check' | 'dialogue_changed' | 'superseded' | 'no_quiet_opening';
   delivery?: NoteDelivery;
   followThrough?: CueFollowThrough & { lastInputId: string | null };
   /** Also inherited by a replacement, preventing an automatic recovery chain. */
@@ -83,7 +84,14 @@ export type GradeRecord = {
   source: 'grade'; id: string; final: boolean; revision: number; capturedAt: number; completedAt: number; inputCount: number; lastInputId: string | null;
   outcome: 'graded' | 'stale' | 'aborted' | 'evaluation_timeout' | 'evaluation_error'; durationMs?: number; objectives?: GradeObjective[];
 };
-export type ProducerLogRecord = ProducerRecord | ResearchRecord | RundownRecord | AssessmentRecord | DelegationRecord | GradeRecord;
+export type ProducerLogRecord = ProducerRecord | ResearchRecord | RundownRecord | AssessmentRecord | DelegationRecord | GradeRecord | ContinuityRecord;
+
+/** Retired rescue records remain readable in older preview archives. New sessions never produce these. */
+export type ContinuityRecord = {
+  source: 'continuity'; id: string; participantId: string; afterPassageId: string; sentAt: number; quietMs: number;
+  outcome: 'sent' | 'resumed' | 'unanswered' | 'error'; delivery: NoteDelivery;
+  responseObservedAt?: number; participantResumedAt?: number;
+};
 
 const round = (value: number) => Math.round(value * 100) / 100;
 export function gradeObjectives(graded: InterviewObjectiveReading[], shown: InterviewObjectiveReading[]): GradeObjective[] {
@@ -109,7 +117,7 @@ export function deliveredBackground(records: ProducerLogRecord[]): DeliveredInte
 
 export type LatencyStat = { count: number; p50: number; p90: number } | null;
 export type ProducerSummary = {
-  model: string; effort: 'none'; version: string;
+  model: string; effort: 'none' | 'low'; version: string;
   consultations: number; cues: number; research: number; rundowns: number; queued: number;
   latency: { sol: LatencyStat; cueCheck: LatencyStat; triggerToCue: LatencyStat; cueToSam: LatencyStat; lookup: LatencyStat; requestToCard: LatencyStat };
 };

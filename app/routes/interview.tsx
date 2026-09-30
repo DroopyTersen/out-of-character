@@ -5,6 +5,7 @@ import { INTERVIEW_SCENARIO_ID, interviewVoices, interviewSummarySchema } from '
 import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewVoiceId } from '../interview/screens';
 import { useSimulator } from '../simulator/use-simulator';
 import { useStreamedReport } from '../simulator/use-report';
+import { liveAvailable } from '../server/simulator/api';
 import { GameHeader } from '../ui/game-header';
 import '../simulator/simulator.css';
 import '../interview/interview.css';
@@ -12,7 +13,7 @@ import '../interview/interview.css';
 export const meta = () => [{ title: 'The Debrief — Out of Character' }];
 export function loader({ context }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
-  return { enabled: String(env.SIMULATOR_ENABLED) === 'true' && String(env.PAID_SERVICES_ENABLED) === 'true' && !!env.OPENAI_API_KEY && !!env.TYPESAFE_API_KEY };
+  return { enabled: liveAvailable(env) };
 }
 
 export default function Interview() {

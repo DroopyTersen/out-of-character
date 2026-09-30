@@ -1,8 +1,65 @@
 import { expect, test } from 'bun:test';
-import { formatTimelineRows, producerTimeline } from './interview-timeline';
+import { formatTimelineRows, interviewTurnGaps, parseTimelineExport, producerTimeline } from './interview-timeline';
 import type { GradeObjective, GradeRecord, ProducerLogRecord } from './interview-producer';
 
 const startedAt = 1_800_000_000_000;
+
+test('provider-clock gaps include question waits without calling them interviewer failures', () => {
+  const passages = [
+    { id: 's1', speaker: 'client' as const, text: 'What changed?', startMs: 0, endMs: 1000 },
+    { id: 's2', speaker: 'client' as const, text: ' Take your time.', startMs: 1200, endMs: 2000 },
+    { id: 'u1', speaker: 'trainee' as const, text: 'Let me think.', startMs: 23_000, endMs: 24_000 },
+    { id: 'u2', speaker: 'trainee' as const, text: 'We updated the guide.', startMs: 34_000, endMs: 35_000 },
+    { id: 's3', speaker: 'client' as const, text: 'That helped.', startMs: 35_000, endMs: 36_000 },
+    { id: 'u3', speaker: 'trainee' as const, text: 'Hello?', startMs: 44_000, endMs: 45_000 },
+    { id: 's4', speaker: 'client' as const, text: 'What else?', startMs: 44_800, endMs: 46_000 },
+    { id: 'u4', speaker: 'trainee' as const, text: 'Nothing else.', startMs: 45_800, endMs: 47_000 },
+  ];
+  expect(interviewTurnGaps(passages)).toEqual([
+    { afterPassageId: 's2', beforePassageId: 'u1', gapMs: 21_000, sam: 'What changed? Take your time.', questionMark: true },
+    { afterPassageId: 's3', beforePassageId: 'u3', gapMs: 8000, sam: 'That helped.', questionMark: false },
+  ]);
+});
+
+test('a historical v7 rescue archive parses and sorts with finite timeline offsets', () => {
+  const old = parseTimelineExport({ started_at: startedAt, transcript_json: JSON.stringify([
+    { id: 'u1', speaker: 'trainee', text: 'We updated the guide.', startMs: 1000, endMs: 2000 },
+  ]), interventions_json: JSON.stringify([{
+    source: 'continuity', id: 'old-rescue', participantId: 'u1', afterPassageId: 's1', sentAt: startedAt + 5000, quietMs: 5000,
+    outcome: 'unanswered', delivery: { eventId: 'old-rescue', afterPassageId: 's1', status: 'accepted' },
+  }]) });
+  const rows = producerTimeline(old);
+  expect(rows.map(row => [row.lane, row.atMs])).toEqual([['dialogue', 1000], ['continuity', 5000]]);
+  expect(rows.every(row => Number.isFinite(row.atMs))).toBe(true);
+});
+
+test('gap measurement uses speech times across late fragments and overlapping backchannels', () => {
+  expect(interviewTurnGaps([
+    { id: 'u1', speaker: 'trainee', text: 'We shipped it.', startMs: 0, endMs: 1000 },
+    { id: 's1', speaker: 'client', text: 'That helped.', startMs: 1200, endMs: 2000 },
+    { id: 'tail', speaker: 'trainee', text: ' Last week.', startMs: 1000, endMs: 1100 },
+    { id: 'u2', speaker: 'trainee', text: 'Hello?', startMs: 14_000, endMs: 15_000 },
+  ])).toEqual([{ afterPassageId: 's1', beforePassageId: 'u2', gapMs: 12_000, sam: 'That helped.', questionMark: false }]);
+  expect(interviewTurnGaps([
+    { id: 'u1', speaker: 'trainee', text: 'A long answer.', startMs: 0, endMs: 20_000 },
+    { id: 's1', speaker: 'client', text: 'Mm.', startMs: 5000, endMs: 6000 },
+    { id: 'u2', speaker: 'trainee', text: 'And another point.', startMs: 21_000, endMs: 23_000 },
+  ])).toEqual([]);
+  expect(interviewTurnGaps([
+    { id: 's1', speaker: 'client', text: 'What changed during the handoff?', startMs: 0, endMs: 14_000 },
+    { id: 'u1', speaker: 'trainee', text: 'Mm.', startMs: 5000, endMs: 6000 },
+    { id: 'u2', speaker: 'trainee', text: 'The guide.', startMs: 24_000, endMs: 25_000 },
+  ])).toEqual([{ afterPassageId: 's1', beforePassageId: 'u2', gapMs: 10_000, sam: 'What changed during the handoff?', questionMark: true }]);
+});
+
+test.each([['resumed', 900], ['sent', 900], ['unanswered', null]] as const)('the timeline reports the first Sam observation for archived prompts: %s', (outcome, latencyMs) => {
+  const rows = producerTimeline({ startedAt, transcript: [], records: [{
+    source: 'continuity', id: 'rescue', participantId: 'u1', afterPassageId: 's2', sentAt: startedAt + 5000, quietMs: 5000,
+    outcome, delivery: { eventId: 'rescue', afterPassageId: 's2', status: 'accepted' }, responseObservedAt: startedAt + 5900,
+  }] });
+  expect(rows[0]).toMatchObject({ lane: 'continuity', outcome: `${outcome} · accepted`, latencyMs });
+});
+
 const transcript = [
   { id: 's1', speaker: 'client' as const, text: 'What did the team deliver?', startMs: 1000, endMs: 3000 },
   { id: 'u1', speaker: 'trainee' as const, text: 'A routing layer on OpenStreetMap.', startMs: 4000, endMs: 9000 },

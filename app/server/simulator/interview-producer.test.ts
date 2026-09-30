@@ -1,3 +1,4 @@
+import { fixtureFoundry } from '../../../ai/foundry-fixture';
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { InterviewProducer, producerServices, rundownText } from './interview-producer';
 import { CUE_OUTCOMES, PRODUCER_LIMITS, type CueFollowThrough, type CueOutcome, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
@@ -13,7 +14,7 @@ const request = (name: string, clue: string | null = null): ResearchRequest => (
 type Services = typeof producerServices;
 type Generated = Awaited<ReturnType<Services['generateProducer']>>;
 type Lookup = Awaited<ReturnType<Services['lookupInterviewBackground']>>;
-const generated = (cue: string | null, research: ResearchRequest | null = null): Generated => ({ cue, evidenceIds: cue ? ['p2'] : [], research, model: 'gpt-6-sol', usage });
+const generated = (cue: string | null, research: ResearchRequest | null = null): Generated => ({ cue, evidenceIds: cue ? ['p2'] : [], research, model: 'gpt-6.1-sol', usage });
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
   const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
@@ -22,7 +23,7 @@ function deferred<T>() {
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setTimeout(done, 0)); };
 
 // Only the paid adapters are substituted; triggers, queueing, budgets, validation and delivery are real.
-function fixture(overrides: Partial<Services> = {}) {
+function fixture(overrides: Partial<Services> = {}, canDeliverCue?: () => boolean) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = [
     { id: 'p1', speaker: 'client', text: 'What did the team build?', startMs: 0, endMs: 1000 },
@@ -34,8 +35,9 @@ function fixture(overrides: Partial<Services> = {}) {
   const calls = { generate: [] as Parameters<Services['generateProducer']>[0][],
     card: [] as Parameters<Services['checkCard']>[0][], lookup: [] as Parameters<Services['lookupInterviewBackground']>[0][] };
   const producer = new InterviewProducer({
-    clientId: 'sam-cedar', startedAt: epoch, openaiKey: 'openai-fixture', typesafeKey: 'typesafe-fixture',
+    clientId: 'sam-cedar', startedAt: epoch, foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture',
     settled: () => transcript, coverage: () => coverage, send: event => { if (!connected) return false; sent.push(event); return true; },
+    canDeliverCue,
     services: {
       generateProducer: async input => { calls.generate.push(input); return overrides.generateProducer ? overrides.generateProducer(input) : generated(null); },
       checkCard: async input => { calls.card.push(input); return overrides.checkCard ? overrides.checkCard(input) : { probability: .99, usage }; },
@@ -52,6 +54,38 @@ function fixture(overrides: Partial<Services> = {}) {
   return { producer, sent, calls, say, advance, observe, setLevel, of, setConnected: (value: boolean) => { connected = value; }, transcript: () => transcript };
 }
 const concern = (condition: 'boundary-pressure' | 'leading' | 'source-confusion' | 'invented-facts', probability = .8): DirectorSignal => ({ condition, probability });
+
+test('a generated direction waits for Sam output to finish and records actual delivery separately', async () => {
+  let quiet = false;
+  const f = fixture({ generateProducer: async () => generated('Ask what they changed in the release guide.') }, () => quiet);
+  f.observe([concern('leading')]);
+  await f.producer.settle();
+  expect(f.sent).toHaveLength(0);
+  expect(f.of('producer')[0]).toMatchObject({ outcome: 'deferred', deferredAt: epoch });
+  f.advance(3000); f.say('client', 'What happened in the rehearsal?');
+  f.producer.tick();
+  expect(f.sent).toHaveLength(0);
+  quiet = true;
+  f.advance(1000); f.producer.tick();
+  const record = f.of('producer')[0]!;
+  expect(record).toMatchObject({ outcome: 'sent', sentAt: epoch + 4000, delivery: { afterPassageId: 'p3' } });
+  expect(f.sent).toHaveLength(1);
+  expect(f.producer.summary().cues).toBe(1);
+});
+
+test('a direction with no quiet opening expires, and End cancels a deferred direction', async () => {
+  const f = fixture({ generateProducer: async () => generated('Ask what they changed in the release guide.') }, () => false);
+  f.observe([concern('leading')]); await f.producer.settle();
+  f.advance(PRODUCER_LIMITS.cueWait); f.producer.tick();
+  expect(f.of('producer')[0]).toMatchObject({ outcome: 'withheld', reason: 'no_quiet_opening' });
+  expect(f.sent).toHaveLength(0);
+  expect(f.producer.summary().cues).toBe(0);
+  f.observe([concern('invented-facts')]); await f.producer.settle();
+  f.producer.close();
+  expect(f.of('producer')[1]).toMatchObject({ outcome: 'aborted' });
+  f.advance(30_000); f.producer.tick();
+  expect(f.sent).toHaveLength(0);
+});
 
 test('check-ins wait 45 s after a substantive Sam turn and do not repeat on unchanged dialogue', async () => {
   const f = fixture();
@@ -137,7 +171,7 @@ test('research lookups resolve out of order and each card triggers its own follo
   f.observe([concern('leading')]);
   await flush();
   expect(f.calls.lookup.map(item => item.target.name)).toEqual(['OpenStreetMap', 'Mapbox']);
-  expect(f.calls.lookup[0]).toMatchObject({ target: { kind: 'product', name: 'OpenStreetMap' }, clue: null, apiKey: 'openai-fixture' });
+  expect(f.calls.lookup[0]).toMatchObject({ target: { kind: 'product', name: 'OpenStreetMap' }, clue: null, foundry: fixtureFoundry });
   expect(f.calls.generate[1]!.budget).toEqual({ cuesLeft: PRODUCER_LIMITS.cues, researchLeft: PRODUCER_LIMITS.research - 1, lookupsInFlight: 1 });
 
   lookups.get('Mapbox')!.resolve({ status: 'found', facts: [{ ...facts[0]!, text: 'Mapbox provides mapping APIs.' }], retrievedAt: Date.now(), queries: [] });

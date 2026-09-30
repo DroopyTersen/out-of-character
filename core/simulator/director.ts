@@ -111,7 +111,7 @@ export type DetectorRecord = RecordBase & {
   source: 'detector'; result: Extract<DirectorResult, { action: 'intervene' }>; outcome: 'published'; readyAt: number; deliveredAt: number;
 };
 export type DirectorRecord = RecordBase & {
-  source: 'director'; effort: 'none'; inputCount: number; lastInputId: string | null; result?: DirectorResult; readyAt?: number; deliveredAt?: number; completedAt?: number;
+  source: 'director'; effort: 'none' | 'low'; inputCount: number; lastInputId: string | null; result?: DirectorResult; readyAt?: number; deliveredAt?: number; completedAt?: number;
   outcome: 'pending' | 'published' | 'sent' | 'none' | 'stale' | 'invalid' | 'timeout' | 'error' | 'aborted';
   usage?: DirectorUsage; recheck?: { inputCount: number; lastInputId: string | null; startedAt: number; probability: number | null; durationMs: number | null; usage?: DirectorUsage };
   delivery?: { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number };
@@ -122,7 +122,7 @@ export type ObservationRecord = {
   outcome: GateReview['decision'] | 'pending' | 'aborted' | 'stale' | 'expired' | 'evaluation_error' | 'evaluation_timeout'; issueId?: string;
 };
 export type InterventionRecord = ObservationRecord | DetectorRecord | DirectorRecord;
-export type DirectorSummary = { model: string; effort: 'none'; version: string; callsByAudience: Record<DirectorAudience, number>; rechecks: number; notes: number };
+export type DirectorSummary = { model: string; effort: 'none' | 'low'; version: string; callsByAudience: Record<DirectorAudience, number>; rechecks: number; notes: number };
 
 export const publicHint = (issue: DirectorIssue, text: string, evidenceIds: string[], now: number): LiveHint => ({
   id: issue.id, text, kind: issue.signal.condition === 'mistake' ? 'concern' : 'hint', evidenceIds, createdAt: now, expiresAt: now + DIRECTOR_LIMITS.hint,

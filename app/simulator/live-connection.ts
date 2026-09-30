@@ -28,6 +28,9 @@ export class LiveConnection {
   private disposed = false;
   private activeSincePoll = false;
   private lastAudioAt = 0;
+  private outputQuietSince: number | undefined;
+  private meterUpdatedAt = 0;
+  private activitySequence = 0;
   private muted = false;
   private autoMuted = false;
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
@@ -71,7 +74,7 @@ export class LiveConnection {
         if (pc.connectionState === 'failed') void this.fail('The voice connection was interrupted.');
         if (pc.connectionState === 'disconnected') this.disconnectTimer = setTimeout(() => { void this.fail('The voice connection was lost.'); }, 5000);
       });
-      const channel = pc.createDataChannel('oai-events');
+      // Audio only: session events and private actor context stay on the server's sideband.
       await pc.setLocalDescription(await pc.createOffer());
       await this.until(pc, 'icegatheringstatechange', () => pc.iceGatheringState === 'complete', 8000, 'Network negotiation timed out.');
       if (this.ending) return;
@@ -80,7 +83,7 @@ export class LiveConnection {
       if (this.ending) return;
       this.callbacks.snapshot(created.snapshot);
       await pc.setRemoteDescription({ type: 'answer', sdp: created.sdp });
-      await this.until(channel, 'open', () => channel.readyState === 'open', 15_000, 'The voice connection timed out.');
+      await this.until(pc, 'connectionstatechange', () => pc.connectionState === 'connected', 15_000, 'The voice connection timed out.');
       if (this.ending) return;
       this.callbacks.snapshot(await this.request('ready') as SessionSnapshot);
       window.addEventListener('pointerdown', this.keepActive, { passive: true });
@@ -88,9 +91,21 @@ export class LiveConnection {
       this.poll();
       this.meterTimer = setInterval(() => {
         const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
-        if (this.context?.state === 'running' && ((!this.muted && !this.autoMuted && input.level > .08) || (output.level > .03 && !this.audio.paused))) {
+        const now = Date.now();
+        const previousQuiet = this.outputQuietSince;
+        const running = this.context?.state === 'running';
+        const inputEnabled = !this.muted && !this.autoMuted;
+        const outputAudible = output.level > .03 && !this.audio.paused;
+        const heard = running && ((inputEnabled && input.level > .08) || outputAudible);
+        this.meterUpdatedAt = now;
+        this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
+        if (heard) {
           this.keepActive();
-          this.lastAudioAt = Date.now();
+          this.lastAudioAt = now;
+        }
+        // Sam starting to speak closes the cue opening. Ignore any older periodic report on the server.
+        if (previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null && !this.ending) {
+          void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
         }
         this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
       }, 80);
@@ -121,13 +136,24 @@ export class LiveConnection {
     return meter;
   }
 
+  private canMeasureOutput() {
+    return !!this.outputMeter && this.context?.state === 'running' && !this.audio.paused && this.pc?.connectionState === 'connected';
+  }
+
+  private activity(active: boolean) {
+    const now = Date.now();
+    const fresh = now - this.meterUpdatedAt < 250;
+    return { active, audio: now - this.lastAudioAt < 1500, sequence: ++this.activitySequence,
+      outputQuietMs: fresh && this.canMeasureOutput() && this.outputQuietSince != null ? Math.min(60_000, now - this.outputQuietSince) : null };
+  }
+
   private poll(failures = 0) {
     if (this.ending) return;
     this.pollTimer = setTimeout(async () => {
       try {
         const active = this.activeSincePoll;
         this.activeSincePoll = false;
-        const snapshot = await this.request('poll', { active, audio: Date.now() - this.lastAudioAt < 1500 }) as SessionSnapshot;
+        const snapshot = await this.request('poll', this.activity(active)) as SessionSnapshot;
         if (this.ending) return;
         this.autoMuted = snapshot.status === 'ending' || (!!snapshot.warning && snapshot.warning.kind !== 'idle' && Date.now() >= snapshot.warning.endsAt);
         this.applyMute();

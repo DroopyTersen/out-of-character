@@ -16,6 +16,7 @@ import { gradeObjectives, type GradeRecord } from '../../../core/interview-produ
 import { generateReport, REPORT_PROVENANCE } from '../../../ai/simulator/report.server';
 import { idleReport, type CoachingReport, type ReportState } from '../../../core/simulator/report';
 import { SessionReport, within, type ReportArchive } from './report';
+import { foundryConfig } from '../../../ai/foundry.server';
 
 type Lease = { capability: string; providerId?: string; deadline: number; closed: boolean };
 const services = { createLive, attachLive, evaluateTrainee, evaluateClient, evaluateInterview, evaluateInterviewer, summarizeInterview, generateReport, ...directorServices, ...producerServices };
@@ -49,6 +50,8 @@ export class SimulatorSession extends DurableObject<Env> {
   private reachedLive = false;
   private contextual: ContextualDirector | undefined;
   private producer: InterviewProducer | undefined;
+  private quietReport: { outputMs: number | null; at: number } | undefined;
+  private activitySequence = -1;
   // Already bounded by MAX_LIVE_GRADES plus the final grade; retain probability-only changes too.
   private readonly grades: GradeRecord[] = [];
   private seenEvents = new Set<string>();
@@ -92,8 +95,12 @@ export class SimulatorSession extends DurableObject<Env> {
     this.lastSeen = Date.now();
     if (action === '/poll' && request.body) {
       const activity = activitySchema.parse(await request.json());
-      if (activity.active || activity.audio) this.lastActivity = Date.now();
-      if (activity.audio) this.lastAudio = Date.now();
+      if (activity.sequence == null || activity.sequence > this.activitySequence) {
+        if (activity.sequence != null) this.activitySequence = activity.sequence;
+        if (activity.active || activity.audio) this.lastActivity = Date.now();
+        if (activity.audio) this.lastAudio = Date.now();
+        this.quietReport = { outputMs: activity.outputQuietMs ?? null, at: Date.now() };
+      }
     }
     if (action === '/ready' && this.snapshot.status === 'connecting') {
       if (this.checkLifetime()) return simulatorJson(this.publicSnapshot());
@@ -131,7 +138,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!this.report) {
       const snapshot = structuredClone(this.publicSnapshot());
       if (snapshot.interview) {
-        this.report = new SessionReport<InterviewSummaryContent>((signal, finish) => this.paid.summarizeInterview({ transcript: snapshot.transcript, apiKey: this.env.OPENAI_API_KEY!, signal }, finish), archive => {
+        this.report = new SessionReport<InterviewSummaryContent>((signal, finish) => this.paid.summarizeInterview({ transcript: snapshot.transcript, foundry: foundryConfig(this.env), signal }, finish), archive => {
           this.snapshot!.interview!.summary = archive.report ? { status: 'ready', text: archive.report.text } : { status: 'unavailable', text: null };
           this.reportArchive = this.reportArchive.then(async () => {
             if (this.finalArchive) await within(this.finalArchive, 15_000).catch(() => {});
@@ -141,8 +148,8 @@ export class SimulatorSession extends DurableObject<Env> {
         });
       } else {
         const interventions = structuredClone(this.contextual?.records ?? []);
-        this.report = new SessionReport<CoachingReport>((signal, finish) => this.paid.generateReport({ snapshot, interventions, apiKey: this.env.OPENAI_API_KEY!, signal }, finish), archive => {
-          this.reportArchive = this.reportArchive.then(() => this.saveReport({ ...REPORT_PROVENANCE, ...archive }));
+        this.report = new SessionReport<CoachingReport>((signal, finish) => this.paid.generateReport({ snapshot, interventions, foundry: foundryConfig(this.env), signal }, finish), archive => {
+          this.reportArchive = this.reportArchive.then(() => this.saveReport({ ...REPORT_PROVENANCE, model: foundryConfig(this.env).agentModel, ...archive }));
           this.ctx.waitUntil(this.reportArchive);
         });
       }
@@ -173,16 +180,18 @@ export class SimulatorSession extends DurableObject<Env> {
       ...(input.scenarioId === INTERVIEW_SCENARIO_ID ? { interview: { evaluation: null, summary: null } } : {}),
     };
     const settled = () => settledTranscript(this.snapshot!.transcript, this.passageUpdatedAt, Date.now());
-    if (this.snapshot.interview) this.producer = new InterviewProducer({
-      clientId: input.clientId, startedAt: this.snapshot.startedAt,
-      openaiKey: this.env.OPENAI_API_KEY!, typesafeKey: this.env.TYPESAFE_API_KEY!, services: this.paid,
-      settled, coverage: () => this.snapshot!.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.ctx.waitUntil(work),
-    });
-    else if (getScenario(input.scenarioId).objectives.length) this.contextual = new ContextualDirector({
+    if (this.snapshot.interview) {
+      this.producer = new InterviewProducer({
+        clientId: input.clientId, startedAt: this.snapshot.startedAt,
+        foundry: foundryConfig(this.env), typesafeKey: this.env.TYPESAFE_API_KEY!, services: this.paid,
+        settled, coverage: () => this.snapshot!.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.ctx.waitUntil(work),
+        canDeliverCue: () => this.canDeliverCue(),
+      });
+    } else if (getScenario(input.scenarioId).objectives.length) this.contextual = new ContextualDirector({
       scenarioId: input.scenarioId, clientId: input.clientId,
       objectives: () => this.snapshot!.evaluation?.objectives ?? [],
       isFresh: transcript => this.isFresh(transcript),
-      openaiKey: this.env.OPENAI_API_KEY!, typesafeKey: this.env.TYPESAFE_API_KEY!, services: this.paid,
+      foundry: foundryConfig(this.env), typesafeKey: this.env.TYPESAFE_API_KEY!, services: this.paid,
       settled, send: event => this.send(event),
     });
     await this.ctx.storage.put('lease', this.lease);
@@ -204,10 +213,10 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private async openLive(input: { scenarioId: string; clientId: string; sdp: string }) {
-    const created = await this.paid.createLive(input, this.env.OPENAI_API_KEY!);
+    const created = await this.paid.createLive(input, foundryConfig(this.env));
     this.lease!.providerId = created.session.id;
     await this.ctx.storage.put('lease', this.lease);
-    this.socket = await this.paid.attachLive(created.session.id, this.env.OPENAI_API_KEY!);
+    this.socket = await this.paid.attachLive(created.session.id, foundryConfig(this.env));
     this.listen(this.socket);
     return { sdp: created.transport.sdp };
   }
@@ -225,7 +234,17 @@ export class SimulatorSession extends DurableObject<Env> {
 
   private send(event: Record<string, unknown>): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
-    try { this.socket.send(JSON.stringify(event)); return true; } catch { return false; }
+    try {
+      this.socket.send(JSON.stringify(event));
+      return true;
+    } catch { return false; }
+  }
+
+  private canDeliverCue() {
+    const now = Date.now();
+    const lastSam = this.snapshot?.transcript.findLast(entry => entry.speaker === 'client');
+    return !!this.quietReport && now - this.quietReport.at <= 1500 && this.quietReport.outputMs != null && this.quietReport.outputMs >= 600
+      && (!lastSam || now - (this.passageUpdatedAt.get(lastSam.id) ?? now) >= 600);
   }
 
   private onEvent(event: Record<string, unknown>) {
@@ -446,7 +465,7 @@ export class SimulatorSession extends DurableObject<Env> {
       // The browser sends silence while the final trainee audio/transcript arrives.
       if (drain) await new Promise(resolve => setTimeout(resolve, 1000));
       if ((!this.socket || this.socket.readyState !== WebSocket.OPEN) && this.lease?.providerId) {
-        try { this.socket = await this.paid.attachLive(this.lease.providerId, this.env.OPENAI_API_KEY!); this.listen(this.socket); }
+        try { this.socket = await this.paid.attachLive(this.lease.providerId, foundryConfig(this.env)); this.listen(this.socket); }
         catch (error) { if (error instanceof LiveSessionGone) snapshot.finalization = 'confirmed'; /* Otherwise the alarm retains closure responsibility. */ }
       }
       if (String(snapshot.finalization) !== 'confirmed') await new Promise<void>(resolve => {
@@ -484,7 +503,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!this.lease.providerId) { await this.ctx.storage.deleteAll(); return; }
     let socket: WebSocket | undefined;
     try {
-      socket = await this.paid.attachLive(this.lease.providerId, this.env.OPENAI_API_KEY!);
+      socket = await this.paid.attachLive(this.lease.providerId, foundryConfig(this.env));
       const control = socket;
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Closure not confirmed.')), 10_000);

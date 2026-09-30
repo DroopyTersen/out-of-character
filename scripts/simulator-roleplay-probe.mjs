@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
@@ -8,6 +9,7 @@ import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { coverageEvidenceIds, INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
 import { producerDirection } from '../core/interview-producer.ts';
+import { interviewTurnGaps } from '../core/interview-timeline.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
 import { InterviewProducer, producerServices } from '../app/server/simulator/interview-producer.ts';
@@ -20,7 +22,8 @@ import { InterviewProducer, producerServices } from '../app/server/simulator/int
 // Interview rehearsals may run up to 480 seconds. The participant answers only
 // after Sam asks something; a longer silence is reported as dead air.
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded paid rehearsal.');
-if (!process.env.OPENAI_API_KEY || !process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
+const foundry = foundryConfig(process.env);
+if (!process.env.TYPESAFE_API_KEY) throw new Error('Load ignored local provider credentials.');
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const scenarioId = option('scenario') ?? 'sharepoint';
 const isInterview = scenarioId === INTERVIEW_SCENARIO_ID;
@@ -31,6 +34,7 @@ const maxSeconds = Number(option('max-seconds') ?? 180);
 // Explicit isolation test: a synthetic positive trigger exercises real research
 // delivery without claiming that Jev chose it in a natural conversation.
 const exerciseResearch = process.argv.includes('--exercise-research');
+const notesEnabled = !process.argv.includes('--no-notes');
 if (exerciseResearch && (!isInterview || approach !== 'research')) throw new Error('--exercise-research requires the interview research plan.');
 const maxAllowed = isInterview ? 480 : 300;
 if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > maxAllowed) throw new Error(`--max-seconds must be an integer from 60 to ${maxAllowed}.`);
@@ -42,6 +46,20 @@ const negotiated = /free|no charge|no cost|no extra|include|existing project|cur
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
 const plans = {
   'project-closeout': {
+    patience: {
+      turns: 4,
+      lines: {
+        project: 'We built a booking portal for an unnamed agency. I led the API work.',
+        story: 'The important change was how we rehearsed the handoff. We had the incoming engineer deploy from my guide, and she found incorrect permissions. We fixed the guide before I left.',
+        effect: 'Let me think about that for a moment. The next release worked without me. I would repeat that rehearsal before handing over any service.',
+        stop: 'That is the main lesson. I would like to finish now.',
+      },
+      pauses: {
+        story: { before: 'The important change was how we rehearsed the handoff. We had the incoming engineer deploy from my guide, and', after: 'she found incorrect permissions. We fixed the guide before I left.', ms: 4000 },
+        effect: { before: 'Let me think about that for a moment.', after: 'The next release worked without me. I would repeat that rehearsal before handing over any service.', ms: 5500 },
+      },
+      choose: ({ turn }) => ['project', 'story', 'effect', 'stop'][turn],
+    },
     quiet: {
       turns: 10,
       lines: {
@@ -421,37 +439,73 @@ process.umask(0o077);
 await mkdir(output, { recursive: true, mode: 0o700 });
 await chmod(output, 0o700);
 const clips = {};
+const pauseRanges = {};
 for (const [id, line] of Object.entries(plan.lines)) {
+  const pause = plan.pauses?.[id];
+  // One utterance preserves continuation across an embedded pause.
+  const text = pause ? `${pause.before} [[slnc ${pause.ms}]] ${pause.after}` : line;
   const aiff = `${output}/${id}.aiff`;
-  const speech = Bun.spawn(['say', '-v', 'Samantha', '-r', '185', '-o', aiff, line], { stderr: 'ignore' });
+  // Use an unhurried pace for the thought-pause fixture, and measure the generated gap.
+  const speech = Bun.spawn(['say', '-v', 'Samantha', '-r', pause ? '150' : '185', '-o', aiff, text], { stderr: 'ignore' });
   if (await speech.exited) throw new Error('Local speech synthesis failed before provider creation.');
   await chmod(aiff, 0o600);
   const conversion = Bun.spawn(['ffmpeg', '-loglevel', 'error', '-i', aiff, '-f', 's16le', '-ar', '24000', '-ac', '1', '-'], { stdout: 'pipe', stderr: 'ignore' });
-  clips[id] = Buffer.from(await new Response(conversion.stdout).arrayBuffer());
-  if (await conversion.exited || !clips[id].length) throw new Error('Audio fixture conversion failed.');
+  const audio = Buffer.from(await new Response(conversion.stdout).arrayBuffer());
+  if (await conversion.exited || !audio.length) throw new Error('Audio fixture conversion failed.');
+  if (pause) {
+    let from = 0, longest = [0, 0];
+    for (let byte = 0; byte <= audio.length; byte += 960) {
+      const frame = audio.subarray(byte, Math.min(byte + 960, audio.length));
+      let energy = 0;
+      for (let sample = 0; sample + 1 < frame.length; sample += 2) energy += frame.readInt16LE(sample) ** 2;
+      if (frame.length && Math.sqrt(energy / (frame.length / 2)) < 20) continue;
+      if (byte - from > longest[1] - longest[0]) longest = [from, byte];
+      from = byte + 960;
+    }
+    if ((longest[1] - longest[0]) / 48 < pause.ms - 100) throw new Error('Embedded thought pause was not synthesized.');
+    pauseRanges[id] = longest;
+  }
+  clips[id] = audio;
 }
-const { client: _permissions, ...session } = liveConfiguration(scenarioId, clientId);
+const session = liveConfiguration(scenarioId, clientId);
 // A digest identifies the actor brief version without copying private direction into the report.
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
-const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: 'gpt-live-1', scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], deadAir: [], errors: [] };
+const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: foundry.liveModel, scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], deadAir: [], providerErrors: [], errors: [] };
+report.notesEnabled = notesEnabled;
+report.timing = { transport: 'websocket', input: 'TTS with digital silence', lockstep: isInterview && notesEnabled && approach !== 'research', participantFloorMs: 2500, statementReleaseMs: DEAD_AIR_MS, questionRelease: 'Output transcript contains a question mark', purpose: 'Contract smoke; human pacing requires browser listening review.' };
+report.thoughtPauses = [];
+report.maxInputLatenessMs = 0;
 report.controlledResearchTrigger = exerciseResearch;
-const ws = new WebSocket('wss://api.openai.com/v1/live/sessions', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
-let pacing, producerTimer, deadline, closing = false, deciding = false, clip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, inputBytes = 0, inputEnded = 0, turn = 0, outputStart = 0;
+session.model = foundry.liveModel;
+const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
+let pacing, producerTimer, deadline, closing = false, deciding = false, clip, selectedClip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, lastAudibleInput = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, turn = 0, outputStart = 0;
+const audible = audio => {
+  let energy = 0;
+  for (let i = 0; i + 1 < audio.length; i += 2) energy += audio.readInt16LE(i) ** 2;
+  return audio.length > 0 && Math.sqrt(energy / (audio.length / 2)) > 200;
+};
 const chunks = [];
 const observations = [];
 const used = new Set();
-const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
+const send = event => {
+  if (ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(event));
+  return true;
+};
 let coverage = [];
 const passageUpdatedAt = new Map();
 const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
 const startedAt = Date.now();
-const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
-const producer = isInterview ? new InterviewProducer({ clientId, startedAt, coverage: () => coverage, openaiKey: process.env.OPENAI_API_KEY, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices, settled, send }) : null;
+const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
+const producer = isInterview ? new InterviewProducer({ clientId, startedAt, coverage: () => coverage, foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices, settled, send,
+  canDeliverCue: () => Date.now() - Math.max(lastAudibleOutput, lastOutput) >= 600,
+}) : null;
 const directions = producer ?? contextual;
+if (!notesEnabled) directions.close();
 report.interventions = directions.records;
-const close = () => { if (closing) return; closing = true; directions.close(); clearInterval(producerTimer); clearInterval(pacing); send({ type: 'session.close' }); };
+const close = () => { if (closing) return; closing = true; report.closeRequestedAt = Date.now(); report.inputClockDriftMs = inputStartedAt ? Date.now() - inputStartedAt - inputBytes / 48 : null; directions.close(); clearInterval(producerTimer); clearTimeout(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
   if (producer) {
     if (!producer.canObserve) return;
@@ -530,7 +584,7 @@ async function respond() {
   const clientAudioQuietMs = lastAudibleOutput ? Date.now() - lastAudibleOutput : null;
   report.turns.push({ turn: turn + 1, selected: id, inResponseTo: answer, inputStartMs: inputBytes / 48, clientAudioQuietMs });
   outputStart = spoken.length;
-  clip = clips[id]; offset = 0; turn++; deciding = false;
+  clip = clips[id]; selectedClip = id; offset = 0; turn++; deciding = false;
 }
 const completed = new Promise(resolve => {
   deadline = setTimeout(() => { report.errors.push('Rehearsal deadline exceeded.'); close(); setTimeout(resolve, 10_000); }, maxSeconds * 1000);
@@ -540,16 +594,24 @@ const completed = new Promise(resolve => {
     const value = JSON.parse(event.data);
     if (value.type === 'session.instructions.appended' && value.client_event_id === report.controlledCue?.eventId) Object.assign(report.controlledCue, { acknowledgedAt: Date.now(), startMs: value.start_ms, endMs: value.end_ms });
     if (value.type === 'session.started') {
+      report.providerSessionId = value.session?.id ?? null;
       // Same opening request as the production session owner.
       openingSentAt = Date.now();
       send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: opening });
-      if (producer) producerTimer = setInterval(() => producer.tick(), 1000);
-      pacing = setInterval(() => {
+      if (producer) producerTimer = setInterval(() => producer.tick(), 500);
+      inputStartedAt = Date.now();
+      const pace = () => {
+        report.maxInputLatenessMs = Math.max(report.maxInputLatenessMs, Date.now() - inputStartedAt - inputBytes / 48);
         let audio = Buffer.alloc(960);
         if (clip) {
+          const range = pauseRanges[selectedClip];
+          if (range && offset >= range[0] && offset < range[1] && !report.thoughtPauses.some(item => item.turn === turn)) {
+            report.thoughtPauses.push({ turn, selected: selectedClip, plannedMs: (range[1] - range[0]) / 48, startedAt: Date.now(), audibleSamFrames: 0 });
+          }
           audio = clip.subarray(offset, Math.min(offset + 960, clip.length)); offset += audio.length;
           if (offset >= clip.length) { clip = undefined; inputEnded = Date.now(); }
         }
+        if (audible(audio)) lastAudibleInput = Date.now();
         send({ type: 'session.input_audio.append', audio: audio.toString('base64') });
         inputBytes += audio.length;
         const interruptOpening = approach === 'interruption' && turn === 0 && firstAudibleOutput > 0 && Date.now() - firstAudibleOutput >= 6000 && Date.now() - lastAudibleOutput < 250;
@@ -560,11 +622,12 @@ const completed = new Promise(resolve => {
           readyForReply = quietMs > DEAD_AIR_MS;
           if (readyForReply) {
             report.deadAir.push({ afterTurn: turn, quietMs, sam: samSinceLastLine() });
-            report.errors.push(`Sam asked nothing for ${Math.round(quietMs / 1000)} s after participant turn ${turn}.`);
           }
         }
         if (!clip && !deciding && readyForReply) void respond().catch(() => { report.errors.push('Rehearsal step failed.'); close(); });
-      }, 20);
+        if (!closing) pacing = setTimeout(pace, Math.max(0, inputStartedAt + inputBytes / 48 - Date.now()));
+      };
+      pace();
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       if (value.type === 'session.output_transcript.delta') {
         lastOutput = Date.now();
@@ -579,12 +642,15 @@ const completed = new Promise(resolve => {
       chunks.push(audio);
       // Live streams silence too. Wait for quiet PCM as well as settled text,
       // so a delayed transcript or deliberate pause does not trigger a reply.
-      let energy = 0;
-      for (let i = 0; i + 1 < audio.length; i += 2) energy += audio.readInt16LE(i) ** 2;
-      if (Math.sqrt(energy / (audio.length / 2)) > 200) {
+      if (audible(audio)) {
         lastAudibleOutput = Date.now();
         if (!firstAudibleOutput) report.openingLatencyMs = lastAudibleOutput - openingSentAt;
         firstAudibleOutput ||= lastAudibleOutput;
+        const range = pauseRanges[selectedClip];
+        if (clip && range && offset >= range[0] && offset < range[1]) {
+          const pause = report.thoughtPauses.find(item => item.turn === turn);
+          if (pause) { pause.audibleSamFrames++; pause.firstSamAt ??= Date.now(); }
+        }
       }
     } else if (value.type === 'session.instructions.appended' && value.client_event_id === 'opening') {
       report.openingAcknowledged = true;
@@ -605,11 +671,13 @@ const completed = new Promise(resolve => {
         producer?.delegation(value.delegation.id, value.delegation.target, replied);
       }
     } else if (value.type === 'session.closed') {
+      if (!closing) report.errors.push('Voice service closed before the rehearsal requested End.');
       report.finalized = true; report.usageSeconds = value.usage?.seconds ?? null; resolve();
     } else if (value.type === 'error') {
+      report.providerErrors.push({ at: Date.now(), afterTurn: turn, closing, error: value.error });
       const eventId = value.error?.client_event_id;
-      if (typeof eventId === 'string' && /^(cue|research|rundown)-/.test(eventId)) directions.providerEvent(eventId, false);
-      else report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
+      if (typeof eventId === 'string' && /^(cue|research|rundown)-/.test(eventId)) { directions.providerEvent(eventId, false); }
+      else if (!(closing && value.error?.code === 'output_creation_failed')) report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
     }
   });
   ws.addEventListener('error', () => { report.errors.push('Voice transport failed.'); close(); });
@@ -623,9 +691,12 @@ try {
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
-  directions.close(); clearTimeout(deadline); clearInterval(producerTimer); clearInterval(pacing); ws.close();
+  directions.close(); clearTimeout(deadline); clearInterval(producerTimer); clearTimeout(pacing); ws.close();
   await Promise.all(observations);
   if (producer) { await producer.settle(); report.producer = producer.summary(); }
+  report.interventions = directions.records;
+  report.turnGaps = interviewTurnGaps(report.transcript);
+  if (report.thoughtPauses.some(item => item.audibleSamFrames > 0)) report.errors.push('Sam spoke during a participant thought pause.');
   if (report.delegations.some(item => !item.acknowledged)) report.errors.push('Actor role direction was not acknowledged.');
   await writeFile(`${output}/client-audio.pcm`, Buffer.concat(chunks));
   await chmod(`${output}/client-audio.pcm`, 0o600);
@@ -636,5 +707,5 @@ finally {
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
   await chmod(`${output}/report.json`, 0o600);
 }
-console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), errors: report.errors }));
+console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), scriptedDeadAir: report.deadAir.length, statementGaps: report.turnGaps.filter(item => !item.questionMark).length, questionWaits: report.turnGaps.filter(item => item.questionMark).length, maxInputLatenessMs: report.maxInputLatenessMs, errors: report.errors }));
 if (!report.finalized || report.errors.length) process.exitCode = 1;

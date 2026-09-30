@@ -166,7 +166,7 @@ test('actor cues arrive after new speech or a changed drift assessment without a
     await work;
     expect(rechecks).toBe(0);
     expect(f.sent).toHaveLength(1);
-    expect(f.sent[0]).toMatchObject({ type: 'session.thinking.append', content: 'Ask the consultant to own the delivery recommendation.' });
+    expect(f.sent[0]).toMatchObject({ type: 'session.instructions.append', content: 'Ask the consultant to own the delivery recommendation.' });
     expect(f.director.records.find(row => row.source === 'director')).toMatchObject({ outcome: 'sent', delivery: { afterPassageId: 'p3' } });
     expect(f.director.coaching()).toBeNull();
   }

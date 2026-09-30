@@ -283,7 +283,7 @@ export class SimulatorSession extends DurableObject<Env> {
     }
     if (snapshot.status === 'ending') return;
     if ((event.type === 'session.thinking.appended' || event.type === 'session.instructions.appended') && typeof event.client_event_id === 'string') {
-      if (event.type === 'session.thinking.appended') this.contextual?.providerEvent(event.client_event_id, true);
+      if (event.type === 'session.instructions.appended') this.contextual?.providerEvent(event.client_event_id, true);
       this.producer?.providerEvent(event.client_event_id, true, {
         ...(typeof event.start_ms === 'number' && Number.isFinite(event.start_ms) ? { startMs: event.start_ms } : {}),
         ...(typeof event.end_ms === 'number' && Number.isFinite(event.end_ms) ? { endMs: event.end_ms } : {}),

@@ -223,7 +223,7 @@ test('actor directions remain private and record provider rejection without chan
   await f.observe([{ condition: 'role', probability: .99 }], 'actor');
   expect(f.sent).toHaveLength(1);
   const event = f.sent[0]!;
-  expect(event).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  expect(event).toMatchObject({ type: 'session.instructions.append', delegation_id: null });
   expect(String(event.event_id)).toStartWith('cue-');
   expect(JSON.stringify(f.snapshot)).not.toContain('delivery recommendation');
   expect(f.director.records.find(row => row.source === 'director')?.delivery?.status).toBe('unknown');

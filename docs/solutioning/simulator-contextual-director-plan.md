@@ -36,7 +36,7 @@ sequenceDiagram
         alt Trainee hint
             S-->>U: Publish hint
         else Actor direction
-            S->>V: Private session.thinking.append
+            S->>V: Private session.instructions.append
             V-->>S: Acknowledge or reject context delivery
         end
     end
@@ -83,7 +83,7 @@ Sol returns only `{ action, text, evidenceIds }`. Both prompts ask for one immed
 
 The initial actor briefing prepares it for private producer cues: use relevant direction at the next natural opportunity, stay within the character's personality, knowledge, and authority, and never acknowledge or read the cue aloud. A cue is direction, not new facts; current dialogue supersedes an outdated cue.
 
-The server sends the text through `session.thinking.append`, `delegation_id: null`, over the WebSocket attached to the existing voice session. Browser audio continues over WebRTC. This adds quiet context; it cannot interrupt speech or rewrite audio already generated. Provider acknowledgment establishes context delivery, not whether the actor followed the direction. Optional cue errors stay private.
+The server sends behavioral direction through `session.instructions.append`, `delegation_id: null`, over the WebSocket attached to the existing voice session. Browser audio continues over WebRTC. The matching `session.instructions.appended` acknowledgment establishes context delivery, not whether the actor followed the direction. Instructions can interrupt speech; the initial actor briefing asks for cue uptake at the next natural opportunity, but this is not a provider guarantee. Optional cue errors stay private. Archived director version `contextual-director-v3` identifies this delivery channel change.
 
 ## Private quality log
 

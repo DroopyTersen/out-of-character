@@ -960,7 +960,11 @@ test('the final grade can revoke an earlier historical objective', async () => {
   expect(ended.evaluation.objectives.find((item: { id: string }) => item.id === 'capability').achieved).toBe(false);
 });
 
-test('the shared consultant ownership correction reaches only the actor', async () => {
+test.each([
+  ['session.instructions.appended', true, 'accepted'],
+  ['session.instructions.appended', false, 'unknown'],
+  ['session.thinking.appended', true, 'unknown'],
+] as const)('actor direction stays private and archives its receipt (%s, matching=%s)', async (type, matching, status) => {
   const f = await fixture({ overrides: {
     evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, answers: {}, signals: [{ condition: 'role', probability: .99 }] }),
   } });
@@ -970,10 +974,15 @@ test('the shared consultant ownership correction reaches only the actor', async 
   await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('cue-')));
   await Promise.all(f.pending);
   const cue = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))!;
-  expect(cue).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  expect(cue).toMatchObject({ type: 'session.instructions.append', delegation_id: null });
+  f.socket.emit({ type, client_event_id: matching ? cue.event_id : 'opening' });
   const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, unknown>;
   expect(JSON.stringify(snapshot)).not.toContain(String(cue.content));
   await f.session.fetch(request('end'));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(parseArchive(f.row()!).interventions.find((item: any) => item.source === 'director' && item.audience === 'actor')).toMatchObject({
+    outcome: 'sent', delivery: { eventId: cue.event_id, status },
+  });
 });
 
 test('one transient judging failure retries unchanged dialogue and stops after success', async () => {

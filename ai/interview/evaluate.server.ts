@@ -124,7 +124,8 @@ export function coverageWindow(entries: TranscriptEntry[], keepIds: string[] = [
   return { transcript, earlierDialogueOmitted: transcript.length < entries.length };
 }
 
-function state(entries: TranscriptEntry[]) {
+/** The dialogue as every Jev interview call sees it, rendered the same way each time. */
+export function dialogueState(entries: TranscriptEntry[]) {
   return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: entries.map(({ id, speaker, text }) => [id, speaker === 'trainee' ? 'participant' : 'sam', text]) };
 }
 
@@ -134,7 +135,7 @@ export async function evaluateInterview(input: Input) {
   const { transcript, earlierDialogueOmitted } = coverageWindow(input.transcript, input.keepIds);
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: { ...state(transcript), earlierDialogueOmitted }, questions: interviewQuestions(transcript),
+    state: { ...dialogueState(transcript), earlierDialogueOmitted }, questions: interviewQuestions(transcript),
     abortSignal: input.signal, maxRetries: 0,
   });
   return {
@@ -187,7 +188,7 @@ export function interviewerState(transcript: TranscriptEntry[], deliveredBackgro
   const kept = cue ? [...cue.evidenceIds, ...(cue.afterPassageId ? [cue.afterPassageId] : [])] : [];
   const window = coverageWindow(transcript, kept, 12_000);
   return {
-    ...state(window.transcript),
+    ...dialogueState(window.transcript),
     earlierDialogueOmitted: window.earlierDialogueOmitted,
     ...(cue ? { producerDirection: { ...cue, responseIds: cueResponseIds(window.transcript, cue) } } : {}),
     deliveredBackground: deliveredBackground.slice(-PRODUCER_LIMITS.research).map(({ target, facts, retrievedAt, afterPassageId, status }) => ({

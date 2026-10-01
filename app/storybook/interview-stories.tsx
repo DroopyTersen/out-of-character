@@ -20,7 +20,54 @@ export const transcript: TranscriptEntry[] = [
   { id: 'u4', speaker: 'trainee', text: 'I would ask for representative records and access earlier. I am glad we were direct with the client about what the prototype had and had not proven.', startMs: 55200, endMs: 64200 },
 ];
 
-const summaryText = `The interviewee described a small field-inspection prototype intended to give inspectors one place to capture notes. They served as technical lead. In their account, seeing two inspectors try the prototype was the most useful part of the work: both returned to the question of offline use. The team treated offline capability as something still to validate, rather than a delivered feature.\n\nAccess to sample records arrived late, so the team used a smaller synthetic data set in the demonstration. The interviewee said they made that limitation explicit in the meeting. This kept the demonstration useful while leaving real-system integration open.\n\nFor a similar project, the interviewee would seek representative data and access earlier. They were pleased with the team’s candor about what the prototype had and had not proven. The interview did not establish how the client later decided to proceed.`;
+const summaryText = `The interviewee described a **field-inspection prototype** intended to give inspectors one place to capture notes. They served as technical lead.
+
+## At a glance
+
+- **Win:** Two inspectors tried the prototype and surfaced offline use as a question to validate.
+- **Friction:** Sample records arrived late; the demo used a smaller synthetic set.
+- **Practice to repeat:** The team explained the prototype's limits rather than presenting real integration or offline use as proven.
+
+## Client experience
+
+### Friction: representative records arrived late
+
+Access to sample records arrived late. The team demonstrated the prototype using a smaller synthetic set and made that limitation explicit to the client. The participant said this kept the meeting useful without pretending that the real integration had been tested.
+
+**Participant suggestion:** Request representative records and access earlier on the next project.
+
+## Internal delivery and process
+
+### Win: honest scope and useful feedback
+
+The participant considered watching **two inspectors** try the prototype the most useful part of the work. Both kept returning to offline use. The technical lead made sure the team described that capability as something to validate, rather than a finished feature.
+
+> “I am glad we were direct with the client about what the prototype had and had not proven.”
+
+### How the demo proceeded
+
+The participant described this workaround after sample records arrived late:
+
+\`\`\`mermaid
+flowchart TD
+  A["Sample records arrived late"] --> B["Use smaller synthetic set"]
+  B --> C["Explain demo limits to client"]
+\`\`\`
+
+This shows the reported sequence; it does not establish that real integration was later completed.
+
+## Delivery and contributions
+
+| Area | Contribution or delivery state |
+| --- | --- |
+| Inspection prototype | Built to capture field notes in one place; described as a prototype. |
+| Technical lead | Participant's role; kept offline capability framed as unvalidated. |
+| Inspector feedback | Two inspectors tried the prototype and raised offline-use questions. |
+| Real integration | Not proven by the synthetic-data demonstration. |
+
+## Open questions
+
+The interview did not establish how the client later decided to proceed.`;
 
 function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, summary: InterviewSummary | null, count = transcript.length): InterviewSnapshot {
   const entries = transcript.slice(0, count);
@@ -126,7 +173,7 @@ export function InterviewSummaryStory() {
   const [playing, setPlaying] = useState(false);
   useEffect(() => {
     if (!playing) return;
-    const timer = setInterval(() => setLength(value => Math.min(summaryText.length, value + 24)), 90);
+    const timer = setInterval(() => setLength(value => Math.min(summaryText.length, value + 100)), 90);
     return () => clearInterval(timer);
   }, [playing]);
   useEffect(() => {

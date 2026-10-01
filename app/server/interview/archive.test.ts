@@ -53,14 +53,15 @@ function write(capturedAt: number, state: InterviewArchiveWrite['state'], status
 test('interview transcript and summary stay in their own table; newer final summary wins', async () => {
   const f = fixture();
   try {
+    const markdown = '## Client experience\n\n- The participant credited Jen with resolving access.\n\n| Person | Contribution |\n| --- | --- |\n| Jen | Access |\n\n```mermaid\nflowchart TD\n A["Blocked"] --> B["Access restored"]\n```';
     await writeInterviewArchive(f.d1, write(2000, 'partial', 'pending'));
     await writeInterviewArchive(f.d1, write(3000, 'final', 'pending'));
-    await writeInterviewArchive(f.d1, write(4000, 'final', 'ready', 'The participant credited Jen with resolving access.'));
+    await writeInterviewArchive(f.d1, write(4000, 'final', 'ready', markdown));
     await writeInterviewArchive(f.d1, write(5000, 'final', 'pending'));
     await writeInterviewArchive(f.d1, write(6000, 'partial', 'pending'));
     const row = f.row()!;
     expect(row).toMatchObject({ archive_state: 'final', updated_at: 4000, ended_at: 3000, summary_status: 'ready' });
-    expect(row.summary_text).toContain('credited Jen');
+    expect(row.summary_text).toBe(markdown);
     expect(JSON.parse(row.transcript_json)[0].text).toBe('Jen helped us fix the access issue.');
     expect(f.sqlite.query('SELECT count(*) AS count FROM simulator_attempts').get()).toEqual({ count: 0 });
   } finally { f.sqlite.close(); }

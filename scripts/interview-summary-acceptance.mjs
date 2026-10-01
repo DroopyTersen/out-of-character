@@ -9,7 +9,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH 
 const results = [];
 
 try {
-  for (const mode of ['complete', 'late-failure', 'status-error', 'new-interview', 'leave', 'interrupted', 'end-failure', 'silent']) {
+  for (const mode of ['complete', 'markdown', 'late-failure', 'status-error', 'new-interview', 'leave', 'interrupted', 'end-failure', 'silent']) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
@@ -23,6 +23,8 @@ try {
           privateCue: 'PRIVATE CUE: never put this in the browser summary',
           expected: 'The participant described an access delay and credited Jen with resolving it.',
         };
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { audit.copied = text; } } });
+        if (mode === 'markdown') audit.expected = 'The participant described an access delay.\n\n## At a glance\n\n- **Win:** Jen restored access.\n\n## Client experience\n\nAccess arrived late.\n\n## Internal delivery and process\n\nNot discussed in this interview.\n\n## Delivery and contributions\n\n| Person | Contribution |\n| --- | --- |\n| Jen | Restored access |\n\n```mermaid\nflowchart TD\n  A["Access delay"] --> B["Jen restored access"]\n```\n\n![Tracking image](https://summary-image.invalid/private)\n\n<script>window.__summaryInjected = true</script>';
         navigator.mediaDevices.getUserMedia = async () => {
           const track = (audit.track = new AudioContext().createMediaStreamDestination().stream.getAudioTracks()[0]);
           return new MediaStream([track]);
@@ -101,7 +103,7 @@ try {
           const a = window.__summaryTest;
           a.final = { text: a.expected };
           const json = JSON.stringify(a.final);
-          a.sent = json.indexOf('and credited');
+          a.sent = json.indexOf(a.mode === 'markdown' ? '## At a glance' : 'and credited');
           a.stream.enqueue(new TextEncoder().encode(json.slice(0, a.sent)));
         });
         await page.getByText('The participant described an access delay', { exact: false }).waitFor();
@@ -142,7 +144,23 @@ try {
               await page.getByRole('button', { name: 'Check summary', exact: true }).click();
             }
             await page.getByRole('button', { name: 'Copy summary', exact: true }).waitFor();
-            assert.equal(await page.locator('.interview-summary-text').innerText(), await page.evaluate(() => window.__summaryTest.expected));
+            if (mode === 'markdown') {
+              for (const name of ['At a glance', 'Client experience', 'Internal delivery and process', 'Delivery and contributions']) {
+                await page.getByRole('heading', { name, exact: true }).waitFor();
+              }
+              assert.equal(await page.locator('.interview-summary-text li').count(), 1);
+              assert.equal(await page.locator('.interview-summary-text table tbody tr').count(), 1);
+              const diagram = page.locator('.interview-summary-text [data-streamdown="mermaid-block"]');
+              await diagram.scrollIntoViewIfNeeded();
+              await diagram.locator('svg[role="graphics-document document"]').waitFor();
+              assert.ok((await diagram.innerText()).includes('Jen restored access'));
+              assert.equal(await page.locator('.interview-summary-text img, .interview-summary-text script').count(), 0);
+              assert.equal(await page.evaluate(() => Boolean(window.__summaryInjected)), false);
+            } else {
+              assert.equal(await page.locator('.interview-summary-text').innerText(), await page.evaluate(() => window.__summaryTest.expected));
+            }
+            await page.getByRole('button', { name: 'Copy summary', exact: true }).click();
+            assert.equal(await page.evaluate(() => window.__summaryTest.copied), await page.evaluate(() => window.__summaryTest.expected));
             assert.equal(await page.evaluate(() => window.__summaryTest.starts), 1);
           }
         }

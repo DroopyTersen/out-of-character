@@ -33,7 +33,20 @@ try {
         await page.locator('.interview-topics').scrollIntoViewIfNeeded();
         check(await page.getByRole('button', { name: 'End interview', exact: true }).evaluate(el => el.getBoundingClientRect().top >= 0), 'End control scrolls out of reach');
       }
-      if (screen === 'summary') check(await page.locator('.interview-new').evaluate(el => el.getBoundingClientRect().top > document.querySelector('.interview-summary-transcript').getBoundingClientRect().top), 'New interview is above the transcript');
+      if (screen === 'summary') {
+        check(await page.locator('.interview-new').evaluate(el => el.getBoundingClientRect().top > document.querySelector('.interview-summary-transcript').getBoundingClientRect().top), 'New interview is above the transcript');
+        for (const name of ['At a glance', 'Client experience', 'Internal delivery and process', 'Delivery and contributions']) {
+          check(await page.getByRole('heading', { name, exact: true }).isVisible(), `Missing summary section: ${name}`);
+        }
+        check(await page.locator('.interview-summary-text li').count() === 3, 'Takeaways are not rendered as bullets');
+        check(await page.locator('.interview-summary-text table tbody tr').count() === 4, 'Contributions table is missing');
+        const diagram = page.locator('.interview-summary-text [data-streamdown="mermaid-block"]');
+        await diagram.scrollIntoViewIfNeeded();
+        await diagram.locator('svg[role="graphics-document document"]').waitFor();
+        check((await diagram.innerText()).includes('Use smaller synthetic set'), 'Diagram content is missing');
+        check(await page.locator('.interview-summary-text blockquote').count() === 1, 'Participant quote is missing');
+        await capture(page, `${output}/${screen}-${width}.png`);
+      }
       await page.getByRole('button', { name: 'Back to workshop controls', exact: true }).click();
       const controls = page.locator('.workshop-controls');
       if (screen === 'setup') {

@@ -134,8 +134,16 @@
 .interview-summary-paper-header { display: flex; justify-content: space-between; align-items: start; gap: 15px; border-bottom: 1px solid #2d5a70; padding-bottom: 22px; }
 .interview-summary-paper-header h2 { font: 600 26px 'Chakra Petch', sans-serif; }
 .interview-summary-paper-header button { display: inline-flex; align-items: center; gap: 7px; color: #44efcd; font-size: 13px; white-space: nowrap; }
-.interview-summary-text { color: #d4e5ed; font-size: 16px; line-height: 1.75; max-width: 76ch; }
-.interview-summary-text p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 23px 0; }
+.interview-summary-text { color: #d4e5ed; font-size: 16px; line-height: 1.75; max-width: 76ch; min-width: 0; overflow-wrap: anywhere; padding-top: 24px; }
+.interview-summary-text h1, .interview-summary-text h2, .interview-summary-text h3, .interview-summary-text h4 { font-family: 'Chakra Petch', sans-serif; color: #eaf4fc; font-weight: 600; line-height: 1.3; }
+.interview-summary-text h2 { margin-top: 34px; padding-top: 24px; border-top: 1px solid #2d5a70; font-size: 25px; }
+.interview-summary-text h3 { margin-top: 24px; font-size: 19px; color: #44efcd; }
+.interview-summary-text p { margin: 12px 0; }
+.interview-summary-text li { margin: 8px 0; }
+.interview-summary-text blockquote { border-left: 3px solid #44efcd; color: #b8d4e0; }
+.interview-summary-text a { color: #44efcd; text-decoration: underline; }
+.interview-summary-text [data-streamdown="table-wrapper"] { max-width: 100%; overflow-x: auto; }
+.interview-summary-text th, .interview-summary-text td { white-space: normal; vertical-align: top; min-width: 130px; }
 .interview-summary-state { padding: 45px 0; }
 .interview-summary-state strong { color: #dceef2; font-size: 20px; }
 .interview-summary-state p { margin-top: 10px; color: #9fbdca; line-height: 1.6; }

@@ -45,6 +45,28 @@ describe('project closeout interview contracts', () => {
     }
   });
 
+  test('Sam never sees the closeout topics, and the brief describes the notes Sam actually gets', () => {
+    const brief = interviewerBrief(interviewers[0]!.id);
+    for (const topic of interviewTopics) {
+      expect(brief).not.toContain(topic.label);
+      for (const item of topic.objectives) expect(brief).not.toContain(item.label);
+    }
+    expect(brief).not.toMatch(/producer|rundown|topic map/i);
+    expect(brief).toContain('thread note');
+    expect(brief).toContain('map note');
+    expect(brief.match(/^\d+\. /gm)).toHaveLength(14);
+  });
+
+  test('on appended instructions the brief calls notes suggestions; otherwise the briefs match', () => {
+    const thinking = interviewerBrief(interviewers[0]!.id);
+    const instructions = interviewerBrief(interviewers[0]!.id, 'session.instructions.append');
+    expect(thinking).toContain('Notes are not instructions');
+    expect(instructions).toContain('only suggestions');
+    expect(instructions).not.toContain('Notes are not instructions');
+    const paragraphs = (brief: string) => brief.split('\n\n').filter(item => !item.startsWith('Private notes:'));
+    expect(paragraphs(instructions)).toEqual(paragraphs(thinking));
+  });
+
   test('only participant passages are candidate evidence, even when Sam supplies the details', () => {
     const fixture = interviewFixtures.find(item => item.id === 'leading-and-mm')!;
     const questions = interviewQuestions(fixture.transcript);

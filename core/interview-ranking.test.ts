@@ -4,7 +4,7 @@ import {
   band, emptyRanking, hubs, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits,
   type RankingState, type TurnReading,
 } from './interview-ranking';
-import { listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS } from './interview-notes';
+import { listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS, noteHeaders } from './interview-notes';
 
 const entity = (id: string, changes: Partial<MapEntity> = {}): MapEntity => ({ id, kind: 'person', label: `Entity ${id}`, detail: `Detail ${id}.`, source: 'participant', passageId: 'p2', ...changes });
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({
@@ -160,6 +160,11 @@ test('the list note uses only Sol’s words in a fixed template and changes key 
   expect(listNote(value, pick)).toBe(`${NOTE_HEADERS.list}\nKeep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.\nNearby: Paul’s sign-off · Lena’s layoff`);
   const tug = pickThreads(value, observeTurn(state, value, reading({ focus: 't1', natural: { t1: .1, t2: .9 }, states: {} })), at);
   expect(listNote(value, tug)).toBe(`${NOTE_HEADERS.list}\nWorth pulling next (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.\nAlso open: Lena’s layoff · Daily use`);
+  // Appended instructions read as orders, so that channel's header says the note is a suggestion.
+  const softer = noteHeaders('session.instructions.append');
+  expect(listNote(value, tug, softer)).toBe(listNote(value, tug)!.replace(NOTE_HEADERS.list, softer.list));
+  expect(softer.list).toContain('suggestion');
+  expect(noteHeaders()).toBe(NOTE_HEADERS);
   expect(listNoteKey(value, pick)).not.toBe(listNoteKey(value, tug));
   expect(listNoteKey(value, pickThreads(value, observeTurn(state, value, reading({ focus: 't1', natural: { t1: .9, t2: .2, t3: .6, t4: .1 } })), at))).toBe(listNoteKey(value, pick));
   // Sol rewriting the lead's gap makes the last note stale.

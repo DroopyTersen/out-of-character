@@ -7,7 +7,7 @@ import { lookupInterviewBackground, researchKey, validateResearchRequest } from 
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import { emptyMap, type ConversationMap, type MapChanges } from '../../../core/interview-map';
-import { EMPTY_LIST_NOTE, listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS } from '../../../core/interview-notes';
+import { emptyListNote, listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
@@ -24,8 +24,8 @@ type Options = {
   /** The settled passages in transcript order, stopping at the first one still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
-  /** The delivery probe compares both channels; the live session uses thinking. */
-  channel?: 'session.thinking.append' | 'session.instructions.append';
+  /** The live session uses thinking; each channel has its own note headers. */
+  channel?: NoteChannel;
 };
 
 const LIMITS = PRODUCER_LIMITS;
@@ -288,7 +288,8 @@ export class InterviewProducer {
     const pick = pickThreads(this.map, this.ranking, this.elapsed(now));
     const key = listNoteKey(this.map, pick);
     if (key === this.listKey) return pick;
-    const text = listNote(this.map, pick) ?? (this.listSent ? EMPTY_LIST_NOTE : null);
+    const headers = noteHeaders(this.options.channel);
+    const text = listNote(this.map, pick, headers) ?? (this.listSent ? emptyListNote(headers) : null);
     if (!text) { this.listKey = key; return pick; }
     const note = this.note('list', text, now, turn);
     if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; }
@@ -301,7 +302,7 @@ export class InterviewProducer {
     if (!this.mapRecord || (this.lastMapNote != null && now - this.lastMapNote < LIMITS.mapNoteSpacing)) return;
     const key = mapNoteKey(this.map);
     if (key === this.mapKey) return;
-    const text = mapNote(this.map);
+    const text = mapNote(this.map, noteHeaders(this.options.channel));
     if (!text) { this.mapKey = key; return; }
     // Sol had read every lookup logged when this map's call started.
     const startedAt = this.mapRecord.startedAt;

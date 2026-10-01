@@ -3,7 +3,7 @@ import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { MAP_PROMPT_VERSION, MapOutputError } from '../../../ai/interview/map.server';
 import { RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
 import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from '../../../core/interview-map';
-import { EMPTY_LIST_NOTE, NOTE_HEADERS } from '../../../core/interview-notes';
+import { EMPTY_LIST_NOTE, NOTE_HEADERS, noteHeaders } from '../../../core/interview-notes';
 import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
 import { threadKey, type TurnReading } from '../../../core/interview-ranking';
 import type { TranscriptEntry } from '../../../core/simulator/types';
@@ -265,11 +265,13 @@ test('an applied map sends the list note, then the map note, and reads traits fo
   });
 });
 
-test('the probe channel carries the same notes', async () => {
+test('appended instructions carry the same notes under that channel’s softer headers', async () => {
   const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(mapWith([thread('t1')])) }, 'session.instructions.append');
   await f.step(0);
   await f.step(20_000);
   expect(f.sent.map(event => event.type)).toEqual(['session.instructions.append', 'session.instructions.append']);
+  const headers = noteHeaders('session.instructions.append');
+  expect(f.sent.map(event => String(event.content).split('\n')[0])).toEqual([headers.list, headers.map]);
 });
 
 test('the list note follows the pick: keep pulling on the focus, and the empty note once Sol closes the lead', async () => {

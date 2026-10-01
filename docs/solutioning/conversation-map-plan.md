@@ -275,7 +275,7 @@ There are two concerns:
 
 Andrew worries `session.thinking.append` won't be firm enough. Acme shows Sam does read it: the rundowns appended there leaked their topic labels into Sam's questions. Whether it's firm *enough* is still open.
 
-1. **Shape** (`scripts/simulator-cue-probe.mjs`, which today runs a 55 s single-cue protocol): 2 channels × {options vs. directions} × {gap + guess vs. a ready sentence} = 8 cells × 3 runs. Measures:
+1. **Shape** (`scripts/interview-delivery-probe.mjs`, built on the 55 s single-cue protocol of `scripts/simulator-cue-probe.mjs`): 2 channels × {options vs. directions} × {gap + guess vs. a ready sentence} = 8 cells × 3 runs, plus a no-note control. Measures:
    - **uptake:** is the next question on the note's thread?
    - **parroting:** how much do the note's words overlap with Sam's next turn?
    - **leakage:** does Sam mention the note ("my notes", "off the table")?

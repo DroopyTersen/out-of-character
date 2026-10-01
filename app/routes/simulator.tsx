@@ -29,7 +29,14 @@ export default function Simulator() {
   const [now, setNow] = useState(Date.now());
   const [briefingOpen, setBriefingOpen] = useState(!!initial);
   const report = useSessionReport();
-  const session = useSimulator(report);
+  const session = useSimulator(report, { kind: 'practice', onReattach: choice => {
+    if (catalog.scenarios.some(item => item.id === choice.scenarioId) && catalog.clients.some(item => item.id === choice.clientId)) {
+      setScenarioId(choice.scenarioId);
+      setClientId(choice.clientId);
+    }
+    // A reloaded practice link would otherwise reopen its briefing over the conversation.
+    setBriefingOpen(false);
+  } });
   useEffect(() => {
     // A paused conversation keeps ticking for its hold countdown.
     if (session.phase !== 'live' && session.phase !== 'paused') return;

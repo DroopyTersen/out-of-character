@@ -41,7 +41,7 @@ const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several 
 
 /**
  * Owns one attempt. The closure lease always survives a worker restart; once the conversation has gone live, a
- * checkpoint lets a replacement owner finish it with what was captured.
+ * checkpoint lets a replacement owner hold it for the browser to resume, or finish it with what was captured.
  */
 export class SimulatorSession extends DurableObject<Env> {
   private lease: Lease | undefined;
@@ -73,7 +73,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private segments: Segment[] = [];
   private pauses: PauseRecord[] = [];
   private resumes = 0;
-  /** Restored from a checkpoint after the previous owner was lost; finished on first contact. */
+  /** Restored from a checkpoint too close to its limit to resume; finished on first contact. */
   private recovered = false;
   private contextual: ContextualDirector | undefined;
   private producer: InterviewProducer | undefined;
@@ -93,7 +93,7 @@ export class SimulatorSession extends DurableObject<Env> {
     ctx.blockConcurrencyWhile(async () => {
       this.lease = await ctx.storage.get<Lease>('lease');
       const checkpoint = this.lease && !this.lease.closed ? await ctx.storage.get<Checkpoint>('checkpoint') : undefined;
-      if (checkpoint) this.restore(checkpoint);
+      if (checkpoint) await this.restore(checkpoint);
     });
   }
 
@@ -476,9 +476,9 @@ export class SimulatorSession extends DurableObject<Env> {
     return this.pausing;
   }
 
-  private async suspend(reason: SessionPause['reason']) {
+  /** Marks the attempt paused and starts its hold. */
+  private hold(reason: SessionPause['reason'], now: number) {
     const snapshot = this.snapshot!;
-    const now = Date.now();
     snapshot.status = 'paused';
     snapshot.warning = null;
     // A failed resume continues the pause it was resuming.
@@ -488,6 +488,10 @@ export class SimulatorSession extends DurableObject<Env> {
       this.pauses.push(record);
     }
     snapshot.pause ??= { reason: record.reason, pausedAt: record.pausedAt, resumeBy: Math.min(record.pausedAt + SESSION_PAUSE_HOLD_MS, snapshot.startedAt + SESSION_WALL_LIMIT_MS), resumes: this.resumes, maxResumes: SESSION_MAX_RESUMES };
+  }
+
+  private async suspend(reason: SessionPause['reason']) {
+    this.hold(reason, Date.now());
     clearInterval(this.timer);
     this.timer = undefined;
     this.quietReport = undefined;
@@ -757,7 +761,8 @@ export class SimulatorSession extends DurableObject<Env> {
     catch { console.warn('Simulator checkpoint save failed', { id: snapshot.id }); }
   }
 
-  private restore(checkpoint: Checkpoint) {
+  /** The previous owner was lost. A started conversation is held for its browser to resume, as after a lost connection. */
+  private async restore(checkpoint: Checkpoint) {
     this.snapshot = checkpoint.snapshot;
     this.reachedLive = checkpoint.reachedLive;
     this.epoch = checkpoint.epoch;
@@ -778,10 +783,25 @@ export class SimulatorSession extends DurableObject<Env> {
     this.createDirectors();
     if (checkpoint.producer) this.producer?.restore(checkpoint.producer);
     if (checkpoint.contextual) this.contextual?.restore(checkpoint.contextual);
-    this.recovered = true;
+    const snapshot = this.snapshot;
+    const now = Date.now();
+    if (!['live', 'connecting', 'paused'].includes(snapshot.status) || now >= this.limitAt(now) - 60_000) {
+      this.recovered = true;
+      return;
+    }
+    // Their control sockets were lost with the previous owner; the alarm closes them.
+    for (const segment of this.segments) if (segment.finalization === 'pending') {
+      segment.finalization = 'unconfirmed';
+      segment.endedAt ??= now;
+    }
+    this.hold('restart', now);
+    snapshot.message = null;
+    await this.saveCheckpoint();
+    // The orphaned sessions are still billing; close them soon rather than at the next scheduled check.
+    await this.ctx.storage.setAlarm(now + 1000);
   }
 
-  /** The previous owner was lost. Finish from the checkpoint so the captured conversation is graded and archived. */
+  /** Too little time remained to resume. Finish from the checkpoint so the captured conversation is graded and archived. */
   private recoverCheckpoint() {
     if (!this.recovered) return;
     this.recovered = false;
@@ -835,7 +855,7 @@ export class SimulatorSession extends DurableObject<Env> {
     finally { socket?.close(); }
   }
 
-  /** While paused, keep retrying provider sessions whose closure was not confirmed. */
+  /** Keeps retrying superseded provider sessions whose closure was not confirmed. */
   private async retryClosures() {
     const open = this.segments.filter(segment => segment.finalization === 'unconfirmed');
     if (!open.length) return;
@@ -863,7 +883,8 @@ export class SimulatorSession extends DurableObject<Env> {
       await this.saveCheckpoint();
       this.ctx.waitUntil(this.saveArchive('partial'));
     }
-    if (this.snapshot.status === 'paused' && !this.pausing) await this.retryClosures();
+    // Includes sessions orphaned by a restart, which a resumed conversation leaves behind.
+    if (!this.pausing) await this.retryClosures();
   }
 
   private connectionLog(): ConnectionLog {

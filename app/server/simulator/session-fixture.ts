@@ -91,10 +91,13 @@ type FixtureOptions = {
   metadata?: boolean;
   /** Fails the numbered provider creation (1 is the start). */
   failCreation?: (creation: number) => boolean;
+  /** The first created provider session's id; a replacement owner needs its own to keep sessions distinct. */
+  provider?: string;
 };
-export async function fixture({ pendingCreation, values = new Map<string, unknown>(), overrides = {}, archive = archiveDatabase(), metadata = true, failCreation = () => false }: FixtureOptions = {}) {
+export async function fixture({ pendingCreation, values = new Map<string, unknown>(), overrides = {}, archive = archiveDatabase(), metadata = true, failCreation = () => false, provider = 'provider-private-id' }: FixtureOptions = {}) {
   // One socket per provider session; the first exists up front so tests can configure it before start.
-  const sockets = new Map<string, ProviderSocket>([['provider-private-id', new ProviderSocket()]]);
+  const sockets = new Map<string, ProviderSocket>([[provider, new ProviderSocket()]]);
+  let latest: string | undefined;
   const socketFor = (id: string) => {
     if (!sockets.has(id)) sockets.set(id, new ProviderSocket());
     return sockets.get(id)!;
@@ -116,7 +119,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
     createLive: async input => {
-      const id = ++creations === 1 ? 'provider-private-id' : `provider-private-id-${creations}`;
+      const id = latest = ++creations === 1 ? provider : `${provider}-${creations}`;
       created.push(input.context ? { context: input.context } : {});
       await pendingCreation;
       if (failCreation(creations)) throw new Error('Provider creation failed.');
@@ -140,8 +143,9 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   await ready;
   return {
     session, values, judged, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
-    /** The newest provider session's socket. */
-    get socket() { return [...sockets.values()].at(-1)!; },
+    /** The newest created provider session's socket, or the newest attached one before any creation. */
+    get socket() { return latest ? sockets.get(latest)! : [...sockets.values()].at(-1)!; },
+    socketFor: (id: string) => sockets.get(id),
     sockets: () => [...sockets.values()], created,
   };
 }

@@ -3,10 +3,15 @@ import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
 
 /** Browser media health once a conversation has started: unstable media reconnects in place; lost media pauses until resumed. */
 export type LinkState = 'stable' | 'reconnecting' | 'paused' | 'resuming';
-/** `reachable` reports whether the paused attempt's server answered its latest heartbeat. */
-export type Link = { state: LinkState; reachable: boolean };
+/**
+ * `reachable` reports whether the paused attempt's server answered its latest heartbeat; `reloaded` marks a pause
+ * this page inherited from before a reload.
+ */
+export type Link = { state: LinkState; reachable: boolean; reloaded?: boolean };
 export const stableLink: Link = { state: 'stable', reachable: true };
 
+/** What a reloaded page needs to rejoin its attempt. */
+export type Attempt = { id: string; capability: string };
 type Callbacks = {
   snapshot: (value: SessionSnapshot) => void;
   levels: (value: AudioLevels) => void;
@@ -29,7 +34,7 @@ const AUTO_RESUME_MS = 60_000;
 
 /** Browser media only. The server owns transcripts, judgments, actor context, and the paused hold. */
 export class LiveConnection {
-  private id = crypto.randomUUID();
+  private id: string = crypto.randomUUID();
   private capability = [...crypto.getRandomValues(new Uint8Array(32))].map(value => value.toString(16).padStart(2, '0')).join('');
   private pc: RTCPeerConnection | undefined;
   private stream: MediaStream | undefined;
@@ -52,6 +57,8 @@ export class LiveConnection {
   private pollFailingSince: number | undefined;
   private pausedAt = 0;
   private autoResumed = false;
+  /** Rejoined after a reload: audio needs a click on this page, so the pause waits for the user. */
+  private reloaded = false;
   /** Settles once the server has heard this pause, so a late report cannot pause the resumed connection. */
   private reported: Promise<void> = Promise.resolve();
   private activeSincePoll = false;
@@ -64,8 +71,12 @@ export class LiveConnection {
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
   private ending: Promise<void> | undefined;
 
-  constructor(private callbacks: Callbacks) { this.audio.autoplay = true; }
+  constructor(private callbacks: Callbacks, existing?: Attempt) {
+    this.audio.autoplay = true;
+    if (existing) ({ id: this.id, capability: this.capability } = existing);
+  }
 
+  get attempt(): Attempt { return { id: this.id, capability: this.capability }; }
   get reportTarget() { return { id: this.id, url: `/api/simulator/sessions/${this.id}`, headers: { Authorization: `Bearer ${this.capability}` } }; }
 
   private async request(action: string, body?: unknown, { keepalive = false, signal = this.controller.signal }: { keepalive?: boolean; signal?: AbortSignal } = {}): Promise<unknown> {
@@ -90,17 +101,29 @@ export class LiveConnection {
         return created.sdp;
       });
       if (!connected) return;
-      window.addEventListener('pointerdown', this.keepActive, { passive: true });
-      window.addEventListener('keydown', this.keepActive);
-      window.addEventListener('offline', this.offline);
-      window.addEventListener('online', this.retry);
-      document.addEventListener('visibilitychange', this.retry);
+      this.listen();
       this.reachedLive = true;
       this.live();
     } catch (error) {
       if (this.ending) return;
       await this.fail(this.describe(error, 'The voice connection could not be established.'));
     }
+  }
+
+  /** Rejoins a started attempt after the page reloaded. It holds the attempt until the user resumes or ends it. */
+  async reattach() {
+    this.requested = this.reachedLive = this.reloaded = true;
+    this.listen();
+    // The previous page's media is gone; the server may not know yet.
+    await this.pause();
+  }
+
+  private listen() {
+    window.addEventListener('pointerdown', this.keepActive, { passive: true });
+    window.addEventListener('keydown', this.keepActive);
+    window.addEventListener('offline', this.offline);
+    window.addEventListener('online', this.retry);
+    document.addEventListener('visibilitychange', this.retry);
   }
 
   /**
@@ -206,6 +229,7 @@ export class LiveConnection {
 
   /** Starts the live loops for the current media connection. */
   private live() {
+    this.reloaded = false;
     this.mediaUnstable = false;
     this.pollFailingSince = undefined;
     this.setLink(stableLink);
@@ -252,7 +276,7 @@ export class LiveConnection {
         this.poll(segment);
       } catch (error) {
         if (this.ending || segment.signal.aborted) return;
-        if (isLost(error)) { await this.fail('Live feedback lost its connection. This attempt has ended.'); return; }
+        if (isLost(error)) { this.lost('Live feedback lost its connection. This attempt has ended.'); return; }
         this.pollFailingSince ??= Date.now();
         this.updateLink();
         if (Date.now() - this.pollFailingSince >= POLL_GRACE_MS) void this.pause();
@@ -285,14 +309,14 @@ export class LiveConnection {
         this.callbacks.snapshot(snapshot);
         if (terminal(snapshot)) { this.settle(); return; }
         const budget = !snapshot.pause || snapshot.pause.resumes < snapshot.pause.maxResumes;
-        if (budget && !this.autoResumed && Date.now() - this.pausedAt < AUTO_RESUME_MS && document.visibilityState === 'visible' && navigator.onLine) {
+        if (budget && !this.autoResumed && !this.reloaded && Date.now() - this.pausedAt < AUTO_RESUME_MS && document.visibilityState === 'visible' && navigator.onLine) {
           void this.resume(true);
           return;
         }
         this.heartbeat();
       } catch (error) {
         if (this.ending || this.link.state !== 'paused') return;
-        if (isLost(error)) { await this.fail('This attempt is no longer available.'); return; }
+        if (isLost(error)) { this.lost('This attempt is no longer available.'); return; }
         this.setLink({ state: 'paused', reachable: false });
         this.heartbeat();
       }
@@ -321,7 +345,7 @@ export class LiveConnection {
       if (this.ending) return;
       this.teardown();
       this.setLink({ state: 'paused', reachable: !(error instanceof TypeError) && navigator.onLine });
-      if (isLost(error)) { await this.fail('This attempt is no longer available.'); return; }
+      if (isLost(error)) { this.lost('This attempt is no longer available.'); return; }
       if (error instanceof SessionRequestError && error.status === 409) this.autoResumed = true;
       this.callbacks.error(this.describe(error, 'The voice connection could not be re-established. Try again.'));
       // The server began reconnecting; hold it again rather than waiting out its connecting timeout.
@@ -334,8 +358,9 @@ export class LiveConnection {
   private offline = () => { if (this.reachedLive && this.link.state !== 'paused' && this.link.state !== 'resuming') void this.pause(); };
   private retry = () => { if (this.link.state === 'paused' && document.visibilityState === 'visible') this.heartbeat(0); };
 
-  private setLink(link: Link) {
-    if (link.state === this.link.state && link.reachable === this.link.reachable) return;
+  private setLink(next: Link) {
+    const link = this.reloaded && next.state === 'paused' ? { ...next, reloaded: true } : next;
+    if (link.state === this.link.state && link.reachable === this.link.reachable && link.reloaded === this.link.reloaded) return;
     this.link = link;
     if (!this.disposed) this.callbacks.link(link);
   }
@@ -355,6 +380,13 @@ export class LiveConnection {
     const closing = this.end();
     this.callbacks.error(message, true);
     await closing;
+  }
+
+  /** The server no longer has this attempt, so there is nothing to end. */
+  private lost(message: string) {
+    if (this.ending) return;
+    this.settle();
+    this.callbacks.error(message, true);
   }
 
   /** The server ended the attempt; nothing remains to close. */
@@ -394,6 +426,16 @@ export class LiveConnection {
     this.disposed = true;
     void this.end();
     this.release();
+  }
+
+  /** The page is leaving mid-conversation, perhaps to reload: hold the attempt for it rather than ending it. Returns whether it is held. */
+  detach(): boolean {
+    if (this.disposed) return false;
+    if (!this.reachedLive || this.ending) { this.dispose(); return false; }
+    this.disposed = true;
+    void this.request('pause', undefined, { keepalive: true }).catch(() => {});
+    this.settle();
+    return true;
   }
 
   /** Stops the current media connection and its loops; the attempt itself continues. */

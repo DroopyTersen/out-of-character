@@ -1,11 +1,12 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { reportSchema } from '../../../core/simulator/report';
-import { skills } from '../../../core/simulator/types';
+import { SESSION_LIMIT_SECONDS, skills } from '../../../core/simulator/types';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
 import { attempt, capability, request, activityPoll, fixture } from './session-fixture';
 
 // The paid report boundary is substituted; session ownership, closure, final
 // grading, storage and public state use the real implementation.
+afterEach(() => setSystemTime());
 function reportProvider() {
   let finish: ((result: import('../../../ai/simulator/report.server').ReportResult) => void) | undefined;
   let output: ReadableStreamDefaultController<string> | undefined;
@@ -82,9 +83,10 @@ test('report waits for closing, uses final transcript and Jev, and claims one ge
 test('interrupted report settles before held final storage and archives after the final row exists', async () => {
   const provider = reportProvider();
   const active = await spokenSession(provider);
-  // A lost connection now pauses; a lost owner is what interrupts a started conversation.
+  // A lost connection pauses, and so does a lost owner with time left; a lost owner near the limit interrupts.
   await active.session.alarm();
   await Promise.all(active.pending);
+  setSystemTime(Date.now() + SESSION_LIMIT_SECONDS * 1000 - 40_000);
   const f = await fixture({ values: active.values, archive: active.archive, overrides: { generateReport: provider.generateReport } });
   const held = f.archive.holdNext();
   await f.session.fetch(request('poll'));

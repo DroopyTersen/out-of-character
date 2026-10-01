@@ -1184,7 +1184,7 @@ test('failed final D1 save is best effort and closure lease cleanup continues', 
   expect(f.row()).toBeNull();
 });
 
-test('a replacement owner finishes the checkpointed conversation and closes its provider', async () => {
+test('a replacement owner near the limit finishes the checkpointed conversation and closes its provider', async () => {
   const active = await fixture();
   await active.session.fetch(request('start'));
   await active.session.fetch(request('ready'));
@@ -1193,6 +1193,8 @@ test('a replacement owner finishes the checkpointed conversation and closes its 
   await active.session.alarm();
   await Promise.all(active.pending);
   expect(active.row()?.archive_state).toBe('partial');
+  // Too little time remains to hold it for a resume.
+  setSystemTime(Date.now() + SESSION_LIMIT_SECONDS * 1000 - 40_000);
   const replacement = await fixture({ values: active.values, archive: active.archive });
   await replacement.session.alarm();
   await Promise.all(replacement.pending);

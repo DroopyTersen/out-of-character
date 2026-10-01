@@ -85,7 +85,7 @@ export type TraineeEvaluation = {
 };
 export type SessionStatus = 'connecting' | 'live' | 'paused' | 'ending' | 'ended' | 'interrupted';
 /** A dropped connection holds the attempt instead of ending it; the browser may resume until resumeBy. */
-export type SessionPause = { reason: 'browser' | 'provider'; pausedAt: number; resumeBy: number; resumes: number; maxResumes: number };
+export type SessionPause = { reason: 'browser' | 'provider' | 'restart'; pausedAt: number; resumeBy: number; resumes: number; maxResumes: number };
 export type FeedbackStatus = 'waiting' | 'current' | 'delayed' | 'unavailable';
 export type LiveHint = { id: string; text: string; kind: 'hint' | 'concern'; objectiveId: string | null; evidenceIds: string[]; createdAt: number; expiresAt: number };
 export type SessionSnapshot = {

@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../../core/simulator/types';
-import { activityPoll, attempt, capability, fixture, request, settle, waitFor } from './session-fixture';
+import { activityPoll, attempt, capability, fixture, request, settle } from './session-fixture';
 
 // Pause and resume across real session ownership; only the provider and paid judges are substituted.
 afterEach(() => setSystemTime());
@@ -199,16 +199,47 @@ test('End while paused finalizes what was captured', async () => {
   expect(pause.resumedAt).toBeNull();
 });
 
-test('a restart while paused finishes the attempt from its checkpoint', async () => {
+test('a restart while paused keeps the hold for its browser', async () => {
   const f = await live();
   await lose(f);
-  const replacement = await fixture({ values: f.values, archive: f.archive });
-  expect((await replacement.session.fetch(request('poll'))).status).toBe(200);
-  await waitFor(() => replacement.row()?.archive_state === 'final');
-  expect(replacement.row()).toMatchObject({ session_status: 'interrupted', finalization: 'confirmed' });
-  expect(JSON.parse(replacement.row()!.transcript_json)).toHaveLength(2);
+  const before = (await poll(f)).pause;
+  const replacement = await fixture({ values: f.values, archive: f.archive, provider: 'replacement' });
+  const state = await poll(replacement);
+  expect(state).toMatchObject({ status: 'paused', pause: { reason: 'provider', pausedAt: before.pausedAt, resumeBy: before.resumeBy } });
+  expect(state.transcript).toHaveLength(2);
   expect(replacement.creations()).toBe(0);
+  await reconnect(replacement);
+  expect(replacement.created[0]!.context).toContain('Who owns the site today?');
+  expect((await poll(replacement)).status).toBe('live');
+  expect(await read(replacement.session.fetch(request('end')))).toMatchObject({ status: 'ended', finalization: 'confirmed' });
+  await settle(replacement);
+  expect(replacement.row()).toMatchObject({ archive_state: 'final', session_status: 'ended' });
+  expect(JSON.parse(replacement.row()!.transcript_json)).toHaveLength(2);
   await f.session.fetch(request('end'));
+});
+
+test('a restart holds a live conversation for its browser and closes the orphaned provider session', async () => {
+  const f = await live();
+  setSystemTime(Date.now() + 30_000);
+  // The periodic check saves the checkpoint a replacement owner restores.
+  await f.session.alarm();
+  await settle(f);
+  const replacement = await fixture({ values: f.values, archive: f.archive, provider: 'replacement' });
+  const state = await poll(replacement);
+  expect(state).toMatchObject({ status: 'paused', message: null, pause: { reason: 'restart', resumes: 0, maxResumes: SESSION_MAX_RESUMES } });
+  expect(state.transcript).toHaveLength(2);
+  expect(replacement.alarm()).toBeLessThanOrEqual(Date.now() + 1000);
+  await replacement.session.alarm();
+  await settle(replacement);
+  expect(replacement.socketFor('provider-private-id')!.sent.map(event => event.type)).toEqual(['session.close']);
+  await reconnect(replacement);
+  expect(replacement.created[0]!.context).toContain('Our team does.');
+  expect(await read(replacement.session.fetch(request('end')))).toMatchObject({ status: 'ended', finalization: 'confirmed' });
+  await settle(replacement);
+  const connection = JSON.parse(replacement.row()!.provenance_json).connection;
+  expect(connection.segments.map((segment: { epoch: number; finalization: string }) => [segment.epoch, segment.finalization])).toEqual([[1, 'confirmed'], [2, 'confirmed']]);
+  expect(connection.pauses).toMatchObject([{ reason: 'restart' }]);
+  await f.session.fetch(request('end')); // Stop the original owner's timer.
 });
 
 test('a resumed interview restates its rundown to the new provider session', async () => {

@@ -7,7 +7,7 @@ import { lookupInterviewBackground, researchKey, validateResearchRequest } from 
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import { emptyMap, type ConversationMap, type MapChanges } from '../../../core/interview-map';
-import { emptyListNote, listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
+import { emptyListNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
@@ -24,7 +24,7 @@ type Options = {
   /** The settled passages in transcript order, stopping at the first one still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
-  /** The live session uses thinking; each channel has its own note headers. */
+  /** Defaults to the live channel; each channel has its own note headers. */
   channel?: NoteChannel;
 };
 
@@ -325,7 +325,7 @@ export class InterviewProducer {
       ...(researchIds.length ? { researchIds } : {}),
     };
     this.records.push(record);
-    const sent = this.options.send({ type: this.options.channel ?? 'session.thinking.append', event_id: id, delegation_id: null, content: text });
+    const sent = this.options.send({ type: this.options.channel ?? LIVE_NOTE_CHANNEL, event_id: id, delegation_id: null, content: text });
     if (!sent) record.outcome = 'error';
     return record;
   }

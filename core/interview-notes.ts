@@ -13,12 +13,14 @@ export type NoteHeaders = typeof NOTE_HEADERS;
 /** The live session uses thinking; the delivery probe compares it with appended instructions. */
 export const NOTE_CHANNELS = ['session.thinking.append', 'session.instructions.append'] as const;
 export type NoteChannel = typeof NOTE_CHANNELS[number];
+/** The channel the live session sends notes on. The brief and the producer both default to it, so their wording agrees. */
+export const LIVE_NOTE_CHANNEL: NoteChannel = 'session.thinking.append';
 /** Appended instructions read as orders, as the old cues did, so on that channel every note says it is only a suggestion. */
 const INSTRUCTION_NOTE_HEADERS: NoteHeaders = {
   list: 'Thread note, a suggestion only. Supersedes earlier thread notes.',
   map: 'Map note, background only. Supersedes earlier map notes.',
 };
-export const noteHeaders = (channel: NoteChannel = 'session.thinking.append'): NoteHeaders =>
+export const noteHeaders = (channel: NoteChannel = LIVE_NOTE_CHANNEL): NoteHeaders =>
   channel === 'session.instructions.append' ? INSTRUCTION_NOTE_HEADERS : NOTE_HEADERS;
 export const MAP_NOTE_LIMITS = { known: 6, research: 3 };
 
@@ -41,7 +43,6 @@ export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADER
 
 /** Replaces a list note whose lead Sol has since closed, when no open thread is left to pull on. */
 export const emptyListNote = (headers = NOTE_HEADERS) => `${headers.list}\nNo open thread right now: follow the participant.`;
-export const EMPTY_LIST_NOTE = emptyListNote();
 
 /** A new list note goes out only when the pick moves or Sol rewrites the lead; the nearby threads changing alone isn't worth one. */
 export function listNoteKey(map: ConversationMap, pick: Pick): string {

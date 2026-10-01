@@ -7,6 +7,7 @@ import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
 import { emptyMap } from '../core/interview-map.ts';
 import { listNote, noteHeaders } from '../core/interview-notes.ts';
 import { appendTranscript } from '../core/simulator/state.ts';
+import { measure } from './lib/interview-delivery-measures.mjs';
 
 // Delivery probe: does Sam take up a thread note, parrot its words, or mention it?
 // Each run: Sam opens; a synthetic participant names three threads in one answer, and a
@@ -17,7 +18,8 @@ import { appendTranscript } from '../core/simulator/state.ts';
 // Usage: bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --cell=thinking:options:gap [--runs=3] [--voice=sam-cedar]
 //        bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --all [--runs=3]
 //        bun scripts/interview-delivery-probe.mjs --summary
-// A run already reported is skipped, so an interrupted --all resumes. The counts are heuristic
+// A run already reported without errors is skipped, so an interrupted --all resumes and a failed run is redone.
+// Failed runs are left out of the summary's rates. The counts are heuristic
 // supporting evidence; conversation.wav in each run is for listening.
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const root = process.env.ACCEPTANCE_OUTPUT || 'output/interview-delivery';
@@ -41,6 +43,9 @@ const lines = [
 const NOTE_AT = 0.5;
 const DEAD_AIR_MS = 8000;
 const FRAME = 960; // 20 ms of 24 kHz mono 16-bit PCM
+const SPOKEN = lines.join(' ');
+const ok = report => report.finalized && !report.errors.length;
+const mean = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100 : '–';
 
 function note(cell) {
   const [channel, phrasing, shape] = cell.split(':');
@@ -57,33 +62,6 @@ function note(cell) {
   return `${headers.list}\n${body}`;
 }
 
-// ---- Measures ----
-
-const words = text => text.toLowerCase().replace(/’/g, '\'').match(/[a-z0-9']+/g) ?? [];
-const trigrams = text => { const list = words(text); return new Set(list.slice(2).map((_, index) => list.slice(index, index + 3).join(' '))); };
-const THREADS = {
-  target: /approv|sign.?off|signed off|final (call|say|decision)|go.?live|green.?light|launch (step|decision|call|meeting)|call to launch|decided to launch/i,
-  vpn: /\bvpn\b|access|three weeks|waited|waiting/i,
-  priya: /priya|pipeline|hand.?(off|over)|took over|newest/i,
-};
-/** Threads the turn names, the last named first: Sam names a thread in the reaction, and the question that follows is on it. */
-const named = text => Object.entries(THREADS).flatMap(([id, pattern]) => {
-  const at = [...text.matchAll(new RegExp(pattern, 'gi'))].at(-1)?.index;
-  return at == null ? [] : [[id, at]];
-}).sort((a, b) => b[1] - a[1]).map(([id]) => id);
-const LEAK = /\b(my|the|these|those) notes?\b|note.?taker|thread note|map note|supersede|still unknown|off the table|been (told|asked) to|supposed to ask|my (brief|instructions)/i;
-
-/** Parroting counts the note's word triples that the participant never said; the control is measured against the production note. */
-function measure(text, noteText, opening) {
-  const question = text.match(/[^.?!]*\?/g)?.join(' ').trim() || null;
-  const spoken = trigrams([...lines, opening].join(' '));
-  const noteOnly = [...trigrams(noteText.split('\n').slice(1).join(' '))].filter(gram => !spoken.has(gram));
-  const said = trigrams(text);
-  const parroted = noteOnly.filter(gram => said.has(gram));
-  const threads = named(text);
-  return { text, question, asked: threads[0] ?? null, threads, parroted, parrotShare: said.size ? Math.round(parroted.length / said.size * 100) / 100 : 0, leak: text.match(LEAK)?.[0] ?? null };
-}
-
 if (process.argv.includes('--summary')) {
   const reports = [];
   for (const name of (await readdir(root).catch(() => [])).sort()) {
@@ -91,9 +69,11 @@ if (process.argv.includes('--summary')) {
     if (await file.exists()) reports.push(await file.json());
   }
   const share = (count, total) => total ? `${count}/${total}` : '–';
+  const controls = reports.filter(item => item.cell === 'control' && ok(item));
   console.table(Object.fromEntries(CELLS.flatMap(cell => {
-    const runs = reports.filter(item => item.cell === cell);
-    if (!runs.length) return [];
+    const all = reports.filter(item => item.cell === cell);
+    const runs = all.filter(ok);
+    if (!all.length) return [];
     const took = runs.filter(item => item.uptake.first);
     return [[cell, {
       runs: runs.length,
@@ -101,10 +81,12 @@ if (process.argv.includes('--summary')) {
       'uptake, next turn': share(took.length, runs.length),
       'uptake by turn 2': share(runs.filter(item => item.uptake.first || item.uptake.second).length, runs.length),
       're-asked after decline': share(took.filter(item => item.uptake.second).length, took.length),
-      'parrot share': Math.round(runs.flatMap(item => item.segments.slice(0, 2).map(segment => segment.parrotShare)).reduce((sum, value) => sum + value, 0) / (runs.length * 2) * 100) / 100,
-      'Sam over answer': runs.filter(item => item.samDuringAnswer > 0).length,
-      leaks: runs.filter(item => item.segments.some(segment => segment.leak)).length,
-      errors: runs.filter(item => item.errors.length || !item.finalized).length,
+      'parrot share': mean(runs.flatMap(item => item.segments.slice(0, 2).map(segment => segment.parrotShare))),
+      // The same overlap with no note sent: Sam taking up the thread shares some words with any note about it.
+      'control parrot': cell === 'control' ? '–' : mean(controls.flatMap(item => item.baselines?.[cell] ?? [])),
+      'Sam over answer': share(runs.filter(item => item.samDuringAnswer[0] > 0).length, runs.length),
+      leaks: share(runs.filter(item => item.segments.some(segment => segment.leak)).length, runs.length),
+      'failed, left out': all.length - runs.length,
     }]];
   })));
   process.exit(0);
@@ -140,13 +122,14 @@ const digest = text => createHash('sha256').update(text).digest('hex').slice(0, 
 
 async function run(cell, index) {
   const output = `${root}/${cell.replaceAll(':', '-')}-r${index}`;
-  if (await Bun.file(`${output}/report.json`).exists()) return null;
+  const previous = Bun.file(`${output}/report.json`);
+  if (await previous.exists() && ok(await previous.json())) return null;
   await mkdir(output, { recursive: true, mode: 0o700 });
   const channel = cell === 'control' ? 'thinking' : cell.split(':')[0];
   const noteText = cell === 'control' ? null : note(cell);
   const opening = interviewOpening(interviewerId);
   const session = { ...liveConfiguration(INTERVIEW_SCENARIO_ID, interviewerId), model: foundry.liveModel, instructions: interviewerBrief(interviewerId, CHANNELS[channel]) };
-  const report = { cell, run: index, checkedAt: new Date().toISOString(), model: foundry.liveModel, voice: session.audio.output.voice, briefDigest: digest(session.instructions), note: noteText, noteEvent: null, samDuringAnswer: 0, uptake: null, segments: [], transcript: [], deadAir: [], delegations: 0, providerErrors: [], errors: [], finalized: false, usageSeconds: null };
+  const report = { cell, run: index, checkedAt: new Date().toISOString(), model: foundry.liveModel, voice: session.audio.output.voice, briefDigest: digest(session.instructions), note: noteText, noteEvent: null, samDuringAnswer: lines.map(() => 0), uptake: null, segments: [], transcript: [], deadAir: [], delegations: 0, providerErrors: [], errors: [], finalized: false, usageSeconds: null };
   const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
   const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
   // Sam's speech after each participant line starts: the opening, two measured replies, the goodbye.
@@ -155,10 +138,11 @@ async function run(cell, index) {
   let step = 0, clip, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, lastAudibleOutput = 0, samCursor = 0, replyStartedAt = 0, pacing, deadline, closing = false;
   const close = () => { if (closing) return; closing = true; clearTimeout(pacing); send({ type: 'session.close' }); };
   const yielded = () => {
-    const quiet = Date.now() - Math.max(lastOutput, lastAudibleOutput);
+    // Quiet since Sam's last sound finished playing, not since it arrived: GPT-Live can stream faster than real time.
+    const quiet = Date.now() - Math.max(lastOutput, lastAudibleOutput, inputStartedAt + samCursor / 48);
     if (lastAudibleOutput > inputEnded && lastOutput > inputEnded) return quiet > 2500 && (said[step].includes('?') || quiet > DEAD_AIR_MS);
-    // Sam never answered: record the dead air and let the participant go on.
-    if (inputEnded && Date.now() - inputEnded > 15_000) { report.deadAir.push({ afterLine: step - 1 }); return true; }
+    // Sam never answered, or never opened: record the dead air and let the participant go on.
+    if (Date.now() - (inputEnded || inputStartedAt) > 15_000) { report.deadAir.push({ afterLine: step - 1 }); return true; }
     return false;
   };
   const pace = () => {
@@ -198,8 +182,9 @@ async function run(cell, index) {
         // Played as it arrives, after anything still queued, on the input clock.
         const at = Math.max(inputBytes, samCursor);
         received.push([at, audio]); samCursor = at + audio.length;
-        // Audible frames while the participant is still answering, as when an appended note sets Sam talking.
-        if (audible(audio)) { lastAudibleOutput = Date.now(); if (clip) report.samDuringAnswer++; if (step === 1) replyStartedAt ||= lastAudibleOutput; }
+        // Audible frames while the participant is still answering, per line, as when an appended note sets Sam talking.
+        // The reply to the first line starts with Sam's first sound after that line ends.
+        if (audible(audio)) { lastAudibleOutput = Date.now(); if (clip) report.samDuringAnswer[step - 1]++; else if (step === 1) replyStartedAt ||= lastAudibleOutput; }
       } else if (value.type === 'session.delegation.created') {
         report.delegations++;
         send({ type: 'session.thinking.append', event_id: `role-guard-${report.delegations}`, delegation_id: value.delegation?.id ?? null, content: NO_EXTERNAL_TASK });
@@ -218,7 +203,10 @@ async function run(cell, index) {
     if (!report.noteEvent.acknowledgedAt) report.errors.push('Note was not acknowledged.');
     report.noteEvent.beforeReply = !!report.noteEvent.acknowledgedAt && !!replyStartedAt && report.noteEvent.acknowledgedAt < replyStartedAt;
   }
-  report.segments = said.slice(1).map(text => measure(text.trim(), noteText ?? note('thinking:options:gap'), opening));
+  const spoken = `${SPOKEN} ${opening}`;
+  report.segments = said.slice(1).map(text => measure(text.trim(), noteText ?? note('thinking:options:gap'), spoken));
+  // The control's replies against every cell's note: the overlap a reply has with no note sent.
+  if (!noteText) report.baselines = Object.fromEntries(CELLS.slice(1).map(cell => [cell, report.segments.slice(0, 2).map(segment => measure(segment.text, note(cell), spoken).parrotShare)]));
   report.uptake = { first: report.segments[0].asked === 'target', second: report.segments[1]?.asked === 'target' };
   // One track for listening: the participant as sent, and Sam as a client would play it.
   const mix = Buffer.alloc(Math.max(inputBytes, samCursor));

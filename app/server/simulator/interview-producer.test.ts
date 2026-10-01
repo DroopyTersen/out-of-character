@@ -3,7 +3,7 @@ import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { MAP_PROMPT_VERSION, MapOutputError } from '../../../ai/interview/map.server';
 import { RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
 import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from '../../../core/interview-map';
-import { EMPTY_LIST_NOTE, NOTE_HEADERS, noteHeaders } from '../../../core/interview-notes';
+import { emptyListNote, NOTE_HEADERS, noteHeaders } from '../../../core/interview-notes';
 import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
 import { threadKey, type TurnReading } from '../../../core/interview-ranking';
 import type { TranscriptEntry } from '../../../core/simulator/types';
@@ -300,7 +300,7 @@ test('the list note follows the pick: keep pulling on the focus, and the empty n
   await f.step(40_000);
   await f.producer.settle();
   expect(f.notes('list')).toHaveLength(3);
-  expect(f.notes('list').at(-1)).toBe(EMPTY_LIST_NOTE);
+  expect(f.notes('list').at(-1)).toBe(emptyListNote());
   await f.turn(45_000, 'That was most of it.');
   expect(f.notes('list')).toHaveLength(3);
 });

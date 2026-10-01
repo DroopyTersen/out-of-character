@@ -51,7 +51,7 @@ describe('project closeout interview contracts', () => {
       expect(brief).not.toContain(topic.label);
       for (const item of topic.objectives) expect(brief).not.toContain(item.label);
     }
-    expect(brief).not.toMatch(/producer|rundown|topic map/i);
+    expect(brief).not.toMatch(/producer|rundown|topic map|coverage/i);
     expect(brief).toContain('thread note');
     expect(brief).toContain('map note');
     expect(brief.match(/^\d+\. /gm)).toHaveLength(14);

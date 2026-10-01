@@ -87,13 +87,6 @@ export function mergeCoverage(previous: InterviewObjectiveReading[], current: In
   });
 }
 
-export type CoverageBand = { id: string; label: string; level: CoverageLevel };
-/** The bands Sam sees in the rundown: topic labels and levels only, never probabilities. */
-export function coverageBands(objectives: Pick<InterviewObjectiveReading, 'id' | 'level'>[]): { id: string; label: string; objectives: CoverageBand[] }[] {
-  return interviewTopics.map(topic => ({ id: topic.id, label: topic.label, objectives: topic.objectives.map(item => ({
-    id: item.id, label: item.label, level: objectives.find(reading => reading.id === item.id)?.level ?? 'not-yet',
-  })) }));
-}
 
 export const COVERAGE_LEVEL_LABELS: Record<CoverageLevel, string> = { 'not-yet': 'Not yet', touched: 'Touched on', explored: 'Explored', 'set-aside': 'Set aside' };
 

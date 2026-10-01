@@ -55,12 +55,12 @@ function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructi
     { id: 'p1', speaker: 'client', text: 'What did the team build?', startMs: 0, endMs: 1000 },
     { id: 'p2', speaker: 'trainee', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
-  let connected = true;
+  let connected: boolean | 'throw' = true;
   const sent: Record<string, unknown>[] = [];
   const calls = { map: [] as Input<'generateMap'>[], turn: [] as Input<'evaluateTurn'>[], traits: [] as Input<'evaluateTraits'>[], lookup: [] as Input<'lookupInterviewBackground'>[] };
   const producer = new InterviewProducer({
     attemptId: 'attempt-1', startedAt: epoch, foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture', channel,
-    settled: () => transcript, coverage: () => [], send: event => { if (!connected) return false; sent.push(event); return true; },
+    settled: () => transcript, coverage: () => [], send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
       evaluateTurn: async input => { calls.turn.push(input); return overrides.evaluateTurn ? overrides.evaluateTurn(input) : reading(input); },
@@ -86,7 +86,7 @@ function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructi
   const step = async (ms?: number) => { if (ms != null) at(ms); producer.tick(Date.now()); await flush(); };
   const of = <S extends ProducerLogRecord['source']>(source: S) => producer.records.filter(item => item.source === source) as Extract<ProducerLogRecord, { source: S }>[];
   const notes = (kind?: keyof typeof NOTE_HEADERS) => sent.filter(event => !kind || String(event.content).startsWith(NOTE_HEADERS[kind])).map(event => String(event.content));
-  return { producer, sent, calls, say, grow, turn, at, step, of, notes, setConnected: (value: boolean) => { connected = value; } };
+  return { producer, sent, calls, say, grow, turn, at, step, of, notes, setConnected: (value: boolean | 'throw') => { connected = value; } };
 }
 
 test('Sol calls on the minute only when participant text is unlogged, and a wake an earlier call already logged is dropped', async () => {
@@ -195,6 +195,40 @@ test.each(['invalid', 'error'] as const)('an %s Sol update leaves the map behind
   expect(f.of('map')[1]!.outcome).toBe('applied');
   await f.step(140_000);
   expect(f.calls.map).toHaveLength(2);
+});
+
+test('a failure after Sol’s map lands leaves the call applied, so the minute does not re-map', async () => {
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(mapWith([thread('t1')])) });
+  await f.step(0);
+  f.setConnected('throw');
+  await f.step(20_000);
+  expect(f.of('map')[0]).toMatchObject({ outcome: 'applied', completedAt: epoch + 20_000 });
+  expect(f.producer.conversationMap.threads.map(item => item.id)).toEqual(['t1']);
+  f.setConnected(true);
+  await f.step(80_000);
+  expect(f.calls.map).toHaveLength(1);
+});
+
+test('a failed Sol call that carried only a lookup is retried on the minute', async () => {
+  const f = fixture({
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+    generateMap: async input => {
+      if (f.calls.map.length === 2) throw new Error('upstream 500');
+      return mapped(input.previous, f.calls.map.length === 1 ? request('OpenStreetMap') : null);
+    },
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.producer.settle();
+  await f.step(40_000);
+  expect(f.calls.map[1]!.tail.reasons).toEqual(['public research arrived about the product "OpenStreetMap"']);
+  expect(f.of('map').map(item => item.outcome)).toEqual(['applied', 'error']);
+  await f.step(99_999);
+  expect(f.calls.map).toHaveLength(2);
+  await f.step(100_000);
+  expect(f.calls.map[2]!.tail.reasons).toEqual([MINUTE]);
+  expect(f.calls.map[2]!.blocks).toEqual(f.calls.map[1]!.blocks);
+  expect(f.of('map')[2]!.outcome).toBe('applied');
 });
 
 test('an applied map sends the list note, then the map note, and reads traits for its new threads', async () => {
@@ -328,6 +362,25 @@ test('a rejected or unsent list note goes out again at the next pick, and receip
   ]);
   expect(list[2]!.text).toBe(list[1]!.text);
   expect(f.notes('list')).toHaveLength(4);
+});
+
+test('rejecting a list note a newer one replaced does not resend the newer one', async () => {
+  const f = fixture({
+    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, focus: id === 'p2' ? null : 't1' }); },
+    generateMap: async () => mapped(mapWith([thread('t1')])),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(25_000);
+  const [first, keep] = f.of('note').filter(note => note.kind === 'list');
+  expect(keep!.text).toStartWith(`${NOTE_HEADERS.list}\nKeep pulling`);
+  f.producer.providerEvent(first!.id, false);
+  expect(first!.outcome).toBe('rejected');
+  await f.turn(30_000);
+  expect(f.notes('list')).toHaveLength(2);
+  f.producer.providerEvent(keep!.id, false);
+  await f.turn(35_000);
+  expect(f.notes('list')).toEqual([first!.text, keep!.text, keep!.text]);
 });
 
 test('the note cap stops every note, list and map alike', async () => {

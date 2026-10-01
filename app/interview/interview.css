@@ -114,10 +114,11 @@
 .interview-reading-score { display: inline; margin-left: 7px; color: #8fb2c3; font-size: 11px; font-variant-numeric: tabular-nums; }
 .interview-timeline { display: grid; gap: 0; list-style: none; margin: 18px 0 0; padding: 0; }
 .interview-timeline li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 10px 0 10px 10px; border-left: 3px solid #2e6074; border-bottom: 1px solid #1d4155; }
-.interview-timeline li[data-lane=producer] { border-left-color: #44efcd; }
+.interview-timeline li[data-lane=map] { border-left-color: #44efcd; }
 .interview-timeline li[data-lane=research] { border-left-color: #efba57; }
-.interview-timeline li[data-lane=rundown] { border-left-color: #8fa8ff; }
-.interview-timeline li[data-lane=assessment], .interview-timeline li[data-lane=delegation] { border-left-color: #5a8192; }
+.interview-timeline li[data-lane=note] { border-left-color: #8fa8ff; }
+.interview-timeline li[data-lane=turn], .interview-timeline li[data-lane=traits] { border-left-color: #6fc3d6; }
+.interview-timeline li[data-lane=grade], .interview-timeline li[data-lane=delegation] { border-left-color: #5a8192; }
 .interview-timeline time { color: #8fb2c3; font-size: 12px; font-variant-numeric: tabular-nums; }
 .interview-timeline p { margin: 0; color: #c8dfe6; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .interview-timeline li[data-lane=dialogue] p { color: #9fbccb; }

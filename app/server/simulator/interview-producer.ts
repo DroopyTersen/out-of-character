@@ -62,7 +62,7 @@ export class InterviewProducer {
   private lastMapStart: number;
   private reasons = new Set<string>();
   private events: { event: MapLogEvent; researchId: string }[] = [];
-  /** A failed call logged participant text the map doesn't reflect yet. */
+  /** A failed call logged participant text or events the map doesn't reflect yet. */
   private behind = false;
   private turnBusy = false;
   private readTurnKey = '';
@@ -147,7 +147,7 @@ export class InterviewProducer {
       if (research) research.loggedAt = now;
     }
     const controller = new AbortController();
-    const unmapped = fresh || this.behind;
+    const unmapped = fresh || this.behind || events.length > 0;
     this.call = { record, controller, unmapped };
     this.track(this.generate(record, controller, log, settled, now, unmapped)
       .finally(() => { if (this.call?.record === record) this.call = null; }));
@@ -175,33 +175,36 @@ export class InterviewProducer {
     const { services, foundry, attemptId } = this.options;
     const signal = AbortSignal.any([this.abort.signal, controller.signal, AbortSignal.timeout(LIMITS.mapTimeout)]);
     const live = () => this.alive && this.call?.record === record;
+    let result: Awaited<ReturnType<typeof services.generateMap>>;
     try {
-      const result = await services.generateMap({
+      result = await services.generateMap({
         foundry, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
       });
       if (!live()) return;
       signal.throwIfAborted();
-      Object.assign(record, {
-        outcome: 'applied', completedAt: Date.now(), model: result.model, usage: result.usage,
-        update: result.update, changes: compactChanges(result.changes), research: result.research,
-      } satisfies Partial<MapRecord>);
-      this.counts.applied++;
-      this.behind = false;
-      this.map = result.map;
-      this.mapRecord = record;
-      this.traitFailures.clear();
-      this.ranking = observeMap(this.ranking, result.map, this.elapsed(record.startedAt));
-      if (result.research) this.request(record, result.research, settled);
-      this.pick(Date.now());
-      this.sendMapNote(Date.now());
-      this.readTraits();
     } catch (error) {
       if (!live()) return;
       if (error instanceof MapOutputError) Object.assign(record, { outcome: 'invalid', defects: error.defects.slice(0, 10), model: error.model, usage: error.usage } satisfies Partial<MapRecord>);
       else record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
       record.completedAt = Date.now();
       this.behind ||= unmapped;
+      return;
     }
+    // Outside the try: a failure after the map lands is not Sol's, so it neither fails this call nor leaves the map behind.
+    Object.assign(record, {
+      outcome: 'applied', completedAt: Date.now(), model: result.model, usage: result.usage,
+      update: result.update, changes: compactChanges(result.changes), research: result.research,
+    } satisfies Partial<MapRecord>);
+    this.counts.applied++;
+    this.behind = false;
+    this.map = result.map;
+    this.mapRecord = record;
+    this.traitFailures.clear();
+    this.ranking = observeMap(this.ranking, result.map, this.elapsed(record.startedAt));
+    if (result.research) this.request(record, result.research, settled);
+    this.pick(Date.now());
+    this.sendMapNote(Date.now());
+    this.readTraits();
   }
 
   // ---- Jev and the list note ----
@@ -385,7 +388,7 @@ export class InterviewProducer {
     }
   }
 
-  /** A rejected note is sent again at the next change: the list note on the next pick, the map note after its spacing. */
+  /** A rejected note is sent again at the next change: the list note on the next pick, the map note after its spacing. One a newer note of its kind already replaced is not. */
   providerEvent(id: string, accepted: boolean, timing?: { startMs?: number; endMs?: number }) {
     if (!this.alive) return;
     const record = this.records.find((item): item is NoteRecord => item.source === 'note' && item.delivery.eventId === id);
@@ -395,6 +398,7 @@ export class InterviewProducer {
     if (timing) Object.assign(record.delivery, timing);
     if (accepted) return;
     record.outcome = 'rejected';
+    if (this.records.findLast(item => item.source === 'note' && item.kind === record.kind) !== record) return;
     if (record.kind === 'list') this.listKey = null;
     else this.mapKey = null;
   }

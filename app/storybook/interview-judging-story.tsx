@@ -2,18 +2,14 @@ import { useState } from 'react';
 import { interviewFixtures } from '../../ai/interview/fixtures';
 import recordings from '../../ai/interview/recordings.json';
 import { COVERAGE_LEVEL_LABELS, interviewReadings, interviewTopics, type InterviewObjectiveReading, type InterviewReadingId } from '../../core/interview';
-import type { ResearchRequest } from '../../core/interview-producer';
-import type { DirectorSignal } from '../../core/simulator/director';
 import { formatTime } from '../simulator/conversation';
 import '../simulator/simulator.css';
 
 type Recording = {
-  collectedAt: string; rubricVersion: string; producerVersion: string; source: string;
+  collectedAt: string; rubricVersion: string; source: string;
   rows: {
     fixtureId: string;
     participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: InterviewObjectiveReading[] };
-    interviewer: { model: string; durationMs: number; signals: DirectorSignal[]; researchProbability?: number };
-    producer?: { model: string; durationMs: number; cue: string | null; evidenceIds: string[]; research: ResearchRequest | null };
   }[];
 };
 const recorded = recordings as unknown as Recording;
@@ -40,7 +36,7 @@ export function InterviewJudgingStory() {
         <h1>{fixture.id.replaceAll('-', ' ')}</h1>
         <p>{fixture.description}</p>
       </header>
-      <p className="sim-lab-provenance">Synthetic fixture · {recorded.rubricVersion} · measured {recorded.collectedAt.slice(0, 10)}<br />Participant {row.participant.model} · {row.participant.durationMs} ms · Interviewer {row.interviewer.model} · {row.interviewer.durationMs} ms. Opening this view makes no provider request.</p>
+      <p className="sim-lab-provenance">Synthetic fixture · {recorded.rubricVersion} · measured {recorded.collectedAt.slice(0, 10)}<br />Participant {row.participant.model} · {row.participant.durationMs} ms. Opening this view makes no provider request.</p>
       <div className="sim-lab-grid">
         <div>
           <h2 className="sim-lab-column-title">Conversation evidence</h2>
@@ -50,22 +46,6 @@ export function InterviewJudgingStory() {
               <p>{entry.text}</p>
             </article>
           )}</div>
-          <section className="sim-director-readout">
-            <h3>Private interviewer direction</h3>
-            <>
-              <p>Jev observations: {row.interviewer.signals.map(signal => 'probability' in signal ? `${signal.condition.replaceAll('-', ' ')} ${(signal.probability * 100).toFixed(0)}%` : null).filter(Boolean).join(' · ')}</p>
-              {row.interviewer.researchProbability != null && <p>Public lookup useful: {(row.interviewer.researchProbability * 100).toFixed(0)}%. Sol considers this at its next check-in.</p>}
-              {row.producer?.cue ? <>
-                <blockquote className="sim-evidence"><span>Recorded Sol direction · {row.producer.model} · {row.producer.durationMs} ms</span><p>“{row.producer.cue}”</p></blockquote>
-                <p>{recorded.producerVersion} · Sol directions go to Sam without a Jev delivery check. Synthetic replay; no voice session.</p>
-                {row.producer.evidenceIds.map(entryId => {
-                  const entry = fixture.transcript.find(item => item.id === entryId);
-                  return entry ? <blockquote className="sim-evidence" key={entryId}><span>{entry.speaker === 'trainee' ? 'Participant' : 'Sam'} · {entryId}</span><p>“{entry.text}”</p></blockquote> : null;
-                })}
-              </> : <p>{row.producer ? 'Sol chose no direction for this check-in.' : 'This fixture has not had a Sol replay.'}</p>}
-              {row.producer?.research && <p>Requested lookup: {row.producer.research.name}{row.producer.research.clue && ` · ${row.producer.research.clue}`}. No web lookup runs in this replay.</p>}
-            </>
-          </section>
         </div>
         <div>
           <h2 className="sim-lab-column-title">Participant observations</h2>

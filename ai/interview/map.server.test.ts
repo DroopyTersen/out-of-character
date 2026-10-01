@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { fixtureFoundry } from '../foundry-fixture';
 import {
   appendMapLog, emptyMapLog, generateMap, mapCacheKey, mapInstructions, mapMessages, mapOutputSchema, mapSeed, MapOutputError, MAP_PROMPT_VERSION,
-  mapWireSchema, renderMapTail, researchLogEvent, settledPrefix,
+  mapWireSchema, renderMapTail, researchLogEvent, settledPrefix, unloggedPassages,
 } from './map.server';
 import { emptyMap, MAP_LIMITS, PARTICIPANT_ID } from '../../core/interview-map';
 import { DirectorOutputError } from '../simulator/sol.server';
@@ -18,7 +18,7 @@ const update = {
   entities: [{ id: 'e1', kind: 'product', label: 'Routing layer', detail: 'Built for dispatch, per the participant.', source: 'participant', passageId: 'p2' }],
   edges: [{ id: 'r1', kind: 'built', from: PARTICIPANT_ID, to: 'e1' }],
   threads: [{ id: 't1', label: 'Routing first', anchors: ['e1'], unknown: 'who chose to build routing first', guess: 'the client, to unblock a demo', related: [], topics: ['client-decisions'], status: 'open', reason: null }],
-  keep: [], drop: [],
+  keep: [], drop: [], research: null,
 };
 const solResponse = (value: unknown, usage: Record<string, unknown> = { input_tokens: 9000, output_tokens: 900 }) => Response.json({
   status: 'completed', model: 'gpt-6.1-sol', output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(value) }] }], usage,
@@ -47,6 +47,34 @@ test('events land in time order among the passages logged with them', () => {
 test('a passage still being transcribed holds back everything after it', () => {
   expect(settledPrefix(transcript, entry => entry.id !== 'p2').map(entry => entry.id)).toEqual(['p1']);
   expect(settledPrefix(transcript, () => true)).toBe(transcript);
+});
+
+test('only settled passages whose current text the log lacks are unlogged', () => {
+  const log = appendMapLog(emptyMapLog(), transcript.slice(0, 2));
+  expect(unloggedPassages(log, transcript.slice(0, 2))).toEqual([]);
+  const grown = [transcript[0]!, { ...transcript[1]!, text: 'A routing layer for the dispatch team. It replaced paper maps.' }, transcript[2]!];
+  expect(unloggedPassages(log, grown).map(entry => entry.id)).toEqual(['p2', 'p3']);
+  // Whitespace alone is not new text.
+  expect(unloggedPassages(log, [transcript[0]!, { ...transcript[1]!, text: 'A routing layer for  the dispatch team. ' }])).toEqual([]);
+});
+
+test('the tail lists each lookup with its status and the lookups left', () => {
+  const research = { left: 1, requests: [
+    { kind: 'organization' as const, name: 'Acme', clue: 'logistics', status: 'found; see the event in the log' },
+    { kind: 'term' as const, name: 'offline mode', clue: null, status: 'rejected (name_unspoken)' },
+  ] };
+  expect(renderMapTail(emptyMap(), { ...tail, research })).toContain('RESEARCH (1 lookup left)\n- organization "Acme" (clue: logistics): found; see the event in the log\n- term "offline mode": rejected (name_unspoken)');
+  expect(renderMapTail(emptyMap(), { ...tail, research: { left: 3, requests: [] } })).toContain('RESEARCH (3 lookups left)\n- none requested yet');
+  expect(renderMapTail(emptyMap(), tail)).not.toContain('RESEARCH');
+});
+
+test('a research request comes back beside the update, not inside it', async () => {
+  const ask = { kind: 'product' as const, name: 'routing layer', clue: null, passageIds: ['p2'] };
+  const result = await generateMap({
+    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'attempt-1', blocks: [], previous: emptyMap(), tail, passages: transcript,
+  }, async () => solResponse({ ...update, research: ask }));
+  expect(result.research).toEqual(ask);
+  expect(result.update).not.toHaveProperty('research');
 });
 
 test('research reaches the log as labeled public background', () => {

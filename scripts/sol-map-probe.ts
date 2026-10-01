@@ -28,7 +28,9 @@ const cache = !flags.includes('--no-cache');
 const foundry = foundryConfig(process.env);
 
 type Grade = { source: 'grade'; capturedAt: number; completedAt: number; lastInputId: string | null; objectives?: { id: string; shown: [CoverageLevel, string | null] }[] };
-type Research = { source: 'research'; request: InterviewBackground['target']; outcome: string; facts?: InterviewBackground['facts']; sentAt?: number; completedAt?: number };
+/** Lookups log as found at loggedAt; exports from before the map logged them as sent at sentAt. */
+type Research = { source: 'research'; request: InterviewBackground['target']; outcome: string; facts?: InterviewBackground['facts']; loggedAt?: number; sentAt?: number; completedAt?: number };
+const FOUND = ['found', 'sent'];
 const raw = await Bun.file(path).json();
 const row = (Array.isArray(raw) ? (raw[0]?.results?.[0] ?? raw[0]) : raw) as Record<string, unknown>;
 const json = (field: unknown) => typeof field === 'string' ? JSON.parse(field) : field;
@@ -49,9 +51,9 @@ const toAudio = (wall: number) => {
   const end = anchor && endOf.get(anchor.item.lastInputId!);
   return anchor && end != null ? wall - (anchor.item.capturedAt - end) : null;
 };
-const research = records.filter((item): item is Research => item.source === 'research' && ['sent', 'unresolved'].includes((item as Research).outcome));
+const research = records.filter((item): item is Research => item.source === 'research' && [...FOUND, 'unresolved'].includes((item as Research).outcome));
 const events: (MapLogEvent & { used: boolean })[] = research
-  .flatMap(item => { const at = toAudio(item.sentAt ?? item.completedAt ?? NaN); return at == null || !Number.isFinite(at) ? [] : [{ atMs: at, text: researchLogEvent(item.request, item.outcome === 'sent' ? item.facts ?? null : null), used: false }]; })
+  .flatMap(item => { const at = toAudio(item.loggedAt ?? item.sentAt ?? item.completedAt ?? NaN); return at == null || !Number.isFinite(at) ? [] : [{ atMs: at, text: researchLogEvent(item.request, FOUND.includes(item.outcome) ? item.facts ?? null : null), used: false }]; })
   .sort((a, b) => a.atMs - b.atMs);
 if (events.length < research.length) console.warn(`Skipped ${research.length - events.length} research events with no grade to place them on the audio clock.`);
 

@@ -4,7 +4,7 @@ import type { ConversationMap, MapThread } from './interview-map';
  * Code's half of the turn loop: Jev reads the open threads after each settled participant turn, and code scores them,
  * holds down the ones Jev saw answered, declined or stalled, and picks keep-pulling or a thread to tug. Sol owns thread
  * status; nothing here is ever written back to the map. Every time here (atMs, nowMs, startedAtMs) is interview-elapsed
- * ms, on the transcript's clock.
+ * ms, measured from the session start.
  */
 export const THREAD_STATES = ['open', 'answered', 'declined', 'stalled'] as const;
 export type ThreadState = typeof THREAD_STATES[number];
@@ -67,9 +67,10 @@ export function withTraits(state: RankingState, traits: Record<string, ThreadTra
 
 /**
  * Applies Jev's turn reading: focus sets the current thread, and a turn that answers or declines a thread, or stalls the
- * one being asked about, holds it down. A reading of a thread Sol has since rewritten no longer applies.
+ * one being asked about, holds it down. A reading of a thread Sol has since rewritten no longer applies. A re-read of
+ * a turn that grew replaces the earlier reading without counting as another turn on the current thread.
  */
-export function observeTurn(state: RankingState, map: ConversationMap, reading: TurnReading): RankingState {
+export function observeTurn(state: RankingState, map: ConversationMap, reading: TurnReading, regrown = false): RankingState {
   const open = new Map(openThreads(map).map(thread => [thread.id, thread]));
   const focus = reading.focus != null && open.has(reading.focus) ? reading.focus : null;
   // Stalled means Sam asked and the answer didn't move it, so it only counts for the thread the conversation was or is on.
@@ -84,7 +85,7 @@ export function observeTurn(state: RankingState, map: ConversationMap, reading: 
   }
   return {
     ...state, holds, reading,
-    current: focus, turnsOnCurrent: focus == null ? 0 : focus === state.current ? state.turnsOnCurrent + 1 : 1,
+    current: focus, turnsOnCurrent: focus == null ? 0 : focus === state.current ? state.turnsOnCurrent + (regrown ? 0 : 1) : 1,
   };
 }
 

@@ -3,7 +3,9 @@ import { foundryConfig } from '../ai/foundry.server.ts';
 import { generateScene } from '../ai/scenes.ts';
 import { characters } from '../core/characters.ts';
 import { generateDirector } from '../ai/simulator/director.server.ts';
-import { generateProducer } from '../ai/interview/producer.server.ts';
+import { appendMapLog, emptyMapLog, generateMap } from '../ai/interview/map.server.ts';
+import { evaluateTurn } from '../ai/interview/ranking.server.ts';
+import { emptyMap } from '../core/interview-map.ts';
 import { lookupInterviewBackground } from '../ai/interview/research.server.ts';
 import { summarizeInterview } from '../ai/interview/summary.server.ts';
 import { generateReport } from '../ai/simulator/report.server.ts';
@@ -24,6 +26,8 @@ const transcript = [
   { id: 'p4', speaker: 'trainee', text: 'We agreed the format first and avoided rework. Next time I would include sample payload testing in the estimate.', startMs: 15000, endMs: 21000 },
 ];
 const signal = () => AbortSignal.timeout(90_000);
+// Jev reads the turn against Sol's map; with no map it still reads whether the turn is new.
+let map = emptyMap();
 const consume = async generate => {
   let result, text = '', chunks = 0;
   for await (const chunk of generate(value => { result = value; })) { text += chunk; chunks++; }
@@ -35,9 +39,17 @@ const checks = {
   scene: async () => ({ text: await generateScene({ characterId: characters[0].id, history: [], foundry, signal: signal() }) }),
   director: async () => generateDirector({ audience: 'trainee', reason: { condition: 'objective:decision', selected: true },
     scenarioId: 'proposal', clientId: 'morgan', transcript, objectives: [], history: [], foundry, signal: signal() }),
-  producer: async () => generateProducer({ clientId: 'sam-cedar', transcript, coverage: [], history: [],
-    startedAt: Date.now() - 120_000, now: Date.now(), triggers: [{ kind: 'check-in' }],
-    budget: { cuesLeft: 15, researchLeft: 4, lookupsInFlight: 0 }, foundry, signal: signal() }),
+  map: async () => {
+    const result = await generateMap({ foundry, signal: signal(), attemptId: `smoke-${crypto.randomUUID()}`,
+      blocks: appendMapLog(emptyMapLog(), transcript).blocks, previous: emptyMap(), passages: transcript,
+      tail: { coverage: [], reasons: ['first participant answer'], elapsedMs: 21_000, lastPassageId: 'p4' } });
+    map = result.map;
+    return { model: result.model, threads: map.threads.length, entities: map.entities.length, research: result.research, usage: result.usage };
+  },
+  ranking: async () => {
+    const result = await evaluateTurn({ transcript, map, apiKey: process.env.TYPESAFE_API_KEY, signal: signal(), atMs: 21_000 });
+    return { model: result.model, durationMs: result.durationMs, threads: Object.keys(result.reading.states).length };
+  },
   research: async () => {
     const result = await lookupInterviewBackground({ target: { kind: 'product', name: 'OpenStreetMap' }, clue: null, foundry, signal: signal() });
     if (result.status !== 'found') throw new Error(`Public research unresolved: ${result.reason}`);

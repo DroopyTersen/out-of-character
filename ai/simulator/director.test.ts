@@ -44,7 +44,7 @@ test('actor context excludes consultant plans, scoring, and hint history', () =>
 });
 
 test('interview scenarios are rejected; the interview producer owns Sam direction', () => {
-  expect(() => directorContext({ ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor', reason: { condition: 'missed-thread', probability: .91 } }))
+  expect(() => directorContext({ ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor', reason: { condition: 'knowledge', probability: .91 } }))
     .toThrow('Interview direction uses the interview producer.');
 });
 

@@ -28,6 +28,9 @@ export function listNote(map: ConversationMap, pick: Pick): string | null {
   ].join('\n');
 }
 
+/** Replaces a list note whose lead Sol has since closed, when no open thread is left to pull on. */
+export const EMPTY_LIST_NOTE = `${NOTE_HEADERS.list}\nNo open thread right now: follow the participant.`;
+
 /** A new list note goes out only when the pick moves or Sol rewrites the lead; the nearby threads changing alone isn't worth one. */
 export function listNoteKey(map: ConversationMap, pick: Pick): string {
   const lead = map.threads.find(thread => thread.id === pick.lead);

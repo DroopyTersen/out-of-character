@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { gradeObjectives } from './interview-producer';
+import { fitRecords, gradeObjectives, type GradeRecord, type MapRecord, type ProducerLogRecord } from './interview-producer';
 import { interviewTopics, type CoverageLevel, type InterviewObjectiveReading } from './interview';
 
 const reading = (id: string, level: CoverageLevel, entryId: string | null, levels: Partial<Record<CoverageLevel, number>> | null = null): InterviewObjectiveReading => ({
@@ -27,4 +27,37 @@ test('a full hour of compact grades leaves room for dialogue and producer record
   }));
   // Leave 600 KB for the bounded transcript, summary, producer and provenance fields.
   expect(new TextEncoder().encode(JSON.stringify(records)).byteLength).toBeLessThan(1_400_000);
+});
+
+test('records over the row budget shed live grade objectives evenly, then Sol updates oldest first', () => {
+  const grade = (index: number, final = false): GradeRecord => ({
+    source: 'grade', id: `grade-${index}`, final, revision: index, capturedAt: index, completedAt: index, inputCount: 1, lastInputId: 'p1', outcome: 'graded', durationMs: 1,
+    objectives: [{ id: 'a', shown: ['touched', 'p1'], graded: ['touched', 'p1'], levels: [.1, .6, .2, .1] }],
+  });
+  const map = (index: number): MapRecord => ({
+    source: 'map', id: `map-${index}`, reasons: ['the participant spoke'], startedAt: index, completedAt: index, outcome: 'applied', inputCount: 1, lastInputId: 'p1', model: 'sol',
+    update: { keep: [], drop: [], participant: { vantage: 'They led the routing work.', preferences: [] }, entities: [], edges: [], threads: [] },
+    changes: { added: [], changed: [], dropped: [] }, research: null,
+  });
+  const size = (items: ProducerLogRecord[]) => new TextEncoder().encode(JSON.stringify(items)).byteLength;
+  const graded = (items: ProducerLogRecord[]) => items.flatMap(item => item.source === 'grade' && item.objectives ? [item.id] : []);
+  const updated = (items: ProducerLogRecord[]) => items.flatMap(item => item.source === 'map' && item.update ? [item.id] : []);
+  const records = [map(1), ...Array.from({ length: 8 }, (_, index) => grade(index + 1)), grade(9, true), map(2)];
+  const copy = structuredClone(records);
+
+  expect(fitRecords(records, size(records))).toEqual(records);
+  const thinned = fitRecords(records, size(records) - 1);
+  expect(graded(thinned)).toEqual(['grade-1', 'grade-3', 'grade-5', 'grade-7', 'grade-9']);
+  expect(updated(thinned)).toEqual(['map-1', 'map-2']);
+  const bare = fitRecords(records, 0);
+  expect(graded(bare)).toEqual(['grade-1', 'grade-9']);
+  expect(updated(bare)).toEqual([]);
+  expect(bare[1]).toEqual(grade(1));
+  const { objectives: _, ...thin } = grade(2);
+  expect(bare[2]).toEqual(thin);
+
+  // Room for one update keeps the newest.
+  const newest = bare.with(-1, map(2));
+  expect(fitRecords(records, size(newest))).toEqual(newest);
+  expect(records).toEqual(copy);
 });

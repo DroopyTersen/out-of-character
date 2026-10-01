@@ -4,18 +4,20 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
-import { evaluateInterview, evaluateInterviewer } from '../ai/interview/evaluate.server.ts';
+import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
+import { settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
-import { coverageEvidenceIds, INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
-import { producerDirection } from '../core/interview-producer.ts';
+import { INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
+import { NOTE_HEADERS } from '../core/interview-notes.ts';
 import { interviewTurnGaps } from '../core/interview-timeline.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
 import { InterviewProducer, producerServices } from '../app/server/simulator/interview-producer.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
-// real GPT-Live supplies the client and Jev gates contextual private directions from Sol.
+// real GPT-Live supplies the client. In interviews the producer sends Sam its thread and map
+// notes; elsewhere Jev gates contextual private directions from Sol.
 // A plan chooses each trainee line from what the client has actually said so far.
 // Usage: bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid
 //   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--max-seconds=180]
@@ -31,11 +33,7 @@ const clientId = option('client') ?? 'morgan';
 const approach = option('plan') ?? (process.argv.includes('--poor') ? 'poor' : 'good');
 const label = option('label');
 const maxSeconds = Number(option('max-seconds') ?? 180);
-// Explicit isolation test: a synthetic positive trigger exercises real research
-// delivery without claiming that Jev chose it in a natural conversation.
-const exerciseResearch = process.argv.includes('--exercise-research');
 const notesEnabled = !process.argv.includes('--no-notes');
-if (exerciseResearch && (!isInterview || approach !== 'research')) throw new Error('--exercise-research requires the interview research plan.');
 const maxAllowed = isInterview ? 480 : 300;
 if (!Number.isInteger(maxSeconds) || maxSeconds < 60 || maxSeconds > maxAllowed) throw new Error(`--max-seconds must be an integer from 60 to ${maxAllowed}.`);
 // A real participant waits after a bare acknowledgment instead of rescuing the interviewer.
@@ -107,7 +105,7 @@ const plans = {
       choose: ({ turn }) => ['project', 'tradeoff', 'effect', 'stop'][turn],
     },
     'cue-in-flight': {
-      turns: 4, cue: 'Ask who made the final launch approval decision.', cueDuringSpeech: true,
+      turns: 4, cue: { label: 'Launch approval', unknown: 'who made the final launch approval decision' }, cueDuringSpeech: true,
       lines: {
         project: 'We built a booking portal for an unnamed agency. I led the API. We had a final launch approval meeting.',
         reply: 'The implementation itself was straightforward. The important piece was getting the launch approved.',
@@ -117,7 +115,7 @@ const plans = {
       choose: ({ turn, answer }) => turn === 0 ? 'project' : turn === 3 ? 'stop' : /who|approv|decision|sign.?off/i.test(answer) ? 'owner' : 'reply',
     },
     'cue-answered': {
-      turns: 3, cue: 'Ask who made the final launch approval decision.',
+      turns: 3, cue: { label: 'Launch approval', unknown: 'who made the final launch approval decision' },
       lines: {
         project: 'We built a booking portal for an unnamed agency. I led the API. We had a final launch approval meeting.',
         answer: 'The operations director Elena made the final launch decision. She watched a passing service desk rehearsal and approved it that afternoon.',
@@ -128,7 +126,7 @@ const plans = {
     // Controlled earpiece test: a real voice session must prioritize newer speech over this older cue.
     'fresh-disclosure': {
       turns: 4,
-      cue: 'Ask who owned client approval before moving on.',
+      cue: { label: 'Client approval', unknown: 'who owned client approval' },
       lines: {
         project: 'We built a booking portal for an unnamed regional agency. I owned the API. We had weekly reviews, and I had planned to tell you about the approvals.',
         disclosure: 'Actually, something more important just came back to me. Priya, our newest developer, caught a duplicate charge in the final test. The finance lead had been dismissing her questions all week. That changed how our team handled the launch.',
@@ -170,7 +168,7 @@ const plans = {
     // Multi-topic continuity: an older cue arrives as a fresh client story starts,
     // then a knowledge limit, a tradeoff, client roles and a request to finish.
     continuity: {
-      turns: 9, cue: 'Ask how they prepared Dana for the handoff.',
+      turns: 9, cue: { label: 'Dana’s handoff', unknown: 'how they prepared Dana for the handoff' },
       lines: {
         project: 'We built a stock count app for an unnamed regional grocery chain. I was the delivery lead for the first eight weeks. Dana took over from me before launch because I went on leave.',
         disclosure: 'Actually, something more useful comes to mind first. Their night shift supervisor, Rosa, tested every build on the store floor. She rejected our first release because the scanner screen timed out while people were lifting cases. After we fixed that, she sent us one real problem every week.',
@@ -477,7 +475,6 @@ report.notesEnabled = notesEnabled;
 report.timing = { transport: 'websocket', input: 'TTS with digital silence', lockstep: isInterview && notesEnabled && approach !== 'research', participantFloorMs: 2500, statementReleaseMs: DEAD_AIR_MS, questionRelease: 'Output transcript contains a question mark', purpose: 'Contract smoke; human pacing requires browser listening review.' };
 report.thoughtPauses = [];
 report.maxInputLatenessMs = 0;
-report.controlledResearchTrigger = exerciseResearch;
 session.model = foundry.liveModel;
 const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
 let pacing, producerTimer, deadline, closing = false, deciding = false, clip, selectedClip, offset = 0, openingSentAt = 0, lastOutput = 0, firstAudibleOutput = 0, lastAudibleOutput = 0, lastAudibleInput = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, turn = 0, outputStart = 0;
@@ -499,37 +496,20 @@ const passageUpdatedAt = new Map();
 const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
 const startedAt = Date.now();
 const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
-const producer = isInterview ? new InterviewProducer({ clientId, startedAt, coverage: () => coverage, foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices, settled, send,
-  canDeliverCue: () => Date.now() - Math.max(lastAudibleOutput, lastOutput) >= 600,
-}) : null;
+// As in the session, Sol's append-only log reads only up to the first passage still being transcribed.
+const prefix = () => { const ready = new Set(settled()); return settledPrefix(report.transcript, entry => ready.has(entry)); };
+const producer = isInterview ? new InterviewProducer({ attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices, settled: prefix, send }) : null;
 const directions = producer ?? contextual;
 if (!notesEnabled) directions.close();
 report.interventions = directions.records;
 const close = () => { if (closing) return; closing = true; report.closeRequestedAt = Date.now(); report.inputClockDriftMs = inputStartedAt ? Date.now() - inputStartedAt - inputBytes / 48 : null; directions.close(); clearInterval(producerTimer); clearTimeout(pacing); send({ type: 'session.close' }); };
 async function observeClient(afterTurn, transcript) {
   if (producer) {
-    if (!producer.canObserve) return;
-    const capturedAt = Date.now();
-    const input = { scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) };
+    // Coverage only: the producer reads turns, calls Sol and sends notes on its own tick.
     try {
-      const [judged, graded] = await Promise.allSettled([
-        evaluateInterviewer({ ...input, cue: producer.cue(), deliveredBackground: producer.background() }),
-        evaluateInterview({ ...input, keepIds: coverageEvidenceIds(coverage) }),
-      ]);
-      if (closing) return;
-      if (graded.status === 'fulfilled') coverage = mergeCoverage(coverage, graded.value.objectives);
-      else report.errors.push(`Participant grading failed (${graded.reason.name}).`);
-      if (judged.status === 'rejected') throw judged.reason;
-      const judgment = judged.value;
-      report.directions.push({ afterTurn, signals: judgment.signals, researchProbability: judgment.researchProbability, followThrough: judgment.followThrough,
-        ...(exerciseResearch && afterTurn === 2 ? { suppliedResearchProbability: 1 } : {}) });
-      producer.observe({ transcript, capturedAt, signals: judgment.signals, model: judgment.model, followThrough: judgment.followThrough,
-        researchProbability: exerciseResearch && afterTurn === 2 ? 1 : judgment.researchProbability });
-      producer.tick();
-    } catch (error) {
-      producer.observe({ transcript, capturedAt, signals: [], failure: error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
-      report.directions.push({ afterTurn, unavailable: true, error: error.name });
-    }
+      const graded = await evaluateInterview({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
+      if (!closing) coverage = mergeCoverage(coverage, graded.objectives);
+    } catch (error) { report.errors.push(`Participant grading failed (${error.name}).`); }
     return;
   }
   if (!contextual.canObserveActor) return;
@@ -545,8 +525,10 @@ async function observeClient(afterTurn, transcript) {
 }
 function sendControlledCue() {
   const eventId = 'rehearsal-cue';
-  report.controlledCue = { eventId, cue: plan.cue, afterPassageId: report.transcript.at(-1)?.id ?? null, sentAt: Date.now(), acknowledgedAt: null, followThrough: 'Manual review; this controlled cue is outside the producer loop.', duringSpeech: !!plan.cueDuringSpeech };
-  send({ type: 'session.instructions.append', event_id: eventId, delegation_id: null, content: producerDirection(plan.cue) });
+  // A hand-written thread note on the producer's channel and template.
+  const content = `${NOTE_HEADERS.list}\nWorth pulling next (${plan.cue.label}): still unknown: ${plan.cue.unknown}.`;
+  report.controlledCue = { eventId, cue: content, afterPassageId: report.transcript.at(-1)?.id ?? null, sentAt: Date.now(), acknowledgedAt: null, followThrough: 'Manual review; this controlled note is outside the producer loop.', duringSpeech: !!plan.cueDuringSpeech };
+  send({ type: 'session.thinking.append', event_id: eventId, delegation_id: null, content });
 }
 // After an interview participant asks to finish, Sam's reply ends the rehearsal.
 const finished = () => isInterview && used.has('stop');
@@ -556,24 +538,14 @@ async function respond() {
   const spoken = report.transcript.filter(entry => entry.speaker === 'client');
   const answer = samSinceLastLine();
   const id = turn < plan.turns && !finished() ? plan.choose({ turn, answer, heard: spoken.map(entry => entry.text).join(' '), used }) : null;
-  // For interviews, finish a private review before the next participant line.
+  // For interviews, finish grading before the next participant line.
   // The final Sam reply is left unprompted so an earlier note has a fair response window.
   if (turn && (!isInterview || id)) {
     const observation = observeClient(turn, [...report.transcript]);
     observations.push(observation);
     if (isInterview && approach !== 'research') await observation;
   }
-  if (!id) {
-    if (isInterview && turn) {
-      // Measure Sam's reply after the last possible note without proposing an
-      // unobservable new note at the moment the rehearsal closes.
-      try {
-        const result = await evaluateInterviewer({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(2500), deliveredBackground: producer.background(), cue: producer.cue() });
-        report.finalObservation = { signals: result.signals, followThrough: result.followThrough, model: result.model, durationMs: result.durationMs };
-      } catch (error) { report.finalObservation = { unavailable: true, error: error.name }; }
-    }
-    close(); return;
-  }
+  if (!id) { close(); return; }
   if (plan.cue && !plan.cueDuringSpeech && turn === 1) {
     sendControlledCue();
     const until = Date.now() + 3000;
@@ -592,7 +564,7 @@ const completed = new Promise(resolve => {
   ws.addEventListener('message', event => {
     if (typeof event.data !== 'string') return;
     const value = JSON.parse(event.data);
-    if (value.type === 'session.instructions.appended' && value.client_event_id === report.controlledCue?.eventId) Object.assign(report.controlledCue, { acknowledgedAt: Date.now(), startMs: value.start_ms, endMs: value.end_ms });
+    if (value.type === 'session.thinking.appended' && value.client_event_id === report.controlledCue?.eventId) Object.assign(report.controlledCue, { acknowledgedAt: Date.now(), startMs: value.start_ms, endMs: value.end_ms });
     if (value.type === 'session.started') {
       report.providerSessionId = value.session?.id ?? null;
       // Same opening request as the production session owner.
@@ -676,7 +648,7 @@ const completed = new Promise(resolve => {
     } else if (value.type === 'error') {
       report.providerErrors.push({ at: Date.now(), afterTurn: turn, closing, error: value.error });
       const eventId = value.error?.client_event_id;
-      if (typeof eventId === 'string' && /^(cue|research|rundown)-/.test(eventId)) { directions.providerEvent(eventId, false); }
+      if (typeof eventId === 'string' && /^(cue|note)-/.test(eventId)) { directions.providerEvent(eventId, false); }
       else if (!(closing && value.error?.code === 'output_creation_failed')) report.errors.push({ code: value.error?.code ?? 'unknown', command: eventId ?? null });
     }
   });
@@ -687,7 +659,7 @@ try {
   await completed;
   if (report.finalized && report.transcript.some(entry => entry.speaker === 'trainee')) {
     const evaluate = isInterview ? evaluateInterview : evaluateTrainee;
-    report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000), ...(producer ? { keepIds: coverageEvidenceIds(coverage) } : {}) });
+    report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {

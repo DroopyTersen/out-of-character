@@ -1,4 +1,4 @@
-import type { Evidence, ObjectiveReading, SkillReading } from './simulator/types';
+import type { ObjectiveReading, SkillReading } from './simulator/types';
 import { z } from 'zod';
 
 export const INTERVIEW_SCENARIO_ID = 'project-closeout';
@@ -104,10 +104,6 @@ export const COVERAGE_LEVEL_LABELS: Record<CoverageLevel, string> = { 'not-yet':
 export function coverageConfidence(reading: Pick<InterviewObjectiveReading, 'level' | 'levels'> | undefined): number | null {
   if (!reading?.levels || reading.level === 'not-yet') return null;
   return reading.level === 'touched' ? 1 - reading.levels['not-yet'] : reading.levels[reading.level];
-}
-
-export function coverageEvidenceIds(objectives: { evidence: Evidence | null }[]): string[] {
-  return [...new Set(objectives.flatMap(item => item.evidence ? [item.evidence.entryId] : []))];
 }
 
 export function emptyInterviewReadings(): InterviewEvaluation['readings'] {

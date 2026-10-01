@@ -1,7 +1,7 @@
 import type { InterviewSession } from '../../../core/interview';
 import type { SessionSnapshot } from '../../../core/simulator/types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
-import type { ProducerLogRecord } from '../../../core/interview-producer';
+import { fitRecords, type ProducerLogRecord } from '../../../core/interview-producer';
 
 export type InterviewArchiveWrite = {
   state: 'partial' | 'final';
@@ -10,6 +10,10 @@ export type InterviewArchiveWrite = {
   provenance: ArchiveProvenance;
   interventions: ProducerLogRecord[];
 };
+
+/** D1 rejects a row over 2,000,000 bytes; the margin covers row overhead. */
+export const ROW_BYTES = 1_990_000;
+const encoder = new TextEncoder();
 
 /** Interview rows stay outside routine simulator transcript exports. */
 export async function writeInterviewArchive(db: D1Database, { state, capturedAt, snapshot, provenance, interventions }: InterviewArchiveWrite): Promise<void> {
@@ -20,8 +24,11 @@ export async function writeInterviewArchive(db: D1Database, { state, capturedAt,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.interview.evaluation ? JSON.stringify(snapshot.interview.evaluation) : null,
     summary?.status ?? 'pending', summary?.text ?? null,
-    JSON.stringify(provenance), '[]', JSON.stringify(interventions),
+    JSON.stringify(provenance), '[]',
   ];
+  // Producer records take whatever the rest of the row leaves.
+  const used = columns.reduce<number>((sum, value) => sum + (typeof value === 'string' ? encoder.encode(value).byteLength : 8), 0);
+  columns.push(JSON.stringify(fitRecords(interventions, ROW_BYTES - used)));
   const result = await db.prepare(`
     INSERT INTO interview_attempts (
       id, scenario_id, interviewer_id, started_at, updated_at, ended_at, archive_state,

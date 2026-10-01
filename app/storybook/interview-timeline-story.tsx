@@ -9,38 +9,34 @@ import '../interview/interview.css';
 
 const startedAt = Date.UTC(2026, 0, 5, 15);
 const at = (seconds: number) => startedAt + seconds * 1000;
-/** Synthetic dialogue, grades, an unresolved lookup, a declined follow-up, a sent cue and rundowns. */
+/** Synthetic dialogue, grades, two map calls, Jev readings, an unresolved lookup and notes to Sam. */
 const records: ProducerLogRecord[] = [
+  { source: 'map', id: 'map-1', reasons: ['the participant spoke'], startedAt: at(9.5), completedAt: at(12.6), outcome: 'applied', inputCount: 2, lastInputId: 'u1', model: 'gpt-6.1-sol',
+    changes: { added: ['e1', 'e2', 't1', 't2'], changed: [], dropped: [] }, research: null },
+  { source: 'traits', id: 'traits-1', mapId: 'map-1', threadIds: ['t1', 't2'], startedAt: at(12.6), completedAt: at(13.5), outcome: 'read', durationMs: 900, traits: { t1: [.35, .9], t2: [.8, .2] } },
+  { source: 'note', id: 'note-1', kind: 'list', text: 'Threads to pull\n- Who the field teams were, and how they worked before.\n- Nearby: what the technical lead decided.', mapId: 'map-1',
+    sentAt: at(12.7), outcome: 'sent', delivery: { eventId: 'note-1', afterPassageId: 'u1', status: 'accepted' }, nextSamTurnAt: at(14.6), nextSamTurnAfterId: 'u1' },
   { source: 'grade', id: 'grade-1', final: false, revision: 2, capturedAt: at(15), completedAt: at(15.3), inputCount: 2, lastInputId: 'u1', outcome: 'graded', durationMs: 300,
     objectives: [{ id: 'project-delivery', shown: ['explored', 'u1'], graded: ['explored', 'u1'], levels: [.01, .03, .95, .01] }] },
+  { source: 'turn', id: 'turn-1', passageId: 'u2', mapId: 'map-1', startedAt: at(29.5), completedAt: at(30.7), outcome: 'read', durationMs: 1200,
+    reading: { atMs: 29_500, focus: 't1', novel: .86, natural: { t1: .7, t2: .4 }, states: { t1: 'answered', t2: 'open' } },
+    pick: { current: 't1', action: 'tug', lead: 't2', nearby: [], ranked: [['t2', .66, 'elsewhere']] } },
+  { source: 'note', id: 'note-2', kind: 'list', text: 'Threads to pull\n- What made the team change course.', mapId: 'map-1', turnId: 'turn-1',
+    sentAt: at(30.7), outcome: 'sent', delivery: { eventId: 'note-2', afterPassageId: 'u2', status: 'accepted' }, nextSamTurnAt: at(32), nextSamTurnAfterId: 'u2' },
+  { source: 'map', id: 'map-2', reasons: ['the participant’s latest turn (u2) adds something the map lacks'], startedAt: at(31), completedAt: at(35.6), outcome: 'applied',
+    inputCount: 4, lastInputId: 'u2', model: 'gpt-6.1-sol', changes: { added: ['e3', 't3'], changed: ['t2'], dropped: [] },
+    research: { kind: 'term', name: 'offline use', clue: null, passageIds: ['u2'] } },
+  { source: 'research', id: 'research-1', mapId: 'map-2', request: { kind: 'term', name: 'offline use', clue: null, passageIds: ['u2'] }, model: 'gpt-6-luna',
+    requestedAt: at(35.6), lookupAt: at(50.4), completedAt: at(50.4), loggedAt: at(52), outcome: 'unresolved', reason: 'Too general to identify one public source.' },
   { source: 'grade', id: 'grade-2', final: false, revision: 4, capturedAt: at(31), completedAt: at(31.2), inputCount: 4, lastInputId: 'u2', outcome: 'graded', durationMs: 200,
     objectives: [{ id: 'project-delivery', shown: ['explored', 'u1'], graded: ['touched', 'u2'], levels: [.02, .37, .6, .01] }] },
-  { source: 'assessment', id: 'assessment-1', snapshotAt: at(15), completedAt: at(17.2), model: 'jev-1.13.0', inputCount: 2, lastInputId: 'u1',
-    signals: [{ condition: 'missed-thread', probability: .22 }, { condition: 'leading', probability: .04 }], researchProbability: .71, outcome: 'observed', concerns: [] },
-  { source: 'producer', id: 'producer-1', triggers: [{ kind: 'check-in' }, { kind: 'signal', condition: 'research', probability: .71 }], queued: false, model: 'gpt-6-sol', effort: 'none',
-    inputCount: 4, lastInputId: 'u2', triggeredAt: at(31.8), startedAt: at(31.8), generatedAt: at(33.1), completedAt: at(33.1), outcome: 'none',
-    result: { cue: null, evidenceIds: [], research: { kind: 'term', name: 'offline use', clue: null, passageIds: ['u2'] } } },
-  { source: 'research', id: 'research-1', consultationId: 'producer-1', request: { kind: 'term', name: 'offline use', clue: null, passageIds: ['u2'] }, model: 'gpt-6-luna',
-    requestedAt: at(33.1), lookupAt: at(47.9), completedAt: at(47.9), outcome: 'unresolved', reason: 'Too general to identify one public source.' },
-  { source: 'rundown', id: 'rundown-1', sentAt: at(34), reason: 'change', elapsedMinutes: 1, levels: { 'project-delivery': 'explored', 'project-role': 'explored' }, outcome: 'sent',
-    delivery: { eventId: 'rundown-1', afterPassageId: 'u2', status: 'accepted' } },
-  { source: 'assessment', id: 'assessment-2', snapshotAt: at(40), completedAt: at(42.6), model: 'jev-1.13.0', inputCount: 6, lastInputId: 'u3',
-    signals: [{ condition: 'missed-thread', probability: .64 }, { condition: 'leading', probability: .06 }], researchProbability: .2, outcome: 'observed', concerns: [] },
-  { source: 'producer', id: 'producer-2', triggers: [{ kind: 'research', researchId: 'research-1', status: 'unresolved' }, { kind: 'signal', condition: 'missed-thread', probability: .64 }],
-    queued: false, model: 'gpt-6-sol', effort: 'none', inputCount: 6, lastInputId: 'u3', triggeredAt: at(47.9), startedAt: at(47.9), generatedAt: at(49.2),
-    completedAt: at(49.2), outcome: 'none', result: { cue: null, evidenceIds: [], research: null } },
-  { source: 'producer', id: 'producer-3', triggers: [{ kind: 'check-in' }], queued: true, model: 'gpt-6-sol', effort: 'none', inputCount: 6, lastInputId: 'u3',
-    triggeredAt: at(48.5), startedAt: at(50.1), generatedAt: at(51.3), sentAt: at(51.3), nextSamTurnAt: at(54.2), nextSamTurnAfterId: 'u3', completedAt: at(51.3), outcome: 'sent',
-    result: { cue: 'Ask what the client did with the synthetic-data caveat.', evidenceIds: ['u3'], research: null },
-    delivery: { eventId: 'cue-3', afterPassageId: 'u3', status: 'accepted' } },
-  { source: 'rundown', id: 'rundown-2', sentAt: at(60), reason: 'change', elapsedMinutes: 1,
-    levels: { 'project-delivery': 'explored', 'project-role': 'explored', 'project-reflection': 'touched', 'client-access': 'explored' }, outcome: 'sent',
-    delivery: { eventId: 'rundown-2', afterPassageId: 'u4', status: 'accepted' } },
+  { source: 'note', id: 'note-3', kind: 'map', text: 'Conversation map\nThe participant led the technical work on a field-inspection prototype.', mapId: 'map-2',
+    sentAt: at(79), outcome: 'sent', delivery: { eventId: 'note-3', afterPassageId: 'u4', status: 'accepted' } },
 ];
 
 export function InterviewTimelineStory() {
-  const [lanes, setLanes] = useState<TimelineLane[]>(TIMELINE_LANES.filter(lane => lane !== 'assessment' && lane !== 'grade'));
-  const [source, setSource] = useState<{ name: string; startedAt: number; transcript: TranscriptEntry[]; records: ProducerLogRecord[] }>({ name: 'Synthetic interview', startedAt, transcript, records });
+  const [lanes, setLanes] = useState<TimelineLane[]>(TIMELINE_LANES.filter(lane => lane !== 'traits' && lane !== 'grade'));
+  const [source, setSource] = useState<{ name: string; startedAt: number; transcript: TranscriptEntry[]; records: ProducerLogRecord[]; skipped: number }>({ name: 'Synthetic interview', startedAt, transcript, records, skipped: 0 });
   const [error, setError] = useState<string | null>(null);
   const rows = useMemo(() => producerTimeline(source), [source]);
   const latency = producerLatency(source.records);
@@ -54,12 +50,13 @@ export function InterviewTimelineStory() {
       {TIMELINE_LANES.map(lane => <label className="workshop-check" key={lane}><input type="checkbox" checked={lanes.includes(lane)} onChange={event => setLanes(value => event.target.checked ? [...value, lane] : value.filter(item => item !== lane))} /> {lane}</label>)}
       <label>Archive JSON<input type="file" accept="application/json,.json" onChange={event => { void load(event.target.files?.[0]); }} /></label>
       {error && <span role="status">{error}</span>}
+      {source.skipped > 0 && <span role="status">{source.skipped} records from an earlier producer version are not shown.</span>}
     </div>
     <div className="sim-lab">
       <header className="sim-lab-heading">
         <span className="eyebrow">PRODUCER DEBUG · {source.name.toUpperCase()}</span>
         <h1>Producer timeline</h1>
-        <p>Dialogue, Sol consultations, research cards, rundowns and assessments in one order, with each step’s latency. A loaded file stays in this browser; opening this view makes no provider request.</p>
+        <p>Dialogue, Sol’s map calls, Jev’s readings, notes to Sam and lookups in one order, with each step’s latency. A loaded file stays in this browser; opening this view makes no provider request.</p>
       </header>
       <p className="sim-lab-checks">{Object.entries(latency).map(([name, stat]) => <span key={name}>{name} {stat ? `p50 ${stat.p50} · p90 ${stat.p90} ms · n ${stat.count}` : '—'}</span>)}</p>
       <ol className="interview-timeline">{rows.filter(row => lanes.includes(row.lane)).map(row => <li key={`${row.lane}-${row.id}`} data-lane={row.lane}>

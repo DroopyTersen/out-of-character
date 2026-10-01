@@ -6,6 +6,7 @@
  * A map applies once its Sol call finished (start plus latency); the replay stops a cadence after the last Sol call. The report holds transcript-derived notes: keep it out of the repo.
  */
 import { evaluateTraits, evaluateTurn, latestTurn } from '../ai/interview/ranking.server';
+import { isBackchannel } from '../core/interview';
 import type { ConversationMap } from '../core/interview-map';
 import { listNote, listNoteKey, mapNote, mapNoteKey } from '../core/interview-notes';
 import { emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadsNeedingTraits, withTraits, type Pick, type TurnReading } from '../core/interview-ranking';
@@ -35,7 +36,12 @@ const visibleAt: number[] = [];
 transcript.forEach((entry, index) => visibleAt.push(Math.max(index ? visibleAt[index - 1]! : 0, entry.endMs + SETTLE_MS)));
 // Past the Sol probe's last call plus one cadence the map would be stale, so the replay stops there.
 const end = Math.max(...report.rows.map(item => item.atMs)) + report.cadence;
-const turns = transcript.flatMap((entry, index) => entry.speaker === 'trainee' && transcript[index + 1]?.speaker !== 'trainee' && visibleAt[index]! <= end
+// A participant turn ends where Sam says more than a backchannel, as latestTurn reads it.
+const samRepliesAfter = (index: number) => {
+  for (const entry of transcript.slice(index + 1)) { if (entry.speaker === 'trainee') return false; if (!isBackchannel(entry.text)) return true; }
+  return true;
+};
+const turns = transcript.flatMap((entry, index) => entry.speaker === 'trainee' && samRepliesAfter(index) && visibleAt[index]! <= end
   ? [{ index, atMs: visibleAt[index]! }] : []);
 
 type Row = {
@@ -84,10 +90,10 @@ for (const turn of turns.slice(0, limit)) {
       natural: result.reading.natural, states: result.reading.states, holds: Object.keys(state.holds),
       pick: { ...pick, top: ranked.slice(0, 4).map(entry => [entry.id, +entry.score.toFixed(2), entry.band]) },
     };
-    const key = listNoteKey({ ...pick, ranked });
+    const key = listNoteKey(map, { ...pick, ranked });
     if (key !== lastList) { lastList = key; const note = listNote(map, { ...pick, ranked }); if (note) item.listNote = note; }
     const mapKey = mapNoteKey(map);
-    if (mapKey !== lastMap) { lastMap = mapKey; item.mapNote = mapNote(map); }
+    if (mapKey !== lastMap) { lastMap = mapKey; const note = mapNote(map); if (note) item.mapNote = note; }
   } catch (error) {
     item = { passageId, atMs: turn.atMs, mapCall: applied!.call, focus: null, novel: 0, durationMs: Math.round(performance.now() - started), error: String(error),
       pick: { current: state.current, action: 'none', lead: null, nearby: [], top: [] } };
@@ -111,7 +117,7 @@ const summary = {
   traitCalls: traitCalls.length, traitErrors: traitCalls.filter(item => item.error).length,
   novelWakes: ok.filter(item => item.novel >= RANKING.novel).length,
   noPick: ok.filter(item => item.pick.action === 'none').length,
-  // A→B→A: the lead returns to a thread it left within the last three changes.
+  // A→B→A: the lead changes back to one of the two leads before the one it just left.
   leadReturns: leads.reduce((count, lead, index) => { const changes = leads.slice(0, index).filter((value, i, list) => value !== list[i - 1]); return count + (lead != null && lead !== leads[index - 1] && changes.slice(-3, -1).includes(lead) ? 1 : 0); }, 0),
 };
 console.log('\nSummary', JSON.stringify(summary, null, 2));

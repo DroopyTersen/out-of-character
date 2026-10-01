@@ -142,7 +142,7 @@ The ranking questions merge into **one Jev call per settled participant turn**, 
 |---|---|---|
 | Focus | Which open thread is the conversation on right now? (choice, including "none / something new") | Sets the current thread, for keep-pulling vs. nearby |
 | Natural next | For each open thread: could this be the next question, given what they just said? | Highest weight |
-| State | For each open thread: answered, declined, asked without getting anywhere, or still open? (choice) | Holds the thread down in the ranking until Sol decides (see Crossing out) |
+| State | For each open thread: does the latest turn answer it, decline it, or (for the thread Sam asked about) stall it? (choice; earlier turns are context only) | Holds the thread down in the ranking until Sol decides (see Crossing out): answered and declined until Sol's next call starts, at most 2 min; stalled for 3 min |
 | Substantially new | Does this turn name a person, decision, event, product part, limit or interview preference **not in this list**: `<entity labels>`? | Wakes Sol early |
 
 Focus "something new" and Substantially new overlap. Both stay for now, and the harness shows whether one is redundant.
@@ -249,7 +249,7 @@ If TypeSafe doesn't cache prefixes, the full-transcript cost on every turn needs
 
 ## What Sam receives
 
-- **The list note.** Sent only when the current thread or the top pick changes. It holds:
+- **The list note.** Sent only when the current thread or the top pick changes, or Sol rewrites the top pick. It holds:
   - keep-pulling for the current thread, with its unknown and guess;
   - up to two nearby threads, by label.
 

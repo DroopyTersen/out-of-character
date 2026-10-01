@@ -12,7 +12,7 @@ import { foundryConfig } from '../ai/foundry.server';
 import { appendMapLog, emptyMapLog, generateMap, MapOutputError, MAP_PROMPT_VERSION, renderMapTail, researchLogEvent, settledPrefix, type MapLogEvent, type MapTail } from '../ai/interview/map.server';
 import { DirectorOutputError } from '../ai/simulator/sol.server';
 import { emptyMap, renderMapForSol, type MapChanges, type MapDefect } from '../core/interview-map';
-import type { CoverageLevel, InterviewBackground } from '../core/interview';
+import { isBackchannel, type CoverageLevel, type InterviewBackground } from '../core/interview';
 import type { DirectorUsage } from '../core/simulator/director';
 import type { TranscriptEntry } from '../core/simulator/types';
 
@@ -80,7 +80,8 @@ const request = async (url: string, options: RequestInit) => {
   return response;
 };
 // A participant turn is a run of participant passages; Sam's backchannels don't split one.
-const turnsIn = (entries: TranscriptEntry[]) => entries.filter((entry, index) => entry.speaker === 'trainee' && entries[index - 1]?.speaker !== 'trainee').length;
+const turnsIn = (entries: TranscriptEntry[]) => entries.filter((entry, index) => entry.speaker === 'trainee'
+  && entries.slice(0, index).findLast(item => item.speaker === 'trainee' || !isBackchannel(item.text))?.speaker !== 'trainee').length;
 let loggedTurns = 0;
 const participantIndexes = transcript.flatMap((entry, index) => entry.speaker === 'trainee' ? [index] : []);
 const nextParticipantAt = (count: number) => { const index = participantIndexes[count]; return index == null ? null : visibleAt[index]!; };

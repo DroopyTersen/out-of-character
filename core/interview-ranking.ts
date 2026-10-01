@@ -3,7 +3,8 @@ import type { ConversationMap, MapThread } from './interview-map';
 /**
  * Code's half of the turn loop: Jev reads the open threads after each settled participant turn, and code scores them,
  * holds down the ones Jev saw answered, declined or stalled, and picks keep-pulling or a thread to tug. Sol owns thread
- * status; nothing here is ever written back to the map.
+ * status; nothing here is ever written back to the map. Every time here (atMs, nowMs, startedAtMs) is interview-elapsed
+ * ms, on the transcript's clock.
  */
 export const THREAD_STATES = ['open', 'answered', 'declined', 'stalled'] as const;
 export type ThreadState = typeof THREAD_STATES[number];
@@ -19,16 +20,21 @@ export const RANKING = {
   /** How far another thread must beat the current one; it shrinks with each turn spent on the current thread. */
   margin: { start: .3, step: .05, min: .05 },
   stalledHoldMs: 3 * 60_000,
-  /** An entity linked to more than this share of the others, or anchoring more than this share of open threads, is a hub and doesn't make threads nearby. */
+  /** An answered or declined thread stays down until Sol's next call starts, or this long if Sol's calls keep failing. */
+  maxHoldMs: 2 * 60_000,
+  /**
+   * An entity linked to more than this share of the others, or anchoring more than this share of open threads, and to
+   * at least three, is a hub and doesn't make threads nearby.
+   */
   hub: { share: 1 / 3, minEntities: 6, minThreads: 4 },
   nearby: 2,
   /** Jev's "substantially new" probability that wakes Sol early. */
   novel: .8,
 };
 
-/** Jev's reading after one settled participant turn, against the map it was shown. */
+/** Jev's reading after one settled participant turn; `keys` is each open thread's wording in the map Jev was shown. */
 export type TurnReading = {
-  passageId: string; atMs: number; focus: string | null;
+  passageId: string; atMs: number; focus: string | null; keys: Record<string, string>;
   natural: Record<string, number>; states: Record<string, ThreadState>; novel: number;
 };
 /** Jev's reading of a thread when Sol adds or rewrites it; `key` is the thread content it was read against. */
@@ -59,15 +65,21 @@ export function withTraits(state: RankingState, traits: Record<string, ThreadTra
   return { ...state, traits: { ...state.traits, ...traits } };
 }
 
-/** Applies Jev's turn reading: focus sets the current thread, and a new non-open state holds a thread down. */
+/**
+ * Applies Jev's turn reading: focus sets the current thread, and a turn that answers or declines a thread, or stalls the
+ * one being asked about, holds it down. A reading of a thread Sol has since rewritten no longer applies.
+ */
 export function observeTurn(state: RankingState, map: ConversationMap, reading: TurnReading): RankingState {
   const open = new Map(openThreads(map).map(thread => [thread.id, thread]));
   const focus = reading.focus != null && open.has(reading.focus) ? reading.focus : null;
+  // Stalled means Sam asked and the answer didn't move it, so it only counts for the thread the conversation was or is on.
+  const asked = new Set([focus, state.current]);
   const holds = { ...state.holds };
   for (const [id, threadState] of Object.entries(reading.states)) {
     const thread = open.get(id);
+    if (!thread || reading.keys[id] !== threadKey(thread) || threadState === 'open' || (threadState === 'stalled' && !asked.has(id))) continue;
     // An active hold isn't extended, so repeated readings can't pin a thread down past Sol's next call.
-    if (!thread || threadState === 'open' || active(holds[id], thread, reading.atMs)) continue;
+    if (active(holds[id], thread, reading.atMs)) continue;
     holds[id] = { state: threadState, atMs: reading.atMs, key: threadKey(thread) };
   }
   return {
@@ -93,7 +105,7 @@ export function observeMap(state: RankingState, map: ConversationMap, startedAtM
 
 function active(hold: Hold | undefined, thread: MapThread, nowMs: number) {
   if (!hold || hold.key !== threadKey(thread)) return false;
-  return hold.state !== 'stalled' || nowMs < hold.atMs + RANKING.stalledHoldMs;
+  return nowMs < hold.atMs + (hold.state === 'stalled' ? RANKING.stalledHoldMs : RANKING.maxHoldMs);
 }
 
 /** Entities that every path runs through, such as the product or the client: linked to many others, or anchoring many threads. */
@@ -105,13 +117,13 @@ export function hubs(map: ConversationMap): Set<string> {
     const neighbors = new Map<string, Set<string>>();
     const link = (a: string, b: string) => neighbors.set(a, (neighbors.get(a) ?? new Set()).add(b));
     for (const edge of map.edges) { link(edge.from, edge.to); link(edge.to, edge.from); }
-    for (const [id, set] of neighbors) if (set.size > share * (count - 1)) found.add(id);
+    for (const [id, set] of neighbors) if (set.size > Math.max(2, share * (count - 1))) found.add(id);
   }
   const open = openThreads(map);
   if (open.length >= minThreads) {
     const anchored = new Map<string, number>();
     for (const thread of open) for (const id of new Set(thread.anchors)) anchored.set(id, (anchored.get(id) ?? 0) + 1);
-    for (const [id, number] of anchored) if (number > share * open.length) found.add(id);
+    for (const [id, number] of anchored) if (number > Math.max(2, share * open.length)) found.add(id);
   }
   return found;
 }
@@ -134,8 +146,10 @@ export function score(state: RankingState, thread: MapThread, nowMs: number): nu
   const { weights } = RANKING;
   const traits = state.traits[thread.id]?.key === threadKey(thread) ? state.traits[thread.id]! : null;
   const fade = Math.max(0, 1 - nowMs / RANKING.groundingFadeMs);
-  // A thread Jev hasn't read yet scores nothing for that part: a fresh thread waits for evidence rather than jumping the queue.
-  return weights.natural * (state.reading?.natural[thread.id] ?? 0) + weights.spicy * (traits?.spicy ?? 0) + weights.grounding * fade * (traits?.grounding ?? 0);
+  const reading = state.reading;
+  const natural = reading?.keys[thread.id] === threadKey(thread) ? reading.natural[thread.id] ?? 0 : 0;
+  // A thread Jev hasn't read in its current wording scores nothing for that part: it waits for evidence rather than jumping the queue.
+  return weights.natural * natural + weights.spicy * (traits?.spicy ?? 0) + weights.grounding * fade * (traits?.grounding ?? 0);
 }
 
 /** Highest score first; scores within the tie margin of the best go to the closer band. */

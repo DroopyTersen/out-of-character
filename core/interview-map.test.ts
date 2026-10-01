@@ -7,11 +7,11 @@ const passages = [
 ];
 const entity = (id: string, changes: Partial<MapEntity> = {}): MapEntity => ({ id, kind: 'product', label: `Entity ${id}`, detail: 'Per the participant.', source: 'participant', passageId: 'p2', ...changes });
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({
-  id, label: `Thread ${id}`, anchors: ['e1'], unknown: 'who decided', guess: null, related: [], topics: ['client-decisions'], status: 'open', reason: null, ...changes,
+  id, label: `Thread ${id}`, anchors: ['e1'], unknown: 'who decided', guess: 'Dana alone', related: [], topics: ['client-decisions'], status: 'open', reason: null, ...changes,
 });
 const update = (changes: Partial<MapUpdate>): MapUpdate => ({ keep: [], drop: [], participant: null, entities: [], edges: [], threads: [], ...changes });
 const first = (changes: Partial<MapUpdate> = {}) => update({
-  participant: { vantage: 'App tech lead for the whole project.', preferences: '' },
+  participant: { vantage: 'App tech lead for the whole project.', preferences: [] },
   entities: [entity('e1'), entity('e2', { kind: 'person', label: 'Dana' })],
   edges: [{ id: 'r1', kind: 'decided', from: 'e2', to: 'e1' }],
   threads: [thread('t1'), thread('t2', { anchors: ['e2', PARTICIPANT_ID], related: ['t1'] })],
@@ -58,10 +58,28 @@ test('an update keeps, changes, closes and drops by ID, and nothing disappears s
   expect(fixed.changes).toEqual({ added: ['e3'], changed: ['r1', 't1', 't2'], dropped: ['e2'], kept: [PARTICIPANT_ID, 'e1'] });
 });
 
-test('a rewritten node identical to its previous version counts as kept', () => {
+test('a rewritten node identical to its previous version counts as kept, whatever its key order', () => {
   const map = built();
   const result = applyMapUpdate(map, update({ participant: map.participant, keep: ['e2', 'r1', 't1', 't2'], entities: [map.entities[0]!] }), passages);
   expect(result.ok && result.changes).toEqual({ added: [], changed: [], dropped: [], kept: ['e2', 'r1', 't1', 't2', PARTICIPANT_ID, 'e1'] });
+  const reversed = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).reverse()) as T;
+  const reordered = applyMapUpdate(map, update({ participant: reversed(map.participant), keep: ['e2', 'r1', 't2'], entities: [reversed(map.entities[0]!)], threads: [reversed(map.threads[0]!)] }), passages);
+  expect(reordered.ok && reordered.changes).toEqual({ added: [], changed: [], dropped: [], kept: ['e2', 'r1', 't2', PARTICIPANT_ID, 'e1', 't1'] });
+});
+
+test('an open thread’s reason is cleared, the one repair', () => {
+  const result = applyMapUpdate(emptyMap(), first({ threads: [thread('t1', { reason: 'Left over from when it was done.' }), thread('t2')] }), passages);
+  expect(result.ok && result.map.threads.map(item => item.reason)).toEqual([null, null]);
+});
+
+test('preferences cite the participant passage where they were expressed', () => {
+  const defects = (preferences: { text: string; passageId: string }[]) => {
+    const result = applyMapUpdate(emptyMap(), first({ participant: { vantage: 'App tech lead.', preferences } }), passages);
+    return result.ok ? [] : result.defects;
+  };
+  expect(defects([{ text: 'Wants concrete questions', passageId: 'p2' }])).toEqual([]);
+  expect(defects([{ text: 'Wants concrete questions', passageId: 'p3' }])).toEqual([{ kind: 'passage', id: PARTICIPANT_ID, detail: 'preference citing p3, not a participant passage' }]);
+  expect(defects([{ text: 'Wants concrete questions', passageId: 'p99' }])).toEqual([{ kind: 'passage', id: PARTICIPANT_ID, detail: 'preference citing p99, not a participant passage' }]);
 });
 
 test('ID accounting rejects skipped, repeated, invented, misfiled and reused IDs', () => {
@@ -75,6 +93,9 @@ test('ID accounting rejects skipped, repeated, invented, misfiled and reused IDs
   expect(defects(update({ keep: all.filter(id => id !== 'e1'), threads: [{ ...thread('e1') }] }))).toEqual([{ kind: 'prefix', id: 'e1', detail: 'not a previous thread' }]);
   expect(defects(update({ keep: all, entities: [entity('t3')] }))).toEqual([{ kind: 'prefix', id: 't3', detail: 'entities' }]);
   expect(defects(update({ keep: all, entities: [entity('e1x')] }))).toEqual([{ kind: 'prefix', id: 'e1x', detail: 'entities' }]);
+  // e03 would make a second spelling of e3.
+  expect(defects(update({ keep: all, entities: [entity('e03')] }))).toEqual([{ kind: 'prefix', id: 'e03', detail: 'entities' }]);
+  expect(defects(update({ keep: all, entities: [entity('e0')] }))).toEqual([{ kind: 'prefix', id: 'e0', detail: 'entities' }]);
   // e2 was dropped earlier: its number is never handed out again.
   const merged = applyMapUpdate(map, update({ keep: [PARTICIPANT_ID, 'e1', 't1'], drop: [{ id: 'e2', reason: 'mistake' }, { id: 'r1', reason: 'mistake' }, { id: 't2', reason: 'mistake' }] }), passages);
   if (!merged.ok) throw new Error('drop failed');
@@ -88,7 +109,7 @@ test('the participant can only be kept or rewritten, never dropped or left out',
   const defects = (value: MapUpdate) => { const result = applyMapUpdate(map, value, passages); return result.ok ? [] : result.defects; };
   expect(defects(update({ keep: rest }))).toEqual([{ kind: 'skipped', id: PARTICIPANT_ID }]);
   expect(defects(update({ keep: rest, drop: [{ id: PARTICIPANT_ID, reason: 'gone' }] }))).toContainEqual({ kind: 'participant', id: PARTICIPANT_ID, detail: 'cannot be dropped' });
-  expect(defects(update({ keep: [...rest, PARTICIPANT_ID], participant: { vantage: 'x', preferences: '' } }))).toEqual([{ kind: 'duplicate', id: PARTICIPANT_ID }]);
+  expect(defects(update({ keep: [...rest, PARTICIPANT_ID], participant: { vantage: 'x', preferences: [] } }))).toEqual([{ kind: 'duplicate', id: PARTICIPANT_ID }]);
 });
 
 test('threads and edges must resolve, and closed threads and drops need a reason', () => {
@@ -110,7 +131,10 @@ test('participant facts need a participant passage; Sam cannot establish one', (
     .toEqual([{ kind: 'passage', id: 'e1', detail: 'participant fact without a participant passage' }]);
   expect(defects(first({ entities: [entity('e1', { passageId: null }), entity('e2')] })))
     .toEqual([{ kind: 'passage', id: 'e1', detail: 'participant fact without a participant passage' }]);
-  expect(defects(first({ entities: [entity('e1', { passageId: 'p99', source: 'research' }), entity('e2')] }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'p99' }]);
+  expect(defects(first({ entities: [entity('e1', { passageId: 'p99' }), entity('e2')] })))
+    .toEqual([{ kind: 'passage', id: 'e1', detail: 'p99' }, { kind: 'passage', id: 'e1', detail: 'participant fact without a participant passage' }]);
+  // Research and seed facts come from outside the dialogue, so citing a passage means Sol misfiled a participant fact.
+  expect(defects(first({ entities: [entity('e1', { passageId: 'p2', source: 'research' }), entity('e2')] }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'research fact citing a passage' }]);
   expect(defects(first({ entities: [entity('e1', { passageId: null, source: 'research' }), entity('e2')] }))).toEqual([]);
   // A kept entity is not rechecked: its passage may since have left the bounded transcript.
   const result = applyMapUpdate(built(), update({ keep: [PARTICIPANT_ID, 'e1', 'e2', 'r1', 't1', 't2'] }), []);
@@ -122,7 +146,7 @@ test('the map renders compactly for Sol, with closed threads on one line', () =>
   const closed = applyMapUpdate(map, update({ keep: [PARTICIPANT_ID, 'e1', 'e2', 'r1', 't2'], threads: [thread('t1', { status: 'off', reason: 'Was on leave then.' })] }), passages);
   if (!closed.ok) throw new Error('close failed');
   expect(renderMapForSol(closed.map)).toBe([
-    'participant | vantage: "App tech lead for the whole project." | preferences: ""',
+    'participant | vantage: "App tech lead for the whole project." | preferences: none',
     'NEXT FREE IDS e3 r2 t3',
     'ENTITIES',
     'e1 product "Entity e1": "Per the participant." [participant p2]',
@@ -130,7 +154,7 @@ test('the map renders compactly for Sol, with closed threads on one line', () =>
     'EDGES',
     'r1 e2 decided e1',
     'OPEN THREADS',
-    't2 "Thread t2" | anchors e2,participant | unknown: "who decided" | guess: none | related t1 | topics client-decisions',
+    't2 "Thread t2" | anchors e2,participant | unknown: "who decided" | guess: "Dana alone" | related t1 | topics client-decisions',
     'CLOSED THREADS',
     't1 [off] "Thread t1": "Was on leave then."',
   ].join('\n'));

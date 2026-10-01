@@ -14,7 +14,8 @@ export const MAP_TOPIC_IDS = interviewTopics.flatMap(topic => topic.objectives.m
 /** The participant is an ordinary node with a fixed ID, so anchors and edges can point at them. */
 export const PARTICIPANT_ID = 'participant';
 export const MAP_ID_PREFIX = { entities: 'e', edges: 'r', threads: 't' } as const;
-export const MAP_LIMITS = { nodes: 160, label: 80, detail: 240, unknown: 200, guess: 200, reason: 200, vantage: 500, preferences: 400, anchors: 4, related: 4, topics: 6 };
+/** Hard limits code enforces after the call. Sol's schema carries none of the string lengths: strict decoding cuts a string mid-word at its limit. */
+export const MAP_LIMITS = { nodes: 160, label: 80, detail: 240, unknown: 200, guess: 200, reason: 240, vantage: 600, preference: 200, preferences: 4, anchors: 4, related: 4, topics: 2 };
 
 export type EntityKind = typeof ENTITY_KINDS[number];
 export type EntitySource = typeof ENTITY_SOURCES[number];
@@ -22,12 +23,14 @@ export type EdgeKind = typeof EDGE_KINDS[number];
 export type ThreadStatus = typeof THREAD_STATUSES[number];
 export type MapTopicId = typeof MAP_TOPIC_IDS[number];
 
-export type MapParticipant = { vantage: string; preferences: string };
+/** Each preference is something the participant asked for or showed, citing that passage, so Sol's own advice can't pass as theirs. */
+export type MapPreference = { text: string; passageId: string };
+export type MapParticipant = { vantage: string; preferences: MapPreference[] };
 export type MapEntity = { id: string; kind: EntityKind; label: string; detail: string; source: EntitySource; passageId: string | null };
 export type MapEdge = { id: string; kind: EdgeKind; from: string; to: string };
-/** A gap, never a question: Sam turns the unknown and the guess into a question of its own. */
+/** A gap, never a question: Sam turns the unknown and the guess into a question of its own. Every thread carries a guess. */
 export type MapThread = {
-  id: string; label: string; anchors: string[]; unknown: string; guess: string | null;
+  id: string; label: string; anchors: string[]; unknown: string; guess: string;
   related: string[]; topics: MapTopicId[]; status: ThreadStatus; reason: string | null;
 };
 /** `nextIds` is code's bookkeeping, not Sol content: a dropped ID is never reused, so rankings and hold-downs keyed by ID stay sound. */
@@ -48,21 +51,26 @@ export type MapDefect = {
 export type MapChanges = { added: string[]; changed: string[]; dropped: string[]; kept: string[] };
 export type MapResult = { ok: true; map: ConversationMap; changes: MapChanges } | { ok: false; defects: MapDefect[] };
 
-export const emptyMap = (): ConversationMap => ({ participant: { vantage: '', preferences: '' }, entities: [], edges: [], threads: [], nextIds: { e: 1, r: 1, t: 1 } });
+export const emptyMap = (): ConversationMap => ({ participant: { vantage: '', preferences: [] }, entities: [], edges: [], threads: [], nextIds: { e: 1, r: 1, t: 1 } });
 
 export function mapIds(map: ConversationMap): string[] {
   return [PARTICIPANT_ID, ...map.entities.map(item => item.id), ...map.edges.map(item => item.id), ...map.threads.map(item => item.id)];
 }
 
-const idNumber = (id: string, prefix: string) => new RegExp(`^${prefix}\\d{1,4}$`).test(id) ? Number(id.slice(prefix.length)) : null;
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const idNumber = (id: string, prefix: string) => new RegExp(`^${prefix}[1-9]\\d{0,3}$`).test(id) ? Number(id.slice(prefix.length)) : null;
+/** Key order doesn't matter: a map read back from the archive must compare equal to the one that was saved. */
+const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
+  : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : 1).map(([key, item]) => [key, canonical(item)])) : value;
+const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 
 /**
  * Rebuilds the full map from Sol's update. Every previous ID must be accounted for exactly once; nothing disappears silently.
- * Rejects rather than repairs: the probe counts defects, and a rejected update leaves the previous map in place.
- * `passages` is the transcript Sol saw, used to check that participant facts cite a participant passage.
+ * Rejects rather than repairs: the probe counts defects, and a rejected update leaves the previous map in place. The one
+ * repair: a reason on an open thread is cleared, since nothing reads it and a reopened thread would otherwise carry it unseen.
+ * `passages` is the transcript Sol saw, used to check that participant facts and preferences cite a participant passage.
  */
-export function applyMapUpdate(previous: ConversationMap, update: MapUpdate, passages: { id: string; speaker: Speaker }[]): MapResult {
+export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, passages: { id: string; speaker: Speaker }[]): MapResult {
+  const update = { ...input, threads: input.threads.map(thread => thread.status === 'open' && thread.reason != null ? { ...thread, reason: null } : thread) };
   const defects: MapDefect[] = [];
   const before = new Set(mapIds(previous));
   const mentions = new Map<string, number>();
@@ -121,10 +129,15 @@ export function applyMapUpdate(previous: ConversationMap, update: MapUpdate, pas
     if (thread.status !== 'open' && !thread.reason?.trim()) defects.push({ kind: 'reason', id: thread.id });
   }
   // A participant fact needs a participant passage: Sam's guesses and playbacks count only once the participant confirms them.
+  // Research and seed facts come from outside the dialogue, so they cite none.
   for (const entity of update.entities) {
     const speaker = entity.passageId == null ? undefined : speakers.get(entity.passageId);
     if (entity.passageId != null && !speaker) defects.push({ kind: 'passage', id: entity.id, detail: entity.passageId });
     if (entity.source === 'participant' && speaker !== 'trainee') defects.push({ kind: 'passage', id: entity.id, detail: 'participant fact without a participant passage' });
+    if (entity.source !== 'participant' && entity.passageId != null) defects.push({ kind: 'passage', id: entity.id, detail: `${entity.source} fact citing a passage` });
+  }
+  for (const preference of update.participant?.preferences ?? []) {
+    if (speakers.get(preference.passageId) !== 'trainee') defects.push({ kind: 'passage', id: PARTICIPANT_ID, detail: `preference citing ${preference.passageId}, not a participant passage` });
   }
   if (defects.length) return { ok: false, defects };
 
@@ -149,14 +162,14 @@ export function renderMapForSol(map: ConversationMap): string {
   const open = map.threads.filter(item => item.status === 'open');
   const closed = map.threads.filter(item => item.status !== 'open');
   const lines = [
-    `${PARTICIPANT_ID} | vantage: ${quote(map.participant.vantage)} | preferences: ${quote(map.participant.preferences)}`,
+    `${PARTICIPANT_ID} | vantage: ${quote(map.participant.vantage)} | preferences: ${map.participant.preferences.map(item => `${quote(item.text)} [${item.passageId}]`).join('; ') || 'none'}`,
     `NEXT FREE IDS ${Object.entries(map.nextIds).map(([prefix, number]) => `${prefix}${number}`).join(' ')}`,
     'ENTITIES',
     ...map.entities.map(item => `${item.id} ${item.kind} ${quote(item.label)}: ${quote(item.detail)} [${item.source}${item.passageId ? ` ${item.passageId}` : ''}]`),
     'EDGES',
     ...map.edges.map(item => `${item.id} ${item.from} ${item.kind} ${item.to}`),
     'OPEN THREADS',
-    ...open.map(item => `${item.id} ${quote(item.label)} | anchors ${item.anchors.join(',')} | unknown: ${quote(item.unknown)} | guess: ${item.guess == null ? 'none' : quote(item.guess)}`
+    ...open.map(item => `${item.id} ${quote(item.label)} | anchors ${item.anchors.join(',')} | unknown: ${quote(item.unknown)} | guess: ${quote(item.guess)}`
       + `${item.related.length ? ` | related ${item.related.join(',')}` : ''}${item.topics.length ? ` | topics ${item.topics.join(',')}` : ''}`),
     'CLOSED THREADS',
     ...closed.map(item => `${item.id} [${item.status}] ${quote(item.label)}: ${quote(item.reason ?? '')}`),

@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
 import { fixtureFoundry } from '../foundry-fixture';
 import {
-  appendMapLog, emptyMapLog, generateMap, mapCacheKey, mapInstructions, mapMessages, mapSeed, MapOutputError, MAP_PROMPT_VERSION,
-  renderMapTail, researchLogEvent, settledPrefix,
+  appendMapLog, emptyMapLog, generateMap, mapCacheKey, mapInstructions, mapMessages, mapOutputSchema, mapSeed, MapOutputError, MAP_PROMPT_VERSION,
+  mapWireSchema, renderMapTail, researchLogEvent, settledPrefix,
 } from './map.server';
-import { emptyMap, PARTICIPANT_ID } from '../../core/interview-map';
+import { emptyMap, MAP_LIMITS, PARTICIPANT_ID } from '../../core/interview-map';
+import { DirectorOutputError } from '../simulator/sol.server';
 import type { TranscriptEntry } from '../../core/simulator/types';
 
 const transcript: TranscriptEntry[] = [
@@ -13,10 +14,10 @@ const transcript: TranscriptEntry[] = [
   { id: 'p3', speaker: 'client', text: 'Who decided on routing first?', startMs: 260_000, endMs: 262_000 },
 ];
 const update = {
-  participant: { vantage: 'Built the routing layer.', preferences: '' },
+  participant: { vantage: 'Built the routing layer.', preferences: [] },
   entities: [{ id: 'e1', kind: 'product', label: 'Routing layer', detail: 'Built for dispatch, per the participant.', source: 'participant', passageId: 'p2' }],
   edges: [{ id: 'r1', kind: 'built', from: PARTICIPANT_ID, to: 'e1' }],
-  threads: [{ id: 't1', label: 'Routing first', anchors: ['e1'], unknown: 'who chose to build routing first', guess: null, related: [], topics: ['client-decisions'], status: 'open', reason: null }],
+  threads: [{ id: 't1', label: 'Routing first', anchors: ['e1'], unknown: 'who chose to build routing first', guess: 'the client, to unblock a demo', related: [], topics: ['client-decisions'], status: 'open', reason: null }],
   keep: [], drop: [],
 };
 const solResponse = (value: unknown, usage: Record<string, unknown> = { input_tokens: 9000, output_tokens: 900 }) => Response.json({
@@ -34,6 +35,13 @@ test('the log is append-only: new passages, continuations, corrections and event
   expect(two.blocks[1]).toBe('[p2 · participant · continued] It replaced paper maps.\n[p3 · Sam · 4.3 min] Who decided on routing first?\n[event · 4.4 min] Public research arrived.');
   const three = appendMapLog(two, [{ ...grown[1]!, text: 'A routing layer for dispatchers.' }]);
   expect(three.blocks[2]).toBe('[p2 · participant · corrected] A routing layer for dispatchers.');
+});
+
+test('events land in time order among the passages logged with them', () => {
+  const log = appendMapLog(emptyMapLog(), transcript, [{ atMs: 300_000, text: 'Late.' }, { atMs: 100_000, text: 'Early.' }, { atMs: 260_000, text: 'Same moment as p3.' }]);
+  expect(log.blocks[0]!.split('\n').map(line => line.slice(0, 16))).toEqual([
+    '[p1 · Sam · 0.0 ', '[p2 · participan', '[event · 1.7 min', '[event · 4.3 min', '[p3 · Sam · 4.3 ', '[event · 5.0 min',
+  ]);
 });
 
 test('a passage still being transcribed holds back everything after it', () => {
@@ -89,6 +97,29 @@ test('the map request uses explicit caching keyed by prompt version and attempt,
   expect(result.usage).toEqual({ inputTokens: 9000, outputTokens: 900, cachedTokens: 7000, cacheWriteTokens: 400, reasoningTokens: 500 });
   expect(result.map.threads[0]!.unknown).toBe('who chose to build routing first');
   expect(result.changes.added).toEqual(['e1', 'r1', 't1']);
+});
+
+test('Sol is sent the schema without string lengths, which zod enforces afterwards', () => {
+  const wire = JSON.stringify(mapWireSchema);
+  expect(wire).not.toContain('maxLength');
+  expect(wire).not.toContain('minLength');
+  expect(wire).toContain('"maxItems"');
+  expect(JSON.stringify(mapWireSchema).length).toBeLessThan(JSON.stringify(mapOutputSchema.toJSONSchema()).length);
+  const long = { ...update, threads: [{ ...update.threads[0]!, guess: 'x'.repeat(MAP_LIMITS.guess + 1) }] };
+  expect(mapOutputSchema.safeParse(long).success).toBe(false);
+});
+
+test('a response cut short reports why and what it used', async () => {
+  const error = await generateMap({
+    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript,
+  }, async () => Response.json({
+    status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, model: 'gpt-6.1-sol',
+    output: [{ type: 'reasoning' }], usage: { input_tokens: 9000, output_tokens: 8000, output_tokens_details: { reasoning_tokens: 8000 } },
+  })).catch(caught => caught);
+  expect(error).toBeInstanceOf(DirectorOutputError);
+  expect(error.detail).toBe('max_output_tokens');
+  expect(error.message).toBe('Director output was incomplete: max_output_tokens.');
+  expect(error.usage).toEqual({ inputTokens: 9000, outputTokens: 8000, cachedTokens: null, reasoningTokens: 8000 });
 });
 
 test('without caching the map request sends no cache options or breakpoints', async () => {

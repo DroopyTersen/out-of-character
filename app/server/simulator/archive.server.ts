@@ -23,6 +23,12 @@ export type ArchiveProvenance = {
   workerTag: string | null;
   /** The simulator's director, or the interview's producer. */
   contextualDirector: DirectorSummary | ProducerSummary | null;
+  /** One entry per provider session, and each connection pause. Provider ids are never archived. */
+  connection?: ConnectionLog;
+};
+export type ConnectionLog = {
+  segments: { epoch: number; startedAt: number; endedAt: number | null; closeReason: string | null; finalization: 'pending' | 'confirmed' | 'unconfirmed'; usageSeconds: number | null }[];
+  pauses: { reason: 'browser' | 'provider'; pausedAt: number; resumedAt: number | null; durationMs: number }[];
 };
 
 export type ArchiveWrite = {

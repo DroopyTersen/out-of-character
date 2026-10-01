@@ -428,6 +428,18 @@ p.sim-lab-check-details { padding: 12px 0; }
 .sim-session-warning { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 0 0 20px; padding: 16px 20px; border: 1px solid #b39251; border-radius: 8px; background: #26302e; color: #f2dbad; }
 .sim-session-warning p { margin: 4px 0 0; font-size: 14px; }
 .sim-session-warning button { flex-shrink: 0; padding: 10px 16px; border: 1px solid #dcc18c; border-radius: 6px; color: #fff0d0; background: #3c4134; }
+/* A lost connection holds the conversation; the transcript and observations stay visible underneath. */
+.sim-connection-paused { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin: 0 0 20px; padding: 18px 20px; border: 1px solid #f1bf64; border-radius: 8px; background: #22302f; color: #f2dbad; }
+.sim-connection-paused > svg { flex-shrink: 0; color: #f1bf64; }
+.sim-connection-paused > div:first-of-type { flex: 1; min-width: 220px; }
+.sim-connection-paused strong { font-size: 17px; }
+.sim-connection-paused p { margin: 4px 0 0; font-size: 14px; line-height: 1.5; }
+.sim-connection-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.sim-resume { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 18px; border: 1px solid #f1bf64; border-radius: 6px; color: #10212b; background: #f1bf64; font-weight: 600; }
+.sim-resume:disabled { opacity: .55; }
+.sim-connection-actions .quiet-button { min-height: 44px; }
+.sim-connection-unstable { margin-top: 0; }
+[data-state=paused] .sim-speaking { color: #efba57; }
 
 /* Post-session feedback and the provisional/final assessment share one layout. */
 .sim-debrief { max-width: 1280px; }

@@ -8,6 +8,7 @@ export const directorServices = { generateDirector, recheckDirector };
 type Observation = { audience: DirectorAudience; transcript: TranscriptEntry[]; revision: number; capturedAt: number };
 type ObservationResult = { signals: DirectorSignal[]; model?: string; failure?: 'evaluation_error' | 'evaluation_timeout' };
 type RecordedObservation = Observation & { record: ObservationRecord };
+export type DirectorCheckpoint = { records: InterventionRecord[]; usage: DirectorGate['usage']; lastConcern?: string };
 type Options = {
   scenarioId: string; clientId: string; objectives: () => ObjectiveReading[];
   foundry: FoundryConfig; typesafeKey: string; services: typeof directorServices;
@@ -19,6 +20,7 @@ export class ContextualDirector {
   private gate = new DirectorGate();
   readonly records: InterventionRecord[] = [];
   private abort = new AbortController();
+  private closed = false;
   private lastConcern: string | undefined;
   private hint: LiveHint | null = null;
 
@@ -90,7 +92,8 @@ export class ContextualDirector {
     this.records.push(record);
     const expiry = observation.capturedAt + DIRECTOR_LIMITS.age;
     const deadline = Math.min(Date.now() + DIRECTOR_LIMITS.generation, expiry - DIRECTOR_LIMITS.recheck);
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]);
     const input: DirectorInput = {
       audience: observation.audience, reason: issue.signal,
       scenarioId: this.options.scenarioId, clientId: this.options.clientId, transcript: observation.transcript,
@@ -98,7 +101,7 @@ export class ContextualDirector {
     };
     try {
       const { model, usage, ...result } = await services.generateDirector(input);
-      if (!this.alive) return;
+      if (scope.aborted) return;
       record.result = result;
       record.usage = usage;
       record.model = model;
@@ -109,11 +112,11 @@ export class ContextualDirector {
         if (expiry - Date.now() < DIRECTOR_LIMITS.recheck) { record.outcome = 'stale'; return; }
         const transcript = [...this.options.settled()];
         const started = Date.now();
-        const recheck = this.gate.recheck(() => services.recheckDirector({ ...input, audience: 'trainee', transcript, objectives: this.options.objectives(), apiKey: this.options.typesafeKey, intervention: result, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(DIRECTOR_LIMITS.recheck)]) }));
+        const recheck = this.gate.recheck(() => services.recheckDirector({ ...input, audience: 'trainee', transcript, objectives: this.options.objectives(), apiKey: this.options.typesafeKey, intervention: result, signal: AbortSignal.any([scope, AbortSignal.timeout(DIRECTOR_LIMITS.recheck)]) }));
         if (!recheck) { record.outcome = 'stale'; return; }
         record.recheck = { inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null, startedAt: started, probability: null, durationMs: null };
         const checked = await recheck;
-        if (!this.alive) return;
+        if (scope.aborted) return;
         record.recheck = { ...record.recheck, probability: checked.probability, durationMs: Date.now() - started, usage: checked.usage };
         if (checked.probability < .9 || !this.options.isFresh(transcript)) { record.outcome = 'stale'; return; }
       }
@@ -137,10 +140,10 @@ export class ContextualDirector {
         if (sent) record.deliveredAt = Date.now();
       }
     } catch (error) {
-      if (!this.alive) return;
+      if (scope.aborted) return;
       record.outcome = error instanceof DirectorOutputError ? 'invalid' : error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError') ? 'timeout' : 'error';
     } finally {
-      if (this.alive) record.completedAt = Date.now();
+      if (!scope.aborted) record.completedAt = Date.now();
     }
   }
 
@@ -153,12 +156,34 @@ export class ContextualDirector {
     }
   }
 
-  close() {
+  /** The connection dropped: in-flight observations and directions are abandoned, and the hint no longer fits. */
+  pause() {
     this.abort.abort();
     this.hint = null;
     for (const record of this.records) if (record.source !== 'detector' && record.outcome === 'pending') {
       record.outcome = 'aborted';
       record.completedAt = Date.now();
     }
+  }
+
+  resume() {
+    if (!this.closed && !this.alive) this.abort = new AbortController();
+  }
+
+  checkpoint(): DirectorCheckpoint {
+    return { records: this.records, usage: this.gate.usage, ...(this.lastConcern ? { lastConcern: this.lastConcern } : {}) };
+  }
+
+  /** Restores a paused director. Work in flight when the checkpoint was written was lost with the isolate. */
+  restore(checkpoint: DirectorCheckpoint) {
+    this.records.splice(0, this.records.length, ...checkpoint.records);
+    this.gate.restoreUsage(checkpoint.usage);
+    this.lastConcern = checkpoint.lastConcern;
+    this.pause();
+  }
+
+  close() {
+    this.closed = true;
+    this.pause();
   }
 }

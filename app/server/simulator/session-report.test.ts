@@ -81,9 +81,13 @@ test('report waits for closing, uses final transcript and Jev, and claims one ge
 
 test('interrupted report settles before held final storage and archives after the final row exists', async () => {
   const provider = reportProvider();
-  const f = await spokenSession(provider);
+  const active = await spokenSession(provider);
+  // A lost connection now pauses; a lost owner is what interrupts a started conversation.
+  await active.session.alarm();
+  await Promise.all(active.pending);
+  const f = await fixture({ values: active.values, archive: active.archive, overrides: { generateReport: provider.generateReport } });
   const held = f.archive.holdNext();
-  f.socket.emit({ type: 'session.closed', reason: 'connection_lost', usage: { seconds: 4 } });
+  await f.session.fetch(request('poll'));
   await held.started;
   const response = await f.session.fetch(request('report'));
   expect(provider.input()!.snapshot.status).toBe('interrupted');
@@ -93,6 +97,7 @@ test('interrupted report settles before held final storage and archives after th
   held.release(); await Promise.all(f.pending);
   expect(parseArchive(f.row()!).report.attempts).toHaveLength(1);
   expect(f.row()!.archive_state).toBe('final');
+  await active.session.fetch(request('end')); // Stop the original owner's timer.
 }, 10_000);
 
 test('a report archive failure cannot turn validated coaching into a failed report', async () => {

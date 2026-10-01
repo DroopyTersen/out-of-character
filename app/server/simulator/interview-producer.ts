@@ -10,6 +10,7 @@ import {
   type ProtectionCondition, type ResearchRecord, type ResearchRequest, type RundownRecord,
 } from '../../../core/interview-producer';
 import type { DirectorSignal } from '../../../core/simulator/director';
+import { activeElapsed, type PauseSpan } from '../../../core/simulator/state';
 import type { TranscriptEntry } from '../../../core/simulator/types';
 
 export const producerServices = { generateProducer, checkCard, lookupInterviewBackground };
@@ -18,6 +19,15 @@ type Options = {
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
   canDeliverCue?: () => boolean;
+  /** Connection pauses; elapsed time excludes them. */
+  pauses?: () => PauseSpan[];
+};
+/** Producer state that outlives the isolate. In-flight work is not kept: a restored producer starts idle. */
+export type ProducerCheckpoint = {
+  records: ProducerLogRecord[]; counts: { consultations: number; cues: number; research: number; rundowns: number };
+  lastConsultation: number; consultedDialogue: string; signals: DirectorSignal[]; researchProbability?: number;
+  episodes: ProtectionCondition[]; lastCueAt: number | null; researched: string[]; samTurns: string[];
+  lastRundown: { key: string; at: number } | null; timeRundownSent: boolean;
 };
 export type Assessment = {
   transcript: TranscriptEntry[]; capturedAt: number; signals: DirectorSignal[]; researchProbability?: number; model?: string;
@@ -62,6 +72,7 @@ export function researchCard(request: Pick<ResearchRequest, 'kind' | 'name'>, fa
 export class InterviewProducer {
   readonly records: ProducerLogRecord[] = [];
   private abort = new AbortController();
+  private closed = false;
   private busy = false;
   private queue: { triggers: ProducerTrigger[]; triggeredAt: number } | null = null;
   private lastConsultation: number;
@@ -83,6 +94,7 @@ export class InterviewProducer {
   constructor(private options: Options) { this.lastConsultation = options.startedAt; }
 
   private get alive() { return !this.abort.signal.aborted; }
+  private elapsed(now: number) { return activeElapsed(this.options.startedAt, now, this.options.pauses?.()); }
   get canObserve() { return this.alive && this.counts.consultations < LIMITS.consultations; }
   background() { return deliveredBackground(this.records); }
   cue(): InterviewCue | undefined {
@@ -188,7 +200,10 @@ export class InterviewProducer {
       ...(triggers.some(item => item.kind === 'cue-recovery') ? { recoveryUsed: true } : {}),
     };
     this.records.push(record);
+    const scope = this.abort.signal;
     this.track(this.consult(record, transcript).finally(() => {
+      // A pause already released the slot; a resumed producer may own it now.
+      if (scope.aborted) return;
       this.busy = false;
       const next = this.queue;
       this.queue = null;
@@ -214,13 +229,14 @@ export class InterviewProducer {
 
   private async consult(record: ProducerRecord, transcript: TranscriptEntry[]) {
     const { services, startedAt } = this.options;
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.generation)]);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.generation)]);
     try {
       const { model, usage, ...result } = await services.generateProducer({
-        clientId: this.options.clientId, transcript, coverage: this.options.coverage(), startedAt, now: Date.now(),
+        clientId: this.options.clientId, transcript, coverage: this.options.coverage(), startedAt, now: Date.now(), pauses: this.options.pauses?.(),
         triggers: record.triggers, history: this.records, budget: this.budget(), foundry: this.options.foundry, signal,
       });
-      if (!this.alive) return;
+      if (scope.aborted) return;
       signal.throwIfAborted();
       if (Date.now() - record.startedAt >= LIMITS.generation) { record.outcome = 'timeout'; return; }
       Object.assign(record, { generatedAt: Date.now(), result, usage, model });
@@ -233,11 +249,11 @@ export class InterviewProducer {
       if (record.triggers.every(item => item.kind === 'cue-recovery' && item.cueId !== this.cue()?.id)) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
       this.deliverCue(record, Date.now());
     } catch (error) {
-      if (!this.alive) return;
+      if (scope.aborted) return;
       record.outcome = error instanceof DirectorOutputError ? 'invalid' : signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
-      if (!['sent', 'deferred'].includes(record.outcome) && record.triggers.some(item => item.kind === 'cue-recovery' && item.cueId === this.currentCue?.id)) this.currentCue = null;
-      if (this.alive && record.outcome !== 'deferred') record.completedAt = Date.now();
+      if (!scope.aborted && !['sent', 'deferred'].includes(record.outcome) && record.triggers.some(item => item.kind === 'cue-recovery' && item.cueId === this.currentCue?.id)) this.currentCue = null;
+      if (!scope.aborted && record.outcome !== 'deferred') record.completedAt = Date.now();
     }
   }
 
@@ -285,11 +301,12 @@ export class InterviewProducer {
   private async research(record: ResearchRecord, key: string) {
     const { services } = this.options;
     const { kind, name, clue } = record.request;
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.researchAge)]);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.researchAge)]);
     const result = (status: 'sent' | 'withheld') => this.trigger([{ kind: 'research', researchId: record.id, status }], Date.now());
     try {
       const lookup = await services.lookupInterviewBackground({ target: { kind, name }, clue, foundry: this.options.foundry, signal });
-      if (!this.alive) return;
+      if (scope.aborted) return;
       signal.throwIfAborted();
       record.lookupAt = Date.now();
       record.queries = lookup.queries;
@@ -307,7 +324,7 @@ export class InterviewProducer {
         transcript, request: record.request, facts: lookup.facts, apiKey: this.options.typesafeKey,
         signal: checkSignal,
       });
-      if (!this.alive) return;
+      if (scope.aborted) return;
       checkSignal.throwIfAborted();
       record.checkedAt = Date.now();
       record.check = { ...record.check, probability: checked.probability, usage: checked.usage };
@@ -319,12 +336,12 @@ export class InterviewProducer {
       record.outcome = sent ? 'sent' : 'error';
       if (sent) { record.sentAt = Date.now(); result('sent'); }
     } catch (error) {
-      if (!this.alive) return;
+      if (scope.aborted) return;
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
-      // Transient failures may be requested again; they still used an attempt.
-      if (['error', 'timeout', 'expired'].includes(record.outcome) || record.reason === 'dialogue_changed') this.researched.delete(key);
-      if (this.alive) record.completedAt = Date.now();
+      // Transient failures, and lookups a pause cut short, may be requested again; they still used an attempt.
+      if (['error', 'timeout', 'expired', 'aborted'].includes(record.outcome) || record.reason === 'dialogue_changed') this.researched.delete(key);
+      if (!scope.aborted) record.completedAt = Date.now();
     }
   }
 
@@ -333,14 +350,14 @@ export class InterviewProducer {
    * One rundown stays reserved for the time reminder until it is sent, so coverage churn cannot use it up.
    */
   private rundown(now: number) {
-    const late = !this.timeRundownSent && now - this.options.startedAt >= LIMITS.rundownAt;
+    const elapsed = this.elapsed(now);
+    const late = !this.timeRundownSent && elapsed >= LIMITS.rundownAt;
     if (this.counts.rundowns >= LIMITS.rundowns - (late || this.timeRundownSent ? 0 : 1)) return;
     const coverage = this.options.coverage();
     const levels = Object.fromEntries(coverageBands(coverage).flatMap(topic => topic.objectives.map(item => [item.id, item.level])));
     const key = JSON.stringify(levels);
     const changed = key !== (this.lastRundown?.key ?? INITIAL_LEVELS);
     if ((!late && !changed) || (this.lastRundown && now - this.lastRundown.at < LIMITS.rundownSpacing)) return;
-    const elapsed = now - this.options.startedAt;
     const record: RundownRecord = { source: 'rundown', id: `rundown-${crypto.randomUUID()}`, sentAt: now, reason: late ? 'time' : 'change',
       elapsedMinutes: Math.round(elapsed / 6000) / 10, levels, outcome: 'sent' };
     this.records.push(record);
@@ -375,7 +392,7 @@ export class InterviewProducer {
         record.reason = 'delivery_rejected';
         this.researched.delete(researchKey(record.request));
       }
-      if (!accepted && record.source === 'rundown' && record.outcome !== 'error') {
+      if (!accepted && record.source === 'rundown' && record.outcome !== 'error' && record.reason !== 'resume') {
         record.outcome = 'error';
         this.counts.rundowns--;
         if (record.reason === 'time') this.timeRundownSent = false;
@@ -395,13 +412,82 @@ export class InterviewProducer {
     };
   }
 
+  /**
+   * The connection dropped. In-flight consultations and lookups are abandoned: their results would reach a
+   * provider session that no longer exists. Notes already delivered are restated on resume.
+   */
+  pause() {
+    this.abort.abort();
+    this.busy = false;
+    this.queue = null;
+    this.pendingCue = null;
+    // The resumed session never saw the cue; follow-through and recovery no longer apply.
+    this.currentCue = null;
+    this.abandon();
+  }
+
+  /**
+   * A new provider session joined. Its instructions carry the conversation but none of the producer's notes,
+   * so restate the rundown and delivered research. The restatement is outside the rundown budget.
+   */
+  resume(now = Date.now()) {
+    if (this.closed || this.alive) return;
+    this.abort = new AbortController();
+    // A fresh check-in interval: the next consultation should see the resumed dialogue.
+    this.lastConsultation = now;
+    const coverage = this.options.coverage();
+    const levels = Object.fromEntries(coverageBands(coverage).flatMap(topic => topic.objectives.map(item => [item.id, item.level])));
+    const elapsed = this.elapsed(now);
+    const record: RundownRecord = { source: 'rundown', id: `rundown-${crypto.randomUUID()}`, sentAt: now, reason: 'resume',
+      elapsedMinutes: Math.round(elapsed / 6000) / 10, levels, outcome: 'sent' };
+    this.records.push(record);
+    if (!this.sendNote(record, record.id, rundownText(coverage, elapsed))) record.outcome = 'error';
+    // Deliveries stay tracked on the original records; the restatement is context only.
+    for (const item of this.background()) {
+      this.options.send({ type: 'session.thinking.append', event_id: `background-${crypto.randomUUID()}`, delegation_id: null,
+        content: researchCard(item.target, item.facts, item.retrievedAt) });
+    }
+  }
+
+  checkpoint(): ProducerCheckpoint {
+    return {
+      records: this.records, counts: { ...this.counts }, lastConsultation: this.lastConsultation, consultedDialogue: this.consultedDialogue,
+      signals: this.signals, ...(this.researchProbability != null ? { researchProbability: this.researchProbability } : {}),
+      episodes: [...this.episodes], lastCueAt: this.lastCueAt, researched: [...this.researched], samTurns: [...this.samTurns],
+      lastRundown: this.lastRundown, timeRundownSent: this.timeRundownSent,
+    };
+  }
+
+  /** Restores a paused producer. In-flight work in the checkpoint was lost with the isolate. */
+  restore(checkpoint: ProducerCheckpoint) {
+    this.abort.abort();
+    this.records.splice(0, this.records.length, ...checkpoint.records);
+    this.counts = { ...checkpoint.counts };
+    this.lastConsultation = checkpoint.lastConsultation;
+    this.consultedDialogue = checkpoint.consultedDialogue;
+    this.signals = checkpoint.signals;
+    this.researchProbability = checkpoint.researchProbability;
+    this.episodes = new Set(checkpoint.episodes);
+    this.lastCueAt = checkpoint.lastCueAt;
+    this.researched = new Set(checkpoint.researched);
+    this.samTurns = new Set(checkpoint.samTurns);
+    this.lastRundown = checkpoint.lastRundown;
+    this.timeRundownSent = checkpoint.timeRundownSent;
+    this.abandon();
+  }
+
+  private abandon() {
+    for (const record of this.records) if ((record.source === 'producer' || record.source === 'research') && ['pending', 'deferred'].includes(record.outcome)) {
+      record.outcome = 'aborted';
+      record.completedAt ??= Date.now();
+    }
+  }
+
   close() {
+    this.closed = true;
     this.abort.abort();
     this.queue = null;
     this.pendingCue = null;
-    for (const record of this.records) if ((record.source === 'producer' || record.source === 'research') && ['pending', 'deferred'].includes(record.outcome)) {
-      record.outcome = 'aborted';
-      record.completedAt = Date.now();
-    }
+    this.abandon();
   }
 }

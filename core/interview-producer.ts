@@ -64,7 +64,7 @@ export type ResearchRecord = {
   delivery?: NoteDelivery;
 };
 export type RundownRecord = {
-  source: 'rundown'; id: string; sentAt: number; reason: 'change' | 'time'; elapsedMinutes: number;
+  source: 'rundown'; id: string; sentAt: number; reason: 'change' | 'time' | 'resume'; elapsedMinutes: number;
   levels: Record<string, CoverageLevel>; outcome: 'sent' | 'error'; delivery?: NoteDelivery;
 };
 export type AssessmentRecord = {

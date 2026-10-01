@@ -7,7 +7,7 @@ import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
 
-import { attempt, capability, request, activityPoll, fixture, waitFor } from './session-fixture';
+import { attempt, capability, request, activityPoll, fixture, settle, waitFor } from './session-fixture';
 afterEach(() => setSystemTime());
 const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
 
@@ -682,17 +682,25 @@ test('an actor delegation receives private role direction instead of starting ou
   expect(f.creations()).toBe(1);
   await f.session.fetch(request('end'));
 });
-test('server alarm closes abandoned practice without browser cooperation', async () => {
+test('server alarm holds abandoned practice, closes its provider, and ends it after the hold', async () => {
   const f = await fixture();
   await f.session.fetch(request('start'));
   await f.session.fetch(request('ready'));
   expect(f.alarm()).toBeGreaterThan(Date.now());
-  setSystemTime(Date.now() + 40_000);
+  const lost = Date.now() + 40_000;
+  setSystemTime(lost);
+  await f.session.alarm();
+  await settle(f);
+  expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(true);
+  expect(f.values.get('checkpoint')).toBeDefined();
+  expect(f.values.get('lease')).not.toHaveProperty('providerId');
+  expect(f.row()).toMatchObject({ archive_state: 'partial', session_status: 'paused' });
+  setSystemTime(lost + 15 * 60_000);
   await f.session.alarm();
   const result = await (await f.session.fetch(request('poll'))).json() as Record<string, unknown>;
-  expect(result.status).toBe('ended');
-  expect(result.finalization).toBe('confirmed');
-  expect(f.socket.sent.some(event => event.type === 'session.close')).toBe(true);
+  expect(result).toMatchObject({ status: 'ended', finalization: 'confirmed', pause: null });
+  expect(result.message).toContain('did not return within 15 minutes');
+  expect(f.values.get('checkpoint')).toBeUndefined();
 });
 for (const polling of [false, true]) test(`a connection that never becomes ready closes ${polling ? 'despite polling' : 'after abandonment'}`, async () => {
   const f = await fixture();
@@ -1176,7 +1184,7 @@ test('failed final D1 save is best effort and closure lease cleanup continues', 
   expect(f.row()).toBeNull();
 });
 
-test('restart closes the provider and leaves the last successful checkpoint partial', async () => {
+test('a replacement owner finishes the checkpointed conversation and closes its provider', async () => {
   const active = await fixture();
   await active.session.fetch(request('start'));
   await active.session.fetch(request('ready'));
@@ -1187,9 +1195,15 @@ test('restart closes the provider and leaves the last successful checkpoint part
   expect(active.row()?.archive_state).toBe('partial');
   const replacement = await fixture({ values: active.values, archive: active.archive });
   await replacement.session.alarm();
-  expect(replacement.row()).toMatchObject({ archive_state: 'partial', session_status: 'live', finalization: 'pending' });
+  await Promise.all(replacement.pending);
+  expect(replacement.socket.sent.map(event => event.type)).toEqual(['session.close']);
+  expect(replacement.row()).toMatchObject({ archive_state: 'final', session_status: 'interrupted', finalization: 'confirmed' });
   expect(JSON.parse(replacement.row()!.transcript_json)[0].text).toBe('A captured question.');
-  expect((await replacement.session.fetch(request('poll'))).status).toBe(410);
+  const result = await (await replacement.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(result.status).toBe('interrupted');
+  expect(result.message).toContain('service restart');
+  expect(replacement.values.get('checkpoint')).toBeUndefined();
+  expect(replacement.values.get('lease')).toMatchObject({ closed: true });
   await active.session.fetch(request('end')); // Stop the original fixture's timer after simulating restart.
 });
 

@@ -6,7 +6,7 @@ import type { FoundryConfig } from '../foundry.server';
 import { DirectorOutputError, requestSol } from '../simulator/sol.server';
 import { INTERVIEWER_NAME, interviewTopics, type InterviewBackground, type InterviewObjectiveReading } from '../../core/interview';
 import { PRODUCER_LIMITS, type ProducerLogRecord, type ProducerTrigger, type ResearchRequest } from '../../core/interview-producer';
-import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
+import { TRANSCRIPT_LIMIT, activeElapsed, transcriptCharacters, type PauseSpan } from '../../core/simulator/state';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import { interviewerBrief } from './scenario.server';
 import { recentTranscript } from './evaluate.server';
@@ -25,6 +25,8 @@ export type ProducerResult = { cue: string | null; evidenceIds: string[]; resear
 export type ProducerBudget = { cuesLeft: number; researchLeft: number; lookupsInFlight: number };
 export type ProducerInput = {
   clientId: string; transcript: TranscriptEntry[]; coverage: InterviewObjectiveReading[]; startedAt: number; now: number;
+  /** Connection pauses; the clock and history times exclude them. */
+  pauses?: PauseSpan[];
   triggers: ProducerTrigger[]; history: ProducerLogRecord[]; budget: ProducerBudget; foundry: FoundryConfig; signal: AbortSignal;
 };
 
@@ -66,11 +68,11 @@ function coverageView(coverage: InterviewObjectiveReading[]) {
 /** Everything Sol knows: purpose, clock, coverage, its own past cues, the research log and the full dialogue. */
 export function producerContext(input: Omit<ProducerInput, 'foundry' | 'signal'>) {
   if (!input.transcript.length || input.transcript.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(input.transcript) > TRANSCRIPT_LIMIT.characters) throw new Error('Producer transcript is outside the interview limit.');
-  const at = (time: number | undefined) => time == null ? null : minutes(time - input.startedAt);
+  const at = (time: number | undefined) => time == null ? null : minutes(activeElapsed(input.startedAt, time, input.pauses));
   return {
     purpose: PRODUCER_PURPOSE,
     interviewer: { name: INTERVIEWER_NAME, brief: interviewerBrief(input.clientId) },
-    clock: { elapsedMinutes: minutes(input.now - input.startedAt), targetMinutes: PRODUCER_LIMITS.targetMinutes },
+    clock: { elapsedMinutes: minutes(activeElapsed(input.startedAt, input.now, input.pauses)), targetMinutes: PRODUCER_LIMITS.targetMinutes },
     coverage: coverageView(input.coverage),
     triggers: input.triggers,
     budget: input.budget,

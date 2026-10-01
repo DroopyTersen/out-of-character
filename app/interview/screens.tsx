@@ -3,7 +3,8 @@ import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic,
 import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import type { AudioLevels } from '../simulator/audio-levels';
-import { formatTime } from '../simulator/conversation';
+import { ConnectionPaused, ConnectionUnstable, formatTime, type ConversationPhase } from '../simulator/conversation';
+import { stableLink, type Link } from '../simulator/live-connection';
 import { VoiceDisplay } from '../simulator/voice-display';
 import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 
@@ -134,10 +135,10 @@ function InterviewBackgroundLive({ notes }: { notes: InterviewBackground[] | und
   return <section className="interview-background sim-panel" aria-label="Background Sam received"><h2>Background Sam received</h2><p className="interview-background-context">Current public background; your account establishes what happened on the project.</p><InterviewBackgroundFacts notes={notes} /></section>;
 }
 
-export function InterviewConversation({ voiceId, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, error }: {
-  voiceId: InterviewVoiceId; snapshot: InterviewSnapshot | null; phase: 'connecting' | 'live' | 'ending';
+export function InterviewConversation({ voiceId, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, onResume = () => {}, link = stableLink, error }: {
+  voiceId: InterviewVoiceId; snapshot: InterviewSnapshot | null; phase: ConversationPhase;
   muted: boolean; levels: AudioLevels; elapsed: number;
-  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue: () => void; error?: string | null;
+  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue: () => void; onResume?: () => void; link?: Link; error?: string | null;
 }) {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const transcriptButton = useRef<HTMLButtonElement>(null);
@@ -151,10 +152,11 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
   return <section className="interview-conversation">
     <header className="interview-session-bar"><div><h1 tabIndex={-1}>A conversation with Sam</h1></div><time aria-label={`${formatTime(elapsed)} elapsed`}>{formatTime(elapsed)} <small>elapsed</small></time><button className="interview-end" onClick={onEnd} disabled={phase === 'ending'}>{phase === 'connecting' ? 'Cancel' : phase === 'ending' ? 'Finishing…' : 'End interview'}</button></header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
+    {phase === 'paused' ? <ConnectionPaused snapshot={snapshot} link={link} noun="interview" endLabel="End & get summary" onResume={onResume} onEnd={onEnd} /> : phase === 'live' && <ConnectionUnstable link={link} />}
     {warning && <div className="sim-session-warning" role="status"><div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong><p>{warning.kind === 'idle' ? `The interview will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before the interview ends automatically.`}</p></div>{warning.kind === 'idle' && <button onClick={onContinue}>Continue interview</button>}</div>}
     <div className="interview-live-grid">
       <div className="interview-primary">
-        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : 'Sam is ready when you are.'}</p>}</div>
+        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
           <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
         </div>
         {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}

@@ -101,7 +101,7 @@ export class DirectorGate {
   }
 }
 
-export type DirectorUsage = { inputTokens: number | null; outputTokens: number | null; cachedTokens?: number | null };
+export type DirectorUsage = { inputTokens: number | null; outputTokens: number | null; cachedTokens?: number | null; cacheWriteTokens?: number; reasoningTokens?: number };
 export type DirectorResult = { action: 'none'; text: null; evidenceIds: [] } | { action: 'intervene'; text: string; evidenceIds: string[] };
 type RecordBase = {
   id: string; observationId: string; issueId: string; audience: DirectorAudience; signal: DirectorSignal;

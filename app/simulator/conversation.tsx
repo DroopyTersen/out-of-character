@@ -38,7 +38,7 @@ export function ConnectionPaused({ snapshot, link, noun, endLabel, onResume, onE
           : 'Everything so far is saved. Resume to pick up where you left off.';
   return <div className="sim-connection-paused" role="status" aria-busy={resuming}>
     <WifiOff size={22} aria-hidden="true" />
-    <div><strong>Connection lost — {noun} paused.</strong><p>{detail}</p></div>
+    <div><strong>{link.reloaded ? `Your ${noun} is paused.` : pause?.reason === 'restart' ? `The server restarted — ${noun} paused.` : `Connection lost — ${noun} paused.`}</strong><p>{detail}</p></div>
     <div className="sim-connection-actions">
       <button className="sim-resume" onClick={onResume} disabled={resuming || exhausted || !link.reachable}><RotateCcw size={17} aria-hidden="true" />{resuming ? 'Resuming…' : `Resume ${noun}`}</button>
       <button className="quiet-button" onClick={onEnd}>{endLabel}</button>

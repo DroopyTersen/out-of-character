@@ -1,7 +1,7 @@
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
 import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
-import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator/types';
+import { SIMULATOR_VERSION, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../core/interview-producer';
@@ -28,7 +28,7 @@ export type ArchiveProvenance = {
 };
 export type ConnectionLog = {
   segments: { epoch: number; startedAt: number; endedAt: number | null; closeReason: string | null; finalization: 'pending' | 'confirmed' | 'unconfirmed'; usageSeconds: number | null }[];
-  pauses: { reason: 'browser' | 'provider'; pausedAt: number; resumedAt: number | null; durationMs: number }[];
+  pauses: { reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; durationMs: number }[];
 };
 
 export type ArchiveWrite = {

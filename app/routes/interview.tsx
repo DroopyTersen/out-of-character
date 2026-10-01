@@ -21,7 +21,10 @@ export default function Interview() {
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>(interviewVoices[0].id);
   const [now, setNow] = useState(Date.now());
   const report = useStreamedReport(interviewSummarySchema, draft => !!draft?.text);
-  const session = useSimulator(report);
+  const session = useSimulator(report, { kind: 'interview', onReattach: ({ clientId }) => {
+    const voice = interviewVoices.find(item => item.id === clientId);
+    if (voice) setVoiceId(voice.id);
+  } });
   const main = useRef<HTMLElement>(null);
   const screen = session.phase === 'selection' || session.phase === 'debrief' ? session.phase : 'conversation';
   const shownScreen = useRef(screen);

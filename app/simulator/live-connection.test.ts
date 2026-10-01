@@ -201,3 +201,49 @@ test('a reconnect that fails after the server accepted it holds the attempt agai
   expect(states(links).at(-1)).toBe('stable');
   await connection.end();
 });
+
+const saved = { id: '00000000-0000-4000-8000-000000000000', capability: 'a'.repeat(64) };
+async function reattached() {
+  const { LiveConnection } = await import('./live-connection');
+  const links: Link[] = [], errors: [string, boolean | undefined][] = [], snapshots: SessionSnapshot[] = [];
+  const connection = new LiveConnection({ snapshot: value => snapshots.push(value), levels: () => {}, error: (message, fatal) => errors.push([message, fatal]), link: link => links.push(link) }, saved);
+  return { connection, links, errors, snapshots };
+}
+
+test('a reloaded page rejoins its attempt paused and waits for the user to resume', async () => {
+  server.status = 'live';
+  const { connection, links, snapshots } = await reattached();
+  expect(connection.attempt).toEqual(saved);
+  await connection.reattach();
+  await advance(100);
+  expect(server.calls).toEqual(['pause', 'poll']);
+  expect(snapshots.at(-1)!.status).toBe('paused');
+  expect(links).toEqual([{ state: 'paused', reachable: true, reloaded: true }]);
+  // Audio needs a click on the new page, so the heartbeat never resumes on its own.
+  await advance(20_000);
+  expect(server.calls).not.toContain('resume');
+  await connection.resume();
+  expect(links).toEqual([{ state: 'paused', reachable: true, reloaded: true }, { state: 'resuming', reachable: true }, { state: 'stable', reachable: true }]);
+  expect(server.status).toBe('live');
+  await connection.end();
+});
+
+test('leaving mid-conversation holds the attempt instead of ending it', async () => {
+  const { connection, peer } = await connected();
+  const sent = server.calls.length;
+  expect(connection.detach()).toBe(true);
+  await advance(20_000);
+  expect(server.calls.slice(sent)).toEqual(['pause']);
+  expect(peer().connectionState).toBe('closed');
+});
+
+test('a reloaded page whose attempt is gone reports it once and ends nothing', async () => {
+  server.override = () => ({ status: 410, body: { error: 'This practice session was interrupted. Start a new attempt.' } });
+  const { connection, errors } = await reattached();
+  await connection.reattach();
+  await advance(20_000);
+  expect(errors).toEqual([['This attempt is no longer available.', true]]);
+  expect(server.calls).toEqual(['pause', 'poll']);
+  await connection.end();
+  expect(server.calls).toEqual(['pause', 'poll']);
+});

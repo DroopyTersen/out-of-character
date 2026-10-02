@@ -507,8 +507,8 @@ test('research requests are validated, deduplicated, one at a time, capped, and 
   expect(f.producer.summary().research).toBe(3);
 });
 
-test('a found lookup wakes Sol without new text, an unresolved one waits in the log, and a map note cites only lookups Sol had read', async () => {
-  const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: null };
+test('a found lookup wakes Sol without new text, an unresolved one waits in the log, and a map note carries the lookup its research fact cites', async () => {
+  const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: 'L1' };
   const known = mapWith([], { participant: { vantage: 'Led the routing integration', preferences: [] } });
   const results = [mapped(known, request('OpenStreetMap')), mapped({ ...known, entities: [routing, research] }, request('Mapbox'))];
   const lookups: ReturnType<typeof deferred<Lookup>>[] = [];
@@ -528,8 +528,10 @@ test('a found lookup wakes Sol without new text, an unresolved one waits in the 
   expect(found!.loggedAt).toBeUndefined();
   await f.step(40_000);
   expect(f.calls.map[1]!.tail.reasons).toEqual(['public research arrived about the product "OpenStreetMap"']);
+  expect(f.calls.map[0]!.lookups).toEqual([]);
+  expect(f.calls.map[1]!.lookups).toEqual(['L1']);
   expect(f.calls.map[1]!.blocks).toEqual([...f.calls.map[0]!.blocks,
-    '[event · 0.5 min] Public research about the product "OpenStreetMap" (public background, not project fact): OpenStreetMap is a collaborative, openly licensed world map. [About OpenStreetMap]']);
+    '[event L1 · 0.5 min] Public research about the product "OpenStreetMap" (public background, not project fact): OpenStreetMap is a collaborative, openly licensed world map. [About OpenStreetMap]']);
   expect(found!.loggedAt).toBe(epoch + 40_000);
 
   f.at(45_000); lookups[1]!.resolve({ status: 'unresolved', reason: 'Several products share the name.', queries: [] }); await flush();
@@ -551,8 +553,29 @@ test('a found lookup wakes Sol without new text, an unresolved one waits in the 
   // The event alone doesn't call Sol on the minute; new participant text does.
   await f.turn(115_000);
   expect(f.calls.map[2]!.tail.reasons).toEqual([MINUTE]);
-  expect(f.calls.map[2]!.blocks.at(-1)).toContain('[event · 0.8 min] Public research about the product "Mapbox" found nothing reliable: Several products share the name.');
+  expect(f.calls.map[2]!.blocks.at(-1)).toContain('[event L2 · 0.8 min] Public research about the product "Mapbox" found nothing reliable: Several products share the name.');
   expect(unresolved.loggedAt).toBe(epoch + 115_000);
+});
+
+test('a map note credits only the lookups its research facts cite, not every lookup Sol had read', async () => {
+  const known = mapWith([], { participant: { vantage: 'Led the routing integration', preferences: [] } });
+  const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: 'L1' };
+  const results = [mapped(known, request('OpenStreetMap')), mapped(known, request('Mapbox')), mapped({ ...known, entities: [routing, research], nextIds: { e: 3, r: 1, t: 1 } })];
+  const f = fixture({
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+    generateMap: async input => results[f.calls.map.length - 1] ?? mapped(input.previous),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.step(40_000);
+  await f.step(60_000);
+  const [osm, mapbox] = f.of('research');
+  expect([osm, mapbox].map(item => [item!.request.name, item!.outcome, item!.eventId])).toEqual([['OpenStreetMap', 'found', 'L1'], ['Mapbox', 'found', 'L2']]);
+  expect(f.calls.map[2]!.lookups).toEqual(['L1', 'L2']);
+  await f.step(80_000);
+  const note = f.of('note').at(-1)!;
+  expect(note.text).toContain(`\nPublic background you read, not project fact: OpenStreetMap: ${facts[0]!.text}`);
+  expect(note.researchIds).toEqual([osm!.id]);
 });
 
 test('Jev re-reads a turn that grew without counting another turn on the thread, skips Sam’s turn, and drops a late reading', async () => {

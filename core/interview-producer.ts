@@ -7,7 +7,7 @@ import type { DirectorUsage } from './simulator/director';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v11';
+export const PRODUCER_VERSION = 'interview-producer-v12';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 30_000,
@@ -47,8 +47,8 @@ export type TraitRecord = {
   traits?: Record<string, [spicy: number, grounding: number]>;
 };
 /**
- * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups Sol
- * had seen when it wrote the map, if the note carries research.
+ * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
+ * research facts cite.
  */
 export type NoteRecord = {
   source: 'note'; id: string; kind: 'list' | 'map'; text: string; mapId: string | null; turnId?: string; sentAt: number;
@@ -59,6 +59,8 @@ export type NoteRecord = {
 export type ResearchRecord = {
   source: 'research'; id: string; mapId: string; request: ResearchRequest; model: string;
   requestedAt: number; lookupAt?: number; completedAt?: number; loggedAt?: number;
+  /** The ID of the lookup's event in Sol's log, which research facts cite. */
+  eventId?: string;
   facts?: InterviewBackground['facts']; retrievedAt?: number; queries?: string[]; reason?: string;
   outcome: 'pending' | 'invalid' | 'duplicate' | 'budget' | 'busy' | 'found' | 'unresolved' | 'timeout' | 'error' | 'aborted';
 };
@@ -87,7 +89,7 @@ export function gradeObjectives(graded: InterviewObjectiveReading[], shown: Inte
   });
 }
 
-/** Lookups Sam could have read: Sol had seen them when it wrote a map note that carried research, and the voice service accepted the note. */
+/** Lookups Sam could have read: a research fact in a map note cites them, and the voice service accepted the note. */
 export function deliveredBackground(records: ProducerLogRecord[]): InterviewBackground[] {
   const delivered = new Set(records.flatMap(item => item.source === 'note' && item.delivery.status === 'accepted' ? item.researchIds ?? [] : []));
   return records.flatMap(item => item.source === 'research' && item.outcome === 'found' && delivered.has(item.id) && item.facts?.length && item.retrievedAt != null

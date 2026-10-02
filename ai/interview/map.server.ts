@@ -12,7 +12,7 @@ import type { TranscriptEntry } from '../../core/simulator/types';
 import { interviewScenario } from './scenario.server';
 
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v3';
+export const MAP_PROMPT_VERSION = 'sol-map-v4';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -55,10 +55,10 @@ export const mapWireSchema = (function strip(node: unknown): unknown {
 /** Static for every interview. Examples are fictional; never put a real client here. */
 export const mapInstructions = [
   `You are Sol, the producer behind ${INTERVIEWER_NAME}, an AI voice interviewer in a real project closeout. You keep the conversation map: a private, loose graph of what the participant has said and the open gaps worth pulling on. You never speak to Sam or the participant. After each participant turn, code ranks your open threads and passes Sam the best ones in your words: thread labels, unknowns and guesses verbatim, along with the participant's vantage, preferences and key facts. Sam chooses the actual question and how to segue.`,
-  'Input. A seed message gives the purpose and the closeout topics. The transcript log follows, append-only, one line per settled passage: [passage id · speaker · minutes since start] text. A "continued" line adds text to an earlier passage; a "corrected" line replaces it. Event lines record what arrived mid-interview, such as public research. The last message is the current state: your previous map, Jev\'s coverage readings, any thread signals, why you were called and the clock. The map is empty on your first call.',
+  'Input. A seed message gives the purpose and the closeout topics. The transcript log follows, append-only, one line per settled passage: [passage id · speaker · minutes since start] text. A "continued" line adds text to an earlier passage; a "corrected" line replaces it. Event lines record what arrived mid-interview, such as public research: [event id · minutes since start] text. The last message is the current state: your previous map, Jev\'s coverage readings, any thread signals, why you were called and the clock. The map is empty on your first call.',
   'Output: an update to the previous map, not a fresh map. Account for every previous ID exactly once, including participant: list it in keep if it is unchanged, write it in full under entities, edges or threads if it changed, or drop it with a reason. Set participant to null and list participant in keep when the vantage and preferences are unchanged; otherwise write both fields in full. New IDs use the prefix for their kind (e for entities, r for edges, t for threads) and numbers from the next free IDs upward; never reuse a number. Code rejects an update that skips, repeats or invents an ID or points at a missing node, and the previous map then stays in place. Check the accounting before you answer.',
   'Stability. Keep a node whose substance has not changed, even if you would now phrase it differently: changed wording reaches Sam and costs time. Change a node when the transcript changes what it should say.',
-  'Truth. Only the participant establishes project facts. Sam\'s questions, guesses, suggestions and paraphrases are conversation, not evidence. They become facts only when the participant confirms them ("yeah, exactly, it was her call"); then cite the participant\'s confirming passage. A participant-sourced entity cites the participant passage where it was said or confirmed. Never record Sam\'s guess as an entity. Public research arrives as event lines: record anything useful with source research and a null passage, never as a project fact; Sam frames it as something read. Preserve hedges, attribution and who knows what: something heard secondhand stays secondhand.',
+  'Truth. Only the participant establishes project facts. Sam\'s questions, guesses, suggestions and paraphrases are conversation, not evidence. They become facts only when the participant confirms them ("yeah, exactly, it was her call"); then cite the participant\'s confirming passage. A participant-sourced entity cites the participant passage where it was said or confirmed. Never record Sam\'s guess as an entity. Public research arrives as event lines: record anything useful with source research, citing the event ID (such as L1) as its passage, never as a project fact; Sam frames it as something read. Preserve hedges, attribution and who knows what: something heard secondhand stays secondhand.',
   'Entities. Record what helps Sam ask good questions: people (with their role and side, client or delivery team), organizations, products, features, events (with timing when known), decisions and terms. A label is the name the participant used, 1-5 words: "Dana", "reporting module", "the March cut". The detail states the fact plainly in at most 20 words; the source tag already carries attribution, so never begin with "The participant says". Use fact only for a standalone number, constraint or limit; anything about a person, decision or event belongs in that node\'s detail. Do not make an entity for every noun. Merge duplicates: when two nodes describe the same thing, keep one, fold in the other\'s detail, and drop the other ("merged into e5"). Cite the passage that establishes the fact, not its latest mention. Add edges only for clear relations: built (a person or team built a product or feature), part-of (a feature of a product), decided (a person made a decision), works-for (a person at an organization), involved (a person in an event or decision), happened-during (an event during another).',
   'The participant. Vantage is a concrete statement, at most 40 words, of what they can and cannot speak to firsthand, drawn from their role, the parts they built, their time on the project and any absences: "Tech lead on the app side, weeks 1-6 of 12; on leave weeks 7-12, so cannot speak to launch or later scope changes." Preferences are at most four things the participant asked for or showed about how to be interviewed, each under 25 words and citing the participant passage where they said or showed it: "Wants concrete questions about what was built" [p12]. Only what the participant expressed is a preference; your own advice about technique, pacing or what to explore is not. Never write a list of topics to avoid: when a closed thread matters to Sam, the reason belongs in the vantage or a preference as a fact ("on leave when the integration was cut"). Leave either empty until there is something to say.',
   [
@@ -100,7 +100,8 @@ export function mapSeed(): string {
  * `logged` holds each passage's text as last logged, to render growth as a continuation.
  */
 export type MapLog = { blocks: string[]; logged: Record<string, string> };
-export type MapLogEvent = { atMs: number; text: string };
+/** `id` is what a research fact cites, so code knows which lookups a map carries. */
+export type MapLogEvent = { id: string; atMs: number; text: string };
 export const emptyMapLog = (): MapLog => ({ blocks: [], logged: {} });
 
 const minutes = (ms: number) => (Math.max(0, ms) / 60_000).toFixed(1);
@@ -123,7 +124,7 @@ export function appendMapLog(log: MapLog, settled: TranscriptEntry[], events: Ma
   const logged = { ...log.logged };
   const lines: string[] = [];
   const pending = [...events].sort((a, b) => a.atMs - b.atMs);
-  const flush = (untilMs: number) => { while (pending.length && pending[0]!.atMs <= untilMs) { const event = pending.shift()!; lines.push(`[event · ${minutes(event.atMs)} min] ${oneLine(event.text)}`); } };
+  const flush = (untilMs: number) => { while (pending.length && pending[0]!.atMs <= untilMs) { const event = pending.shift()!; lines.push(`[event ${event.id} · ${minutes(event.atMs)} min] ${oneLine(event.text)}`); } };
   for (const entry of settled) {
     const current = oneLine(entry.text);
     const previous = logged[entry.id];
@@ -192,6 +193,8 @@ export async function generateMap(input: {
   foundry: FoundryConfig; signal: AbortSignal; attemptId: string; blocks: string[]; previous: ConversationMap; tail: MapTail;
   /** Every passage Sol has seen, to check what participant facts cite. */
   passages: Pick<TranscriptEntry, 'id' | 'speaker'>[];
+  /** The IDs of every event in the log, to check what research facts cite. */
+  lookups?: string[];
   /** False sends no cache options, for deployments that reject them. */
   cache?: boolean;
 }, request: (url: string, options: RequestInit) => Promise<Response> = fetch): Promise<{ map: ConversationMap; update: MapUpdate; changes: MapChanges; research: ResearchRequest | null; model: string; usage: DirectorUsage }> {
@@ -203,7 +206,7 @@ export async function generateMap(input: {
   const parsed = mapOutputSchema.safeParse(value);
   if (!parsed.success) throw new MapOutputError(parsed.error.issues.map(issue => ({ kind: 'schema', id: issue.path.join('.'), detail: issue.message })), value, model, usage);
   const { research, ...update } = parsed.data;
-  const result = applyMapUpdate(input.previous, update, input.passages);
+  const result = applyMapUpdate(input.previous, update, input.passages, input.lookups);
   if (!result.ok) throw new MapOutputError(result.defects, value, model, usage);
   return { map: result.map, update, changes: result.changes, research, model, usage };
 }

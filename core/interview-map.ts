@@ -26,6 +26,7 @@ export type MapTopicId = typeof MAP_TOPIC_IDS[number];
 /** Each preference is something the participant asked for or showed, citing that passage, so Sol's own advice can't pass as theirs. */
 export type MapPreference = { text: string; passageId: string };
 export type MapParticipant = { vantage: string; preferences: MapPreference[] };
+/** `passageId` is the participant passage a participant fact cites, the lookup event a research fact cites, and null for a seed fact. */
 export type MapEntity = { id: string; kind: EntityKind; label: string; detail: string; source: EntitySource; passageId: string | null };
 export type MapEdge = { id: string; kind: EdgeKind; from: string; to: string };
 /** A gap, never a question: Sam turns the unknown and the guess into a question of its own. Every thread carries a guess. */
@@ -67,9 +68,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.s
  * Rebuilds the full map from Sol's update. Every previous ID must be accounted for exactly once; nothing disappears silently.
  * Rejects rather than repairs: the probe counts defects, and a rejected update leaves the previous map in place. The one
  * repair: a reason on an open thread is cleared, since nothing reads it and a reopened thread would otherwise carry it unseen.
- * `passages` is the transcript Sol saw, used to check that participant facts and preferences cite a participant passage.
+ * `passages` is the transcript Sol saw, used to check that participant facts and preferences cite a participant passage;
+ * `lookups` are the IDs of the research events in Sol's log, which research facts cite instead.
  */
-export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, passages: { id: string; speaker: Speaker }[]): MapResult {
+export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, passages: { id: string; speaker: Speaker }[], lookups: string[] = []): MapResult {
   const update = { ...input, threads: input.threads.map(thread => thread.status === 'open' && thread.reason != null ? { ...thread, reason: null } : thread) };
   const defects: MapDefect[] = [];
   const before = new Set(mapIds(previous));
@@ -129,8 +131,12 @@ export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, pass
     if (thread.status !== 'open' && !thread.reason?.trim()) defects.push({ kind: 'reason', id: thread.id });
   }
   // A participant fact needs a participant passage: Sam's guesses and playbacks count only once the participant confirms them.
-  // Research and seed facts come from outside the dialogue, so they cite none.
+  // Research facts cite the lookup they came from, so a note credits only the lookups it carries; seed facts cite nothing.
   for (const entity of update.entities) {
+    if (entity.source === 'research') {
+      if (entity.passageId == null || !lookups.includes(entity.passageId)) defects.push({ kind: 'passage', id: entity.id, detail: `research fact citing ${entity.passageId ?? 'nothing'}, not a lookup event` });
+      continue;
+    }
     const speaker = entity.passageId == null ? undefined : speakers.get(entity.passageId);
     if (entity.passageId != null && !speaker) defects.push({ kind: 'passage', id: entity.id, detail: entity.passageId });
     if (entity.source === 'participant' && speaker !== 'trainee') defects.push({ kind: 'passage', id: entity.id, detail: 'participant fact without a participant passage' });

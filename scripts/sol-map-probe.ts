@@ -54,7 +54,8 @@ const toAudio = (wall: number) => {
 const research = records.filter((item): item is Research => item.source === 'research' && [...FOUND, 'unresolved'].includes((item as Research).outcome));
 const events: (MapLogEvent & { used: boolean })[] = research
   .flatMap(item => { const at = toAudio(item.loggedAt ?? item.sentAt ?? item.completedAt ?? NaN); return at == null || !Number.isFinite(at) ? [] : [{ atMs: at, text: researchLogEvent(item.request, FOUND.includes(item.outcome) ? item.facts ?? null : null), used: false }]; })
-  .sort((a, b) => a.atMs - b.atMs);
+  .sort((a, b) => a.atMs - b.atMs)
+  .map((event, index) => ({ ...event, id: `L${index + 1}` }));
 if (events.length < research.length) console.warn(`Skipped ${research.length - events.length} research events with no grade to place them on the audio clock.`);
 
 const attemptId = `probe-${randomUUID()}`;
@@ -112,7 +113,7 @@ while (at != null && rows.length < limit) {
   const base = { call: rows.length + 1, atMs: at, reasons, blocks: log.blocks.length, tail: renderMapTail(map, tail) };
   let result: Row;
   try {
-    const value = await generateMap({ foundry, signal: AbortSignal.timeout(30_000), attemptId, blocks: log.blocks, previous: map, passages: settled, cache, tail }, request);
+    const value = await generateMap({ foundry, signal: AbortSignal.timeout(30_000), attemptId, blocks: log.blocks, previous: map, passages: settled, lookups: events.filter(event => event.used).map(event => event.id), cache, tail }, request);
     map = value.map;
     maps.push({ call: base.call, map });
     result = { ...base, latencyMs: Math.round(performance.now() - started), outcome: 'ok', usage: value.usage, changes: { ...value.changes, kept: value.changes.kept.length }, update: lastUpdate, ...counts() };

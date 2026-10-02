@@ -30,17 +30,17 @@ test('the log is append-only: new passages, continuations, corrections and event
   expect(one.blocks).toEqual(['[p1 · Sam · 0.0 min] What did the project deliver, and who was the client?\n[p2 · participant · 0.1 min] A routing layer for the dispatch team.']);
   expect(appendMapLog(one, transcript.slice(0, 2))).toBe(one);
   const grown = [transcript[0]!, { ...transcript[1]!, text: 'A routing layer for the dispatch team. It replaced paper maps.' }, transcript[2]!];
-  const two = appendMapLog(one, grown, [{ atMs: 265_000, text: 'Public research arrived.' }]);
+  const two = appendMapLog(one, grown, [{ id: 'L1', atMs: 265_000, text: 'Public research arrived.' }]);
   expect(two.blocks[0]).toBe(one.blocks[0]!);
-  expect(two.blocks[1]).toBe('[p2 · participant · continued] It replaced paper maps.\n[p3 · Sam · 4.3 min] Who decided on routing first?\n[event · 4.4 min] Public research arrived.');
+  expect(two.blocks[1]).toBe('[p2 · participant · continued] It replaced paper maps.\n[p3 · Sam · 4.3 min] Who decided on routing first?\n[event L1 · 4.4 min] Public research arrived.');
   const three = appendMapLog(two, [{ ...grown[1]!, text: 'A routing layer for dispatchers.' }]);
   expect(three.blocks[2]).toBe('[p2 · participant · corrected] A routing layer for dispatchers.');
 });
 
 test('events land in time order among the passages logged with them', () => {
-  const log = appendMapLog(emptyMapLog(), transcript, [{ atMs: 300_000, text: 'Late.' }, { atMs: 100_000, text: 'Early.' }, { atMs: 260_000, text: 'Same moment as p3.' }]);
+  const log = appendMapLog(emptyMapLog(), transcript, [{ id: 'L3', atMs: 300_000, text: 'Late.' }, { id: 'L1', atMs: 100_000, text: 'Early.' }, { id: 'L2', atMs: 260_000, text: 'Same moment as p3.' }]);
   expect(log.blocks[0]!.split('\n').map(line => line.slice(0, 16))).toEqual([
-    '[p1 · Sam · 0.0 ', '[p2 · participan', '[event · 1.7 min', '[event · 4.3 min', '[p3 · Sam · 4.3 ', '[event · 5.0 min',
+    '[p1 · Sam · 0.0 ', '[p2 · participan', '[event L1 · 1.7 ', '[event L2 · 4.3 ', '[p3 · Sam · 4.3 ', '[event L3 · 5.0 ',
   ]);
 });
 
@@ -161,8 +161,8 @@ test('without caching the map request sends no cache options or breakpoints', as
 });
 
 test('a rejected update reports every defect with what Sol returned', async () => {
-  const run = (value: unknown) => generateMap({
-    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript,
+  const run = (value: unknown, lookups?: string[]) => generateMap({
+    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript, lookups,
   }, async () => solResponse(value));
   const sam = { ...update, entities: [{ ...update.entities[0]!, passageId: 'p3' }] };
   const error = await run(sam).catch(caught => caught);
@@ -172,6 +172,10 @@ test('a rejected update reports every defect with what Sol returned', async () =
   expect(error.usage).toEqual({ inputTokens: 9000, outputTokens: 900, cachedTokens: null });
   const schema = await run({ ...update, threads: [{ ...update.threads[0]!, status: 'later' }] }).catch(caught => caught);
   expect(schema.defects[0]).toMatchObject({ kind: 'schema', id: 'threads.0.status' });
+  // A research fact cites a lookup event Sol was given.
+  const research = { ...update, entities: [...update.entities, { id: 'e2', kind: 'product', label: 'Mapbox', detail: 'A mapping platform.', source: 'research', passageId: 'L1' }] };
+  expect((await run(research).catch(caught => caught)).defects).toEqual([{ kind: 'passage', id: 'e2', detail: 'research fact citing L1, not a lookup event' }]);
+  expect((await run(research, ['L1'])).map.entities.map(item => item.passageId)).toEqual(['p2', 'L1']);
 });
 
 test('existing JSON-context Sol callers send no cache options', async () => {

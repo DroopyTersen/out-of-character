@@ -61,11 +61,14 @@ function known(map: ConversationMap, source: MapEntity['source'], limit: number)
   return entities.filter(item => chosen.has(item));
 }
 
+/** The research facts the map note carries. */
+export const mapNoteResearch = (map: ConversationMap): MapEntity[] => known(map, 'research', MAP_NOTE_LIMITS.research);
+
 /** Null while the map has nothing to tell Sam. */
 export function mapNote(map: ConversationMap, headers = NOTE_HEADERS): string | null {
   const { vantage, preferences } = map.participant;
   const facts = known(map, 'participant', MAP_NOTE_LIMITS.known);
-  const research = known(map, 'research', MAP_NOTE_LIMITS.research);
+  const research = mapNoteResearch(map);
   const item = (entity: MapEntity) => `${oneLine(entity.label)}: ${oneLine(entity.detail)}`;
   const lines = [
     ...(oneLine(vantage) ? [`About the participant: ${sentence(vantage)}`] : []),

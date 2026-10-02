@@ -7,7 +7,7 @@ import { lookupInterviewBackground, researchKey, validateResearchRequest } from 
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import { emptyMap, type ConversationMap, type MapChanges } from '../../../core/interview-map';
-import { emptyListNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
+import { emptyListNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, mapNoteResearch, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
@@ -179,6 +179,7 @@ export class InterviewProducer {
     try {
       result = await services.generateMap({
         foundry, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
+        lookups: this.records.flatMap(item => item.source === 'research' && item.eventId != null && item.loggedAt != null ? [item.eventId] : []),
       });
       if (!live()) return;
       signal.throwIfAborted();
@@ -305,10 +306,9 @@ export class InterviewProducer {
     if (key === this.mapKey) return;
     const text = mapNote(this.map, noteHeaders(this.options.channel));
     if (!text) { this.mapKey = key; return; }
-    // Sol had read every lookup logged when this map's call started.
-    const startedAt = this.mapRecord.startedAt;
-    const researchIds = text.includes('\nPublic background') ? this.records.flatMap(item =>
-      item.source === 'research' && item.outcome === 'found' && item.loggedAt != null && item.loggedAt <= startedAt ? [item.id] : []) : [];
+    // The note carries the lookups its research facts cite; Sol's update was checked to cite only events it had read.
+    const cited = new Set(mapNoteResearch(this.map).map(entity => entity.passageId));
+    const researchIds = this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && cited.has(item.eventId) ? [item.id] : []);
     const note = this.note('map', text, now, undefined, researchIds);
     if (!note) return;
     this.lastMapNote = now;
@@ -364,7 +364,8 @@ export class InterviewProducer {
       if (lookup.status === 'found') Object.assign(record, { outcome: 'found', facts: lookup.facts, retrievedAt: lookup.retrievedAt } satisfies Partial<ResearchRecord>);
       else Object.assign(record, { outcome: 'unresolved', reason: lookup.reason } satisfies Partial<ResearchRecord>);
       const facts = lookup.status === 'found' ? lookup.facts : null;
-      this.events.push({ researchId: record.id, event: { atMs: this.elapsed(now), text: researchLogEvent({ kind, name }, facts, lookup.status === 'unresolved' ? lookup.reason : undefined) } });
+      record.eventId = `L${this.records.filter(item => item.source === 'research' && item.eventId != null).length + 1}`;
+      this.events.push({ researchId: record.id, event: { id: record.eventId, atMs: this.elapsed(now), text: researchLogEvent({ kind, name }, facts, lookup.status === 'unresolved' ? lookup.reason : undefined) } });
       if (facts?.length) this.wake(`public research arrived about the ${kind} "${name}"`);
     } catch (error) {
       if (!this.alive) return;

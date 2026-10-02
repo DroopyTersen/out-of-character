@@ -133,9 +133,16 @@ test('participant facts need a participant passage; Sam cannot establish one', (
     .toEqual([{ kind: 'passage', id: 'e1', detail: 'participant fact without a participant passage' }]);
   expect(defects(first({ entities: [entity('e1', { passageId: 'p99' }), entity('e2')] })))
     .toEqual([{ kind: 'passage', id: 'e1', detail: 'p99' }, { kind: 'passage', id: 'e1', detail: 'participant fact without a participant passage' }]);
-  // Research and seed facts come from outside the dialogue, so citing a passage means Sol misfiled a participant fact.
-  expect(defects(first({ entities: [entity('e1', { passageId: 'p2', source: 'research' }), entity('e2')] }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'research fact citing a passage' }]);
-  expect(defects(first({ entities: [entity('e1', { passageId: null, source: 'research' }), entity('e2')] }))).toEqual([]);
+  // A research fact cites the lookup event it came from, one Sol has read; a seed fact cites nothing.
+  const cited = (value: MapEntity) => { const result = applyMapUpdate(emptyMap(), first({ entities: [value, entity('e2')] }), passages, ['L1']); return result.ok ? [] : result.defects; };
+  expect(cited(entity('e1', { passageId: 'L1', source: 'research' }))).toEqual([]);
+  expect(cited(entity('e1', { passageId: 'L2', source: 'research' }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'research fact citing L2, not a lookup event' }]);
+  expect(cited(entity('e1', { passageId: 'p2', source: 'research' }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'research fact citing p2, not a lookup event' }]);
+  expect(cited(entity('e1', { passageId: null, source: 'research' }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'research fact citing nothing, not a lookup event' }]);
+  expect(cited(entity('e1', { passageId: 'L1' })))
+    .toEqual([{ kind: 'passage', id: 'e1', detail: 'L1' }, { kind: 'passage', id: 'e1', detail: 'participant fact without a participant passage' }]);
+  expect(cited(entity('e1', { passageId: 'p2', source: 'seed' }))).toEqual([{ kind: 'passage', id: 'e1', detail: 'seed fact citing a passage' }]);
+  expect(cited(entity('e1', { passageId: null, source: 'seed' }))).toEqual([]);
   // A kept entity is not rechecked: its passage may since have left the bounded transcript.
   const result = applyMapUpdate(built(), update({ keep: [PARTICIPANT_ID, 'e1', 'e2', 'r1', 't1', 't2'] }), []);
   expect(result.ok).toBe(true);

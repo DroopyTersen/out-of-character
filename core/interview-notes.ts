@@ -44,7 +44,7 @@ export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADER
 /** Replaces a list note whose lead Sol has since closed, when no open thread is left to pull on. */
 export const emptyListNote = (headers = NOTE_HEADERS) => `${headers.list}\nNo open thread right now: follow the participant.`;
 
-/** A new list note goes out only when the pick moves or Sol rewrites the lead; the nearby threads changing alone isn't worth one. */
+/** A new list note goes out when the pick moves or Sol rewrites the lead. A nearby thread reordering isn't worth one; the producer resends when one it named closes. */
 export function listNoteKey(map: ConversationMap, pick: Pick): string {
   const lead = map.threads.find(thread => thread.id === pick.lead);
   return JSON.stringify([pick.action, pick.current, pick.lead, lead ? threadKey(lead) : null]);
@@ -76,8 +76,5 @@ export function mapNote(map: ConversationMap, headers = NOTE_HEADERS): string | 
   return lines.length ? [headers.map, ...lines].join('\n') : null;
 }
 
-/** Material change: a new vantage, a preference from a new passage, or a different set of facts. Rewording isn't worth a note. */
-export function mapNoteKey(map: ConversationMap): string {
-  const ids = (source: MapEntity['source'], limit: number) => known(map, source, limit).map(item => item.id).join(',');
-  return JSON.stringify([map.participant.vantage, map.participant.preferences.map(item => item.passageId).join(','), ids('participant', MAP_NOTE_LIMITS.known), ids('research', MAP_NOTE_LIMITS.research)]);
-}
+/** Any change to what the note says. Sol corrects a fact by rewording it, so rewording counts; the producer's spacing keeps it from flooding Sam. */
+export const mapNoteKey = (map: ConversationMap): string => mapNote(map) ?? '';

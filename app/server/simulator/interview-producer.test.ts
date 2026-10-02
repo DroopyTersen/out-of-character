@@ -305,7 +305,25 @@ test('the list note follows the pick: keep pulling on the focus, and the empty n
   expect(f.notes('list')).toHaveLength(3);
 });
 
-test('map notes wait 60 s between sends and skip rewording, and a rejected one is resent after the spacing', async () => {
+test('a thread the list note named as open is closed or dropped, so the note is replaced without it', async () => {
+  const maps = [
+    mapWith([thread('t1'), thread('t2'), thread('t3')]),
+    mapWith([thread('t1'), thread('t2')]),
+    mapWith([thread('t1'), thread('t2', { status: 'done', reason: 'Answered in p6.' })]),
+  ];
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(maps[f.calls.map.length - 1]!) });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(25_000);
+  await f.step(40_000);
+  await f.turn(45_000);
+  await f.step(60_000);
+  expect(f.calls.map).toHaveLength(3);
+  const lead = `${NOTE_HEADERS.list}\nWorth pulling next (Thread t1): still unknown: what happened with t1. Guess: a guess about t1.`;
+  expect(f.notes('list')).toEqual([`${lead}\nAlso open: Thread t2 · Thread t3`, `${lead}\nAlso open: Thread t2`, lead]);
+});
+
+test('map notes wait 60 s between sends, carry a reworded fact, and a rejected one is resent after the spacing', async () => {
   const vantage = (text: string, detail = routing.detail) => mapWith([], { participant: { vantage: text, preferences: [] }, entities: [{ ...routing, detail }] });
   const maps = [vantage('Led the routing integration'), vantage('Led routing and the offline cache'), vantage('Led routing and the offline cache', 'Routing built on OpenStreetMap tiles and Mapbox.')];
   const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(maps[f.calls.map.length - 1]!) });
@@ -330,11 +348,15 @@ test('map notes wait 60 s between sends and skip rewording, and a rejected one i
   expect(f.notes('map')).toHaveLength(3);
   expect(f.notes('map')[2]).toBe(f.notes('map')[1]!);
 
+  // Sol corrects a fact by rewording it; Sam gets the correction once the spacing allows.
   await f.turn(145_000);
   await f.step(150_000);
   expect(f.of('map')[2]!.outcome).toBe('applied');
-  await f.step(200_000);
+  await f.step(199_999);
   expect(f.notes('map')).toHaveLength(3);
+  await f.step(200_000);
+  expect(f.notes('map')).toHaveLength(4);
+  expect(f.notes('map')[3]).toEndWith('Known so far: Routing layer: Routing built on OpenStreetMap tiles and Mapbox.');
 });
 
 test('a rejected or unsent list note goes out again at the next pick, and receipts record their timing', async () => {
@@ -575,6 +597,19 @@ test('Jev re-reads a turn that grew without counting another turn on the thread,
   await f.step(60_000);
   expect(f.calls.map).toHaveLength(2);
   expect(f.producer.summary().turns).toBe(6);
+});
+
+test('a turn Sam has started to answer is still read, and a yes to Sam’s question is new text for Sol', async () => {
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: input.transcript.at(-1)!.id === 'p2' ? .9 : 0 }) });
+  await f.step(0);
+  await f.step(20_000);
+  expect(f.calls.map).toHaveLength(1);
+  f.at(25_000); f.say('client', 'Did the crews use it offline?'); f.say('trainee', 'Yes.'); f.say('client', 'How did that go?');
+  await f.step();
+  expect(f.calls.turn.map(item => item.transcript.map(entry => entry.id).join(','))).toEqual(['p1,p2', 'p1,p2,p3,p4']);
+  await f.step(80_000);
+  expect(f.calls.map).toHaveLength(2);
+  expect(f.calls.map[1]!.tail.reasons).toEqual([MINUTE]);
 });
 
 test('a failed trait read is not retried until Sol’s next map, and a thread Sol rewrites during a read is read again', async () => {

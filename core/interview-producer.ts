@@ -7,7 +7,7 @@ import type { DirectorUsage } from './simulator/director';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v10';
+export const PRODUCER_VERSION = 'interview-producer-v11';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 30_000,

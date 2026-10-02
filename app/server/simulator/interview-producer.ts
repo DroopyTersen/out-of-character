@@ -2,7 +2,7 @@ import {
   appendMapLog, emptyMapLog, generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
   type MapLog, type MapLogEvent, type MapTail,
 } from '../../../ai/interview/map.server';
-import { evaluateTraits, evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
+import { evaluateTraits, evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from '../../../ai/interview/ranking.server';
 import { lookupInterviewBackground, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
@@ -34,7 +34,6 @@ const round = (value: number) => Math.round(value * 100) / 100;
 const roundAll = (values: Record<string, number>) => Object.fromEntries(Object.entries(values).map(([id, value]) => [id, round(value)]));
 const usageOf = (usage: { inputTokens?: number; outputTokens?: number } | undefined): DirectorUsage | undefined =>
   usage ? { inputTokens: usage.inputTokens ?? null, outputTokens: usage.outputTokens ?? null } : undefined;
-const spoken = (entry: TranscriptEntry) => entry.speaker === 'trainee' && !isBackchannel(entry.text);
 /** A turn is re-read when it gains a passage or its text grows. */
 const turnKey = (turn: TranscriptEntry[]) => turn.map(entry => `${entry.id}:${entry.text.length}`).join(',');
 const compactChanges = ({ added, changed, dropped }: MapChanges) => ({ added, changed, dropped });
@@ -66,13 +65,13 @@ export class InterviewProducer {
   private behind = false;
   private turnBusy = false;
   private readTurnKey = '';
-  /** The first passage of the turn last read, so a re-read of a grown turn isn't counted as a new one. */
-  private readTurnStart: string | null = null;
   private traitsBusy = false;
   /** Thread wording whose trait read failed; not retried until Sol's next applied map, so a failing read can't loop. */
   private traitFailures = new Map<string, string>();
   private listKey: string | null = null;
   private listSent = false;
+  /** The threads the last sent list note named besides its lead. */
+  private listNearby: string[] = [];
   private mapKey: string | null = null;
   private lastMapNote: number | null = null;
   private samTurns = new Set<string>();
@@ -124,7 +123,8 @@ export class InterviewProducer {
   private startMap(now: number) {
     if (this.call || this.counts.maps >= LIMITS.mapCalls || now - this.lastMapStart < LIMITS.mapFloor) return;
     const settled = [...this.options.settled()];
-    const fresh = unloggedPassages(this.log, settled).some(spoken);
+    const unlogged = new Set(unloggedPassages(this.log, settled).map(entry => entry.id));
+    const fresh = settled.some((entry, index) => unlogged.has(entry.id) && said(settled, index));
     if (now - this.lastMapStart >= LIMITS.mapTimer && (fresh || this.behind)) this.reasons.add('a minute has passed since your last call');
     if (!this.reasons.size) return;
     // A wake whose news an earlier call already logged has nothing left to say.
@@ -211,21 +211,20 @@ export class InterviewProducer {
 
   private readTurn(now: number) {
     if (this.turnBusy || this.counts.turns >= LIMITS.turns) return;
-    const settled = [...this.options.settled()];
+    const settled = upToParticipant([...this.options.settled()]);
     const turn = latestTurn(settled);
     const key = turnKey(turn);
     if (!turn.length || key === this.readTurnKey) return;
     this.readTurnKey = key;
-    const regrown = this.readTurnStart === turn[0]!.id;
-    this.readTurnStart = turn[0]!.id;
     this.turnBusy = true;
     this.counts.turns++;
     const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId: this.mapRecord?.id ?? null, startedAt: now, outcome: 'pending' };
     this.records.push(record);
-    this.track(this.evaluate(record, settled, now, regrown).finally(() => { this.turnBusy = false; }));
+    this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { this.turnBusy = false; }));
   }
 
-  private async evaluate(record: TurnRecord, settled: TranscriptEntry[], now: number, regrown: boolean) {
+  /** `turn` is the turn's first passage: a turn that grew keeps it, so its re-read replaces the earlier one. */
+  private async evaluate(record: TurnRecord, settled: TranscriptEntry[], now: number, turn: string) {
     const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.turnTimeout)]);
     try {
       const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, apiKey: this.options.typesafeKey, signal, atMs: this.elapsed(now) });
@@ -237,7 +236,7 @@ export class InterviewProducer {
         outcome: 'read', durationMs: result.durationMs, usage: usageOf(result.usage),
         reading: { atMs: reading.atMs, focus: reading.focus, novel: round(reading.novel), natural: roundAll(reading.natural), states: reading.states },
       } satisfies Partial<TurnRecord>);
-      this.ranking = observeTurn(this.ranking, this.map, reading, regrown);
+      this.ranking = observeTurn(this.ranking, this.map, reading, turn);
       if (reading.novel >= RANKING.novel) this.wake(`the participant's latest turn (${reading.passageId}) adds something the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
@@ -283,16 +282,18 @@ export class InterviewProducer {
     })());
   }
 
-  /** Re-picks after a turn reading, a new map or new traits; a list note goes out only when its key changes. */
+  /** Re-picks after a turn reading, a new map or new traits; a list note goes out when its key changes or a thread it named as open has closed. */
   private pick(now: number, turn?: TurnRecord): Pick {
     const pick = pickThreads(this.map, this.ranking, this.elapsed(now));
     const key = listNoteKey(this.map, pick);
-    if (key === this.listKey) return pick;
+    const closed = this.listNearby.some(id => this.map.threads.find(thread => thread.id === id)?.status !== 'open');
+    if (key === this.listKey && !closed) return pick;
     const headers = noteHeaders(this.options.channel);
-    const text = listNote(this.map, pick, headers) ?? (this.listSent ? emptyListNote(headers) : null);
+    const list = listNote(this.map, pick, headers);
+    const text = list ?? (this.listSent ? emptyListNote(headers) : null);
     if (!text) { this.listKey = key; return pick; }
     const note = this.note('list', text, now, turn);
-    if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; }
+    if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; this.listNearby = list ? pick.nearby : []; }
     return pick;
   }
 

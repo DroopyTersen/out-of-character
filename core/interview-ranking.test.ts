@@ -138,9 +138,26 @@ test('a reading taken against an older wording of a thread neither holds nor sco
   const rewritten = map({ threads: [{ ...value.threads[0]!, unknown: 'whether Paul needed sign-off' }, ...value.threads.slice(1)] });
   const state = observeTurn(emptyRanking(), rewritten, reading({ focus: 't1', natural: { t1: .9, t2: .4 }, states: { t1: 'answered', t2: 'answered' } }));
   expect(Object.keys(state.holds)).toEqual(['t2']);
+  // Nor is the conversation on it: Jev judged a gap that no longer reads that way.
+  expect(state).toMatchObject({ current: null, turnsOnCurrent: 0 });
+  expect(observeTurn(emptyRanking(), value, reading({ focus: 't1' })).current).toBe('t1');
   const ranked = pickThreads(rewritten, state, at).ranked;
   expect(ranked.find(item => item.id === 't1')!.score).toBe(0);
   expect(ranked.find(item => item.id === 't2')).toBeUndefined();
+});
+
+test('a re-read of a turn that grew replaces the holds its earlier reading set, and keeps earlier turns’ holds', () => {
+  const value = map();
+  let state = observeTurn(emptyRanking(), value, reading({ passageId: 'p2', focus: 't1', states: { t3: 'declined' } }), 'p2');
+  state = observeTurn(state, value, reading({ passageId: 'p4', focus: 't1', states: { t1: 'stalled', t2: 'answered' } }), 'p4');
+  expect(Object.keys(state.holds).sort()).toEqual(['t1', 't2', 't3']);
+  expect(state.turnsOnCurrent).toBe(2);
+  // p4 grew into an answer to t1, and no longer settles t2.
+  const grown = observeTurn(state, value, reading({ passageId: 'p5', focus: 't1', atMs: at + 5000, states: { t1: 'answered' } }), 'p4');
+  expect(grown.holds).toEqual({ t3: state.holds.t3!, t1: { state: 'answered', atMs: at + 5000, key: threadKey(value.threads[0]!), turn: 'p4' } });
+  expect(grown.turnsOnCurrent).toBe(2);
+  // A new turn doesn't lift another turn's holds.
+  expect(Object.keys(observeTurn(grown, value, reading({ passageId: 'p7', focus: 't1' }), 'p7').holds).sort()).toEqual(['t1', 't3']);
 });
 
 test('with nothing eligible there is no pick and no list note, even on the current thread', () => {
@@ -187,7 +204,7 @@ test('Sol’s text stays on one line, so it can never start a line of its own in
   ]);
 });
 
-test('the map note carries vantage, preferences and the most connected facts, and ignores rewording', () => {
+test('the map note carries vantage, preferences and the most connected facts, and changes key with anything it says', () => {
   const value = map({ entities: [...map().entities, entity('e9', { kind: 'org', label: 'Acme', detail: 'Field services company.', source: 'research', passageId: null })] });
   expect(mapNote(value)).toBe([
     NOTE_HEADERS.map,
@@ -197,10 +214,16 @@ test('the map note carries vantage, preferences and the most connected facts, an
     'Public background you read, not project fact: Acme: Field services company.',
   ].join('\n'));
   const reworded = { ...value, entities: value.entities.map(item => item.id === 'e2' ? { ...item, detail: 'Acme product owner.' } : item) };
-  expect(mapNoteKey(reworded)).toBe(mapNoteKey(value));
+  // Sol corrects a fact or a preference by rewording it in place.
+  expect(mapNoteKey(reworded)).not.toBe(mapNoteKey(value));
   const preference = (text: string, passageId: string) => ({ ...value, participant: { ...value.participant, preferences: [{ text, passageId }] } });
-  expect(mapNoteKey(preference('Wants concrete questions', 'p2'))).toBe(mapNoteKey(value));
-  expect(mapNoteKey(preference('Concrete questions', 'p4'))).not.toBe(mapNoteKey(value));
+  expect(mapNoteKey(preference('Open questions first', 'p2'))).not.toBe(mapNoteKey(value));
+  expect(mapNoteKey(preference('Concrete questions', 'p4'))).toBe(mapNoteKey(value));
+  // A fact the note leaves out changes nothing Sam reads.
+  const unshown = { ...value, entities: [...value.entities, ...['e5', 'e6', 'e7'].map(id => entity(id))] };
+  expect(mapNote(unshown)).toContain('Detail e6');
+  expect(mapNote(unshown)).not.toContain('Detail e7');
+  expect(mapNoteKey({ ...unshown, entities: unshown.entities.map(item => item.id === 'e7' ? { ...item, detail: 'Unshown.' } : item) })).toBe(mapNoteKey(unshown));
   expect(mapNoteKey({ ...value, participant: { ...value.participant, vantage: 'Off the project weeks 9–12' } })).not.toBe(mapNoteKey(value));
   expect(mapNote({ ...emptyMap() })).toBeNull();
   expect(PARTICIPANT_ID).toBe('participant');

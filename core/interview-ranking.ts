@@ -39,18 +39,21 @@ export type TurnReading = {
 };
 /** Jev's reading of a thread when Sol adds or rewrites it; `key` is the thread content it was read against. */
 export type ThreadTraits = { key: string; spicy: number; grounding: number };
-export type Hold = { state: Exclude<ThreadState, 'open'>; atMs: number; key: string };
+/** `turn` is the first passage of the turn whose reading set the hold. */
+export type Hold = { state: Exclude<ThreadState, 'open'>; atMs: number; key: string; turn: string | null };
 export type RankingState = {
   current: string | null; turnsOnCurrent: number;
   holds: Record<string, Hold>; traits: Record<string, ThreadTraits>;
   reading: TurnReading | null;
+  /** The first passage of the turn last read, so a re-read of it once it grows is known. */
+  turn: string | null;
   /** When the applied map's Sol call started: Sol has seen every turn settled before it. */
   mapStartedAtMs: number | null;
 };
 export type Ranked = { id: string; score: number; band: Band };
 export type Pick = { current: string | null; action: 'keep' | 'tug' | 'none'; lead: string | null; nearby: string[]; ranked: Ranked[] };
 
-export const emptyRanking = (): RankingState => ({ current: null, turnsOnCurrent: 0, holds: {}, traits: {}, reading: null, mapStartedAtMs: null });
+export const emptyRanking = (): RankingState => ({ current: null, turnsOnCurrent: 0, holds: {}, traits: {}, reading: null, turn: null, mapStartedAtMs: null });
 
 /** What Jev reads a thread against; a change means Sol rewrote the gap, so earlier readings no longer apply. */
 export const threadKey = (thread: MapThread) => JSON.stringify([thread.label, thread.unknown, thread.guess, thread.anchors]);
@@ -68,23 +71,27 @@ export function withTraits(state: RankingState, traits: Record<string, ThreadTra
 /**
  * Applies Jev's turn reading: focus sets the current thread, and a turn that answers or declines a thread, or stalls the
  * one being asked about, holds it down. A reading of a thread Sol has since rewritten no longer applies. A re-read of
- * a turn that grew replaces the earlier reading without counting as another turn on the current thread.
+ * a turn that grew, named by its first passage, replaces the earlier reading and its holds without counting as another
+ * turn on the current thread.
  */
-export function observeTurn(state: RankingState, map: ConversationMap, reading: TurnReading, regrown = false): RankingState {
+export function observeTurn(state: RankingState, map: ConversationMap, reading: TurnReading, turn: string | null = null): RankingState {
   const open = new Map(openThreads(map).map(thread => [thread.id, thread]));
-  const focus = reading.focus != null && open.has(reading.focus) ? reading.focus : null;
+  // A thread Sol rewrote after Jev read it isn't the thread Jev judged.
+  const read = (id: string | null) => { const thread = id == null ? undefined : open.get(id); return thread && reading.keys[thread.id] === threadKey(thread) ? thread : undefined; };
+  const focus = read(reading.focus)?.id ?? null;
+  const regrown = turn != null && turn === state.turn;
   // Stalled means Sam asked and the answer didn't move it, so it only counts for the thread the conversation was or is on.
   const asked = new Set([focus, state.current]);
-  const holds = { ...state.holds };
+  const holds = Object.fromEntries(Object.entries(state.holds).filter(([, hold]) => !regrown || hold.turn !== turn));
   for (const [id, threadState] of Object.entries(reading.states)) {
-    const thread = open.get(id);
-    if (!thread || reading.keys[id] !== threadKey(thread) || threadState === 'open' || (threadState === 'stalled' && !asked.has(id))) continue;
+    const thread = read(id);
+    if (!thread || threadState === 'open' || (threadState === 'stalled' && !asked.has(id))) continue;
     // An active hold isn't extended, so repeated readings can't pin a thread down past Sol's next call.
     if (active(holds[id], thread, reading.atMs)) continue;
-    holds[id] = { state: threadState, atMs: reading.atMs, key: threadKey(thread) };
+    holds[id] = { state: threadState, atMs: reading.atMs, key: threadKey(thread), turn };
   }
   return {
-    ...state, holds, reading,
+    ...state, holds, reading, turn,
     current: focus, turnsOnCurrent: focus == null ? 0 : focus === state.current ? state.turnsOnCurrent + (regrown ? 0 : 1) : 1,
   };
 }

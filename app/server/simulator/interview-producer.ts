@@ -179,7 +179,7 @@ export class InterviewProducer {
     try {
       result = await services.generateMap({
         foundry, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
-        lookups: this.records.flatMap(item => item.source === 'research' && item.eventId != null && item.loggedAt != null ? [item.eventId] : []),
+        lookups: this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && item.loggedAt != null ? [item.eventId] : []),
       });
       if (!live()) return;
       signal.throwIfAborted();
@@ -306,7 +306,7 @@ export class InterviewProducer {
     if (key === this.mapKey) return;
     const text = mapNote(this.map, noteHeaders(this.options.channel));
     if (!text) { this.mapKey = key; return; }
-    // The note carries the lookups its research facts cite; Sol's update was checked to cite only events it had read.
+    // The note carries the lookups its research facts cite; Sol's update was checked to cite only found lookups it had read.
     const cited = new Set(mapNoteResearch(this.map).map(entity => entity.passageId));
     const researchIds = this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && cited.has(item.eventId) ? [item.id] : []);
     const note = this.note('map', text, now, undefined, researchIds);

@@ -36,6 +36,7 @@ test('a yes, no or sure straight after Sam’s question is an answer; anywhere e
   const reply = (text: string, before = asked): TranscriptEntry[] => [...before, { id: 'p5', speaker: 'trainee', text, startMs: 6100, endMs: 6400 }];
   for (const text of ['Yes.', 'No.', 'Sure!', 'Yeah', 'Uh-huh.']) expect(latestTurn(reply(text)).map(entry => entry.id)).toEqual(['p5']);
   expect(latestTurn(reply('Mm.'))).toEqual([]);
+  expect(latestTurn(reply('Okay.'))).toEqual([]);
   const stated: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 }];
   expect(latestTurn(reply('Yes.', stated))).toEqual([]);
   // A yes that follows the participant's own passage is not a reply to Sam.

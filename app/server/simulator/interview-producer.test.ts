@@ -507,7 +507,7 @@ test('research requests are validated, deduplicated, one at a time, capped, and 
   expect(f.producer.summary().research).toBe(3);
 });
 
-test('a found lookup wakes Sol without new text, an unresolved one waits in the log, and a map note carries the lookup its research fact cites', async () => {
+test('a found lookup wakes Sol without new text, an unresolved one waits in the log and cannot be cited, and a map note carries the lookup its research fact cites', async () => {
   const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: 'L1' };
   const known = mapWith([], { participant: { vantage: 'Led the routing integration', preferences: [] } });
   const results = [mapped(known, request('OpenStreetMap')), mapped({ ...known, entities: [routing, research] }, request('Mapbox'))];
@@ -555,6 +555,8 @@ test('a found lookup wakes Sol without new text, an unresolved one waits in the 
   expect(f.calls.map[2]!.tail.reasons).toEqual([MINUTE]);
   expect(f.calls.map[2]!.blocks.at(-1)).toContain('[event L2 · 0.8 min] Public research about the product "Mapbox" found nothing reliable: Several products share the name.');
   expect(unresolved.loggedAt).toBe(epoch + 115_000);
+  // A lookup that found nothing has no fact to cite.
+  expect(f.calls.map[2]!.lookups).toEqual(['L1']);
 });
 
 test('a map note credits only the lookups its research facts cite, not every lookup Sol had read', async () => {

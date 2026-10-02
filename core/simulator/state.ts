@@ -13,6 +13,14 @@ export function appendTranscript(entries: TranscriptEntry[], delta: TranscriptDe
   return [...entries, { id: `p${entries.length + 1}`, speaker: delta.speaker, text: delta.text, startMs: delta.startMs, endMs: delta.endMs }];
 }
 
+export type PauseSpan = { from: number; to: number | null };
+/** Wall time since start minus paused spans: the conversation's own clock. An open span runs to `time`. */
+export function activeElapsed(startedAt: number, time: number, pauses: readonly PauseSpan[] = []): number {
+  let paused = 0;
+  for (const pause of pauses) paused += Math.max(0, Math.min(time, pause.to ?? time) - Math.max(startedAt, pause.from));
+  return Math.max(0, time - startedAt - paused);
+}
+
 /** Evaluator input bound. A live session stops accepting speech beyond it so final grading stays valid. */
 export const TRANSCRIPT_LIMIT = { entries: 800, characters: 80_000 };
 export const transcriptCharacters = (entries: TranscriptEntry[]) => entries.reduce((sum, entry) => sum + entry.text.length, 0);

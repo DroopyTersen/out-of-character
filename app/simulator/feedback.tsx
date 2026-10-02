@@ -21,10 +21,10 @@ export function SimulatorHintToast({ text, concern, onDismiss }: { text: string 
   </motion.aside>}</>;
 }
 
-export function SimulatorHint({ phase, liveHint, onDismiss }: { phase: 'connecting' | 'live' | 'ending'; liveHint: LiveHint | null; onDismiss: () => void }) {
+export function SimulatorHint({ phase, liveHint, onDismiss }: { phase: 'connecting' | 'live' | 'paused' | 'ending'; liveHint: LiveHint | null; onDismiss: () => void }) {
   const reduced = useReducedMotion();
   const concern = liveHint?.kind === 'concern';
-  const text = phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : liveHint?.text ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : 'Listen for what matters to the client. Your next hint will appear here.');
+  const text = phase === 'ending' ? 'Your conversation has ended. Preparing your debrief.' : liveHint?.text ?? (phase === 'connecting' ? 'Your client is getting ready. Take a breath and review your lead.' : phase === 'paused' ? 'Hints resume with the conversation.' : 'Listen for what matters to the client. Your next hint will appear here.');
   return <section className={`sim-hint ${concern ? 'concern' : ''}`} role="status" aria-atomic="true"><h2><Lightbulb size={18} />{phase === 'ending' ? 'Session review' : 'Live hint'}{liveHint && onDismiss && <button className="quiet-button" onClick={onDismiss} aria-label="Dismiss hint"><X size={18} /></button>}</h2><AnimatePresence mode="wait" initial={false}><motion.p key={text} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .18 }}>{text}</motion.p></AnimatePresence></section>;
 }
 

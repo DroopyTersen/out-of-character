@@ -21,12 +21,16 @@ export default function Interview() {
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>(interviewVoices[0].id);
   const [now, setNow] = useState(Date.now());
   const report = useStreamedReport(interviewSummarySchema, draft => !!draft?.text);
-  const session = useSimulator(report);
+  const session = useSimulator(report, { kind: 'interview', onReattach: ({ clientId }) => {
+    const voice = interviewVoices.find(item => item.id === clientId);
+    if (voice) setVoiceId(voice.id);
+  } });
   const main = useRef<HTMLElement>(null);
   const screen = session.phase === 'selection' || session.phase === 'debrief' ? session.phase : 'conversation';
   const shownScreen = useRef(screen);
   useEffect(() => {
-    if (session.phase !== 'live') return;
+    // A paused conversation keeps ticking for its hold countdown.
+    if (session.phase !== 'live' && session.phase !== 'paused') return;
     const timer = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(timer);
   }, [session.phase]);
@@ -37,6 +41,6 @@ export default function Interview() {
   return <div className="app-shell simulator-shell interview-shell"><GameHeader simulator interview /><main className="game-main" ref={main}>
     {session.phase === 'selection' ? <InterviewSetup voiceId={voiceId} onVoice={setVoiceId} onStart={() => session.start(INTERVIEW_SCENARIO_ID, voiceId)} enabled={enabled} error={session.error} />
       : session.phase === 'debrief' ? <InterviewSummaryScreen report={report.view} onRetrySummary={report.retry} onCheckSummary={report.checkStatus} snapshot={report.view.snapshot ?? session.snapshot} onReset={session.reset} error={session.error} />
-        : <InterviewConversation voiceId={voiceId} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, (now - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} onContinue={session.keepActive} error={session.error} />}
+        : <InterviewConversation voiceId={voiceId} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, ((session.snapshot.pause?.pausedAt ?? now) - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} onContinue={session.keepActive} onResume={session.resume} link={session.link} error={session.error} />}
   </main></div>;
 }

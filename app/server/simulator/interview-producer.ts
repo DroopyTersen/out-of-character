@@ -18,6 +18,7 @@ import {
   emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits, type Pick, type RankingState,
 } from '../../../core/interview-ranking';
 import type { DirectorUsage } from '../../../core/simulator/director';
+import { activeElapsed, type PauseSpan } from '../../../core/simulator/state';
 import type { TranscriptEntry } from '../../../core/simulator/types';
 
 export const producerServices = { generateMap, evaluateTurn, evaluateTraits, lookupInterviewBackground };
@@ -28,6 +29,19 @@ type Options = {
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
   /** Defaults to the live channel; each channel has its own note headers. */
   channel?: NoteChannel;
+  /** Connection pauses; elapsed time excludes them. */
+  pauses?: () => PauseSpan[];
+};
+type Counts = { maps: number; applied: number; turns: number; traits: number; notes: number; research: number };
+type PendingEvent = { event: MapLogEvent; researchId: string };
+/** Producer state that outlives the isolate. In-flight work is not kept: a restored producer starts idle. */
+export type ProducerCheckpoint = {
+  records: ProducerLogRecord[]; counts: Counts;
+  map: ConversationMap; mapRecordId: string | null; log: MapLog; ranking: RankingState;
+  lastMapStart: number; reasons: string[]; events: PendingEvent[]; behind: boolean;
+  readTurnKey: string; readThrough: number; traitFailures: [string, string][];
+  listKey: string | null; listSent: boolean; mapKey: string | null; lastMapNote: number | null;
+  samTurns: string[]; researched: string[];
 };
 
 const LIMITS = PRODUCER_LIMITS;
@@ -62,7 +76,7 @@ export class InterviewProducer {
   private call: { record: MapRecord; controller: AbortController; unmapped: boolean } | null = null;
   private lastMapStart: number;
   private reasons = new Set<string>();
-  private events: { event: MapLogEvent; researchId: string }[] = [];
+  private events: PendingEvent[] = [];
   /** A failed call logged participant text or events the map doesn't reflect yet. */
   private behind = false;
   private turnBusy = false;
@@ -79,12 +93,15 @@ export class InterviewProducer {
   private samTurns = new Set<string>();
   private researched = new Set<string>();
   private lookups = 0;
-  private counts = { maps: 0, applied: 0, turns: 0, traits: 0, notes: 0, research: 0 };
+  private counts: Counts = { maps: 0, applied: 0, turns: 0, traits: 0, notes: 0, research: 0 };
+  private closed = false;
+  /** Notes restated for a new provider session are outside the note budget. */
+  private restating = false;
 
   constructor(private options: Options) { this.lastMapStart = options.startedAt; }
 
   private get alive() { return !this.abort.signal.aborted; }
-  private elapsed(now: number) { return now - this.options.startedAt; }
+  private elapsed(now: number) { return activeElapsed(this.options.startedAt, now, this.options.pauses?.()); }
   /** Read-only views for tests and probes. */
   get conversationMap() { return this.map; }
   get rankingState() { return this.ranking; }
@@ -230,17 +247,20 @@ export class InterviewProducer {
       this.counts.turns++;
       const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId: this.mapRecord?.id ?? null, startedAt: now, outcome: 'pending' };
       this.records.push(record);
-      this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { this.turnBusy = false; }));
+      // A pause already released the slot; a resumed producer may own it now.
+      const scope = this.abort.signal;
+      this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { if (!scope.aborted) this.turnBusy = false; }));
       return;
     }
   }
 
   /** `turn` is the turn's first passage: a turn that grew keeps it, so its re-read replaces the earlier one. */
   private async evaluate(record: TurnRecord, settled: TranscriptEntry[], now: number, turn: string) {
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.turnTimeout)]);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.turnTimeout)]);
     try {
       const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, apiKey: this.options.typesafeKey, signal, atMs: this.elapsed(now) });
-      if (!this.alive) return;
+      if (scope.aborted) return;
       signal.throwIfAborted();
       if (Date.now() - record.startedAt >= LIMITS.turnTimeout) { record.outcome = 'timeout'; return; }
       const { reading } = result;
@@ -252,11 +272,11 @@ export class InterviewProducer {
       if (reading.novel >= RANKING.novel) this.wake(`the participant's latest turn (${reading.passageId}) adds something the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
-      if (!this.alive) return;
+      if (scope.aborted) return;
       record.failure = callFailure(error);
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
-      if (this.alive) record.completedAt = Date.now();
+      if (!scope.aborted) record.completedAt = Date.now();
     }
   }
 
@@ -269,12 +289,13 @@ export class InterviewProducer {
     this.counts.traits++;
     const record: TraitRecord = { source: 'traits', id: `traits-${crypto.randomUUID()}`, mapId: this.mapRecord?.id ?? null, threadIds: threads.map(thread => thread.id), startedAt: Date.now(), outcome: 'pending' };
     this.records.push(record);
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.traitTimeout)]);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.traitTimeout)]);
     const map = this.map;
     this.track((async () => {
       try {
         const result = await this.options.services.evaluateTraits({ map, threads, apiKey: this.options.typesafeKey, signal });
-        if (!this.alive) return;
+        if (scope.aborted) return;
         signal.throwIfAborted();
         Object.assign(record, {
           outcome: 'read', durationMs: result.durationMs, usage: usageOf(result.usage),
@@ -283,16 +304,18 @@ export class InterviewProducer {
         this.ranking = withTraits(this.ranking, result.traits);
         this.pick(Date.now());
       } catch (error) {
-        if (!this.alive) return;
+        if (scope.aborted) return;
         record.failure = callFailure(error);
         record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
         for (const thread of threads) this.traitFailures.set(thread.id, threadKey(thread));
       } finally {
-        if (this.alive) record.completedAt = Date.now();
-        this.traitsBusy = false;
+        if (!scope.aborted) {
+          record.completedAt = Date.now();
+          this.traitsBusy = false;
+        }
       }
       // Sol may have rewritten threads while this read ran.
-      this.readTraits();
+      if (!scope.aborted) this.readTraits();
     })());
   }
 
@@ -330,8 +353,10 @@ export class InterviewProducer {
 
   // Set delivery before sending: an acknowledgment may arrive immediately.
   private note(kind: NoteRecord['kind'], text: string, now: number, turn?: TurnRecord, researchIds: string[] = []): NoteRecord | null {
-    if (this.counts.notes >= LIMITS.notes) return null;
-    this.counts.notes++;
+    if (!this.restating) {
+      if (this.counts.notes >= LIMITS.notes) return null;
+      this.counts.notes++;
+    }
     const id = `note-${crypto.randomUUID()}`;
     const record: NoteRecord = {
       source: 'note', id, kind, text, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), sentAt: now, outcome: 'sent',
@@ -360,16 +385,18 @@ export class InterviewProducer {
     this.researched.add(key);
     this.counts.research++;
     this.lookups++;
-    this.track(this.research(record, key).finally(() => { this.lookups--; }));
+    const scope = this.abort.signal;
+    this.track(this.research(record, key).finally(() => { if (!scope.aborted) this.lookups--; }));
   }
 
   /** A found lookup wakes Sol; one that found nothing waits in the log for Sol's next call. */
   private async research(record: ResearchRecord, key: string) {
     const { kind, name, clue } = record.request;
-    const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(LIMITS.lookupTimeout)]);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.lookupTimeout)]);
     try {
       const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, foundry: this.options.foundry, signal });
-      if (!this.alive) return;
+      if (scope.aborted) return;
       signal.throwIfAborted();
       const now = Date.now();
       record.lookupAt = now;
@@ -378,16 +405,17 @@ export class InterviewProducer {
       else Object.assign(record, { outcome: 'unresolved', reason: lookup.reason } satisfies Partial<ResearchRecord>);
       const facts = lookup.status === 'found' ? lookup.facts : null;
       record.eventId = `L${this.records.filter(item => item.source === 'research' && item.eventId != null).length + 1}`;
-      this.events.push({ researchId: record.id, event: { id: record.eventId, atMs: this.elapsed(now), text: researchLogEvent({ kind, name }, facts, lookup.status === 'unresolved' ? lookup.reason : undefined) } });
+      // Log events sit among passages, whose times include connection pauses.
+      this.events.push({ researchId: record.id, event: { id: record.eventId, atMs: now - this.options.startedAt, text: researchLogEvent({ kind, name }, facts, lookup.status === 'unresolved' ? lookup.reason : undefined) } });
       if (facts?.length) this.wake(`public research arrived about the ${kind} "${name}"`);
     } catch (error) {
-      if (!this.alive) return;
+      if (scope.aborted) return;
       record.failure = callFailure(error);
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
       // A transient failure may be requested again; it still used an attempt.
       this.researched.delete(key);
     } finally {
-      if (this.alive) record.completedAt = Date.now();
+      if (!scope.aborted) record.completedAt = Date.now();
     }
   }
 
@@ -432,17 +460,90 @@ export class InterviewProducer {
     };
   }
 
-  close() {
+  /**
+   * The connection dropped. In-flight calls are abandoned: their notes would reach a provider session that no
+   * longer exists. Whatever they consumed is released, so the work runs again after the resume.
+   */
+  pause() {
+    this.abort.abort();
+    this.call?.controller.abort();
+    this.call = null;
+    this.turnBusy = this.traitsBusy = false;
+    this.lookups = 0;
+    this.release(Date.now());
+  }
+
+  /** A new provider session joined. Its instructions carry the conversation but none of Sam's notes, so restate them. */
+  resume(now = Date.now()) {
+    if (this.closed || this.alive) return;
+    this.abort = new AbortController();
+    this.listKey = this.mapKey = this.lastMapNote = null;
+    this.listSent = false;
+    this.restating = true;
+    try {
+      this.pick(now);
+      this.sendMapNote(now);
+    } finally { this.restating = false; }
+    this.readTraits();
+  }
+
+  checkpoint(): ProducerCheckpoint {
+    return {
+      records: this.records, counts: { ...this.counts }, map: this.map, mapRecordId: this.mapRecord?.id ?? null, log: this.log, ranking: this.ranking,
+      lastMapStart: this.lastMapStart, reasons: [...this.reasons], events: this.events, behind: this.behind,
+      readTurnKey: this.readTurnKey, readThrough: this.readThrough, traitFailures: [...this.traitFailures],
+      listKey: this.listKey, listSent: this.listSent, mapKey: this.mapKey, lastMapNote: this.lastMapNote,
+      samTurns: [...this.samTurns], researched: [...this.researched],
+    };
+  }
+
+  /** Restores a paused producer. In-flight work in the checkpoint was lost with the isolate. */
+  restore(checkpoint: ProducerCheckpoint) {
     this.abort.abort();
     this.call = null;
-    this.reasons.clear();
-    const now = Date.now();
+    this.turnBusy = this.traitsBusy = false;
+    this.lookups = 0;
+    this.records.splice(0, this.records.length, ...checkpoint.records);
+    this.counts = { ...checkpoint.counts };
+    this.map = checkpoint.map;
+    this.mapRecord = this.records.find((item): item is MapRecord => item.source === 'map' && item.id === checkpoint.mapRecordId) ?? null;
+    this.log = checkpoint.log;
+    this.ranking = checkpoint.ranking;
+    this.lastMapStart = checkpoint.lastMapStart;
+    this.reasons = new Set(checkpoint.reasons);
+    this.events = checkpoint.events;
+    this.behind = checkpoint.behind;
+    this.readTurnKey = checkpoint.readTurnKey;
+    this.readThrough = checkpoint.readThrough;
+    this.traitFailures = new Map(checkpoint.traitFailures);
+    this.listKey = checkpoint.listKey;
+    this.listSent = checkpoint.listSent;
+    this.mapKey = checkpoint.mapKey;
+    this.lastMapNote = checkpoint.lastMapNote;
+    this.samTurns = new Set(checkpoint.samTurns);
+    this.researched = new Set(checkpoint.researched);
+    this.release(Date.now());
+  }
+
+  /** Marks pending work aborted and releases what it held: Sol's logged passages leave the map behind, a turn is re-read, a lookup may be requested again. */
+  private release(now: number) {
     for (const record of this.records) {
-      if ((record.source === 'map' || record.source === 'turn' || record.source === 'traits' || record.source === 'research') && record.outcome === 'pending') {
-        record.outcome = 'aborted';
-        record.completedAt = now;
-      }
+      if (!(record.source === 'map' || record.source === 'turn' || record.source === 'traits' || record.source === 'research') || record.outcome !== 'pending') continue;
+      if (record.source === 'map') this.behind = true;
+      if (record.source === 'turn') this.readTurnKey = '';
+      if (record.source === 'research') this.researched.delete(researchKey(record.request));
+      record.outcome = 'aborted';
+      record.completedAt ??= now;
     }
+  }
+
+  close() {
+    this.closed = true;
+    this.abort.abort();
+    this.call?.controller.abort();
+    this.call = null;
+    this.reasons.clear();
+    this.release(Date.now());
   }
 }
 

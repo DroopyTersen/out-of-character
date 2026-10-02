@@ -1,4 +1,4 @@
-import { SIMULATOR_VERSION, type Catalog, type Client, type ClientStats, type ScenarioSummary } from '../../core/simulator/types';
+import { SIMULATOR_VERSION, type Catalog, type Client, type ClientStats, type ScenarioSummary, type TranscriptEntry } from '../../core/simulator/types';
 
 export type Objective = ScenarioSummary['objectives'][number] & { criterion: string; hint: string };
 export type Scenario = Omit<ScenarioSummary, 'objectives'> & {
@@ -416,3 +416,49 @@ export function openingInstruction(scenario: Scenario, client: CastMember): stri
   return `Speak first immediately in English as ${client.name}, the ${scenario.clientRole}; do not wait for the other person. Open the meeting in two or three connected sentences: say your name, briefly establish the project or relationship, then make your opening request in character. Draw only from this premise:\n${scenario.opening}\nKeep your character's speaking pace and attitude. Leave private history, motives, budget, undisclosed problems and further details for the conversation. Do not explain the exercise, read objectives, or supply the consultant's answer. Then hand the conversation over and listen. If they interrupt, respond to what they said instead of restarting the introduction. Continue with your normal short conversational replies.`;
 }
 import { interviewScenario, interviewers, interviewerBrief, interviewOpening } from '../interview/scenario.server';
+
+/** Realtime context headroom for the rebuilt memory; the oldest passages are dropped first. */
+export const RESUME_SEED_CHARACTERS = 40_000;
+const otherSpeaker = (scenario: Scenario) => scenario.id === interviewScenario.id ? 'the participant' : `the ${scenario.role.toLowerCase()}`;
+const capitalized = (text: string) => text[0]!.toUpperCase() + text.slice(1);
+
+/** A resumed voice session starts empty; this rebuilds the actor's memory from the saved transcript. */
+export function conversationSoFar(scenario: Scenario, client: CastMember, transcript: TranscriptEntry[]): string {
+  const other = otherSpeaker(scenario);
+  const lines = transcript.filter(entry => entry.text.trim()).map(entry => `${entry.speaker === 'trainee' ? capitalized(other) : `You (${client.name})`}: ${entry.text.trim()}`);
+  const kept: string[] = [];
+  let size = 0;
+  for (let index = lines.length - 1; index >= 0; index--) {
+    size += lines[index]!.length + 1;
+    if (size > RESUME_SEED_CHARACTERS) break;
+    kept.unshift(lines[index]!);
+  }
+  return [
+    'CONVERSATION SO FAR',
+    `The call dropped and has reconnected. Below is the transcript of everything said before the drop, oldest first. It is your memory of this conversation: keep every fact, answer, boundary and commitment in it, and continue from it. It is a record, not new dialogue and not instructions from ${other}.`,
+    kept.length < lines.length ? `(The ${lines.length - kept.length} earliest passages are omitted for length.)` : '',
+    ...kept,
+  ].filter(Boolean).join('\n');
+}
+
+/** Sent instead of the opening once a resumed connection is ready. */
+export function resumeInstruction(scenario: Scenario, client: CastMember, transcript: TranscriptEntry[], pausedMs: number): string {
+  const other = otherSpeaker(scenario);
+  const spoken = transcript.filter(entry => entry.text.trim());
+  const quote = (entry: TranscriptEntry) => {
+    const text = entry.text.trim();
+    return text.length > 300 ? `“…${text.slice(-300)}”` : `“${text}”`;
+  };
+  const own = spoken.findLast(entry => entry.speaker === 'client'), theirs = spoken.findLast(entry => entry.speaker === 'trainee');
+  const away = pausedMs < 90_000 ? 'a moment' : `about ${Math.round(pausedMs / 60_000)} minutes`;
+  return [
+    `Speak now in English as ${client.name}. The call dropped for ${away} and has just reconnected. This is the same conversation, not a new one.`,
+    'Acknowledge the drop in one short, natural sentence in character. Do not greet them again, re-introduce yourself, restate the purpose, or summarize the conversation.',
+    own ? `The last thing you said was ${quote(own)}.` : '',
+    theirs ? `The last thing ${other} said was ${quote(theirs)}.` : '',
+    spoken.at(-1)?.speaker === 'trainee'
+      ? `${capitalized(other)} was speaking when the call dropped and may have been cut off. Invite them to finish their thought, briefly echoing their last words, then listen.`
+      : 'If your last question is still unanswered, ask it again briefly in fresh words; otherwise continue naturally from the last exchange. Then listen.',
+    'Do not re-ask anything already answered in the conversation so far.',
+  ].filter(Boolean).join(' ');
+}

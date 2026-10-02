@@ -7,6 +7,7 @@ import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from '
 import { emptyListNote, NOTE_HEADERS, noteHeaders } from '../../../core/interview-notes';
 import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
 import { threadKey, type TurnReading } from '../../../core/interview-ranking';
+import type { PauseSpan } from '../../../core/simulator/state';
 import type { TranscriptEntry } from '../../../core/simulator/types';
 import { InterviewProducer, producerServices } from './interview-producer';
 
@@ -59,8 +60,9 @@ function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructi
   let connected: boolean | 'throw' = true;
   const sent: Record<string, unknown>[] = [];
   const calls = { map: [] as Input<'generateMap'>[], turn: [] as Input<'evaluateTurn'>[], traits: [] as Input<'evaluateTraits'>[], lookup: [] as Input<'lookupInterviewBackground'>[] };
+  const pauses: PauseSpan[] = [];
   const producer = new InterviewProducer({
-    attemptId: 'attempt-1', startedAt: epoch, foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture', channel,
+    attemptId: 'attempt-1', startedAt: epoch, foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture', channel, pauses: () => pauses,
     settled: () => transcript, coverage: () => [], send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
@@ -87,7 +89,7 @@ function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructi
   const step = async (ms?: number) => { if (ms != null) at(ms); producer.tick(Date.now()); await flush(); };
   const of = <S extends ProducerLogRecord['source']>(source: S) => producer.records.filter(item => item.source === source) as Extract<ProducerLogRecord, { source: S }>[];
   const notes = (kind?: keyof typeof NOTE_HEADERS) => sent.filter(event => !kind || String(event.content).startsWith(NOTE_HEADERS[kind])).map(event => String(event.content));
-  return { producer, sent, calls, say, grow, turn, at, step, of, notes, setConnected: (value: boolean | 'throw') => { connected = value; } };
+  return { producer, sent, calls, pauses, say, grow, turn, at, step, of, notes, setConnected: (value: boolean | 'throw') => { connected = value; } };
 }
 
 test('Sol calls on the minute only when participant text is unlogged, and a wake an earlier call already logged is dropped', async () => {
@@ -786,4 +788,90 @@ test('End aborts pending work, ignores late results, and records nothing after',
   expect(f.producer.conversationMap.threads.map(item => item.id)).toEqual(['t1']);
   expect(f.of('delegation')).toEqual([{ source: 'delegation', id: 'delegation-1', createdAt: epoch + 20_000, target: 'notes', replied: true }]);
   expect(f.producer.summary()).toMatchObject({ maps: 2, applied: 1, turns: 2, notes: 2, research: 1 });
+});
+
+test('a pause abandons and releases in-flight work, and the resume restates Sam’s notes outside the budget on a clock that skips the pause', async () => {
+  const solCall = deferred<Mapped>();
+  const turnRead = deferred<Read>();
+  const traitRead = deferred<Traits>();
+  const lookup = deferred<Lookup>();
+  const f = fixture({
+    evaluateTurn: async input => f.calls.turn.length === 2 ? turnRead.promise : reading(input, { novel: .9 }),
+    generateMap: async () => f.calls.map.length === 2 ? solCall.promise : mapped(mapWith([thread('t1')]), request('OpenStreetMap')),
+    evaluateTraits: async input => f.calls.traits.length === 1 ? traitRead.promise : traits(input),
+    lookupInterviewBackground: () => lookup.promise,
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(25_000);
+  await f.step(80_000);
+  const before = { list: f.notes('list'), map: f.notes('map') };
+  expect([before.list.length, before.map.length]).toEqual([1, 1]);
+
+  f.at(81_000);
+  const span: PauseSpan = { from: epoch + 81_000, to: null };
+  f.pauses.push(span);
+  f.producer.pause();
+  expect(f.producer.records.filter(item => item.source !== 'note' && item.source !== 'delegation').map(item => [item.source, item.outcome]))
+    .toEqual([['turn', 'read'], ['map', 'applied'], ['research', 'aborted'], ['traits', 'aborted'], ['turn', 'aborted'], ['map', 'aborted']]);
+  expect(f.calls.map[1]!.signal.aborted).toBe(true);
+  const archived = JSON.stringify(f.producer.records);
+  // Late results from the dropped session change nothing, and a paused producer does no work.
+  solCall.resolve(mapped(mapWith([thread('t1'), thread('t2')])));
+  turnRead.resolve(reading(f.calls.turn[1]!, { novel: .9 }));
+  traitRead.resolve(traits(f.calls.traits[0]!));
+  lookup.resolve({ status: 'found', facts, retrievedAt: Date.now(), queries: [] });
+  await f.producer.settle();
+  await f.step(100_000);
+  expect(JSON.stringify(f.producer.records)).toBe(archived);
+  expect(f.producer.conversationMap.threads.map(item => item.id)).toEqual(['t1']);
+
+  f.at(141_000);
+  span.to = epoch + 141_000;
+  f.producer.resume(Date.now());
+  expect(f.notes('list')).toEqual([...before.list, ...before.list]);
+  expect(f.notes('map')).toEqual([...before.map, ...before.map]);
+  expect(f.producer.summary().notes).toBe(2);
+  await flush();
+  expect(f.calls.traits).toHaveLength(2);
+
+  // The abandoned turn is read again, Sol is behind, and the abandoned lookup may be requested again.
+  await f.step(142_000);
+  expect(f.calls.turn).toHaveLength(3);
+  expect(f.calls.turn[2]!.atMs).toBe(82_000);
+  expect(f.calls.map).toHaveLength(3);
+  expect(f.calls.map[2]!.tail).toMatchObject({ reasons: [MINUTE], elapsedMs: 82_000 });
+  await f.producer.settle();
+  expect(f.of('research').map(item => item.outcome)).toEqual(['aborted', 'found']);
+});
+
+test('a restored producer starts paused with the checkpoint’s map, log and reads, and restates its notes on resume', async () => {
+  const lookup = deferred<Lookup>();
+  const a = fixture({
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+    generateMap: async () => mapped(mapWith([thread('t1')]), request('OpenStreetMap')),
+    lookupInterviewBackground: () => lookup.promise,
+  });
+  await a.step(0);
+  await a.step(20_000);
+  const checkpoint = structuredClone(a.producer.checkpoint());
+  const b = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(mapWith([thread('t1')]), request('OpenStreetMap')) });
+  b.producer.restore(checkpoint);
+  expect(b.producer.conversationMap).toEqual(a.producer.conversationMap);
+  expect(b.of('research').map(item => item.outcome)).toEqual(['aborted']);
+  await b.step(30_000);
+  expect(b.sent).toHaveLength(0);
+
+  b.producer.resume(Date.now());
+  expect(b.notes('list')).toEqual(a.notes('list').slice(-1));
+  expect(b.notes('map')).toEqual(a.notes('map').slice(-1));
+  await b.step(31_000);
+  expect(b.calls.turn).toHaveLength(0); // p2 was read before the checkpoint.
+  await b.turn(45_000);
+  await b.step(46_000);
+  expect(b.calls.map).toHaveLength(1);
+  expect(b.calls.map[0]!.blocks).toHaveLength(2);
+  await b.producer.settle();
+  expect(b.of('research').map(item => item.outcome)).toEqual(['aborted', 'found']);
+  expect(b.producer.summary()).toMatchObject({ maps: 2, applied: 2, turns: 2, research: 2 });
 });

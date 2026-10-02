@@ -29,6 +29,8 @@ export class DirectorGate {
   private episode = 0;
 
   get usage() { return { callsByAudience: { ...this.counts.calls }, rechecks: this.counts.rechecks, notes: this.counts.notes }; }
+  /** Budgets outlive a restart; issue lanes rebuild from the next observation. */
+  restoreUsage(usage: DirectorGate['usage']) { this.counts = { calls: { ...usage.callsByAudience }, rechecks: usage.rechecks, notes: usage.notes }; }
   hasCapacity(audience: DirectorAudience) {
     return this.counts.calls[audience] < DIRECTOR_LIMITS.calls[audience] && (audience === 'trainee' || this.counts.notes < DIRECTOR_LIMITS.notes);
   }

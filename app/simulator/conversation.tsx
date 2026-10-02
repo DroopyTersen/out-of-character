@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, FileText, Lightbulb, Mic, MicOff, Volume2, X } from 'lucide-react';
+import { ChevronRight, FileText, Lightbulb, Mic, MicOff, RotateCcw, Volume2, WifiOff, X } from 'lucide-react';
 import type { AudioLevels } from './audio-levels';
+import { stableLink, type Link } from './live-connection';
 import { VoiceDisplay } from './voice-display';
 import type { Client, ScenarioSummary, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import { SimulatorHint, SimulatorHintToast, SimulatorObjectives, SimulatorSkills } from './feedback';
@@ -14,10 +15,41 @@ export function SimulatorTranscript({ entries, startAtEnd = false }: { entries: 
 }
 export const formatTime = (seconds: number) => `${Math.floor(Math.max(0, seconds) / 60).toString().padStart(2, '0')}:${Math.floor(Math.max(0, seconds) % 60).toString().padStart(2, '0')}`;
 
-export function SimulatorConversation({ scenario, client, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, error }: {
+export type ConversationPhase = 'connecting' | 'live' | 'paused' | 'ending';
+
+/** Shown while media is recovering on its own; nothing is lost yet. */
+export function ConnectionUnstable({ link }: { link: Link }) {
+  if (link.state !== 'reconnecting') return null;
+  return <p className="sim-notice sim-connection-unstable" role="status">Connection unstable — reconnecting…</p>;
+}
+
+/** A started conversation whose connection was lost: the server holds its transcript until it is resumed, ended, or the hold expires. */
+export function ConnectionPaused({ snapshot, link, noun, endLabel, onResume, onEnd }: {
+  snapshot: SessionSnapshot | null; link: Link; noun: 'interview' | 'practice'; endLabel: string; onResume: () => void; onEnd: () => void;
+}) {
+  const pause = snapshot?.pause;
+  const resuming = link.state === 'resuming' || snapshot?.status === 'connecting';
+  const exhausted = !!pause && pause.resumes >= pause.maxResumes;
+  const remaining = pause ? Math.max(0, Math.ceil((pause.resumeBy - Date.now()) / 1000)) : null;
+  const detail = resuming ? 'Reconnecting your voice connection…'
+    : exhausted ? `This ${noun} has reconnected too many times. End it to keep what was captured.`
+      : !link.reachable ? `Waiting for your internet connection. Your ${noun} is saved${remaining != null ? ` for ${formatTime(remaining)}` : ''}.`
+        : remaining != null ? `Everything so far is saved. Resume within ${formatTime(remaining)} to pick up where you left off.`
+          : 'Everything so far is saved. Resume to pick up where you left off.';
+  return <div className="sim-connection-paused" role="status" aria-busy={resuming}>
+    <WifiOff size={22} aria-hidden="true" />
+    <div><strong>{link.reloaded ? `Your ${noun} is paused.` : pause?.reason === 'restart' ? `The server restarted — ${noun} paused.` : `Connection lost — ${noun} paused.`}</strong><p>{detail}</p></div>
+    <div className="sim-connection-actions">
+      <button className="sim-resume" onClick={onResume} disabled={resuming || exhausted || !link.reachable}><RotateCcw size={17} aria-hidden="true" />{resuming ? 'Resuming…' : `Resume ${noun}`}</button>
+      <button className="quiet-button" onClick={onEnd}>{endLabel}</button>
+    </div>
+  </div>;
+}
+
+export function SimulatorConversation({ scenario, client, snapshot, phase, muted, levels, elapsed, onEnd, onMute, onAudio, onContinue, onResume = () => {}, link = stableLink, error }: {
   scenario: ScenarioSummary; client: Client; snapshot: SessionSnapshot | null;
-  phase: 'connecting' | 'live' | 'ending'; muted: boolean; levels: AudioLevels; elapsed: number;
-  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue: () => void; error?: string | null;
+  phase: ConversationPhase; muted: boolean; levels: AudioLevels; elapsed: number;
+  onEnd: () => void; onMute: () => void; onAudio: () => void; onContinue: () => void; onResume?: () => void; link?: Link; error?: string | null;
 }) {
   const openEnded = scenario.objectives.length === 0;
   const [transcriptOpen, setTranscriptOpen] = useState(false);
@@ -58,6 +90,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
       <button className="sim-end sim-desktop-only" onClick={onEnd} disabled={phase === 'ending'}>{endLabel}</button>
     </header>
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
+    {phase === 'paused' ? <ConnectionPaused snapshot={snapshot} link={link} noun="practice" endLabel="End & see debrief" onResume={onResume} onEnd={onEnd} /> : phase === 'live' && <ConnectionUnstable link={link} />}
     {warning && <div className="sim-session-warning" role="status">
       <div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong>
         <p>{warning.kind === 'idle' ? `Practice will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before practice ends automatically.`}</p></div>
@@ -74,7 +107,7 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
           </Dialog>
           {!openEnded && <div className="sim-mobile-only"><SimulatorHintToast text={hintOpen ? hint! : null} concern={concern} onDismiss={dismissHint} /></div>}
         </div>
-        <div className="sim-caption sim-desktop-only">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Your voice connection is opening.' : phase === 'ending' ? 'Your conversation has ended.' : 'Say hello when you are ready.'}</p>}</div>
+        <div className="sim-caption sim-desktop-only">{caption && <><small>{caption.speaker === 'trainee' ? 'You' : client.name}</small><p>{caption.text}</p></>}{!caption && <p className="sim-muted">{phase === 'connecting' ? 'Your voice connection is opening.' : phase === 'ending' ? 'Your conversation has ended.' : phase === 'paused' ? 'Paused until the connection returns.' : 'Say hello when you are ready.'}</p>}</div>
         <div className="sim-call-controls" role="group" aria-label="Call controls">
           <button onClick={onMute} disabled={phase !== 'live' || automaticFinish} className={micOff ? 'muted' : ''} aria-pressed={micOff}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button>
           <button className="sim-desktop-only" ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls={transcriptOpen ? 'sim-conversation-transcript' : undefined}><FileText size={18} />Transcript</button>

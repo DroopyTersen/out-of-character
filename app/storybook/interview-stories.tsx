@@ -6,6 +6,8 @@ import { illustrativeLevels } from './simulator-voice-story';
 import { streamedReportView } from '../simulator/use-report';
 import type { ReportState } from '../../core/simulator/report';
 import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewSnapshot, type InterviewVoiceId } from '../interview/screens';
+import type { ConversationPhase } from '../simulator/conversation';
+import { stableLink, type Link } from '../simulator/live-connection';
 import '../simulator/simulator.css';
 import '../interview/interview.css';
 
@@ -116,7 +118,9 @@ export function InterviewSetupStory() {
 
 export function InterviewLiveStory() {
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>('sam-cedar');
-  const [phase, setPhase] = useState<'connecting' | 'live' | 'ending'>('live');
+  const [callState, setCallState] = useState<keyof typeof callStates>('live');
+  const { phase, link } = callStates[callState];
+  const [shownAt] = useState(() => Date.now());
   const [speaking, setSpeaking] = useState('listening');
   const [frame, setFrame] = useState(0);
   const reducedMotion = useReducedMotion();
@@ -129,9 +133,25 @@ export function InterviewLiveStory() {
   const [feedback, setFeedback] = useState<FeedbackStatus>('current');
   const [count, setCount] = useState(6);
   const [notice, setNotice] = useState('');
-  const snapshot = fixture('live', feedback, null, count);
-  return <><div className="workshop-controls"><label>Voice<select value={voiceId} onChange={event => setVoiceId(event.target.value as InterviewVoiceId)}><option value="sam-cedar">Cedar</option><option value="sam-gleam">Gleam</option></select></label><label>Call state<select value={phase} onChange={event => setPhase(event.target.value as typeof phase)}><option value="connecting">Connecting</option><option value="live">Live</option><option value="ending">Ending</option></select></label><label>Speaking<select value={speaking} onChange={event => setSpeaking(event.target.value)}><option value="listening">Listening</option><option value="client">Sam</option><option value="trainee">You</option><option value="overlap">Both</option></select></label><label>Observations<select value={feedback} onChange={event => setFeedback(event.target.value as FeedbackStatus)}><option value="waiting">Waiting</option><option value="current">Current</option><option value="delayed">Delayed</option><option value="unavailable">Unavailable</option></select></label><label>Transcript<select value={count} onChange={event => setCount(Number(event.target.value))}><option value="0">Empty</option><option value="2">Opening</option><option value="6">Detailed conversation</option><option value="8">Through reflection</option></select></label><label className="workshop-check"><input type="checkbox" checked={muted} onChange={event => setMuted(event.target.checked)} /> Mic muted</label>{notice && <span role="status">{notice}</span>}</div><InterviewConversation voiceId={voiceId} snapshot={snapshot} phase={phase} muted={muted} levels={illustrativeLevels(speaking, frame)} elapsed={50} onEnd={() => setNotice('Workshop preview: no live interview to end.')} onMute={() => setMuted(value => !value)} onAudio={() => setNotice('Workshop preview: audio remains off.')} onContinue={() => setNotice('Workshop preview: no live timer is running.')} /></>;
+  const live = fixture('live', feedback, null, count);
+  const snapshot: InterviewSnapshot = phase === 'paused'
+    ? { ...live, status: callState === 'resuming' ? 'connecting' : 'paused', pause: { reason: callState === 'restarted' ? 'restart' : 'provider', pausedAt: shownAt - 42_000, resumeBy: shownAt + 13 * 60_000, resumes: callState === 'exhausted' ? 5 : 1, maxResumes: 5 } }
+    : live;
+  return <><div className="workshop-controls"><label>Voice<select value={voiceId} onChange={event => setVoiceId(event.target.value as InterviewVoiceId)}><option value="sam-cedar">Cedar</option><option value="sam-gleam">Gleam</option></select></label><label>Call state<select value={callState} onChange={event => setCallState(event.target.value as typeof callState)}>{Object.entries(callStates).map(([value, state]) => <option key={value} value={value}>{state.label}</option>)}</select></label><label>Speaking<select value={speaking} onChange={event => setSpeaking(event.target.value)}><option value="listening">Listening</option><option value="client">Sam</option><option value="trainee">You</option><option value="overlap">Both</option></select></label><label>Observations<select value={feedback} onChange={event => setFeedback(event.target.value as FeedbackStatus)}><option value="waiting">Waiting</option><option value="current">Current</option><option value="delayed">Delayed</option><option value="unavailable">Unavailable</option></select></label><label>Transcript<select value={count} onChange={event => setCount(Number(event.target.value))}><option value="0">Empty</option><option value="2">Opening</option><option value="6">Detailed conversation</option><option value="8">Through reflection</option></select></label><label className="workshop-check"><input type="checkbox" checked={muted} onChange={event => setMuted(event.target.checked)} /> Mic muted</label>{notice && <span role="status">{notice}</span>}</div><InterviewConversation voiceId={voiceId} snapshot={snapshot} phase={phase} muted={muted} levels={illustrativeLevels(speaking, frame)} elapsed={50} onEnd={() => setNotice('Workshop preview: no live interview to end.')} onMute={() => setMuted(value => !value)} onAudio={() => setNotice('Workshop preview: audio remains off.')} onContinue={() => setNotice('Workshop preview: no live timer is running.')} onResume={() => setCallState('resuming')} link={link} /></>;
 }
+
+const callStates = {
+  connecting: { label: 'Connecting', phase: 'connecting', link: stableLink },
+  live: { label: 'Live', phase: 'live', link: stableLink },
+  unstable: { label: 'Connection unstable', phase: 'live', link: { state: 'reconnecting', reachable: true } },
+  paused: { label: 'Paused', phase: 'paused', link: { state: 'paused', reachable: true } },
+  offline: { label: 'Paused, offline', phase: 'paused', link: { state: 'paused', reachable: false } },
+  resuming: { label: 'Resuming', phase: 'paused', link: { state: 'resuming', reachable: true } },
+  exhausted: { label: 'Paused, no resumes left', phase: 'paused', link: { state: 'paused', reachable: true } },
+  reloaded: { label: 'Paused, page reloaded', phase: 'paused', link: { state: 'paused', reachable: true, reloaded: true } },
+  restarted: { label: 'Paused, server restarted', phase: 'paused', link: { state: 'paused', reachable: true } },
+  ending: { label: 'Ending', phase: 'ending', link: stableLink },
+} satisfies Record<string, { label: string; phase: ConversationPhase; link: Link }>;
 
 const researchTranscript: TranscriptEntry[] = [
   { id: 'sam-1', speaker: 'client', text: 'What were you building on this project?', startMs: 0, endMs: 3300 },

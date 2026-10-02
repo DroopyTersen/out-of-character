@@ -23,6 +23,13 @@ export async function waitFor(check: () => boolean, timeout = 2500) {
     await new Promise(resolve => setTimeout(resolve, 25));
   }
 }
+/** Waits for background work, including work started by other background work. */
+export async function settle(f: { pending: Promise<unknown>[] }) {
+  for (let seen = -1; seen !== f.pending.length;) {
+    seen = f.pending.length;
+    await Promise.all(f.pending);
+  }
+}
 export const capability = `Bearer ${'a'.repeat(64)}`;
 export const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
 export const request = (action: string, cap = capability, input = attempt) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(input) : action === 'poll' ? JSON.stringify({ active: false, audio: false, outputQuietMs: 60_000 }) : undefined });
@@ -83,9 +90,20 @@ type FixtureOptions = {
   overrides?: Partial<NonNullable<ConstructorParameters<typeof SimulatorSession>[2]>>;
   archive?: ReturnType<typeof archiveDatabase>;
   metadata?: boolean;
+  /** Fails the numbered provider creation (1 is the start). */
+  failCreation?: (creation: number) => boolean;
+  /** The first created provider session's id; a replacement owner needs its own to keep sessions distinct. */
+  provider?: string;
 };
-export async function fixture({ pendingCreation, values = new Map<string, unknown>(), overrides = {}, archive = archiveDatabase(), metadata = true }: FixtureOptions = {}) {
-  const socket = new ProviderSocket();
+export async function fixture({ pendingCreation, values = new Map<string, unknown>(), overrides = {}, archive = archiveDatabase(), metadata = true, failCreation = () => false, provider = 'provider-private-id' }: FixtureOptions = {}) {
+  // One socket per provider session; the first exists up front so tests can configure it before start.
+  const sockets = new Map<string, ProviderSocket>([[provider, new ProviderSocket()]]);
+  let latest: string | undefined;
+  const socketFor = (id: string) => {
+    if (!sockets.has(id)) sockets.set(id, new ProviderSocket());
+    return sockets.get(id)!;
+  };
+  const created: { context?: string }[] = [];
   let ready = Promise.resolve();
   let alarm = 0;
   let creations = 0;
@@ -93,7 +111,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   const interviewJudged: unknown[] = [];
   const pending: Promise<unknown>[] = [];
   const ctx = {
-    storage: { get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }, setAlarm: async (value: number) => { alarm = value; }, deleteAll: async () => values.clear() },
+    storage: { get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }, delete: async (key: string) => values.delete(key), setAlarm: async (value: number) => { alarm = value; }, deleteAll: async () => values.clear() },
     blockConcurrencyWhile: (fn: () => Promise<void>) => { ready = fn(); }, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); },
   } as unknown as DurableObjectState;
   const session = new SimulatorSession(ctx, {
@@ -101,8 +119,15 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     SIMULATOR_ARCHIVE: archive.d1,
     ...(!metadata ? {} : { CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' } }),
   } as Env, {
-    createLive: async () => { creations++; await pendingCreation; return { session: { id: 'provider-private-id' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } }; },
-    attachLive: async () => socket as unknown as WebSocket,
+    createLive: async input => {
+      const id = latest = ++creations === 1 ? provider : `${provider}-${creations}`;
+      created.push(input.context ? { context: input.context } : {});
+      await pendingCreation;
+      if (failCreation(creations)) throw new Error('Provider creation failed.');
+      socketFor(id);
+      return { session: { id }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } };
+    },
+    attachLive: async (id: string) => socketFor(id) as unknown as WebSocket,
     evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }; },
     evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }),
     generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
@@ -117,5 +142,11 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     ...overrides,
   });
   await ready;
-  return { session, socket, values, judged, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm };
+  return {
+    session, values, judged, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
+    /** The newest created provider session's socket, or the newest attached one before any creation. */
+    get socket() { return latest ? sockets.get(latest)! : [...sockets.values()].at(-1)!; },
+    socketFor: (id: string) => sockets.get(id),
+    sockets: () => [...sockets.values()], created,
+  };
 }

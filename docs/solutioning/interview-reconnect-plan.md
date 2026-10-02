@@ -251,6 +251,13 @@ Run several seeds.
 **Phase 2: survive refresh and restarts**
 - Persist `{ id, capability }` in `sessionStorage` and offer "Resume your interview" after a reload.
 - Full rehydration from the checkpoint, so resume works after an eviction or deploy.
+- As built:
+  - **Saving.** The attempt is saved per page (`ooc-attempt-interview` or `ooc-attempt-practice`) once the conversation goes live.
+  - **Leaving.** `pagehide` sends a keepalive `/pause` and marks the saved attempt as left. Unmounting inside the app still ends it.
+  - **Rejoining.** A page rejoins only an attempt marked as left. A duplicated tab copies `sessionStorage` without that mark, so it starts fresh instead of pausing the original tab.
+  - **After a reload.** A rejoined attempt stays paused until the user clicks Resume, since audio needs a gesture on the new page.
+  - **Restarts.** A replacement owner holds a `live`, `connecting`, or `paused` checkpoint as paused, with reason `restart` when it was live. The alarm closes the orphaned provider sessions.
+  - **Near the limit.** Within 1 min of the limit, a restart still finishes the attempt as `interrupted`.
 
 **Phase 3 (only if the Live API supports it): same-session reattach**
 - If Foundry can take a new SDP for an existing session, prefer that for short outages, keeping Sam's live context. Fall back to a fresh session.

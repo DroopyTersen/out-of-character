@@ -12,19 +12,20 @@ export const transcriptEvent = z.object({
   start_ms: z.number().finite().nonnegative(), end_ms: z.number().finite().nonnegative(),
 }).refine(event => event.end_ms >= event.start_ms);
 
-export function liveConfiguration(scenarioId: string, clientId: string) {
+/** A resumed session appends the rebuilt conversation after the unchanged actor brief. */
+export function liveConfiguration(scenarioId: string, clientId: string, context?: string) {
   const client = getClient(clientId);
   return {
-    model: LIVE_MODEL, instructions: actorBrief(getScenario(scenarioId), client),
+    model: LIVE_MODEL, instructions: [actorBrief(getScenario(scenarioId), client), context].filter(Boolean).join('\n\n'),
     delegation: { type: 'client' }, store: false,
     audio: { output: { voice: client.voice } },
   };
 }
 
-export async function createLive(input: { scenarioId: string; clientId: string; sdp: string }, foundry: FoundryConfig, request: typeof fetch = fetch) {
+export async function createLive(input: { scenarioId: string; clientId: string; sdp: string; context?: string }, foundry: FoundryConfig, request: typeof fetch = fetch) {
   const response = await request(foundryUrl(foundry, '/live/sessions'), {
     method: 'POST', headers: { 'api-key': foundry.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session: { ...liveConfiguration(input.scenarioId, input.clientId), model: foundry.liveModel }, transport: { type: 'webrtc', sdp: input.sdp } }),
+    body: JSON.stringify({ session: { ...liveConfiguration(input.scenarioId, input.clientId, input.context), model: foundry.liveModel }, transport: { type: 'webrtc', sdp: input.sdp } }),
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`Live creation failed (${response.status}).`);

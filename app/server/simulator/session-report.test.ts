@@ -1,11 +1,12 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { reportSchema } from '../../../core/simulator/report';
-import { skills } from '../../../core/simulator/types';
+import { SESSION_LIMIT_SECONDS, skills } from '../../../core/simulator/types';
 import { parseArchive } from '../../../scripts/simulator-transcripts';
 import { attempt, capability, request, activityPoll, fixture } from './session-fixture';
 
 // The paid report boundary is substituted; session ownership, closure, final
 // grading, storage and public state use the real implementation.
+afterEach(() => setSystemTime());
 function reportProvider() {
   let finish: ((result: import('../../../ai/simulator/report.server').ReportResult) => void) | undefined;
   let output: ReadableStreamDefaultController<string> | undefined;
@@ -81,9 +82,14 @@ test('report waits for closing, uses final transcript and Jev, and claims one ge
 
 test('interrupted report settles before held final storage and archives after the final row exists', async () => {
   const provider = reportProvider();
-  const f = await spokenSession(provider);
+  const active = await spokenSession(provider);
+  // A lost connection pauses, and so does a lost owner with time left; a lost owner near the limit interrupts.
+  await active.session.alarm();
+  await Promise.all(active.pending);
+  setSystemTime(Date.now() + SESSION_LIMIT_SECONDS * 1000 - 40_000);
+  const f = await fixture({ values: active.values, archive: active.archive, overrides: { generateReport: provider.generateReport } });
   const held = f.archive.holdNext();
-  f.socket.emit({ type: 'session.closed', reason: 'connection_lost', usage: { seconds: 4 } });
+  await f.session.fetch(request('poll'));
   await held.started;
   const response = await f.session.fetch(request('report'));
   expect(provider.input()!.snapshot.status).toBe('interrupted');
@@ -93,6 +99,7 @@ test('interrupted report settles before held final storage and archives after th
   held.release(); await Promise.all(f.pending);
   expect(parseArchive(f.row()!).report.attempts).toHaveLength(1);
   expect(f.row()!.archive_state).toBe('final');
+  await active.session.fetch(request('end')); // Stop the original owner's timer.
 }, 10_000);
 
 test('a report archive failure cannot turn validated coaching into a failed report', async () => {

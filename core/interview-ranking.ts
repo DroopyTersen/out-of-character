@@ -4,7 +4,7 @@ import type { ConversationMap, MapThread } from './interview-map';
  * Code's half of the turn loop: Jev reads the open threads after each settled participant turn, and code scores them,
  * holds down the ones Jev saw answered, declined or stalled, and picks keep-pulling or a thread to tug. Sol owns thread
  * status; nothing here is ever written back to the map. Every time here (atMs, nowMs, startedAtMs) is interview-elapsed
- * ms, measured from the session start.
+ * ms, measured from the session start with connection pauses excluded.
  */
 export const THREAD_STATES = ['open', 'answered', 'declined', 'stalled'] as const;
 export type ThreadState = typeof THREAD_STATES[number];

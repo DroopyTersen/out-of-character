@@ -29,9 +29,17 @@ export default function Simulator() {
   const [now, setNow] = useState(Date.now());
   const [briefingOpen, setBriefingOpen] = useState(!!initial);
   const report = useSessionReport();
-  const session = useSimulator(report);
+  const session = useSimulator(report, { kind: 'practice', onReattach: choice => {
+    if (catalog.scenarios.some(item => item.id === choice.scenarioId) && catalog.clients.some(item => item.id === choice.clientId)) {
+      setScenarioId(choice.scenarioId);
+      setClientId(choice.clientId);
+    }
+    // A reloaded practice link would otherwise reopen its briefing over the conversation.
+    setBriefingOpen(false);
+  } });
   useEffect(() => {
-    if (session.phase !== 'live') return;
+    // A paused conversation keeps ticking for its hold countdown.
+    if (session.phase !== 'live' && session.phase !== 'paused') return;
     const timer = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(timer);
   }, [session.phase]);
@@ -57,6 +65,6 @@ export default function Simulator() {
     {briefingOpen ? <SimulatorBriefing scenario={scenario} client={client} briefing={scenarioBriefings[scenarioId]!} enabled={enabled} onBack={() => setBriefingOpen(false)} onStart={startConversation} />
       : session.phase === 'selection' ? <><SimulatorSelection catalog={catalog} scenarioId={scenarioId} clientId={clientId} onScenario={setScenarioId} onClient={setClientId} onStart={openBriefing} enabled={enabled} error={session.error ?? (invalidLink ? 'That practice link is incomplete or unavailable. Choose a scenario and client to continue.' : null)} /><p className="sim-lab-link">Trying different voices? <Link to="/simulator/voice-lab">Open the Voice Lab →</Link></p></>
       : session.phase === 'debrief' ? <SimulatorDebrief scenario={scenario} client={client} snapshot={session.snapshot} report={report.view} onRetryReport={report.retry} onCheckReport={report.checkStatus} onRetry={() => session.start(scenarioId, clientId)} onChoose={session.reset} error={session.error} />
-        : <SimulatorConversation scenario={scenario} client={client} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, (now - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} onContinue={session.keepActive} error={session.error} />}
+        : <SimulatorConversation scenario={scenario} client={client} snapshot={session.snapshot} phase={session.phase} muted={session.muted} levels={session.levels} elapsed={session.snapshot ? Math.max(0, ((session.snapshot.pause?.pausedAt ?? now) - session.snapshot.startedAt) / 1000) : 0} onEnd={() => { void session.end(); }} onMute={session.toggleMute} onAudio={session.playAudio} onContinue={session.keepActive} onResume={session.resume} link={session.link} error={session.error} />}
   </main></div>;
 }

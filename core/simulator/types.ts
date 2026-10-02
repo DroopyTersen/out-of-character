@@ -4,6 +4,12 @@ export const SIMULATOR_VERSION = 'simulator-v1';
 export const SESSION_LIMIT_SECONDS = 3600;
 export const SESSION_IDLE_WARNING_MS = 3 * 60_000;
 export const SESSION_IDLE_TIMEOUT_MS = 5 * 60_000;
+/** How long a dropped attempt is held for resume before it ends with what was captured. */
+export const SESSION_PAUSE_HOLD_MS = 15 * 60_000;
+/** Each resume creates a paid voice session; bound a flapping network. */
+export const SESSION_MAX_RESUMES = 5;
+/** Paused time extends the live limit, up to this much wall clock. */
+export const SESSION_WALL_LIMIT_MS = 90 * 60_000;
 export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity'; endsAt: number };
 
 export const skills = [
@@ -77,7 +83,9 @@ export type TraineeEvaluation = {
   model: string;
   durationMs: number;
 };
-export type SessionStatus = 'connecting' | 'live' | 'ending' | 'ended' | 'interrupted';
+export type SessionStatus = 'connecting' | 'live' | 'paused' | 'ending' | 'ended' | 'interrupted';
+/** A dropped connection holds the attempt instead of ending it; the browser may resume until resumeBy. */
+export type SessionPause = { reason: 'browser' | 'provider' | 'restart'; pausedAt: number; resumeBy: number; resumes: number; maxResumes: number };
 export type FeedbackStatus = 'waiting' | 'current' | 'delayed' | 'unavailable';
 export type LiveHint = { id: string; text: string; kind: 'hint' | 'concern'; objectiveId: string | null; evidenceIds: string[]; createdAt: number; expiresAt: number };
 export type SessionSnapshot = {
@@ -97,6 +105,8 @@ export type SessionSnapshot = {
   message: string | null;
   finalization: 'pending' | 'confirmed' | 'unconfirmed';
   usageSeconds: number | null;
+  /** Present while paused, and while a resume is connecting. */
+  pause?: SessionPause | null;
 };
 
 export function emptySkills(): Record<SkillId, SkillReading> {

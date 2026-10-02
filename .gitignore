@@ -11,3 +11,5 @@ output/
 .react-router/
 build/
 test-results/
+# Real evidence: transcripts, downloads, real-interview examples. Never committed.
+.data/

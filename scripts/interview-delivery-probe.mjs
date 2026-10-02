@@ -135,11 +135,12 @@ async function run(cell, index) {
   // Sam's speech after each participant line starts: the opening, two measured replies, the goodbye.
   const said = lines.map(() => '').concat('');
   const sent = [], received = [];
-  let step = 0, clip, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, lastAudibleOutput = 0, samCursor = 0, replyStartedAt = 0, pacing, deadline, closing = false;
+  let step = 0, clip, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, lastAudibleOutput = 0, audibleUntil = 0, samCursor = 0, replyStartedAt = 0, pacing, deadline, closing = false;
   const close = () => { if (closing) return; closing = true; clearTimeout(pacing); send({ type: 'session.close' }); };
   const yielded = () => {
     // Quiet since Sam's last sound finished playing, not since it arrived: GPT-Live can stream faster than real time.
-    const quiet = Date.now() - Math.max(lastOutput, lastAudibleOutput, inputStartedAt + samCursor / 48);
+    // Only audible frames count: GPT-Live streams near-silent output for the whole session.
+    const quiet = Date.now() - Math.max(lastOutput, lastAudibleOutput, audibleUntil);
     if (lastAudibleOutput > inputEnded && lastOutput > inputEnded) return quiet > 2500 && (said[step].includes('?') || quiet > DEAD_AIR_MS);
     // Sam never answered, or never opened: record the dead air and let the participant go on.
     if (Date.now() - (inputEnded || inputStartedAt) > 15_000) { report.deadAir.push({ afterLine: step - 1 }); return true; }
@@ -184,7 +185,7 @@ async function run(cell, index) {
         received.push([at, audio]); samCursor = at + audio.length;
         // Audible frames while the participant is still answering, per line, as when an appended note sets Sam talking.
         // The reply to the first line starts with Sam's first sound after that line ends.
-        if (audible(audio)) { lastAudibleOutput = Date.now(); if (clip) report.samDuringAnswer[step - 1]++; else if (step === 1) replyStartedAt ||= lastAudibleOutput; }
+        if (audible(audio)) { lastAudibleOutput = Date.now(); audibleUntil = inputStartedAt + samCursor / 48; if (clip) report.samDuringAnswer[step - 1]++; else if (step === 1) replyStartedAt ||= lastAudibleOutput; }
       } else if (value.type === 'session.delegation.created') {
         report.delegations++;
         send({ type: 'session.thinking.append', event_id: `role-guard-${report.delegations}`, delegation_id: value.delegation?.id ?? null, content: NO_EXTERNAL_TASK });

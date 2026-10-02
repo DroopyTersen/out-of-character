@@ -7,7 +7,7 @@ import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
 import { emptyMap } from '../core/interview-map.ts';
 import { listNote, noteHeaders } from '../core/interview-notes.ts';
 import { appendTranscript } from '../core/simulator/state.ts';
-import { measure } from './lib/interview-delivery-measures.mjs';
+import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mjs';
 
 // Delivery probe: does Sam take up a thread note, parrot its words, or mention it?
 // Each run: Sam opens; a synthetic participant names three threads in one answer, and a
@@ -18,9 +18,12 @@ import { measure } from './lib/interview-delivery-measures.mjs';
 // Usage: bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --cell=thinking:options:gap [--runs=3] [--voice=sam-cedar]
 //        bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --all [--runs=3]
 //        bun scripts/interview-delivery-probe.mjs --summary
-// A run already reported without errors is skipped, so an interrupted --all resumes and a failed run is redone.
-// Failed runs are left out of the summary's rates. The counts are heuristic
-// supporting evidence; conversation.wav in each run is for listening.
+// A usable run (see unusable()) is skipped, so an interrupted --all resumes and an unusable run is redone; the probe stops
+// after an unusable run rather than spend the rest of the batch. Before any session starts, a usable run made with another
+// model, voice, brief, note or harness version stops the probe, so one directory never mixes experiments.
+// Unusable runs are left out of the summary's rates. A Sam turn whose questions don't name exactly one thread is counted
+// as unclear until it is labelled by hand (a "label" on the segment). The counts are heuristic supporting evidence;
+// conversation.wav in each run is for listening.
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const root = process.env.ACCEPTANCE_OUTPUT || 'output/interview-delivery';
 const CHANNELS = { thinking: 'session.thinking.append', instructions: 'session.instructions.append' };
@@ -44,7 +47,10 @@ const NOTE_AT = 0.5;
 const DEAD_AIR_MS = 8000;
 const FRAME = 960; // 20 ms of 24 kHz mono 16-bit PCM
 const SPOKEN = lines.join(' ');
-const ok = report => report.finalized && !report.errors.length;
+// Bump when a change alters what a run does (the participant, the note, the timing), not only how it is scored.
+const HARNESS = 2;
+const IDENTITY = ['harness', 'model', 'voice', 'briefDigest', 'note'];
+const measured = report => report.segments.slice(0, 2);
 const mean = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100 : '–';
 
 function note(cell) {
@@ -69,24 +75,33 @@ if (process.argv.includes('--summary')) {
     if (await file.exists()) reports.push(await file.json());
   }
   const share = (count, total) => total ? `${count}/${total}` : '–';
-  const controls = reports.filter(item => item.cell === 'control' && ok(item));
+  const usable = reports.filter(item => !unusable(item));
+  // The runs a table compares must share a harness, model and voice, and each cell's runs their brief and note.
+  for (const [fields, group] of [[['harness', 'model', 'voice'], () => 'all'], [['briefDigest', 'note'], item => item.cell]]) {
+    const seen = Map.groupBy(usable, group);
+    for (const [key, items] of seen) for (const field of fields) if (new Set(items.map(item => item[field])).size > 1) console.warn(`Mixed ${field} in ${key} runs: the table compares different experiments.`);
+  }
+  const controls = usable.filter(item => item.cell === 'control');
+  const target = (item, turn) => askedIn(item.segments[turn]) === 'target';
   console.table(Object.fromEntries(CELLS.flatMap(cell => {
     const all = reports.filter(item => item.cell === cell);
-    const runs = all.filter(ok);
+    const runs = usable.filter(item => item.cell === cell);
     if (!all.length) return [];
-    const took = runs.filter(item => item.uptake.first);
+    const took = runs.filter(item => target(item, 0));
     return [[cell, {
       runs: runs.length,
       'note before reply': cell === 'control' ? '–' : share(runs.filter(item => item.noteEvent?.beforeReply).length, runs.length),
       'uptake, next turn': share(took.length, runs.length),
-      'uptake by turn 2': share(runs.filter(item => item.uptake.first || item.uptake.second).length, runs.length),
-      're-asked after decline': share(took.filter(item => item.uptake.second).length, took.length),
-      'parrot share': mean(runs.flatMap(item => item.segments.slice(0, 2).map(segment => segment.parrotShare))),
+      'uptake by turn 2': share(runs.filter(item => target(item, 0) || target(item, 1)).length, runs.length),
+      're-asked after decline': share(took.filter(item => target(item, 1)).length, took.length),
+      // Measured turns the classifier couldn't place and nobody has labelled: the rates above count them as not the target.
+      unclear: runs.flatMap(measured).filter(segment => segment.unclear && !segment.label).length,
+      'parrot share': mean(runs.flatMap(item => measured(item).map(segment => segment.parrotShare))),
       // The same overlap with no note sent: Sam taking up the thread shares some words with any note about it.
       'control parrot': cell === 'control' ? '–' : mean(controls.flatMap(item => item.baselines?.[cell] ?? [])),
       'Sam over answer': share(runs.filter(item => item.samDuringAnswer[0] > 0).length, runs.length),
       leaks: share(runs.filter(item => item.segments.some(segment => segment.leak)).length, runs.length),
-      'failed, left out': all.length - runs.length,
+      'unusable, left out': all.length - runs.length,
     }]];
   })));
   process.exit(0);
@@ -119,17 +134,33 @@ const audible = audio => {
   return audio.length > 0 && Math.sqrt(energy / (audio.length / 2)) > 200;
 };
 const digest = text => createHash('sha256').update(text).digest('hex').slice(0, 12);
+const directory = (cell, index) => `${root}/${cell.replaceAll(':', '-')}-r${index}`;
+const previous = async (cell, index) => { const file = Bun.file(`${directory(cell, index)}/report.json`); return await file.exists() ? file.json() : null; };
+const channelOf = cell => cell === 'control' ? 'thinking' : cell.split(':')[0];
+const sessionFor = cell => ({ ...liveConfiguration(INTERVIEW_SCENARIO_ID, interviewerId), model: foundry.liveModel, instructions: interviewerBrief(interviewerId, CHANNELS[channelOf(cell)]) });
+const identity = cell => {
+  const session = sessionFor(cell);
+  return { harness: HARNESS, model: session.model, voice: session.audio.output.voice, briefDigest: digest(session.instructions), note: cell === 'control' ? null : note(cell) };
+};
+for (const cell of cells) {
+  const expected = identity(cell);
+  for (let index = 1; index <= runs; index++) {
+    const report = await previous(cell, index);
+    const changed = report && !unusable(report) ? IDENTITY.filter(field => report[field] !== expected[field]) : [];
+    if (changed.length) throw new Error(`${cell} run ${index} was made with a different ${changed.join(', ')}. Move it aside or set another ACCEPTANCE_OUTPUT; no session was started.`);
+  }
+}
 
 async function run(cell, index) {
-  const output = `${root}/${cell.replaceAll(':', '-')}-r${index}`;
-  const previous = Bun.file(`${output}/report.json`);
-  if (await previous.exists() && ok(await previous.json())) return null;
+  const output = directory(cell, index);
+  const prior = await previous(cell, index);
+  if (prior && !unusable(prior)) return null;
   await mkdir(output, { recursive: true, mode: 0o700 });
-  const channel = cell === 'control' ? 'thinking' : cell.split(':')[0];
+  const channel = channelOf(cell);
   const noteText = cell === 'control' ? null : note(cell);
   const opening = interviewOpening(interviewerId);
-  const session = { ...liveConfiguration(INTERVIEW_SCENARIO_ID, interviewerId), model: foundry.liveModel, instructions: interviewerBrief(interviewerId, CHANNELS[channel]) };
-  const report = { cell, run: index, checkedAt: new Date().toISOString(), model: foundry.liveModel, voice: session.audio.output.voice, briefDigest: digest(session.instructions), note: noteText, noteEvent: null, samDuringAnswer: lines.map(() => 0), uptake: null, segments: [], transcript: [], deadAir: [], delegations: 0, providerErrors: [], errors: [], finalized: false, usageSeconds: null };
+  const session = sessionFor(cell);
+  const report = { cell, run: index, checkedAt: new Date().toISOString(), ...identity(cell), noteEvent: null, samDuringAnswer: lines.map(() => 0), uptake: null, segments: [], transcript: [], deadAir: [], delegations: 0, providerErrors: [], errors: [], finalized: false, usageSeconds: null };
   const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
   const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
   // Sam's speech after each participant line starts: the opening, two measured replies, the goodbye.
@@ -208,7 +239,7 @@ async function run(cell, index) {
   report.segments = said.slice(1).map(text => measure(text.trim(), noteText ?? note('thinking:options:gap'), spoken));
   // The control's replies against every cell's note: the overlap a reply has with no note sent.
   if (!noteText) report.baselines = Object.fromEntries(CELLS.slice(1).map(cell => [cell, report.segments.slice(0, 2).map(segment => measure(segment.text, note(cell), spoken).parrotShare)]));
-  report.uptake = { first: report.segments[0].asked === 'target', second: report.segments[1]?.asked === 'target' };
+  report.uptake = { first: askedIn(report.segments[0]) === 'target', second: askedIn(report.segments[1]) === 'target' };
   // One track for listening: the participant as sent, and Sam as a client would play it.
   const mix = Buffer.alloc(Math.max(inputBytes, samCursor));
   Buffer.concat(sent).copy(mix);
@@ -219,11 +250,12 @@ async function run(cell, index) {
   return report;
 }
 
-for (const cell of cells) {
+batch: for (const cell of cells) {
   for (let index = 1; index <= runs; index++) {
     const report = await run(cell, index);
     if (!report) continue;
-    console.log(JSON.stringify({ cell, run: index, finalized: report.finalized, noteBeforeReply: report.noteEvent?.beforeReply ?? null, uptake: report.uptake, asked: report.segments.slice(0, 2).map(item => item.asked), parroted: report.segments.slice(0, 2).map(item => item.parroted.length), leak: report.segments.find(item => item.leak)?.leak ?? null, usageSeconds: report.usageSeconds, errors: report.errors }));
-    if (!report.finalized || report.errors.length) process.exitCode = 1;
+    const reason = unusable(report);
+    console.log(JSON.stringify({ cell, run: index, unusable: reason, noteBeforeReply: report.noteEvent?.beforeReply ?? null, uptake: report.uptake, asked: measured(report).map(item => item.unclear ? 'unclear' : item.asked), parroted: measured(report).map(item => item.parroted.length), leak: report.segments.find(item => item.leak)?.leak ?? null, usageSeconds: report.usageSeconds, errors: report.errors }));
+    if (reason) { process.exitCode = 1; break batch; }
   }
 }

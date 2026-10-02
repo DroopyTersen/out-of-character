@@ -8,6 +8,7 @@ test('the thread Sam asks about is the last one the turn names', () => {
   expect(named('Three weeks for VPN, ouch. Who gave the green light?')).toEqual(['target', 'vpn']);
   expect(named('Oh. Three weeks for VPN access. That’s a lot. What did that break for you early on?')).toEqual(['vpn']);
   expect(named('So after access cleared, you handed the pipeline to Priya. What made that handoff work?')).toEqual(['priya', 'vpn']);
+  expect(named('A three-week VPN wait is brutal. When it came time to actually launch, who had to say, “Yep, we’re going live”?')).toEqual(['target', 'vpn']);
   expect(measure('Sure. Thanks for talking it through.', note, spoken).asked).toBeNull();
 });
 

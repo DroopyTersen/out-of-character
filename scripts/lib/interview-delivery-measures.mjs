@@ -4,7 +4,8 @@
 export const words = text => text.toLowerCase().replace(/’/g, '\'').match(/[a-z0-9']+/g) ?? [];
 export const trigrams = text => { const list = words(text); return new Set(list.slice(2).map((_, index) => list.slice(index, index + 3).join(' '))); };
 export const THREADS = {
-  target: /approv|sign.?off|signed off|final (call|say|decision)|go.?live|green.?light|launch (step|decision|call|meeting)|call to launch|decided to launch/i,
+  // Neither of the other threads involves the launch, so any mention of it counts.
+  target: /approv|sign.?off|signed off|final (call|say|decision)|go(ing|es)?.?live|green.?light|\blaunch/i,
   vpn: /\bvpn\b|access|three weeks|waited|waiting/i,
   priya: /priya|pipeline|hand.?(off|over)|took over|newest/i,
 };

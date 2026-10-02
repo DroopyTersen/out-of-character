@@ -31,14 +31,14 @@ test('the latest turn is the participant passages since Sam last said more than 
   expect(latestTurn([...split, { id: 'p6', speaker: 'client', text: 'Who were they?', startMs: 6100, endMs: 7000 }])).toEqual([]);
 });
 
-test('a yes, no or sure straight after Sam’s question is an answer; anywhere else it is a backchannel', () => {
+test('short confirmations after Sam speaks are kept, while acknowledgments within the participant’s turn are omitted', () => {
   const asked: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'Did the bids team use it daily?', startMs: 4400, endMs: 6000 }];
   const reply = (text: string, before = asked): TranscriptEntry[] => [...before, { id: 'p5', speaker: 'trainee', text, startMs: 6100, endMs: 6400 }];
   for (const text of ['Yes.', 'No.', 'Sure!', 'Yeah', 'Uh-huh.']) expect(latestTurn(reply(text)).map(entry => entry.id)).toEqual(['p5']);
   expect(latestTurn(reply('Mm.'))).toEqual([]);
   expect(latestTurn(reply('Okay.'))).toEqual([]);
   const stated: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 }];
-  expect(latestTurn(reply('Yes.', stated))).toEqual([]);
+  expect(latestTurn(reply('Yes.', stated)).map(entry => entry.id)).toEqual(['p5']);
   // A yes that follows the participant's own passage is not a reply to Sam.
   expect(latestTurn([...reply('It ran every morning.'), { id: 'p6', speaker: 'trainee', text: 'Yeah.', startMs: 6500, endMs: 6700 }]).map(entry => entry.id)).toEqual(['p5']);
 });
@@ -48,6 +48,14 @@ test('the turn is read up to the participant’s last words, after Sam has start
   expect(upToParticipant(replied).map(entry => entry.id)).toEqual(['p1', 'p2']);
   expect(latestTurn(upToParticipant(replied)).map(entry => entry.id)).toEqual(['p2']);
   expect(upToParticipant(transcript.slice(0, 1))).toEqual([]);
+});
+
+test('a short reply can confirm a declarative guess without a question mark', () => {
+  const guess: TranscriptEntry = { id: 'p4', speaker: 'client', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 };
+  for (const text of ['Yes.', 'No.', 'Right.', 'Uh-huh.']) {
+    const answer: TranscriptEntry = { id: 'p5', speaker: 'trainee', text, startMs: 6100, endMs: 6400 };
+    expect(latestTurn([...transcript, guess, answer]).map(entry => entry.id)).toEqual(['p5']);
+  }
 });
 
 test('turn questions cover focus, newness and each open thread; closed threads, guesses and topics stay out', () => {

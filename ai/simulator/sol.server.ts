@@ -4,7 +4,17 @@ import type { DirectorUsage } from '../../core/simulator/director';
 
 /** `detail` names why a response stopped short, such as max_output_tokens; `usage` is what that response reported. */
 export class DirectorOutputError extends Error {
-  constructor(readonly detail?: string, readonly usage?: DirectorUsage) { super(detail ? `Director output was incomplete: ${detail}.` : 'Director output was invalid.'); }
+  constructor(readonly detail?: string, readonly usage?: DirectorUsage) {
+    super(detail ? `Director output was incomplete: ${detail}.` : 'Director output was invalid.');
+    this.name = 'DirectorOutputError';
+  }
+}
+
+export class DirectorHttpError extends Error {
+  constructor(readonly statusCode: number, readonly requestId: string | null) {
+    super(`Director request failed (${statusCode}).`);
+    this.name = 'DirectorHttpError';
+  }
 }
 
 const responseSchema = z.object({
@@ -47,16 +57,16 @@ export async function requestSol(input: {
       text: { format: { type: 'json_schema', name: input.name, strict: true, schema: input.jsonSchema ?? z.toJSONSchema(input.schema) } },
     }),
   });
-  if (!response.ok) throw new Error(`Director request failed (${response.status}).`);
+  if (!response.ok) throw new DirectorHttpError(response.status, response.headers.get('apim-request-id') ?? response.headers.get('x-request-id'));
   const parsed = responseSchema.safeParse(await response.json());
   if (!parsed.success) throw new DirectorOutputError();
   const data = parsed.data;
   const usage = readUsage(data.usage);
   if (data.status !== 'completed') throw new DirectorOutputError(data.incomplete_details?.reason ?? data.status, usage);
   const messages = data.output.filter(item => item.type === 'message');
-  if (messages.length !== 1 || messages[0]!.status !== 'completed' || messages[0]!.content?.length !== 1 || messages[0]!.content[0]!.type !== 'output_text') throw new DirectorOutputError();
+  if (messages.length !== 1 || messages[0]!.status !== 'completed' || messages[0]!.content?.length !== 1 || messages[0]!.content[0]!.type !== 'output_text') throw new DirectorOutputError(undefined, usage);
   let value: unknown;
-  try { value = JSON.parse(messages[0]!.content[0]!.text ?? ''); } catch { throw new DirectorOutputError(); }
+  try { value = JSON.parse(messages[0]!.content[0]!.text ?? ''); } catch { throw new DirectorOutputError(undefined, usage); }
   input.signal.throwIfAborted();
   return { value, model: data.model, usage };
 }

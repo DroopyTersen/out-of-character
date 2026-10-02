@@ -44,10 +44,14 @@ export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADER
 /** Replaces a list note whose lead Sol has since closed, when no open thread is left to pull on. */
 export const emptyListNote = (headers = NOTE_HEADERS) => `${headers.list}\nNo open thread right now: follow the participant.`;
 
-/** A new list note goes out when the pick moves or Sol rewrites the lead. A nearby thread reordering isn't worth one; the producer resends when one it named closes. */
+/** Withdraws the previous note when Sol has removed all its facts, vantage and preferences. */
+export const emptyMapNote = (headers = NOTE_HEADERS) => `${headers.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;
+
+/** A changed lead or set of nearby options supersedes the note; nearby ordering alone does not. */
 export function listNoteKey(map: ConversationMap, pick: Pick): string {
   const lead = map.threads.find(thread => thread.id === pick.lead);
-  return JSON.stringify([pick.action, pick.current, pick.lead, lead ? threadKey(lead) : null]);
+  const nearby = [...pick.nearby].sort().map(id => [id, map.threads.find(thread => thread.id === id)?.label]);
+  return JSON.stringify([pick.action, pick.current, pick.lead, lead ? threadKey(lead) : null, nearby]);
 }
 
 /** The most connected participant facts, in map order, so the note stays short as the map grows. */

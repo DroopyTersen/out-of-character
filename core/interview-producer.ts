@@ -7,7 +7,7 @@ import type { DirectorUsage } from './simulator/director';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v13';
+export const PRODUCER_VERSION = 'interview-producer-v14';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 30_000,
@@ -22,6 +22,8 @@ export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satis
 export type ResearchKind = typeof RESEARCH_KINDS[number];
 export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null; passageIds: string[] };
 export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number; startMs?: number; endMs?: number };
+/** Safe provider metadata only; never response bodies, request headers or exception messages. */
+export type CallFailure = { name: string; status?: number; requestId?: string; detail?: string };
 
 /** One Sol call. The applied updates replay to the map, so the map itself isn't stored; an applied record without one was shed to fit the archive row. */
 export type MapRecord = {
@@ -32,6 +34,7 @@ export type MapRecord = {
   /** The first few, for an invalid update. */
   defects?: MapDefect[];
   research?: ResearchRequest | null;
+  failure?: CallFailure;
 };
 /** Jev's reading of one settled participant turn and the pick code made from it. Scores are rounded; ranked is [id, score, band]. */
 export type TurnRecord = {
@@ -39,12 +42,14 @@ export type TurnRecord = {
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: DirectorUsage;
   reading?: { atMs: number; focus: string | null; novel: number; natural: Record<string, number>; states: Record<string, ThreadState> };
   pick?: Omit<Pick, 'ranked'> & { ranked: [id: string, score: number, band: Band][] };
+  failure?: CallFailure;
 };
 /** Spicy and grounding for threads Sol added or rewrote. */
 export type TraitRecord = {
   source: 'traits'; id: string; mapId: string | null; threadIds: string[]; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: DirectorUsage;
   traits?: Record<string, [spicy: number, grounding: number]>;
+  failure?: CallFailure;
 };
 /**
  * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
@@ -63,6 +68,7 @@ export type ResearchRecord = {
   eventId?: string;
   facts?: InterviewBackground['facts']; retrievedAt?: number; queries?: string[]; reason?: string;
   outcome: 'pending' | 'invalid' | 'duplicate' | 'budget' | 'busy' | 'found' | 'unresolved' | 'timeout' | 'error' | 'aborted';
+  failure?: CallFailure;
 };
 export type DelegationRecord = { source: 'delegation'; id: string; createdAt: number; target: string | null; replied: boolean };
 /** Compact, named tuples keep either judgment's evidence small; a live grade without objectives was thinned to fit the archive row. */
@@ -75,6 +81,7 @@ export type GradeObjective = {
 export type GradeRecord = {
   source: 'grade'; id: string; final: boolean; revision: number; capturedAt: number; completedAt: number; inputCount: number; lastInputId: string | null;
   outcome: 'graded' | 'stale' | 'aborted' | 'evaluation_timeout' | 'evaluation_error'; durationMs?: number; objectives?: GradeObjective[];
+  failure?: CallFailure;
 };
 export type ProducerLogRecord = MapRecord | TurnRecord | TraitRecord | NoteRecord | ResearchRecord | DelegationRecord | GradeRecord;
 

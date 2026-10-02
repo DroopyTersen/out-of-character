@@ -3,15 +3,15 @@ import { type REPORT_PROVENANCE, type ReportResult } from '../../../ai/simulator
 import { idleReport, REPORT_MAX_STARTS, REPORT_DEADLINE_MS, type CoachingReport, type ReportFailure, type ReportState } from '../../../core/simulator/report';
 import { simulatorJson } from './api';
 
-type Attempt = { startedAt: number; endedAt: number; failure: ReportFailure | null; usage: ReportResult['usage'] };
-export type SettledReport<T> = { report: T | null; attempts: Attempt[] };
+export type ReportAttempt = { startedAt: number; endedAt: number; failure: ReportFailure | null; usage: ReportResult['usage'] };
+export type SettledReport<T> = { report: T | null; attempts: ReportAttempt[] };
 export type ReportArchive = typeof REPORT_PROVENANCE & { model: string } & SettledReport<CoachingReport>;
 
 /** One bounded review, plus one explicit retry. No live-session resources are retained. */
 export class SessionReport<T = CoachingReport> {
   state = idleReport<T>();
   private settled = Promise.resolve();
-  private attempts: Attempt[] = [];
+  private attempts: ReportAttempt[] = [];
 
   constructor(
     private readonly generate: (signal: AbortSignal, finish: (result: ReportResult<T>) => void) => ReadableStream<string>,

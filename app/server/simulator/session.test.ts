@@ -346,6 +346,7 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
 });
 
 test('interview End re-grades coverage over the whole interview and returns pending before one summary completes', async () => {
+  const summaryUsage = { inputTokens: 43, outputTokens: 17, reasoningTokens: 9, cachedTokens: 11 };
   let releaseSummary: ((text: string) => void) | undefined;
   const summarized: { speaker: string; text: string }[][] = [];
   const interviewJudged: { transcript: { speaker: string; text: string }[] }[] = [];
@@ -365,7 +366,7 @@ test('interview End re-grades coverage over the whole interview and returns pend
     },
     summarizeInterview: (input, done) => { summarized.push(input.transcript); return new ReadableStream({ start(controller) {
       controller.enqueue('{\"text\":');
-      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: null }); controller.close(); releaseSummary = undefined; };
+      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: summaryUsage }); controller.close(); releaseSummary = undefined; };
     } }); },
   } });
   f.socket.holdClose = true;
@@ -425,6 +426,10 @@ test('interview End re-grades coverage over the whole interview and returns pend
     const ready = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     expect(ready.interview.summary).toEqual({ status: 'ready', text: 'The participant credited Jen with resolving the access issue.' });
     expect(f.interviewRow()).toMatchObject({ summary_status: 'ready', summary_text: ready.interview.summary.text });
+    const summaryDiagnostic = JSON.parse(f.interviewRow()!.provenance_json).interviewSummary;
+    expect(summaryDiagnostic).toMatchObject({ model: 'gpt-6.1-sol', version: 'interview-summary-v1', attempts: [{ failure: null, usage: summaryUsage }] });
+    expect(summaryDiagnostic.attempts[0].endedAt).toBeGreaterThanOrEqual(summaryDiagnostic.attempts[0].startedAt);
+    expect(JSON.stringify(ready)).not.toContain('interviewSummary');
     expect(JSON.parse(f.interviewRow()!.transcript_json)).toEqual(ended.transcript);
     expect(f.row()).toBeNull();
   } finally {
@@ -447,6 +452,10 @@ test('a failed interview summary remains unavailable while the participant trans
   const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(snapshot.interview.summary).toEqual({ status: 'unavailable', text: null });
   expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'unavailable', summary_text: null });
+  expect(JSON.parse(f.interviewRow()!.provenance_json).interviewSummary.attempts).toEqual([
+    { startedAt: expect.any(Number), endedAt: expect.any(Number), failure: 'provider', usage: null },
+  ]);
+  expect(f.interviewRow()!.provenance_json).not.toContain('Provider contained');
   expect(JSON.parse(f.interviewRow()!.transcript_json)[0].text).toBe('We shipped the migration despite the handoff delay.');
   expect(JSON.stringify(snapshot)).not.toContain('Provider contained');
   expect(f.row()).toBeNull();

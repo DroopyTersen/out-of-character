@@ -24,6 +24,7 @@
   ],
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
   "previews": {
+    "observability": { "enabled": true, "head_sampling_rate": 1 },
     "vars": { "PAID_SERVICES_ENABLED": "true", "SIMULATOR_ENABLED": "true" },
     "durable_objects": { "bindings": [{ "name": "SIMULATOR_SESSIONS", "class_name": "SimulatorSession" }] },
     "d1_databases": [{ "binding": "SIMULATOR_ARCHIVE", "database_name": "out-of-character-interview-preview", "database_id": "124396fb-4ce9-43d4-92f2-64f2c70c5c26" }],

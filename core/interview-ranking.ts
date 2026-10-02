@@ -107,7 +107,8 @@ export function observeMap(state: RankingState, map: ConversationMap, startedAtM
     return thread && hold.key === threadKey(thread) && (hold.state === 'stalled' || hold.atMs > startedAtMs);
   }));
   const traits = Object.fromEntries(Object.entries(state.traits).filter(([id]) => open.has(id)));
-  const current = state.current != null && open.has(state.current) ? state.current : null;
+  const focused = state.current == null ? undefined : open.get(state.current);
+  const current = focused && state.reading?.keys[focused.id] === threadKey(focused) ? focused.id : null;
   return { ...state, holds, traits, current, turnsOnCurrent: current == null ? 0 : state.turnsOnCurrent, mapStartedAtMs: startedAtMs };
 }
 

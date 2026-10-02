@@ -5,9 +5,11 @@ import {
 import { evaluateTraits, evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from '../../../ai/interview/ranking.server';
 import { lookupInterviewBackground, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
 import type { FoundryConfig } from '../../../ai/foundry.server';
+import { callFailure } from '../../../ai/interview/diagnostics.server';
+import { DirectorOutputError } from '../../../ai/simulator/sol.server';
 import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import { emptyMap, type ConversationMap, type MapChanges } from '../../../core/interview-map';
-import { emptyListNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, mapNoteResearch, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
+import { emptyListNote, emptyMapNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, mapNoteResearch, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
@@ -34,8 +36,8 @@ const round = (value: number) => Math.round(value * 100) / 100;
 const roundAll = (values: Record<string, number>) => Object.fromEntries(Object.entries(values).map(([id, value]) => [id, round(value)]));
 const usageOf = (usage: { inputTokens?: number; outputTokens?: number } | undefined): DirectorUsage | undefined =>
   usage ? { inputTokens: usage.inputTokens ?? null, outputTokens: usage.outputTokens ?? null } : undefined;
-/** A turn is re-read when it gains a passage or its text grows. */
-const turnKey = (turn: TranscriptEntry[]) => turn.map(entry => `${entry.id}:${entry.text.length}`).join(',');
+/** A turn is re-read when its words change, including same-length transcript corrections. */
+const turnKey = (turn: TranscriptEntry[]) => JSON.stringify(turn.map(entry => [entry.id, entry.text]));
 const compactChanges = ({ added, changed, dropped }: MapChanges) => ({ added, changed, dropped });
 const RESEARCH_STATUS: Record<ResearchRecord['outcome'], string> = {
   pending: 'looking it up', found: 'found; see the event in the log', unresolved: 'found nothing reliable', invalid: 'rejected',
@@ -65,13 +67,13 @@ export class InterviewProducer {
   private behind = false;
   private turnBusy = false;
   private readTurnKey = '';
+  /** Transcript boundary last read; revisit it for growth, then drain later turns in order. */
+  private readThrough = 0;
   private traitsBusy = false;
   /** Thread wording whose trait read failed; not retried until Sol's next applied map, so a failing read can't loop. */
   private traitFailures = new Map<string, string>();
   private listKey: string | null = null;
   private listSent = false;
-  /** The threads the last sent list note named besides its lead. */
-  private listNearby: string[] = [];
   private mapKey: string | null = null;
   private lastMapNote: number | null = null;
   private samTurns = new Set<string>();
@@ -185,6 +187,8 @@ export class InterviewProducer {
       signal.throwIfAborted();
     } catch (error) {
       if (!live()) return;
+      record.failure = callFailure(error);
+      if (error instanceof DirectorOutputError) record.usage = error.usage;
       if (error instanceof MapOutputError) Object.assign(record, { outcome: 'invalid', defects: error.defects.slice(0, 10), model: error.model, usage: error.usage } satisfies Partial<MapRecord>);
       else record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
       record.completedAt = Date.now();
@@ -212,16 +216,23 @@ export class InterviewProducer {
 
   private readTurn(now: number) {
     if (this.turnBusy || this.counts.turns >= LIMITS.turns) return;
-    const settled = upToParticipant([...this.options.settled()]);
-    const turn = latestTurn(settled);
-    const key = turnKey(turn);
-    if (!turn.length || key === this.readTurnKey) return;
-    this.readTurnKey = key;
-    this.turnBusy = true;
-    this.counts.turns++;
-    const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId: this.mapRecord?.id ?? null, startedAt: now, outcome: 'pending' };
-    this.records.push(record);
-    this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { this.turnBusy = false; }));
+    const transcript = [...this.options.settled()];
+    for (let end = this.readThrough; end <= transcript.length; end++) {
+      const next = transcript[end];
+      if (next && (next.speaker !== 'client' || isBackchannel(next.text))) continue;
+      const settled = upToParticipant(transcript.slice(0, end));
+      const turn = latestTurn(settled);
+      const key = turnKey(turn);
+      if (!turn.length || key === this.readTurnKey) continue;
+      this.readThrough = end;
+      this.readTurnKey = key;
+      this.turnBusy = true;
+      this.counts.turns++;
+      const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId: this.mapRecord?.id ?? null, startedAt: now, outcome: 'pending' };
+      this.records.push(record);
+      this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { this.turnBusy = false; }));
+      return;
+    }
   }
 
   /** `turn` is the turn's first passage: a turn that grew keeps it, so its re-read replaces the earlier one. */
@@ -242,6 +253,7 @@ export class InterviewProducer {
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
       if (!this.alive) return;
+      record.failure = callFailure(error);
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
       if (this.alive) record.completedAt = Date.now();
@@ -272,6 +284,7 @@ export class InterviewProducer {
         this.pick(Date.now());
       } catch (error) {
         if (!this.alive) return;
+        record.failure = callFailure(error);
         record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
         for (const thread of threads) this.traitFailures.set(thread.id, threadKey(thread));
       } finally {
@@ -283,18 +296,17 @@ export class InterviewProducer {
     })());
   }
 
-  /** Re-picks after a turn reading, a new map or new traits; a list note goes out when its key changes or a thread it named as open has closed. */
+  /** Re-picks after a turn reading, a new map or new traits; changed note content supersedes the previous options. */
   private pick(now: number, turn?: TurnRecord): Pick {
     const pick = pickThreads(this.map, this.ranking, this.elapsed(now));
     const key = listNoteKey(this.map, pick);
-    const closed = this.listNearby.some(id => this.map.threads.find(thread => thread.id === id)?.status !== 'open');
-    if (key === this.listKey && !closed) return pick;
+    if (key === this.listKey) return pick;
     const headers = noteHeaders(this.options.channel);
     const list = listNote(this.map, pick, headers);
     const text = list ?? (this.listSent ? emptyListNote(headers) : null);
     if (!text) { this.listKey = key; return pick; }
     const note = this.note('list', text, now, turn);
-    if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; this.listNearby = list ? pick.nearby : []; }
+    if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; }
     return pick;
   }
 
@@ -304,7 +316,8 @@ export class InterviewProducer {
     if (!this.mapRecord || (this.lastMapNote != null && now - this.lastMapNote < LIMITS.mapNoteSpacing)) return;
     const key = mapNoteKey(this.map);
     if (key === this.mapKey) return;
-    const text = mapNote(this.map, noteHeaders(this.options.channel));
+    const headers = noteHeaders(this.options.channel);
+    const text = mapNote(this.map, headers) ?? (this.mapKey ? emptyMapNote(headers) : null);
     if (!text) { this.mapKey = key; return; }
     // The note carries the lookups its research facts cite; Sol's update was checked to cite only found lookups it had read.
     const cited = new Set(mapNoteResearch(this.map).map(entity => entity.passageId));
@@ -369,6 +382,7 @@ export class InterviewProducer {
       if (facts?.length) this.wake(`public research arrived about the ${kind} "${name}"`);
     } catch (error) {
       if (!this.alive) return;
+      record.failure = callFailure(error);
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
       // A transient failure may be requested again; it still used an attempt.
       this.researched.delete(key);

@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { evaluateInterview } from '../../../ai/interview/evaluate.server';
 import { settledPrefix } from '../../../ai/interview/map.server';
-import { summarizeInterview } from '../../../ai/interview/summary.server';
+import { summarizeInterview, SUMMARY_VERSION } from '../../../ai/interview/summary.server';
+import { callFailure } from '../../../ai/interview/diagnostics.server';
 import { INTERVIEW_SCENARIO_ID, mergeCoverage, type InterviewSummaryContent } from '../../../core/interview';
 import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
 import { getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
@@ -9,7 +10,7 @@ import { appendTranscript, reconcileObjectives, settledTranscript, TRANSCRIPT_LI
 import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, type SessionSnapshot, type SessionWarning } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { activitySchema, simulatorJson, startSchema } from './api';
-import { archiveProvenance, writeArchive, writeReport } from './archive.server';
+import { archiveProvenance, writeArchive, writeReport, type ArchiveProvenance } from './archive.server';
 import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices } from './contextual-director';
 import { InterviewProducer, producerServices } from './interview-producer';
@@ -59,6 +60,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private report: SessionReport<CoachingReport> | SessionReport<InterviewSummaryContent> | undefined;
   private finalArchive: Promise<void> | undefined;
   private reportArchive = Promise.resolve();
+  private summaryArchive: ArchiveProvenance['interviewSummary'];
 
   constructor(ctx: DurableObjectState, env: Env, paid: Partial<typeof services> = {}) {
     super(ctx, env);
@@ -138,6 +140,7 @@ export class SimulatorSession extends DurableObject<Env> {
       const snapshot = structuredClone(this.publicSnapshot());
       if (snapshot.interview) {
         this.report = new SessionReport<InterviewSummaryContent>((signal, finish) => this.paid.summarizeInterview({ transcript: snapshot.transcript, foundry: foundryConfig(this.env), signal }, finish), archive => {
+          this.summaryArchive = { model: foundryConfig(this.env).agentModel, version: SUMMARY_VERSION, attempts: archive.attempts };
           this.snapshot!.interview!.summary = archive.report ? { status: 'ready', text: archive.report.text } : { status: 'unavailable', text: null };
           this.reportArchive = this.reportArchive.then(async () => {
             if (this.finalArchive) await within(this.finalArchive, 15_000).catch(() => {});
@@ -393,6 +396,7 @@ export class SimulatorSession extends DurableObject<Env> {
       }
     } catch (error) {
       if (snapshot.interview) this.grades.push({ ...diagnostic, completedAt: Date.now(),
+        failure: callFailure(error),
         outcome: this.gradeAbort.signal.aborted && !final ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
       if (this.gradeAbort.signal.aborted && !final) return;
       if (!final) this.contextual?.observe(observation, { signals: [], failure: error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
@@ -526,7 +530,9 @@ export class SimulatorSession extends DurableObject<Env> {
       const producer = structuredClone([...(this.producer?.records ?? []), ...this.grades]);
       const director = this.producer?.summary() ?? this.contextual?.summary() ?? null;
       const capturedAt = Date.now();
+      const summaryArchive = structuredClone(this.summaryArchive);
       const provenance = await archiveProvenance(this.env, snapshot, director);
+      if (summaryArchive) provenance.interviewSummary = summaryArchive;
       if (snapshot.interview) await writeInterviewArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot: { ...snapshot, interview: snapshot.interview }, interventions: producer, provenance });
       else await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, provenance, interventions });
     } catch {

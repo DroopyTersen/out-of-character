@@ -5,7 +5,7 @@ import { SIMULATOR_VERSION, type SessionSnapshot } from '../../../core/simulator
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../core/interview-producer';
-import type { ReportArchive } from './report';
+import type { ReportArchive, ReportAttempt } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
   const result = await db.prepare('UPDATE simulator_attempts SET report_json = ? WHERE id = ?').bind(JSON.stringify(report), id).run();
@@ -23,6 +23,7 @@ export type ArchiveProvenance = {
   workerTag: string | null;
   /** The simulator's director, or the interview's producer. */
   contextualDirector: DirectorSummary | ProducerSummary | null;
+  interviewSummary?: { model: string; version: string; attempts: ReportAttempt[] };
 };
 
 export type ArchiveWrite = {

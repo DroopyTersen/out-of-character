@@ -16,13 +16,13 @@ const describe = (thread: MapThread) => `"${thread.label}": still unknown: ${thr
 
 const SHORT_ANSWER = /^(?:yes|yeah|yep|no|nope|sure|right|uh[- ]?huh)[.!]*$/i;
 
-/** A participant passage says something: more than a backchannel, or a yes, no or sure straight after Sam asks a question. */
+/** Short confirmations can answer a question or a declarative guess. Transcript punctuation cannot decide that. */
 export function said(transcript: TranscriptEntry[], index: number) {
   const entry = transcript[index]!;
   if (entry.speaker !== 'trainee') return false;
   if (!isBackchannel(entry.text)) return true;
   const before = transcript[index - 1];
-  return SHORT_ANSWER.test(entry.text.trim()) && before?.speaker === 'client' && before.text.trim().endsWith('?');
+  return SHORT_ANSWER.test(entry.text.trim()) && before?.speaker === 'client' && !isBackchannel(before.text);
 }
 
 /** The participant passages since Sam last said more than a backchannel, keeping those that say something: the turn being read. */

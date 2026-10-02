@@ -160,6 +160,15 @@ test('a re-read of a turn that grew replaces the holds its earlier reading set, 
   expect(Object.keys(observeTurn(grown, value, reading({ passageId: 'p7', focus: 't1' }), 'p7').holds).sort()).toEqual(['t1', 't3']);
 });
 
+test('rewriting the current gap removes its old focus before the next turn reading', () => {
+  const original = map();
+  const state = observeTurn(emptyRanking(), original, reading({ focus: 't1', natural: { t1: .9, t2: .2 } }), 'p4');
+  const rewritten = map({ threads: [{ ...original.threads[0]!, unknown: 'what replaced the integration after launch' }, ...original.threads.slice(1)] });
+  const next = observeMap(state, rewritten, at + 1000);
+  expect(next.current).toBeNull();
+  expect(pickThreads(rewritten, next, at + 1000).lead).toBe('t2');
+});
+
 test('with nothing eligible there is no pick and no list note, even on the current thread', () => {
   const value = map({ threads: [thread('t1', { status: 'off', reason: 'On leave.' })] });
   const pick = pickThreads(value, emptyRanking(), at);

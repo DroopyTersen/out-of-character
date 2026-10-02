@@ -2,6 +2,7 @@ import { fixtureFoundry } from '../../../ai/foundry-fixture';
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { MAP_PROMPT_VERSION, MapOutputError } from '../../../ai/interview/map.server';
 import { RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
+import { DirectorHttpError, DirectorOutputError } from '../../../ai/simulator/sol.server';
 import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from '../../../core/interview-map';
 import { emptyListNote, NOTE_HEADERS, noteHeaders } from '../../../core/interview-notes';
 import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
@@ -180,14 +181,14 @@ test.each(['invalid', 'error'] as const)('an %s Sol update leaves the map behind
     evaluateTurn: async input => reading(input, { novel: .9 }),
     generateMap: async () => {
       if (f.calls.map.length > 1) return mapped(mapWith([]));
-      throw outcome === 'invalid' ? new MapOutputError([{ kind: 'dangling', id: 't1', detail: 'anchor e9' }], {}, 'gpt-6.1-sol-2', { inputTokens: 3, outputTokens: 4 }) : new Error('upstream 500');
+      throw outcome === 'invalid' ? new MapOutputError([{ kind: 'dangling', id: 't1', detail: 'anchor e9' }], {}, 'gpt-6.1-sol-2', { inputTokens: 3, outputTokens: 4 }) : new DirectorHttpError(503, 'request-123');
     },
   });
   await f.step(0);
   await f.step(20_000);
   expect(f.of('map')[0]).toMatchObject(outcome === 'invalid'
     ? { outcome, completedAt: epoch + 20_000, defects: [{ kind: 'dangling', id: 't1', detail: 'anchor e9' }], model: 'gpt-6.1-sol-2', usage: { inputTokens: 3, outputTokens: 4 } }
-    : { outcome, completedAt: epoch + 20_000, model: 'gpt-6.1-sol' });
+    : { outcome, completedAt: epoch + 20_000, model: 'gpt-6.1-sol', failure: { name: 'DirectorHttpError', status: 503, requestId: 'request-123' } });
   await f.step(79_999);
   expect(f.calls.map).toHaveLength(1);
   await f.step(80_000);
@@ -195,6 +196,13 @@ test.each(['invalid', 'error'] as const)('an %s Sol update leaves the map behind
   expect(f.of('map')[1]!.outcome).toBe('applied');
   await f.step(140_000);
   expect(f.calls.map).toHaveLength(2);
+});
+
+test('an incomplete Sol response keeps the stop reason and charged usage in the archive', async () => {
+  const f = fixture({ generateMap: async () => { throw new DirectorOutputError('max_output_tokens', { inputTokens: 300, outputTokens: 1800, reasoningTokens: 1700 }); } });
+  await f.step(60_000);
+  expect(f.of('map')[0]).toMatchObject({ outcome: 'error', failure: { name: 'DirectorOutputError', detail: 'max_output_tokens' },
+    usage: { inputTokens: 300, outputTokens: 1800, reasoningTokens: 1700 } });
 });
 
 test('a failure after Sol’s map lands leaves the call applied, so the minute does not re-map', async () => {
@@ -321,6 +329,40 @@ test('a thread the list note named as open is closed or dropped, so the note is 
   expect(f.calls.map).toHaveLength(3);
   const lead = `${NOTE_HEADERS.list}\nWorth pulling next (Thread t1): still unknown: what happened with t1. Guess: a guess about t1.`;
   expect(f.notes('list')).toEqual([`${lead}\nAlso open: Thread t2 · Thread t3`, `${lead}\nAlso open: Thread t2`, lead]);
+});
+
+test('a declined nearby thread is removed from Sam’s note before Sol revises the map', async () => {
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2'), thread('t3')])),
+    evaluateTurn: async input => reading(input, input.transcript.at(-1)!.id === 'p2'
+      ? { novel: .9 }
+      : { focus: 't1', states: input.transcript.at(-1)!.text.includes('cannot speak') ? { t2: 'declined' } : {} }),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(25_000, 'I built that part myself.');
+  expect(f.notes('list').at(-1)).toContain('Nearby: Thread t2 · Thread t3');
+  await f.turn(26_000, 'I can discuss the build, but cannot speak to the launch.');
+  expect(f.calls.map).toHaveLength(1);
+  expect(f.notes('list').at(-1)).toContain('Keep pulling (Thread t1)');
+  expect(f.notes('list').at(-1)).toContain('Nearby: Thread t3');
+  expect(f.notes('list').at(-1)).not.toContain('Thread t2');
+});
+
+test('withdrawing every map fact supersedes the previous map note', async () => {
+  const f = fixture({
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+    generateMap: async () => mapped(f.calls.map.length === 1 ? mapWith([]) : emptyMap()),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  expect(f.notes('map').at(-1)).toContain('Built on OpenStreetMap and Mapbox.');
+  await f.turn(25_000, 'That was only a made-up example. Disregard those details.');
+  await f.step(40_000);
+  await f.step(80_000);
+  expect(f.notes('map')).toHaveLength(2);
+  expect(f.notes('map').at(-1)).toContain('withdrawn');
+  expect(f.notes('map').at(-1)).not.toContain('OpenStreetMap');
 });
 
 test('map notes wait 60 s between sends, carry a reworded fact, and a rejected one is resent after the spacing', async () => {
@@ -635,6 +677,42 @@ test('a turn Sam has started to answer is still read, and a yes to Sam’s quest
   await f.step(80_000);
   expect(f.calls.map).toHaveLength(2);
   expect(f.calls.map[1]!.tail.reasons).toEqual([MINUTE]);
+});
+
+test('a same-length transcript correction is re-read and retracts the earlier answer', async () => {
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
+    evaluateTurn: async input => reading(input, input.transcript.at(-1)!.id === 'p2' ? { novel: .9 }
+      : { focus: 't1', states: { t1: input.transcript.at(-1)!.text === 'We did ship it.' ? 'answered' : 'open' } }),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(25_000, 'We did ship it.');
+  expect(f.producer.rankingState.holds.t1?.state).toBe('answered');
+  f.grow('p4', 'We did skip it.');
+  await f.step(26_000);
+  expect(f.of('turn').at(-1)?.reading?.states.t1).toBe('open');
+  expect(f.producer.rankingState.holds.t1).toBeUndefined();
+});
+
+test('turns that settle while Jev is busy are each read in order', async () => {
+  const pending = deferred<Read>();
+  const f = fixture({ evaluateTurn: async input => input.transcript.at(-1)!.id === 'p4' ? pending.promise : reading(input) });
+  await f.step(0);
+  await f.turn(5000, 'I handled the build.');
+  await f.turn(5500, 'I cannot discuss personnel decisions.');
+  await f.turn(6000, 'The tests were finished on Tuesday.');
+  f.at(6500);
+  pending.resolve(reading(f.calls.turn[1]!));
+  await flush();
+  await f.step(7000);
+  await f.step(7500);
+  expect(f.calls.turn.map(input => input.transcript.at(-1)!.text)).toEqual([
+    'We integrated OpenStreetMap and Mapbox for the routing layer.',
+    'I handled the build.',
+    'I cannot discuss personnel decisions.',
+    'The tests were finished on Tuesday.',
+  ]);
 });
 
 test('a failed trait read is not retried until Sol’s next map, and a thread Sol rewrites during a read is read again', async () => {

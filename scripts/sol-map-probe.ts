@@ -1,7 +1,7 @@
 /**
  * Replays an exported interview through Sol's map call on a simulated clock and reports latency, cache use and defects.
  * Usage: bun --env-file=.dev.vars scripts/sol-map-probe.ts <row.json> --paid --output=<path outside the repo>
- *   [--cadence=60] [--floor=20] [--limit=40] [--no-cache]
+ *   [--cadence=60] [--floor=20] [--limit=40] [--no-cache] [--effort=low|medium] [--timeout=50]
  * Paid: one Sol call per simulated wake. A passage is visible once its audio end plus 1.2 s has passed. Sol wakes on the timer
  * (cadence after the previous start, given a new participant turn) and when archived research arrived; Jev's "substantially new"
  * wake is not simulated. Coverage comes from the archived grades. The report holds transcript-derived maps: keep it out of the repo.
@@ -9,22 +9,27 @@
  */
 import { randomUUID } from 'node:crypto';
 import { foundryConfig } from '../ai/foundry.server';
-import { appendMapLog, emptyMapLog, generateMap, MapOutputError, MAP_PROMPT_VERSION, renderMapTail, researchLogEvent, settledPrefix, type MapLogEvent, type MapTail } from '../ai/interview/map.server';
+import { appendMapLog, emptyMapLog, generateMap, MapOutputError, MAP_EFFORT, MAP_PROMPT_VERSION, renderMapTail, researchLogEvent, settledPrefix, type MapLogEvent, type MapTail } from '../ai/interview/map.server';
 import { DirectorOutputError } from '../ai/simulator/sol.server';
 import { emptyMap, renderMapForSol, type MapChanges, type MapDefect } from '../core/interview-map';
 import { isBackchannel, type CoverageLevel, type InterviewBackground } from '../core/interview';
+import { PRODUCER_LIMITS } from '../core/interview-producer';
 import type { DirectorUsage } from '../core/simulator/director';
 import type { TranscriptEntry } from '../core/simulator/types';
 
 const [path, ...flags] = Bun.argv.slice(2);
 const flag = (name: string) => flags.find(item => item.startsWith(`--${name}=`))?.slice(name.length + 3);
-if (!path || !flags.includes('--paid')) throw new Error('Usage: bun --env-file=.dev.vars scripts/sol-map-probe.ts <row.json> --paid --output=<path> [--cadence=60] [--floor=20] [--limit=40] [--no-cache]');
+if (!path || !flags.includes('--paid')) throw new Error('Usage: bun --env-file=.dev.vars scripts/sol-map-probe.ts <row.json> --paid --output=<path> [--cadence=60] [--floor=20] [--limit=40] [--no-cache] [--effort=low|medium] [--timeout=50]');
 const output = flag('output');
 if (!output) throw new Error('Pass --output=<path>; the report holds transcript-derived maps, so keep it outside the repo.');
 const cadence = Number(flag('cadence') ?? 60) * 1000;
 const floor = Number(flag('floor') ?? 20) * 1000;
 const limit = Number(flag('limit') ?? 40);
 const cache = !flags.includes('--no-cache');
+const effort = flag('effort') ?? MAP_EFFORT;
+if (effort !== 'low' && effort !== 'medium') throw new Error('--effort must be low or medium.');
+// Defaults to production's map timeout; a longer one shows how far past it a slower effort runs.
+const timeout = Number(flag('timeout') ?? PRODUCER_LIMITS.mapTimeout / 1000) * 1000;
 const foundry = foundryConfig(process.env);
 
 type Grade = { source: 'grade'; capturedAt: number; completedAt: number; lastInputId: string | null; objectives?: { id: string; shown: [CoverageLevel, string | null] }[] };
@@ -90,7 +95,7 @@ const participantIndexes = transcript.flatMap((entry, index) => entry.speaker ==
 const nextParticipantAt = (count: number) => { const index = participantIndexes[count]; return index == null ? null : visibleAt[index]!; };
 
 let at = nextParticipantAt(0);
-console.log(`Sol map probe · ${foundry.agentModel} · ${MAP_PROMPT_VERSION} · cadence ${cadence / 1000}s · floor ${floor / 1000}s · cache ${cache ? 'explicit' : 'off'} · ${transcript.length} passages`);
+console.log(`Sol map probe · ${foundry.agentModel} · ${MAP_PROMPT_VERSION} · effort ${effort} · timeout ${timeout / 1000}s · cadence ${cadence / 1000}s · floor ${floor / 1000}s · cache ${cache ? 'explicit' : 'off'} · ${transcript.length} passages`);
 console.log('call   at   why                      blocks  ms     input  cached  written   tail  output  reason  visible  result');
 while (at != null && rows.length < limit) {
   const settled = settledPrefix(transcript, entry => entry.endMs + SETTLE_MS <= at!);
@@ -113,7 +118,7 @@ while (at != null && rows.length < limit) {
   const base = { call: rows.length + 1, atMs: at, reasons, blocks: log.blocks.length, tail: renderMapTail(map, tail) };
   let result: Row;
   try {
-    const value = await generateMap({ foundry, signal: AbortSignal.timeout(30_000), attemptId, blocks: log.blocks, previous: map, passages: settled, lookups: events.filter(event => event.used && event.found).map(event => event.id), cache, tail }, request);
+    const value = await generateMap({ foundry, signal: AbortSignal.timeout(timeout), attemptId, blocks: log.blocks, previous: map, passages: settled, lookups: events.filter(event => event.used && event.found).map(event => event.id), cache, effort, tail }, request);
     map = value.map;
     maps.push({ call: base.call, map });
     result = { ...base, latencyMs: Math.round(performance.now() - started), outcome: 'ok', usage: value.usage, changes: { ...value.changes, kept: value.changes.kept.length }, update: lastUpdate, ...counts() };
@@ -169,7 +174,7 @@ const tails = rows.flatMap(item => { const tail = tailTokens(item.usage); return
 const summary = {
   calls: rows.length, ok: ok.length, defects: rows.filter(item => item.outcome === 'defects').length, incomplete: rows.filter(item => item.outcome === 'incomplete').length,
   failed: rows.filter(item => item.outcome === 'error' || item.outcome === 'timeout').length,
-  latencyMs: { p50: quantile(latencies, .5), p90: quantile(latencies, .9), max: Math.max(...latencies) },
+  latencyMs: { p50: quantile(latencies, .5), p90: quantile(latencies, .9), max: Math.max(...latencies), overTimeout: latencies.filter(value => value > PRODUCER_LIMITS.mapTimeout).length },
   outputTokens: { p50: quantile(outputs, .5), p90: quantile(outputs, .9) },
   visibleOutputTokens: { p50: quantile(visible, .5), p90: quantile(visible, .9) },
   tailTokens: { p50: quantile(tails, .5), p90: quantile(tails, .9) },
@@ -180,5 +185,5 @@ const summary = {
 };
 console.log('\nSummary', JSON.stringify(summary, null, 2));
 console.log(`\nFinal map\n${renderMapForSol(map)}`);
-await Bun.write(output, JSON.stringify({ collectedAt: new Date().toISOString(), model: foundry.agentModel, version: MAP_PROMPT_VERSION, attemptId, cadence, floor, cache, summary, rows, maps, blocks: log.blocks }, null, 2));
+await Bun.write(output, JSON.stringify({ collectedAt: new Date().toISOString(), model: foundry.agentModel, version: MAP_PROMPT_VERSION, effort, attemptId, cadence, floor, cache, summary, rows, maps, blocks: log.blocks }, null, 2));
 console.log(`\nReport: ${output}`);

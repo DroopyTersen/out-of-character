@@ -36,7 +36,7 @@ test('records over the row budget shed live grade objectives evenly, then Sol up
   });
   const map = (index: number): MapRecord => ({
     source: 'map', id: `map-${index}`, reasons: ['the participant spoke'], startedAt: index, completedAt: index, outcome: 'applied', inputCount: 1, lastInputId: 'p1', model: 'sol',
-    update: { keep: [], drop: [], participant: { vantage: 'They led the routing work.', preferences: [] }, entities: [], edges: [], threads: [] },
+    update: { vantage: 'They led the routing work.', preferences: [], entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
     changes: { added: [], changed: [], dropped: [] }, research: null,
   });
   const size = (items: ProducerLogRecord[]) => new TextEncoder().encode(JSON.stringify(items)).byteLength;

@@ -114,7 +114,7 @@ function hour(updateEntities: number): ProducerLogRecord[] {
   return [
     ...Array.from({ length: 90 }, (_, index): MapRecord => ({
       source: 'map', id: `map-${index + 1}`, reasons: ['the participant spoke', 'a minute passed'], startedAt: at, completedAt: at, outcome: 'applied', inputCount: 300, lastInputId: 'p300', model: 'sol', usage,
-      update: { keep: ids(30, 'e'), drop: [], participant: { vantage: text(600), preferences: ids(4, 'p').map(passageId => ({ text: text(200), passageId })) }, entities, edges: [], threads },
+      update: { vantage: text(600), preferences: ids(4, 'p').map(passageId => ({ text: text(200), passageId })), entities, edges: [], threads, revise: [], close: [], drop: [] },
       changes: { added: ids(3, 't'), changed: ids(3, 'e'), dropped: [] }, research: null,
     })),
     ...Array.from({ length: 300 }, (_, index): TurnRecord => ({

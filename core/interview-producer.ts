@@ -7,10 +7,10 @@ import type { DirectorUsage } from './simulator/director';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v14';
+export const PRODUCER_VERSION = 'interview-producer-v15';
 export const PRODUCER_LIMITS = {
-  /** Sol: one call in flight, gaps measured start to start. */
-  mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 30_000,
+  /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
+  mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
   /** Jev turn readings, including re-reads of a turn that grew, and trait reads of new or rewritten threads. */
   turns: 300, turnTimeout: 3000, traits: 120, traitTimeout: 3000,
   /** Every note Sam receives, list and map together; set from the pile-up probe. */

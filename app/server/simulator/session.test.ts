@@ -25,7 +25,7 @@ const solMap = (): ConversationMap => ({
   nextIds: { e: 2, r: 1, t: 2 },
 });
 const mapped = (map: ConversationMap, research: ResearchRequest | null = null) => ({
-  map, update: { keep: [], drop: [], participant: null, entities: [], edges: [], threads: [] },
+  map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
   changes: { added: [...map.entities, ...map.threads].map(item => item.id), changed: [], dropped: [], kept: [] }, research, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 },
 });
 const noteEvents = (sent: Record<string, unknown>[], kind?: keyof typeof NOTE_HEADERS) =>

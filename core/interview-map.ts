@@ -3,7 +3,7 @@ import type { Speaker } from './simulator/types';
 
 /**
  * Sol's conversation map: a loose graph of what the participant has said and the open gaps worth pulling on.
- * Sol is its only writer. Code rebuilds it from Sol's ID-accounted update and reads it to rank threads; it never edits it.
+ * Sol is its only writer. Code applies Sol's edits and reads the map to rank threads; it never edits it.
  */
 export const ENTITY_KINDS = ['person', 'org', 'product', 'feature', 'event', 'decision', 'fact', 'term'] as const;
 /** Only the participant establishes project facts, including by confirming something Sam said. Research is context. */
@@ -40,13 +40,20 @@ export type ConversationMap = {
   nextIds: Record<typeof MAP_ID_PREFIX[keyof typeof MAP_ID_PREFIX], number>;
 };
 
-/** Unchanged nodes by ID, changed and new nodes in full, dropped nodes by ID with a reason. `participant: null` means unchanged. */
+/**
+ * Edits to the previous map: anything not named stays as it was. New and changed nodes come in full; `revise` and `close`
+ * change one open thread's gap or status without restating it; dropped nodes come by ID with a reason. Null vantage or
+ * preferences mean unchanged.
+ */
 export type MapUpdate = {
-  keep: string[]; drop: { id: string; reason: string }[];
-  participant: MapParticipant | null; entities: MapEntity[]; edges: MapEdge[]; threads: MapThread[];
+  vantage: string | null; preferences: MapPreference[] | null;
+  entities: MapEntity[]; edges: MapEdge[]; threads: MapThread[];
+  revise: { id: string; unknown: string; guess: string }[];
+  close: { id: string; status: Exclude<ThreadStatus, 'open'>; reason: string }[];
+  drop: { id: string; reason: string }[];
 };
 export type MapDefect = {
-  kind: 'schema' | 'skipped' | 'duplicate' | 'unknown' | 'prefix' | 'reused' | 'dangling' | 'reason' | 'passage' | 'participant' | 'size';
+  kind: 'schema' | 'duplicate' | 'unknown' | 'prefix' | 'reused' | 'closed' | 'dangling' | 'reason' | 'passage' | 'participant' | 'size';
   id: string; detail?: string;
 };
 export type MapChanges = { added: string[]; changed: string[]; dropped: string[]; kept: string[] };
@@ -65,7 +72,7 @@ const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(
 const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 
 /**
- * Rebuilds the full map from Sol's update. Every previous ID must be accounted for exactly once; nothing disappears silently.
+ * Applies Sol's edits to the previous map. Each ID is edited at most once, and only a drop removes a node.
  * Rejects rather than repairs: the probe counts defects, and a rejected update leaves the previous map in place. The one
  * repair: a reason on an open thread is cleared, since nothing reads it and a reopened thread would otherwise carry it unseen.
  * `passages` is the transcript Sol saw, used to check that participant facts and preferences cite a participant passage;
@@ -77,9 +84,7 @@ export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, pass
   const before = new Set(mapIds(previous));
   const mentions = new Map<string, number>();
   const mention = (id: string) => mentions.set(id, (mentions.get(id) ?? 0) + 1);
-  update.keep.forEach(mention);
-  update.drop.forEach(item => mention(item.id));
-  if (update.participant) mention(PARTICIPANT_ID);
+  for (const item of [...update.revise, ...update.close, ...update.drop]) mention(item.id);
   const nextIds = { ...previous.nextIds };
   for (const key of ['entities', 'edges', 'threads'] as const) {
     const prefix = MAP_ID_PREFIX[key];
@@ -95,24 +100,33 @@ export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, pass
       else nextIds[prefix] = Math.max(nextIds[prefix], number + 1);
     }
   }
-  for (const id of before) if (!mentions.has(id)) defects.push({ kind: 'skipped', id });
   for (const [id, count] of mentions) if (count > 1) defects.push({ kind: 'duplicate', id });
-  for (const id of [...update.keep, ...update.drop.map(item => item.id)]) if (!before.has(id)) defects.push({ kind: 'unknown', id });
+  for (const { id } of [...update.revise, ...update.close, ...update.drop]) if (!before.has(id)) defects.push({ kind: 'unknown', id });
+  const previousThreads = new Map(previous.threads.map(item => [item.id, item]));
+  for (const { id } of [...update.revise, ...update.close]) if (before.has(id) && !previousThreads.has(id)) defects.push({ kind: 'prefix', id, detail: 'not a previous thread' });
+  // A closed thread comes back only written in full, so its label and anchors are reconsidered with it.
+  for (const { id } of update.revise) if ((previousThreads.get(id)?.status ?? 'open') !== 'open') defects.push({ kind: 'closed', id, detail: 'reopen it in full under threads' });
   if (update.drop.some(item => item.id === PARTICIPANT_ID)) defects.push({ kind: 'participant', id: PARTICIPANT_ID, detail: 'cannot be dropped' });
   for (const item of update.drop) if (!item.reason.trim()) defects.push({ kind: 'reason', id: item.id });
   if (defects.length) return { ok: false, defects };
 
   const dropped = new Set(update.drop.map(item => item.id));
+  const edits = [
+    ...update.revise.map(({ id, unknown, guess }) => ({ ...previousThreads.get(id)!, unknown, guess })),
+    ...update.close.map(({ id, status, reason }) => ({ ...previousThreads.get(id)!, status, reason })),
+  ];
+  const threads = [...update.threads, ...edits];
+  const participant = { vantage: update.vantage ?? previous.participant.vantage, preferences: update.preferences ?? previous.participant.preferences };
   const merge = <T extends { id: string }>(old: T[], next: T[]) => {
     const replaced = new Map(next.map(item => [item.id, item]));
     const kept = old.filter(item => !dropped.has(item.id)).map(item => replaced.get(item.id) ?? item);
     return [...kept, ...next.filter(item => !before.has(item.id))];
   };
   const map: ConversationMap = {
-    participant: update.participant ?? previous.participant,
+    participant,
     entities: merge(previous.entities, update.entities),
     edges: merge(previous.edges, update.edges),
-    threads: merge(previous.threads, update.threads),
+    threads: merge(previous.threads, threads),
     nextIds,
   };
 
@@ -142,20 +156,16 @@ export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, pass
     if (entity.source === 'participant' && speaker !== 'trainee') defects.push({ kind: 'passage', id: entity.id, detail: 'participant fact without a participant passage' });
     if (entity.source !== 'participant' && entity.passageId != null) defects.push({ kind: 'passage', id: entity.id, detail: `${entity.source} fact citing a passage` });
   }
-  for (const preference of update.participant?.preferences ?? []) {
+  for (const preference of update.preferences ?? []) {
     if (speakers.get(preference.passageId) !== 'trainee') defects.push({ kind: 'passage', id: PARTICIPANT_ID, detail: `preference citing ${preference.passageId}, not a participant passage` });
   }
   if (defects.length) return { ok: false, defects };
 
   const old = new Map([...previous.entities, ...previous.edges, ...previous.threads].map(item => [item.id, item] as const));
-  const upserts = [...update.entities, ...update.edges, ...update.threads];
-  const participantChanged = !!update.participant && !same(update.participant, previous.participant);
-  return { ok: true, map, changes: {
-    added: upserts.filter(item => !before.has(item.id)).map(item => item.id),
-    changed: [...(participantChanged ? [PARTICIPANT_ID] : []), ...upserts.filter(item => before.has(item.id) && !same(item, old.get(item.id))).map(item => item.id)],
-    dropped: [...dropped],
-    kept: [...update.keep, ...(update.participant && !participantChanged ? [PARTICIPANT_ID] : []), ...upserts.filter(item => before.has(item.id) && same(item, old.get(item.id))).map(item => item.id)],
-  } };
+  const upserts = [...update.entities, ...update.edges, ...threads];
+  const added = upserts.filter(item => !before.has(item.id)).map(item => item.id);
+  const changed = [...(same(participant, previous.participant) ? [] : [PARTICIPANT_ID]), ...upserts.filter(item => before.has(item.id) && !same(item, old.get(item.id))).map(item => item.id)];
+  return { ok: true, map, changes: { added, changed, dropped: [...dropped], kept: [...before].filter(id => !changed.includes(id) && !dropped.has(id)) } };
 }
 
 const quote = (text: string) => JSON.stringify(text);

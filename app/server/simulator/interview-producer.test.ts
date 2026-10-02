@@ -32,7 +32,7 @@ const thread = (id: string, over: Partial<MapThread> = {}): MapThread =>
 const mapWith = (threads: MapThread[], over: Partial<ConversationMap> = {}): ConversationMap =>
   ({ ...emptyMap(), entities: [routing], threads, nextIds: { e: 2, r: 1, t: threads.length + 1 }, ...over });
 const mapped = (map: ConversationMap, research: ResearchRequest | null = null): Mapped => ({
-  map, update: { keep: [], drop: [], participant: null, entities: [], edges: [], threads: [] },
+  map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
   changes: { added: [], changed: [], dropped: [], kept: [] }, research, model: 'gpt-6.1-sol', usage,
 });
 /** Jev read every open thread in its current wording; nothing is natural, answered or new unless a test says so. */
@@ -153,10 +153,10 @@ test('a Sol call past its timeout is abandoned, its late result is ignored, and 
   });
   await f.step(0);
   await f.step(20_000);
-  await f.step(49_999);
+  await f.step(69_999);
   expect(f.of('map')[0]!.outcome).toBe('pending');
-  await f.step(50_000);
-  expect(f.of('map')[0]).toMatchObject({ outcome: 'timeout', completedAt: epoch + 50_000 });
+  await f.step(70_000);
+  expect(f.of('map')[0]).toMatchObject({ outcome: 'timeout', completedAt: epoch + 70_000 });
   expect(f.calls.map[0]!.signal.aborted).toBe(true);
   expect(f.calls.map).toHaveLength(1);
 

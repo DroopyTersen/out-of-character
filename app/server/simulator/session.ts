@@ -13,7 +13,7 @@ import {
 } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { activitySchema, resumeSchema, simulatorJson, startSchema } from './api';
-import { archiveProvenance, writeArchive, writeReport, type ArchiveProvenance, type ConnectionLog } from './archive.server';
+import { archiveProvenance, writeArchive, writeReport, type ArchiveProvenance, type ConnectionLog, type GreetingLog } from './archive.server';
 import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices, type DirectorCheckpoint } from './contextual-director';
 import { InterviewProducer, producerServices, type ProducerCheckpoint } from './interview-producer';
@@ -29,6 +29,8 @@ type Lease = { capability: string; providerId?: string; unconfirmed?: string[]; 
 type Segment = {
   epoch: number; providerId: string; offsetMs: number; startedAt: number; endedAt: number | null;
   closeReason: string | null; finalization: SessionSnapshot['finalization']; usageSeconds: number | null;
+  /** Absent before the session went live, and on checkpoints saved before it was recorded. */
+  greeting?: GreetingLog;
 };
 type PauseRecord = { epoch: number; reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; endedAt: number | null };
 /** What a lost instance needs to finish the attempt. In-flight paid work is not kept. */
@@ -40,6 +42,11 @@ type Checkpoint = {
 const services = { createLive, attachLive, evaluateTrainee, evaluateClient, evaluateInterview, summarizeInterview, generateReport, ...directorServices, ...producerServices };
 const GRADE_INTERVAL_MS = 5000;
 const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
+// The provider has no command that guarantees speech, and it can accept the greeting and stay silent.
+const GREETING_RETRY_MS = 10_000;
+const GREETING_REPLACE_MS = 25_000;
+const UNRESPONSIVE = 'The voice service is not responding. You can end this attempt and try again.';
+const clientSpoke = (transcript: SessionSnapshot['transcript']) => transcript.some(entry => entry.speaker === 'client' && entry.text.trim());
 
 /**
  * Owns one attempt. The closure lease always survives a worker restart; once the conversation has gone live, a
@@ -83,6 +90,10 @@ export class SimulatorSession extends DurableObject<Env> {
   // Already bounded by MAX_LIVE_GRADES plus the final grade; retain probability-only changes too.
   private readonly grades: GradeRecord[] = [];
   private seenEvents = new Set<string>();
+  /** The current provider session's instruction to speak, kept to ask once more if it is met with silence. */
+  private greeting: { eventId: string; content: string } | undefined;
+  private lastSpeech = 0;
+  private replacedSilent = false;
   private readonly paid: typeof services;
   private report: SessionReport<CoachingReport> | SessionReport<InterviewSummaryContent> | undefined;
   private finalArchive: Promise<void> | undefined;
@@ -148,7 +159,7 @@ export class SimulatorSession extends DurableObject<Env> {
         this.snapshot.status = 'live';
         this.reachedLive = true;
         this.lastActivity = Date.now();
-        this.send({ type: 'session.instructions.append', event_id: 'opening', delegation_id: null, content: openingInstruction(getScenario(this.snapshot.scenarioId), getClient(this.snapshot.clientId)) });
+        this.greet('opening', openingInstruction(getScenario(this.snapshot.scenarioId), getClient(this.snapshot.clientId)));
       }
     }
     if (action === '/end') await this.end();
@@ -336,7 +347,11 @@ export class SimulatorSession extends DurableObject<Env> {
       const changed = next.find(entry => !snapshot.transcript.includes(entry));
       if (!changed) return;
       this.passageUpdatedAt.set(changed.id, Date.now());
-      this.lastActivity = Date.now();
+      this.lastActivity = this.lastSpeech = Date.now();
+      if (value.type !== 'session.input_transcript.delta' && segment.greeting && segment.greeting.repliedAt == null) {
+        segment.greeting.repliedAt = Date.now();
+        if (snapshot.message === UNRESPONSIVE) snapshot.message = null;
+      }
       snapshot.transcript = next;
       snapshot.revision++;
       this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null);
@@ -346,6 +361,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (snapshot.status === 'ending' || snapshot.status === 'paused') return;
     if ((event.type === 'session.thinking.appended' || event.type === 'session.instructions.appended') && typeof event.client_event_id === 'string') {
       if (event.type === 'session.instructions.appended') this.contextual?.providerEvent(event.client_event_id, true);
+      if (segment.greeting && this.greeting && [this.greeting.eventId, `${this.greeting.eventId}-again`].includes(event.client_event_id)) segment.greeting.acknowledgedAt ??= Date.now();
       this.producer?.providerEvent(event.client_event_id, true, {
         ...(typeof event.start_ms === 'number' && Number.isFinite(event.start_ms) ? { startMs: event.start_ms + segment.offsetMs } : {}),
         ...(typeof event.end_ms === 'number' && Number.isFinite(event.end_ms) ? { endMs: event.end_ms + segment.offsetMs } : {}),
@@ -376,6 +392,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!snapshot || snapshot.status !== 'live') return;
     const now = Date.now();
     if (this.checkLifetime()) return;
+    this.unanswered(now);
     if (!getScenario(snapshot.scenarioId).objectives.length) return;
     this.producer?.tick(now);
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
@@ -392,6 +409,31 @@ export class SimulatorSession extends DurableObject<Env> {
       this.lastDirected = now;
       this.directing = this.direct(transcript, snapshot.revision, now).finally(() => { this.directing = undefined; });
       this.ctx.waitUntil(this.directing);
+    }
+  }
+
+  /** Asks the actor to speak on the current provider session; the live tick watches for a reply. */
+  private greet(eventId: string, content: string) {
+    this.greeting = { eventId, content };
+    this.segment!.greeting = { sentAt: Date.now(), acknowledgedAt: null, retriedAt: null, repliedAt: null, abandonedAt: null };
+    this.send({ type: 'session.instructions.append', event_id: eventId, delegation_id: null, content });
+  }
+
+  /** A greeting met with silence is sent once more, then the provider session is replaced once per attempt. */
+  private unanswered(now: number) {
+    const greeting = this.segment?.greeting;
+    if (!greeting || !this.greeting || greeting.repliedAt != null || greeting.abandonedAt != null) return;
+    // Speech, or audio the browser is already hearing, is not silence.
+    const quiet = now - Math.max(greeting.sentAt, this.lastSpeech, this.lastAudio);
+    if (quiet >= GREETING_REPLACE_MS) {
+      greeting.abandonedAt = now;
+      if (this.replacedSilent) { this.snapshot!.message = UNRESPONSIVE; return; }
+      this.replacedSilent = true;
+      // The browser resumes a server pause on its own, which opens a fresh provider session.
+      this.ctx.waitUntil(this.pause('provider'));
+    } else if (quiet >= GREETING_RETRY_MS && greeting.retriedAt == null) {
+      greeting.retriedAt = now;
+      this.send({ type: 'session.instructions.append', event_id: `${this.greeting.eventId}-again`, delegation_id: null, content: this.greeting.content });
     }
   }
 
@@ -530,8 +572,9 @@ export class SimulatorSession extends DurableObject<Env> {
     this.connectingSince = now;
     const epoch = this.epoch;
     try {
+      // Until the actor has spoken there is no conversation to rebuild; the new session opens it instead.
       this.connecting = this.openLive({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, sdp: input.sdp }, offsetMs,
-        conversationSoFar(getScenario(snapshot.scenarioId), getClient(snapshot.clientId), snapshot.transcript));
+        clientSpoke(snapshot.transcript) ? conversationSoFar(getScenario(snapshot.scenarioId), getClient(snapshot.clientId), snapshot.transcript) : undefined);
       const created = await this.connecting;
       if (this.closing || snapshot.status !== 'connecting') return simulatorJson({ error: 'The attempt changed while reconnecting.', snapshot: this.publicSnapshot() }, 409);
       this.lastSeen = Date.now();
@@ -549,7 +592,7 @@ export class SimulatorSession extends DurableObject<Env> {
     }
   }
 
-  /** The resumed media is connected: restate the producer's notes, then let the actor pick the conversation back up. */
+  /** The resumed media is connected: restate the producer's notes, then let the actor pick the conversation back up, or open it if they never spoke. */
   private resumed() {
     const snapshot = this.snapshot!;
     const lease = this.lease!;
@@ -567,8 +610,9 @@ export class SimulatorSession extends DurableObject<Env> {
     this.lastActivity = this.lastAudio = now;
     this.contextual?.resume();
     this.producer?.resume(now);
-    this.send({ type: 'session.instructions.append', event_id: `resume-${this.epoch}`, delegation_id: null,
-      content: resumeInstruction(getScenario(snapshot.scenarioId), getClient(snapshot.clientId), snapshot.transcript, pausedMs) });
+    const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
+    if (clientSpoke(snapshot.transcript)) this.greet(`resume-${this.epoch}`, resumeInstruction(scenario, client, snapshot.transcript, pausedMs));
+    else this.greet(`opening-${this.epoch}`, openingInstruction(scenario, client));
   }
 
   /** Closes the current provider session, reattaching if its control socket is gone. */

@@ -142,14 +142,27 @@ test('failing polls show reconnecting, pause after their grace, and a late retur
   await advance(1100);
   expect(states(links)).toEqual(['reconnecting']);
   await advance(10_000);
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: false });
+  // The browser is online, so a silent server leaves Resume available.
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'unanswered' });
   await advance(60_000);
   server.offline = false;
   await advance(5000);
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: true });
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'answered' });
   expect(server.calls).not.toContain('resume');
   await connection.resume();
   expect(links.at(-1)!.state).toBe('stable');
+  expect(server.status).toBe('live');
+  await connection.end();
+});
+
+test('a server answering with errors leaves a paused attempt resumable', async () => {
+  const { connection, links } = await connected();
+  server.override = action => action === 'poll' ? { status: 503, body: { error: 'Unavailable.' } } : undefined;
+  await advance(12_000);
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'unanswered' });
+  expect(server.calls).not.toContain('resume');
+  await connection.resume();
+  expect(links.at(-1)).toEqual({ state: 'stable', reach: 'answered' });
   expect(server.status).toBe('live');
   await connection.end();
 });
@@ -160,7 +173,7 @@ test('the browser going offline pauses at once, and coming back online checks in
   server.offline = true;
   (globals.window as EventTarget).dispatchEvent(new Event('offline'));
   await flush();
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: false });
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'offline' });
   browser.onLine = true;
   server.offline = false;
   (globals.window as EventTarget).dispatchEvent(new Event('online'));
@@ -175,7 +188,7 @@ test('a refused resume returns to the pause with its reason and is not retried a
   server.status = 'paused';
   await advance(1100);
   expect(errors).toEqual(['This attempt has reconnected too many times. End it to keep what was captured.']);
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: true });
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'answered' });
   // The server already held the attempt; the browser does not report it again.
   expect(server.calls).not.toContain('pause');
   await advance(20_000);
@@ -218,12 +231,12 @@ test('a reloaded page rejoins its attempt paused and waits for the user to resum
   await advance(100);
   expect(server.calls).toEqual(['pause', 'poll']);
   expect(snapshots.at(-1)!.status).toBe('paused');
-  expect(links).toEqual([{ state: 'paused', reachable: true, reloaded: true }]);
+  expect(links).toEqual([{ state: 'paused', reach: 'answered', reloaded: true }]);
   // Audio needs a click on the new page, so the heartbeat never resumes on its own.
   await advance(20_000);
   expect(server.calls).not.toContain('resume');
   await connection.resume();
-  expect(links).toEqual([{ state: 'paused', reachable: true, reloaded: true }, { state: 'resuming', reachable: true }, { state: 'stable', reachable: true }]);
+  expect(links).toEqual([{ state: 'paused', reach: 'answered', reloaded: true }, { state: 'resuming', reach: 'answered' }, { state: 'stable', reach: 'answered' }]);
   expect(server.status).toBe('live');
   await connection.end();
 });

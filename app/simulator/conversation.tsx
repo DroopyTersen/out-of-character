@@ -23,6 +23,18 @@ export function ConnectionUnstable({ link }: { link: Link }) {
   return <p className="sim-notice sim-connection-unstable" role="status">Connection unstable — reconnecting…</p>;
 }
 
+/** The current time, refreshed every second while `running`, so countdowns move without new snapshots. */
+function useNow(running: boolean) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!running) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+  return now;
+}
+
 /** A started conversation whose connection was lost: the server holds its transcript until it is resumed, ended, or the hold expires. */
 export function ConnectionPaused({ snapshot, link, noun, endLabel, onResume, onEnd }: {
   snapshot: SessionSnapshot | null; link: Link; noun: 'interview' | 'practice'; endLabel: string; onResume: () => void; onEnd: () => void;
@@ -30,17 +42,20 @@ export function ConnectionPaused({ snapshot, link, noun, endLabel, onResume, onE
   const pause = snapshot?.pause;
   const resuming = link.state === 'resuming' || snapshot?.status === 'connecting';
   const exhausted = !!pause && pause.resumes >= pause.maxResumes;
-  const remaining = pause ? Math.max(0, Math.ceil((pause.resumeBy - Date.now()) / 1000)) : null;
+  const now = useNow(!!pause);
+  const remaining = pause ? Math.max(0, Math.ceil((pause.resumeBy - now) / 1000)) : null;
+  const saved = `Your ${noun} is saved${remaining != null ? ` for ${formatTime(remaining)}` : ''}.`;
   const detail = resuming ? 'Reconnecting your voice connection…'
     : exhausted ? `This ${noun} has reconnected too many times. End it to keep what was captured.`
-      : !link.reachable ? `Waiting for your internet connection. Your ${noun} is saved${remaining != null ? ` for ${formatTime(remaining)}` : ''}.`
+      : link.reach === 'offline' ? `Waiting for your internet connection. ${saved}`
+        : link.reach === 'unanswered' ? `The server isn’t answering yet; still trying. ${saved}`
         : remaining != null ? `Everything so far is saved. Resume within ${formatTime(remaining)} to pick up where you left off.`
           : 'Everything so far is saved. Resume to pick up where you left off.';
   return <div className="sim-connection-paused" role="status" aria-busy={resuming}>
     <WifiOff size={22} aria-hidden="true" />
     <div><strong>{link.reloaded ? `Your ${noun} is paused.` : pause?.reason === 'restart' ? `The server restarted — ${noun} paused.` : `Connection lost — ${noun} paused.`}</strong><p>{detail}</p></div>
     <div className="sim-connection-actions">
-      <button className="sim-resume" onClick={onResume} disabled={resuming || exhausted || !link.reachable}><RotateCcw size={17} aria-hidden="true" />{resuming ? 'Resuming…' : `Resume ${noun}`}</button>
+      <button className="sim-resume" onClick={onResume} disabled={resuming || exhausted || link.reach === 'offline'}><RotateCcw size={17} aria-hidden="true" />{resuming ? 'Resuming…' : `Resume ${noun}`}</button>
       <button className="quiet-button" onClick={onEnd}>{endLabel}</button>
     </div>
   </div>;

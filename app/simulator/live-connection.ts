@@ -4,11 +4,12 @@ import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
 /** Browser media health once a conversation has started: unstable media reconnects in place; lost media pauses until resumed. */
 export type LinkState = 'stable' | 'reconnecting' | 'paused' | 'resuming';
 /**
- * `reachable` reports whether the paused attempt's server answered its latest heartbeat; `reloaded` marks a pause
- * this page inherited from before a reload.
+ * `reach` reports whether the paused attempt's server answered its latest check, has not answered yet (a restart,
+ * an error, or a slow reply), or this browser is offline. `reloaded` marks a pause this page inherited from before a reload.
  */
-export type Link = { state: LinkState; reachable: boolean; reloaded?: boolean };
-export const stableLink: Link = { state: 'stable', reachable: true };
+export type Reach = 'answered' | 'unanswered' | 'offline';
+export type Link = { state: LinkState; reach: Reach; reloaded?: boolean };
+export const stableLink: Link = { state: 'stable', reach: 'answered' };
 
 /** What a reloaded page needs to rejoin its attempt. */
 export type Attempt = { id: string; capability: string };
@@ -21,6 +22,9 @@ type Callbacks = {
 class SessionRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
+/** No reply arrived: the network failed, or the server took too long. */
+class SessionUnanswered extends Error {}
+const offline = (reach: Reach): Reach => navigator.onLine ? reach : 'offline';
 const lostStatuses = [401, 403, 404, 410];
 const isLost = (error: unknown) => error instanceof SessionRequestError && lostStatuses.includes(error.status);
 const terminal = (snapshot: SessionSnapshot) => snapshot.status === 'ended' || snapshot.status === 'interrupted';
@@ -85,6 +89,10 @@ export class LiveConnection {
       method: 'POST', headers: { Authorization: `Bearer ${this.capability}`, 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}), keepalive,
       signal: keepalive ? AbortSignal.timeout(timeout) : AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
+    }).catch((error: unknown) => {
+      if (error instanceof TypeError) throw new SessionUnanswered(navigator.onLine ? 'The server could not be reached.' : 'This browser is offline.');
+      if (error instanceof DOMException && error.name === 'TimeoutError') throw new SessionUnanswered('The server took too long to answer.');
+      throw error;
     });
     const result = await response.json().catch(() => null) as { error?: string } | null;
     if (!response.ok || !result) throw new SessionRequestError(result?.error || 'The simulator connection is unavailable.', response.status);
@@ -291,7 +299,7 @@ export class LiveConnection {
     this.teardown();
     this.pausedAt = Date.now();
     this.autoResumed = false;
-    this.setLink({ state: 'paused', reachable: navigator.onLine });
+    this.setLink({ state: 'paused', reach: offline('answered') });
     this.reported = report ? this.request('pause').then(() => {}, () => {}) : Promise.resolve();
     await this.reported;
     this.heartbeat(0);
@@ -305,7 +313,7 @@ export class LiveConnection {
       try {
         const snapshot = await this.request('poll') as SessionSnapshot;
         if (this.ending || this.link.state !== 'paused') return;
-        this.setLink({ state: 'paused', reachable: true });
+        this.setLink({ state: 'paused', reach: 'answered' });
         this.callbacks.snapshot(snapshot);
         if (terminal(snapshot)) { this.settle(); return; }
         const budget = !snapshot.pause || snapshot.pause.resumes < snapshot.pause.maxResumes;
@@ -317,7 +325,8 @@ export class LiveConnection {
       } catch (error) {
         if (this.ending || this.link.state !== 'paused') return;
         if (isLost(error)) { this.lost('This attempt is no longer available.'); return; }
-        this.setLink({ state: 'paused', reachable: false });
+        // A restarting or overloaded server is still worth resuming; only an offline browser cannot.
+        this.setLink({ state: 'paused', reach: offline('unanswered') });
         this.heartbeat();
       }
     }, delay);
@@ -329,7 +338,7 @@ export class LiveConnection {
     clearTimeout(this.heartbeatTimer);
     if (automatic) this.autoResumed = true;
     await this.reported;
-    this.setLink({ state: 'resuming', reachable: true });
+    this.setLink({ state: 'resuming', reach: 'answered' });
     let accepted = false;
     try {
       const connected = await this.connect(async sdp => {
@@ -344,7 +353,7 @@ export class LiveConnection {
     } catch (error) {
       if (this.ending) return;
       this.teardown();
-      this.setLink({ state: 'paused', reachable: !(error instanceof TypeError) && navigator.onLine });
+      this.setLink({ state: 'paused', reach: offline(error instanceof SessionUnanswered ? 'unanswered' : 'answered') });
       if (isLost(error)) { this.lost('This attempt is no longer available.'); return; }
       if (error instanceof SessionRequestError && error.status === 409) this.autoResumed = true;
       this.callbacks.error(this.describe(error, 'The voice connection could not be re-established. Try again.'));
@@ -360,14 +369,14 @@ export class LiveConnection {
 
   private setLink(next: Link) {
     const link = this.reloaded && next.state === 'paused' ? { ...next, reloaded: true } : next;
-    if (link.state === this.link.state && link.reachable === this.link.reachable && link.reloaded === this.link.reloaded) return;
+    if (link.state === this.link.state && link.reach === this.link.reach && link.reloaded === this.link.reloaded) return;
     this.link = link;
     if (!this.disposed) this.callbacks.link(link);
   }
 
   private updateLink() {
     if (this.link.state === 'paused' || this.link.state === 'resuming') return;
-    this.setLink(this.mediaUnstable || this.pollFailingSince != null ? { state: 'reconnecting', reachable: true } : stableLink);
+    this.setLink(this.mediaUnstable || this.pollFailingSince != null ? { state: 'reconnecting', reach: 'answered' } : stableLink);
   }
 
   keepActive = () => { this.activeSincePoll = true; };

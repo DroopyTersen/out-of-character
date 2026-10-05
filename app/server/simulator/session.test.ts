@@ -66,7 +66,8 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     const [list, map] = noteEvents(f.socket.sent);
     expect(list).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('PRIVATE UNKNOWN') });
     expect(map).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('PRIVATE VANTAGE') });
-    expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening']);
+    // Notes are never instructions; Sam's silence after the participant spoke drew the greeting once more.
+    expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening', 'opening-again']);
     f.socket.emit({ type: 'session.thinking.appended', client_event_id: list!.event_id, start_ms: 2000, end_ms: 2400 });
     setSystemTime(epoch + 22_000);
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
@@ -178,14 +179,15 @@ test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam 
   await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
   setSystemTime(epoch + 20_500);
-  await f.session.fetch(request('poll'));
+  // Audio the browser hears keeps the silent-greeting watchdog from replacing the voice session.
+  await f.session.fetch(activityPoll(false, true));
   await waitFor(() => lookups.length === 1);
   expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, foundry: expect.objectContaining({ resourceName: 'fixture-foundry', agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' }), signal: expect.any(AbortSignal) }]);
   await Promise.all(f.pending);
   expect(noteEvents(f.socket.sent)).toHaveLength(0);
   // The found lookup wakes Sol, which reads it in its log before Sam hears of it.
   setSystemTime(epoch + 41_000);
-  await f.session.fetch(request('poll'));
+  await f.session.fetch(activityPoll(false, true));
   await waitFor(() => noteEvents(f.socket.sent).length === 1);
   await Promise.all(f.pending);
   expect(maps[1]!.blocks.join('\n')).toContain('PUBLIC BACKGROUND FACT');

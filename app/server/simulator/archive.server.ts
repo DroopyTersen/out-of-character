@@ -27,8 +27,10 @@ export type ArchiveProvenance = {
   /** One entry per provider session, and each connection pause. Provider ids are never archived. */
   connection?: ConnectionLog;
 };
+/** When a provider session was asked to speak, acknowledged it, was asked again, first spoke, and was given up on. */
+export type GreetingLog = { sentAt: number; acknowledgedAt: number | null; retriedAt: number | null; repliedAt: number | null; abandonedAt: number | null };
 export type ConnectionLog = {
-  segments: { epoch: number; startedAt: number; endedAt: number | null; closeReason: string | null; finalization: 'pending' | 'confirmed' | 'unconfirmed'; usageSeconds: number | null }[];
+  segments: { epoch: number; startedAt: number; endedAt: number | null; closeReason: string | null; finalization: 'pending' | 'confirmed' | 'unconfirmed'; usageSeconds: number | null; greeting?: GreetingLog }[];
   pauses: { reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; durationMs: number }[];
 };
 

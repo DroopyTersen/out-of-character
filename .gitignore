@@ -13,3 +13,6 @@ build/
 test-results/
 # Real evidence: transcripts, downloads, real-interview examples. Never committed.
 .data/
+
+# Local Git worktrees are independent checkouts.
+.claude/worktrees/

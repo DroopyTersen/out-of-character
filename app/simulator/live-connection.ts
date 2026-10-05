@@ -311,7 +311,7 @@ export class LiveConnection {
     if (this.ending || this.link.state !== 'paused') return;
     this.heartbeatTimer = setTimeout(async () => {
       try {
-        const snapshot = await this.request('poll') as SessionSnapshot;
+        const snapshot = await this.request('poll', { active: false, audio: false }) as SessionSnapshot;
         if (this.ending || this.link.state !== 'paused') return;
         this.setLink({ state: 'paused', reach: 'answered' });
         this.callbacks.snapshot(snapshot);

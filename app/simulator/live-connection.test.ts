@@ -40,6 +40,7 @@ const server = {
   resumes: 0,
   offline: false,
   calls: [] as string[],
+  polls: [] as unknown[],
   override: undefined as ((action: string) => Reply | undefined) | undefined,
   snapshot(): SessionSnapshot {
     const paused = this.status === 'paused' || (this.status === 'connecting' && this.resumes > 0);
@@ -68,9 +69,10 @@ const globals = globalThis as Record<string, unknown>;
 beforeAll(() => {
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: async () => new FakeStream() }, get onLine() { return browser.onLine; } } });
   Object.assign(globals, { window: new EventTarget(), document: Object.assign(new EventTarget(), { visibilityState: 'visible' }), RTCPeerConnection: FakePeer, AudioContext: FakeAudioContext, Audio: FakeAudio, MediaStream: FakeStream });
-  globalThis.fetch = (async (url: string) => {
+  globalThis.fetch = (async (url: string, options: RequestInit) => {
     const action = url === '/api/simulator/sessions' ? 'start' : url.split('/').at(-1)!;
     server.calls.push(action);
+    if (action === 'poll') server.polls.push(options.body ? JSON.parse(String(options.body)) : null);
     if (server.offline) throw new TypeError('Failed to fetch');
     const { status = 200, body } = server.reply(action);
     return { ok: status < 400, status, json: async () => body };
@@ -83,7 +85,7 @@ afterAll(() => {
 });
 beforeEach(() => {
   jest.useFakeTimers();
-  Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], override: undefined });
+  Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], override: undefined });
   browser.onLine = true;
   FakePeer.all = [];
 });
@@ -230,6 +232,7 @@ test('a reloaded page rejoins its attempt paused and waits for the user to resum
   await connection.reattach();
   await advance(100);
   expect(server.calls).toEqual(['pause', 'poll']);
+  expect(server.polls).toEqual([{ active: false, audio: false }]);
   expect(snapshots.at(-1)!.status).toBe('paused');
   expect(links).toEqual([{ state: 'paused', reach: 'answered', reloaded: true }]);
   // Audio needs a click on the new page, so the heartbeat never resumes on its own.

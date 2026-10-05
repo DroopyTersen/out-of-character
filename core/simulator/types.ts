@@ -10,7 +10,10 @@ export const SESSION_PAUSE_HOLD_MS = 15 * 60_000;
 export const SESSION_MAX_RESUMES = 5;
 /** Paused time extends the live limit, up to this much wall clock. */
 export const SESSION_WALL_LIMIT_MS = 90 * 60_000;
-export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity'; endsAt: number };
+/** client: the client walked out; the session ends once its closing line finishes. */
+export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity' | 'client'; endsAt: number };
+/** The evaluator's walk-out judgment that ended (or is ending) the meeting. */
+export type ClientEnding = { passageId: string; probability: number; detectedAt: number };
 
 export const skills = [
   { id: 'credibility', label: 'Credibility', description: 'Gives this client a reason to trust the advice.' },
@@ -107,6 +110,7 @@ export type SessionSnapshot = {
   usageSeconds: number | null;
   /** Present while paused, and while a resume is connecting. */
   pause?: SessionPause | null;
+  clientEnded?: ClientEnding | null;
 };
 
 export function emptySkills(): Record<SkillId, SkillReading> {

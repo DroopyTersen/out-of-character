@@ -109,6 +109,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   let creations = 0;
   const judged: unknown[] = [];
   const interviewJudged: unknown[] = [];
+  const endings: string[] = [];
   const pending: Promise<unknown>[] = [];
   const ctx = {
     storage: { get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }, delete: async (key: string) => values.delete(key), setAlarm: async (value: number) => { alarm = value; }, deleteAll: async () => values.clear() },
@@ -130,6 +131,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     attachLive: async (id: string) => socketFor(id) as unknown as WebSocket,
     evaluateTrainee: async input => { judged.push(input.transcript); return { revision: input.revision, skills: emptySkills(), objectives: [], concern: null, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }; },
     evaluateClient: async input => ({ revision: input.revision, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, signals: [] }),
+    evaluateEnding: async input => { endings.push(input.transcript.at(-1)!.id); return { model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, probability: .02, passageId: null }; },
     generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
     recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
     generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
@@ -143,7 +145,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   });
   await ready;
   return {
-    session, values, judged, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
+    session, values, judged, interviewJudged, endings, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
     /** The newest created provider session's socket, or the newest attached one before any creation. */
     get socket() { return latest ? sockets.get(latest)! : [...sockets.values()].at(-1)!; },
     socketFor: (id: string) => sockets.get(id),

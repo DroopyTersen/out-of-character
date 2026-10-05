@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
 import { skills } from '../../core/simulator/types';
-import { evaluateTraineeQuestionGroups, readClientAnswers, readTraineeAnswers, shouldPartitionTraineeQuestions } from './evaluate.server';
+import { ENDING_WINDOW, evaluateTraineeQuestionGroups, readClientAnswers, readEndingAnswers, readTraineeAnswers, shouldPartitionTraineeQuestions } from './evaluate.server';
 import { actorBrief, getClient, getScenario, scenarios } from './scenarios.server';
-import { simulatorFixtures } from './fixtures';
+import { dialogue, simulatorFixtures } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
-import { traineeQuestions } from './rubric';
+import { endingQuestions, traineeQuestions } from './rubric';
+import { CONDUCT_CONCERN, MATERIAL_CONCERN } from '../../core/simulator/director';
 
 // Only the paid, probabilistic provider result is substituted. Parsing, public
 // evidence projection, and outcome eligibility use the production implementation.
@@ -38,6 +39,7 @@ test('director signals reflect the objective selection and discard invalid optio
 
 test('actor signals use typed conditions without requiring an authored cue', () => {
   const raw: Parameters<typeof readClientAnswers>[0] = {
+    'director:conduct': { type: 'boolean', probability: .9 },
     'director:knowledge': { type: 'boolean', probability: .72 },
     'director:authority': { type: 'boolean', probability: .13 },
     'director:role': { type: 'boolean', probability: .95 },
@@ -46,10 +48,41 @@ test('actor signals use typed conditions without requiring an authored cue', () 
     'director:assertiveness': { type: 'boolean', probability: .32 },
     'director:style': { type: 'boolean', probability: .61 },
   };
-  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'role', probability: .95 }, { condition: 'interests', probability: .81 }, { condition: 'temperament', probability: .84 }, { condition: 'assertiveness', probability: .32 }, { condition: 'style', probability: .61 }]);
+  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'conduct', probability: .9 }, { condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'role', probability: .95 }, { condition: 'interests', probability: .81 }, { condition: 'temperament', probability: .84 }, { condition: 'assertiveness', probability: .32 }, { condition: 'style', probability: .61 }]);
   raw['director:role'] = { type: 'boolean', probability: -1 };
-  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'interests', probability: .81 }, { condition: 'temperament', probability: .84 }, { condition: 'assertiveness', probability: .32 }, { condition: 'style', probability: .61 }]);
+  expect(readClientAnswers(raw).signals).toEqual([{ condition: 'conduct', probability: .9 }, { condition: 'knowledge', probability: .72 }, { condition: 'authority', probability: .13 }, { condition: 'interests', probability: .81 }, { condition: 'temperament', probability: .84 }, { condition: 'assertiveness', probability: .32 }, { condition: 'style', probability: .61 }]);
 });
+test('personal contempt is its own optional concern and outranks a material mistake', () => {
+  const raw = answers();
+  const read = () => readTraineeAnswers(getScenario('sharepoint'), simulatorFixtures[0]!.transcript, raw);
+  expect(read().concern).toBeNull();
+  expect(read().signals.some(signal => signal.condition === 'disrespect')).toBe(false);
+  raw.mistake = { type: 'boolean', probability: .9 };
+  expect(read().concern).toBe(MATERIAL_CONCERN);
+  raw.disrespect = { type: 'boolean', probability: .84 };
+  expect(read().concern).toBe(MATERIAL_CONCERN);
+  expect(read().signals[0]).toEqual({ condition: 'disrespect', probability: .84 });
+  raw.disrespect = { type: 'boolean', probability: .93 };
+  expect(read().concern).toBe(CONDUCT_CONCERN);
+  // An invalid conduct judgment is dropped without discarding the grade.
+  raw.disrespect = { type: 'boolean', probability: 2 };
+  expect(read().concern).toBe(MATERIAL_CONCERN);
+  expect(read().skills.listening.value).toBe(3.1);
+});
+
+test('a walk-out must cite a recent client passage', () => {
+  const transcript = dialogue(Array.from({ length: 20 }, (_, index) => [index % 2 ? 'trainee' : 'client', `Line ${index + 1}`] as const));
+  const recentClient = transcript.slice(-ENDING_WINDOW).filter(entry => entry.speaker === 'client').map(entry => entry.id);
+  expect(Object.keys(endingQuestions(transcript.slice(-ENDING_WINDOW).filter(entry => entry.speaker === 'client'))['ended:evidence']!.criteria!)).toEqual(['none', ...recentClient]);
+  expect(readEndingAnswers({ ended: { type: 'boolean', probability: .95 }, 'ended:evidence': { type: 'choice', choice: 'p19' } }, transcript)).toEqual({ probability: .95, passageId: 'p19' });
+  // Uncited, the meeting stays open whatever the probability.
+  expect(readEndingAnswers({ ended: { type: 'boolean', probability: .95 }, 'ended:evidence': { type: 'choice', choice: 'none' } }, transcript)).toEqual({ probability: .49, passageId: null });
+  // An old passage, or a trainee passage, is not an ending.
+  expect(() => readEndingAnswers({ ended: { type: 'boolean', probability: .95 }, 'ended:evidence': { type: 'choice', choice: 'p1' } }, transcript)).toThrow();
+  expect(() => readEndingAnswers({ ended: { type: 'boolean', probability: .95 }, 'ended:evidence': { type: 'choice', choice: 'p20' } }, transcript)).toThrow();
+  expect(() => readEndingAnswers({ ended: { type: 'boolean', probability: NaN }, 'ended:evidence': { type: 'choice', choice: 'p19' } }, transcript)).toThrow();
+});
+
 test('feedback quotes source text and leaves unavailable or uncited evidence unscored', () => {
   const transcript = simulatorFixtures[0]!.transcript;
   const raw = answers();

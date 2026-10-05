@@ -66,6 +66,41 @@ test('generated concern replaces immediate concern under the same identity and c
   expect(f.director.coaching()).toBeNull();
 });
 
+test('personal contempt shows its own concern, even after a material concern was shown, and restores without repeating', async () => {
+  const f = fixture();
+  await f.observe([{ condition: 'mistake', probability: .99 }]);
+  const material = f.director.coaching()!;
+  f.snapshot.transcript.push(passage('p3', 'trainee', 'Maybe draw it in crayon for you.'));
+  setSystemTime(epoch + 21_000);
+  const work = f.observe([{ condition: 'disrespect', probability: .95 }, { condition: 'mistake', probability: .99 }]);
+  const conduct = f.director.coaching()!;
+  expect(conduct.kind).toBe('concern');
+  expect(conduct.id).not.toBe(material.id);
+  expect(conduct.text).toContain('personal');
+  await work;
+  expect(f.calls.at(-1)!.reason.condition).toBe('disrespect');
+  // A restart keeps an open concern's identity, so it is not shown again; a later episode never reuses an earlier identity.
+  const restored = fixture();
+  restored.director.restore(structuredClone(f.director.checkpoint()));
+  restored.director.resume();
+  await restored.observe([{ condition: 'disrespect', probability: .95 }]);
+  expect(restored.director.records.filter(record => record.source === 'detector')).toHaveLength(2);
+  await restored.observe([{ condition: 'disrespect', probability: .1 }, { condition: 'mistake', probability: .1 }]);
+  await restored.observe([{ condition: 'mistake', probability: .95 }]);
+  expect(restored.director.coaching()!.id).not.toBe(material.id);
+  expect(restored.director.coaching()!.id).not.toBe(conduct.id);
+  expect(restored.director.records.filter(record => record.source === 'detector')).toHaveLength(3);
+});
+
+test('a concern fading below its alert threshold no longer discards other coaching', async () => {
+  const f = fixture();
+  await f.observe([{ condition: 'mistake', probability: .9 }]);
+  expect(f.director.coaching()!.kind).toBe('concern');
+  setSystemTime(epoch + 21_000);
+  await f.observe([{ condition: 'mistake', probability: .77 }, { condition: 'objective:decision', selected: true }]);
+  expect(f.director.coaching()).toEqual(expect.objectContaining({ kind: 'hint', objectiveId: 'decision' }));
+});
+
 test('a published objective hint survives choice noise and clears when the objective is achieved', async () => {
   const f = fixture();
   await f.observe();

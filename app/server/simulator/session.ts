@@ -4,7 +4,7 @@ import { settledPrefix } from '../../../ai/interview/map.server';
 import { summarizeInterview, SUMMARY_VERSION } from '../../../ai/interview/summary.server';
 import { callFailure } from '../../../ai/interview/diagnostics.server';
 import { INTERVIEW_SCENARIO_ID, mergeCoverage, type InterviewSummaryContent } from '../../../core/interview';
-import { evaluateClient, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
+import { evaluateClient, evaluateEnding, evaluateTrainee } from '../../../ai/simulator/evaluate.server';
 import { conversationSoFar, getClient, getScenario, openingInstruction, resumeInstruction } from '../../../ai/simulator/scenarios.server';
 import { appendTranscript, reconcileObjectives, settledTranscript, TRANSCRIPT_LIMIT, transcriptCharacters, type PauseSpan } from '../../../core/simulator/state';
 import {
@@ -13,7 +13,7 @@ import {
 } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
 import { activitySchema, resumeSchema, simulatorJson, startSchema } from './api';
-import { archiveProvenance, writeArchive, writeReport, type ArchiveProvenance, type ConnectionLog, type GreetingLog } from './archive.server';
+import { archiveProvenance, writeArchive, writeReport, type ArchiveProvenance, type ConnectionLog, type EndingCheck, type GreetingLog } from './archive.server';
 import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices, type DirectorCheckpoint } from './contextual-director';
 import { InterviewProducer, producerServices, type ProducerCheckpoint } from './interview-producer';
@@ -37,9 +37,9 @@ type PauseRecord = { epoch: number; reason: SessionPause['reason']; pausedAt: nu
 type Checkpoint = {
   savedAt: number; snapshot: SessionSnapshot; reachedLive: boolean; epoch: number; resumes: number;
   segments: Segment[]; pauses: PauseRecord[]; grades: GradeRecord[]; gradeCalls: number;
-  producer?: ProducerCheckpoint; contextual?: DirectorCheckpoint;
+  producer?: ProducerCheckpoint; contextual?: DirectorCheckpoint; endingChecks?: EndingCheck[];
 };
-const services = { createLive, attachLive, evaluateTrainee, evaluateClient, evaluateInterview, summarizeInterview, generateReport, ...directorServices, ...producerServices };
+const services = { createLive, attachLive, evaluateTrainee, evaluateClient, evaluateEnding, evaluateInterview, summarizeInterview, generateReport, ...directorServices, ...producerServices };
 const GRADE_INTERVAL_MS = 5000;
 const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
 // The provider has no command that guarantees speech, and it can accept the greeting and stay silent.
@@ -47,6 +47,12 @@ const GREETING_RETRY_MS = 10_000;
 const GREETING_REPLACE_MS = 25_000;
 const UNRESPONSIVE = 'The voice service is not responding. You can end this attempt and try again.';
 const clientSpoke = (transcript: SessionSnapshot['transcript']) => transcript.some(entry => entry.speaker === 'client' && entry.text.trim());
+// A walk-out is judged once per new or changed latest client passage, never from a trainee's words.
+const ENDED_THRESHOLD = .85;
+const ENDING_TIMEOUT_MS = 4000;
+const MAX_ENDING_CHECKS = 240;
+const latestClient = (transcript: SessionSnapshot['transcript']) => transcript.findLast(entry => entry.speaker === 'client' && entry.text.trim());
+const passageKey = (entry: SessionSnapshot['transcript'][number] | undefined) => entry ? `${entry.id}\n${entry.text}` : '';
 
 /**
  * Owns one attempt. The closure lease always survives a worker restart; once the conversation has gone live, a
@@ -77,6 +83,11 @@ export class SimulatorSession extends DurableObject<Env> {
   private gradeAbort = new AbortController();
   private directing: Promise<void> | undefined;
   private lastDirected = 0;
+  private ending: Promise<void> | undefined;
+  /** The latest client passage judged for a walk-out, and the one already retried after a failure. */
+  private endingKey = '';
+  private endingRetried = '';
+  private readonly endingChecks: EndingCheck[] = [];
   private reachedLive = false;
   private epoch = 0;
   private segments: Segment[] = [];
@@ -391,10 +402,15 @@ export class SimulatorSession extends DurableObject<Env> {
     const snapshot = this.snapshot;
     if (!snapshot || snapshot.status !== 'live') return;
     const now = Date.now();
-    if (this.checkLifetime()) return;
+    if (this.checkLifetime()) {
+      // Closing words that reopen the meeting withdraw a walk-out while it drains.
+      if (snapshot.warning?.kind === 'client' && snapshot.status === 'live') this.watchEnding(now);
+      return;
+    }
     this.unanswered(now);
     if (!getScenario(snapshot.scenarioId).objectives.length) return;
     this.producer?.tick(now);
+    this.watchEnding(now);
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
     if ((snapshot.evaluation || snapshot.interview?.evaluation) && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
@@ -477,11 +493,13 @@ export class SimulatorSession extends DurableObject<Env> {
     const deadline = this.lease!.deadline;
     if (now >= deadline - 60_000 && (!warning || deadline < warning.endsAt)) warning = { kind: 'limit', endsAt: deadline };
     if (this.capacityDeadline && (!warning || this.capacityDeadline < warning.endsAt)) warning = { kind: 'capacity', endsAt: this.capacityDeadline };
+    const ended = snapshot.clientEnded;
+    if (ended && (!warning || ended.detectedAt < warning.endsAt)) warning = { kind: 'client', endsAt: ended.detectedAt };
     snapshot.warning = warning;
     if (!warning || now < warning.endsAt) return false;
     // Automatic limits give current speech a short bounded drain. Explicit End remains immediate.
     if (warning.kind !== 'idle' && now < warning.endsAt + 20_000 && (now < warning.endsAt + 3000 || now - this.lastAudio < 2500)) return true;
-    snapshot.message = warning.kind === 'idle' ? 'Practice ended after five minutes without activity.' : warning.kind === 'limit' ? 'Practice reached the 60-minute safety limit.' : 'Practice reached its transcript capacity.';
+    snapshot.message = warning.kind === 'idle' ? 'Practice ended after five minutes without activity.' : warning.kind === 'client' ? this.walkedOut() : warning.kind === 'limit' ? 'Practice reached the 60-minute safety limit.' : 'Practice reached its transcript capacity.';
     this.ctx.waitUntil(this.end());
     return true;
   }
@@ -506,6 +524,11 @@ export class SimulatorSession extends DurableObject<Env> {
     if (this.pausing) return this.pausing;
     const snapshot = this.snapshot;
     if (!snapshot || this.closing || !this.reachedLive || (snapshot.status !== 'live' && snapshot.status !== 'connecting')) return Promise.resolve();
+    // The client already ended the meeting; a lost connection only cuts its closing line short.
+    if (snapshot.clientEnded) {
+      snapshot.message = this.walkedOut();
+      return this.end();
+    }
     const now = Date.now();
     if (this.capacityDeadline || now >= this.limitAt(now) - 60_000) {
       snapshot.message = `${snapshot.interview ? 'The interview' : 'Practice'} ended because the connection was lost close to its limit.`;
@@ -540,6 +563,7 @@ export class SimulatorSession extends DurableObject<Env> {
     await this.closeSegment();
     await this.grading;
     await this.directing;
+    await this.ending;
     this.gradeAbort = new AbortController();
     if (this.closing) return;
     await this.saveCheckpoint();
@@ -730,6 +754,51 @@ export class SimulatorSession extends DurableObject<Env> {
     }
   }
 
+  private walkedOut() {
+    return `${getClient(this.snapshot!.clientId).name} ended the meeting.`;
+  }
+
+  /** A client who walks out ends the attempt. Each new or changed latest client passage is judged once, retried once after a failure. */
+  private watchEnding(now: number) {
+    const snapshot = this.snapshot!;
+    if (snapshot.interview || !getScenario(snapshot.scenarioId).objectives.length || this.ending || this.endingChecks.length >= MAX_ENDING_CHECKS) return;
+    const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
+    const key = passageKey(latestClient(transcript));
+    if (!key || key === this.endingKey || !transcript.some(entry => entry.speaker === 'trainee')) return;
+    this.endingKey = key;
+    this.ending = this.judgeEnding(transcript, key, now).finally(() => { this.ending = undefined; });
+    this.ctx.waitUntil(this.ending);
+  }
+
+  private async judgeEnding(transcript: SessionSnapshot['transcript'], key: string, startedAt: number) {
+    const snapshot = this.snapshot!;
+    const abort = this.gradeAbort.signal;
+    const check: EndingCheck = { passageId: latestClient(transcript)!.id, startedAt, durationMs: null, probability: null, evidenceId: null, outcome: 'pending' };
+    this.endingChecks.push(check);
+    try {
+      const result = await this.paid.evaluateEnding({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, transcript, revision: snapshot.revision,
+        apiKey: this.env.TYPESAFE_API_KEY!, signal: AbortSignal.any([abort, AbortSignal.timeout(ENDING_TIMEOUT_MS)]) });
+      Object.assign(check, { durationMs: result.durationMs, probability: result.probability, evidenceId: result.passageId, usage: result.usage });
+      // Newer client words, even unsettled ones, are judged next; an ending must rest on the client's latest words.
+      if (snapshot.status !== 'live' || this.closing || passageKey(latestClient(snapshot.transcript)) !== key) { check.outcome = 'stale'; return; }
+      if (result.passageId && result.probability >= ENDED_THRESHOLD) {
+        check.outcome = 'ended';
+        snapshot.clientEnded ??= { passageId: result.passageId, probability: result.probability, detectedAt: Date.now() };
+      } else if (snapshot.clientEnded && result.probability < .5) {
+        check.outcome = 'reopened';
+        snapshot.clientEnded = null;
+      } else check.outcome = 'open';
+    } catch (error) {
+      check.durationMs = Date.now() - startedAt;
+      check.outcome = abort.aborted ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error';
+      // An aborted check is repeated after a resume; a failed one is retried once.
+      if (this.endingKey === key && (abort.aborted || this.endingRetried !== key)) {
+        if (!abort.aborted) this.endingRetried = key;
+        this.endingKey = '';
+      }
+    }
+  }
+
   private end(interrupted = false): Promise<void> {
     return this.closing ??= this.finish(interrupted);
   }
@@ -745,6 +814,7 @@ export class SimulatorSession extends DurableObject<Env> {
     try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
     await this.pausing;
     await this.grading;
+    await this.ending;
     this.gradeAbort = new AbortController();
     const current = this.segment;
     // Only the newest session can still be open; any other unclosed one is left to the closure lease.
@@ -787,6 +857,7 @@ export class SimulatorSession extends DurableObject<Env> {
       segments: this.segments, pauses: this.pauses, grades: this.grades, gradeCalls: this.gradeCalls,
       ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
       ...(this.contextual ? { contextual: this.contextual.checkpoint() } : {}),
+      ...(this.endingChecks.length ? { endingChecks: this.endingChecks } : {}),
     });
     try { await this.ctx.storage.put('checkpoint', checkpoint); }
     catch { console.warn('Simulator checkpoint save failed', { id: snapshot.id }); }
@@ -802,6 +873,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.pauses = checkpoint.pauses;
     this.grades.push(...checkpoint.grades);
     this.gradeCalls = checkpoint.gradeCalls;
+    this.endingChecks.push(...checkpoint.endingChecks ?? []);
     // A provider session opened after the checkpoint is known only to the lease; it is the newest.
     const known = new Set(this.segments.map(segment => segment.providerId));
     for (const id of [...(this.lease!.unconfirmed ?? []), ...(this.lease!.providerId ? [this.lease!.providerId] : [])]) if (!known.has(id)) {
@@ -816,7 +888,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (checkpoint.contextual) this.contextual?.restore(checkpoint.contextual);
     const snapshot = this.snapshot;
     const now = Date.now();
-    if (!['live', 'connecting', 'paused'].includes(snapshot.status) || now >= this.limitAt(now) - 60_000) {
+    if (!['live', 'connecting', 'paused'].includes(snapshot.status) || snapshot.clientEnded || now >= this.limitAt(now) - 60_000) {
       this.recovered = true;
       return;
     }
@@ -837,6 +909,12 @@ export class SimulatorSession extends DurableObject<Env> {
     if (!this.recovered) return;
     this.recovered = false;
     const snapshot = this.snapshot!;
+    // A walk-out already decided the outcome; the restart only cut its closing line short.
+    if (snapshot.clientEnded) {
+      snapshot.message = this.walkedOut();
+      this.ctx.waitUntil(this.end());
+      return;
+    }
     snapshot.message = `${snapshot.interview ? 'The interview' : 'Practice'} was interrupted by a service restart. Your transcript was saved.`;
     this.ctx.waitUntil(this.end(true));
   }
@@ -939,6 +1017,7 @@ export class SimulatorSession extends DurableObject<Env> {
       const summaryArchive = structuredClone(this.summaryArchive);
       const provenance: ArchiveProvenance = { ...await archiveProvenance(this.env, snapshot, director), connection };
       if (summaryArchive) provenance.interviewSummary = summaryArchive;
+      if (!snapshot.interview) provenance.ending = { checks: structuredClone(this.endingChecks), clientEnded: snapshot.clientEnded ?? null };
       if (snapshot.interview) await writeInterviewArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot: { ...snapshot, interview: snapshot.interview }, interventions: producer, provenance });
       else await writeArchive(this.env.SIMULATOR_ARCHIVE, { state, capturedAt, snapshot, provenance, interventions });
     } catch {

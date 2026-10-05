@@ -8,7 +8,12 @@ export type SimulatorFixture = {
   clientId: string;
   description: string;
   transcript: TranscriptEntry[];
-  expected: { achieved: string[]; absent: string[]; lowSkills?: SkillId[]; highSkills?: SkillId[]; unavailable?: SkillId[]; director?: 'none' | (typeof ACTOR_CONDITIONS)[number]; concern?: boolean; objectiveEvidence?: Record<string, string> };
+  expected: { achieved: string[]; absent: string[]; lowSkills?: SkillId[]; highSkills?: SkillId[]; unavailable?: SkillId[]; director?: 'none' | (typeof ACTOR_CONDITIONS)[number]; concern?: boolean; objectiveEvidence?: Record<string, string>;
+    /** The trainee's remarks became personal contempt. */
+    conductConcern?: boolean;
+    /** The client's latest words end the meeting; judged only when set. */
+    ended?: boolean;
+  };
 };
 
 export function dialogue(lines: readonly (readonly [TranscriptEntry['speaker'], string])[]): TranscriptEntry[] {

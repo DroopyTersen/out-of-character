@@ -107,8 +107,8 @@ export function SimulatorConversation({ scenario, client, snapshot, phase, muted
     {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
     {phase === 'paused' ? <ConnectionPaused snapshot={snapshot} link={link} noun="practice" endLabel="End & see debrief" onResume={onResume} onEnd={onEnd} /> : phase === 'live' && <ConnectionUnstable link={link} />}
     {warning && <div className="sim-session-warning" role="status">
-      <div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong>
-        <p>{warning.kind === 'idle' ? `Practice will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before practice ends automatically.`}</p></div>
+      <div><strong>{warning.kind === 'idle' ? 'Still there?' : warning.kind === 'client' ? `${client.name} ended the meeting` : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong>
+        <p>{warning.kind === 'idle' ? `Practice will end in ${formatTime(remaining)} without activity.` : warning.kind === 'client' ? 'Your mic is off while they finish. Your debrief is next.' : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before practice ends automatically.`}</p></div>
       {warning.kind === 'idle' && <button onClick={onContinue}>Continue practice</button>}
     </div>}
     <div className="sim-live-grid" data-open-ended={openEnded || undefined}>

@@ -1,7 +1,7 @@
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
 import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
-import { SIMULATOR_VERSION, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
+import { SIMULATOR_VERSION, type ClientEnding, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../core/interview-producer';
@@ -26,6 +26,13 @@ export type ArchiveProvenance = {
   interviewSummary?: { model: string; version: string; attempts: ReportAttempt[] };
   /** One entry per provider session, and each connection pause. Provider ids are never archived. */
   connection?: ConnectionLog;
+  /** Each walk-out judgment, and the walk-out that ended the attempt. Simulator scenarios only. */
+  ending?: { checks: EndingCheck[]; clientEnded: ClientEnding | null };
+};
+export type EndingCheck = {
+  passageId: string; startedAt: number; durationMs: number | null; probability: number | null; evidenceId: string | null;
+  outcome: 'pending' | 'ended' | 'open' | 'reopened' | 'stale' | 'aborted' | 'evaluation_timeout' | 'evaluation_error';
+  usage?: { inputTokens: number | undefined; outputTokens: number | undefined; totalTokens: number | undefined };
 };
 /** When a provider session was asked to speak, acknowledged it, was asked again, first spoke, and was given up on. */
 export type GreetingLog = { sentAt: number; acknowledgedAt: number | null; retriedAt: number | null; repliedAt: number | null; abandonedAt: number | null };

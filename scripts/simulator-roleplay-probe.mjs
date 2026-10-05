@@ -3,7 +3,7 @@ import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
-import { evaluateClient, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
+import { evaluateClient, evaluateEnding, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
 import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
 import { settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
@@ -19,6 +19,7 @@ import { InterviewProducer, producerServices } from '../app/server/simulator/int
 // real GPT-Live supplies the client. In interviews the producer sends Sam its thread and map
 // notes; elsewhere Jev gates contextual private directions from Sol.
 // A plan chooses each trainee line from what the client has actually said so far.
+// In scored scenarios each client reply is judged for a walk-out; one ends the rehearsal.
 // Usage: bun --env-file=.dev.vars scripts/simulator-roleplay-probe.mjs --paid
 //   [--scenario=<id>] [--client=<id>] [--plan=<name>] [--label=before] [--max-seconds=180]
 // Interview rehearsals may run up to 480 seconds. The participant answers only
@@ -42,6 +43,14 @@ const DEAD_AIR_MS = 8000;
 const offer = 'Our SharePoint and adoption team could run a short assessment of document ownership and how people would actually use the process. It would be separately scoped and paid, outside the current release. Would something like that be useful?';
 const negotiated = /free|no charge|no cost|no extra|include|existing project|current project|throw in|budget|cost|price|how much|cheaper|discount|spend/i;
 const sharepointClose = ({ answer, used }) => used.has('offer') ? negotiated.test(answer) ? 'counter' : 'close' : 'offer';
+// Personal contempt, for the client's boundary and walk-out. Synthetic lines only.
+const opener = 'Before we get into solutions, what is going wrong with your documents?';
+const insults = {
+  careless: 'Honestly, it sounds like your team cannot keep its own files straight. Are you even the right person for this conversation?',
+  clueless: 'Look, you clearly do not understand your own process, so I will just tell you what you need.',
+  waste: 'This is a waste of my time. You obviously have no idea how to run a department.',
+  demand: 'Whatever. Are you going to sign off on this or not?',
+};
 const plans = {
   'project-closeout': {
     patience: {
@@ -207,6 +216,34 @@ const plans = {
     },
   },
   sharepoint: {
+    // Repeated contempt: the client objects once, then ends the meeting.
+    contempt: {
+      turns: 5,
+      lines: { opener, ...insults },
+      choose: ({ turn }) => ['opener', 'careless', 'clueless', 'waste', 'demand'][turn],
+    },
+    // One insult, then a specific apology and changed behavior: the meeting continues without a reward.
+    repair: {
+      turns: 5,
+      lines: {
+        opener, careless: insults.careless,
+        apology: 'You are right, and I am sorry. That remark about your team was out of line. Let me start again: who owns the approval workflow today?',
+        owner: 'What happens when people cannot find the approved version?',
+        next: 'Then ownership needs attention before another site. Could you ask the workflow owner about a short scoping call and let me know by Friday? I would rather hear a concern than assume agreement.',
+      },
+      choose: ({ turn }) => ['opener', 'careless', 'apology', 'owner', 'next'][turn],
+    },
+    // Firm disagreement without contempt: no boundary, no walk-out.
+    pushback: {
+      turns: 4,
+      lines: {
+        opener,
+        push: 'I want to push back on that. A new site will not fix this on its own. Without a named owner for approvals, we would rebuild the same problem.',
+        hold: 'I understand the frustration, but I will not promise that a migration alone fixes it. Who owns approvals today?',
+        next: 'Then ownership needs attention before another site. Could you ask the workflow owner about a short scoping call and let me know by Friday?',
+      },
+      choose: ({ turn }) => ['opener', 'push', 'hold', 'next'][turn],
+    },
     // A personable client should not confuse pleasant conversation with consent.
     surface: {
       turns: 3,
@@ -470,10 +507,13 @@ const session = liveConfiguration(scenarioId, clientId);
 const briefDigest = createHash('sha256').update(session.instructions).digest('hex').slice(0, 12);
 const opening = openingInstruction(scenario, getClient(clientId));
 const openingDigest = createHash('sha256').update(opening).digest('hex').slice(0, 12);
+const judgesEnding = !isInterview && scenario.objectives.length > 0;
 const report = { rubricVersion: isInterview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, checkedAt: new Date().toISOString(), model: foundry.liveModel, scenarioId, clientId, voice: session.audio.output.voice, plan: approach, label: label ?? null, briefDigest, openingDigest, synthetic: true, openingAcknowledged: false, openingLatencyMs: null, finalized: false, usageSeconds: null, transcript: [], turns: [], directions: [], delegations: [], deadAir: [], providerErrors: [], errors: [] };
 report.notesEnabled = notesEnabled;
 report.timing = { transport: 'websocket', input: 'TTS with digital silence', lockstep: isInterview && notesEnabled && approach !== 'research', participantFloorMs: 2500, statementReleaseMs: DEAD_AIR_MS, questionRelease: 'Output transcript contains a question mark', purpose: 'Contract smoke; human pacing requires browser listening review.' };
 report.thoughtPauses = [];
+report.endings = [];
+report.clientEnded = null;
 report.maxInputLatenessMs = 0;
 session.model = foundry.liveModel;
 const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
@@ -533,8 +573,29 @@ function sendControlledCue() {
 // After an interview participant asks to finish, Sam's reply ends the rehearsal.
 const finished = () => isInterview && used.has('stop');
 const samSinceLastLine = () => report.transcript.filter(entry => entry.speaker === 'client').slice(outputStart).map(entry => entry.text).join(' ');
+/** As in the session: a walk-out must cite the client's latest words. */
+async function clientEnded(afterTurn) {
+  const started = Date.now();
+  try {
+    const ending = await evaluateEnding({ scenarioId, clientId, transcript: [...report.transcript], revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(4000) });
+    report.endings.push({ afterTurn, probability: ending.probability, passageId: ending.passageId, durationMs: ending.durationMs, usage: ending.usage });
+    return !!ending.passageId && ending.probability >= .85 ? ending : null;
+  } catch (error) {
+    report.endings.push({ afterTurn, failure: error.name, durationMs: Date.now() - started });
+    return null;
+  }
+}
 async function respond() {
   deciding = true;
+  if (turn && judgesEnding) {
+    const ending = await clientEnded(turn);
+    if (ending) {
+      report.clientEnded = { afterTurn: turn, passageId: ending.passageId, probability: ending.probability };
+      observations.push(observeClient(turn, [...report.transcript]));
+      close();
+      return;
+    }
+  }
   const spoken = report.transcript.filter(entry => entry.speaker === 'client');
   const answer = samSinceLastLine();
   const id = turn < plan.turns && !finished() ? plan.choose({ turn, answer, heard: spoken.map(entry => entry.text).join(' '), used }) : null;
@@ -679,5 +740,5 @@ finally {
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
   await chmod(`${output}/report.json`, 0o600);
 }
-console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), scriptedDeadAir: report.deadAir.length, statementGaps: report.turnGaps.filter(item => !item.questionMark).length, questionWaits: report.turnGaps.filter(item => item.questionMark).length, maxInputLatenessMs: report.maxInputLatenessMs, errors: report.errors }));
+console.log(JSON.stringify({ output, briefDigest, finalized: report.finalized, turns: report.turns.map(item => item.selected), usageSeconds: report.usageSeconds, clientEnded: report.clientEnded, concern: report.trainee?.concern ?? null, directions: report.directions.map(({ afterTurn, signals, unavailable }) => ({ afterTurn, signals, unavailable })), scriptedDeadAir: report.deadAir.length, statementGaps: report.turnGaps.filter(item => !item.questionMark).length, questionWaits: report.turnGaps.filter(item => item.questionMark).length, maxInputLatenessMs: report.maxInputLatenessMs, errors: report.errors }));
 if (!report.finalized || report.errors.length) process.exitCode = 1;

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { DirectorGate, selectDirectorSignal } from './director';
+import { ACTOR_CONDITIONS, DirectorGate, selectDirectorSignal } from './director';
 
 const complete = async () => {};
 
@@ -49,15 +49,34 @@ test('concerns clear below .50 and have new identity only after resolution', () 
   expect(gate.concern()?.id).not.toBe(first);
 });
 
-test('a latched concern blocks ordinary coaching throughout the hysteresis band', async () => {
+test('a concern owns the trainee slot only while it is above its alert threshold', async () => {
   const gate = new DirectorGate();
-  gate.observe('trainee', [{ condition: 'mistake', probability: .9 }]);
-  gate.observe('trainee', [{ condition: 'mistake', probability: .7 }, { condition: 'objective:need', selected: true }]);
-  expect(gate.review('trainee', 1000, 1, complete).decision).toBe('no_trigger');
-  expect(gate.usage.callsByAudience).toEqual({ trainee: 0, actor: 0 });
-  gate.observe('trainee', [{ condition: 'mistake', probability: .9 }, { condition: 'objective:need', selected: true }]);
-  await gate.review('trainee', 2000, 2, async issue => { expect(issue.signal.condition).toBe('mistake'); }).work;
-  expect(gate.usage.callsByAudience.trainee).toBe(1);
+  const reviewed: string[] = [];
+  const remember = async (issue: { signal: { condition: string } }) => { reviewed.push(issue.signal.condition); };
+  const need = { condition: 'objective:need', selected: true } as const;
+  gate.observe('trainee', [{ condition: 'mistake', probability: .88 }, need]);
+  await gate.review('trainee', 1000, 1, remember).work;
+  // A concern fading through the hysteresis band stays shown but no longer starves other coaching.
+  gate.observe('trainee', [{ condition: 'mistake', probability: .84 }, need]);
+  expect(gate.concern()?.signal.condition).toBe('mistake');
+  expect(gate.urgentConcerns()).toEqual([]);
+  await gate.review('trainee', 21_000, 2, remember).work;
+  gate.observe('trainee', [{ condition: 'mistake', probability: .77 }, need]);
+  expect(gate.review('trainee', 41_000, 3, remember).decision).toBe('waiting_for_progress');
+  gate.observe('trainee', [{ condition: 'mistake', probability: .6 }, need]);
+  expect(gate.concern()).toBeDefined();
+  expect(reviewed).toEqual(['mistake', 'objective:need']);
+});
+
+test('an eligible concern still suppresses ordinary coaching, and disrespect outranks a material mistake', async () => {
+  const gate = new DirectorGate();
+  gate.observe('trainee', [{ condition: 'mistake', probability: .9 }, { condition: 'disrespect', probability: .9 }, { condition: 'objective:need', selected: true }]);
+  expect(gate.concerns().map(issue => issue.signal.condition)).toEqual(['disrespect', 'mistake']);
+  await gate.review('trainee', 1000, 1, async issue => { expect(issue.signal.condition).toBe('disrespect'); }).work;
+  // The concern was reviewed; the eligible material mistake is next, still ahead of the objective.
+  await gate.review('trainee', 21_000, 2, async issue => { expect(issue.signal.condition).toBe('mistake'); }).work;
+  expect(gate.review('trainee', 41_000, 3, complete).decision).toBe('waiting_for_progress');
+  expect(gate.usage.callsByAudience.trainee).toBe(2);
 });
 
 test('invalid signals cannot trigger reviews and scores are not signals', () => {
@@ -68,7 +87,7 @@ test('invalid signals cannot trigger reviews and scores are not signals', () => 
 });
 
 test('actor concerns earn a second opinion at .60 without lowering trainee thresholds', async () => {
-  for (const condition of ['knowledge', 'authority', 'role', 'interests', 'temperament', 'assertiveness', 'style'] as const) {
+  for (const condition of ACTOR_CONDITIONS) {
     const gate = new DirectorGate();
     gate.observe('actor', [{ condition, probability: .59 }]);
     expect(gate.review('actor', 1000, 1, complete).decision).toBe('no_trigger');
@@ -77,7 +96,7 @@ test('actor concerns earn a second opinion at .60 without lowering trainee thres
     expect(gate.usage.callsByAudience.actor).toBe(1);
   }
   const gate = new DirectorGate();
-  gate.observe('trainee', [{ condition: 'mistake', probability: .84 }, { condition: 'stalled', probability: .79 }]);
+  gate.observe('trainee', [{ condition: 'disrespect', probability: .84 }, { condition: 'mistake', probability: .84 }, { condition: 'stalled', probability: .79 }]);
   expect(gate.review('trainee', 1000, 1, complete).decision).toBe('no_trigger');
 });
 

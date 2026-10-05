@@ -533,6 +533,7 @@ test('happy hour archives the client voice without live or final judging', async
   await new Promise(resolve => setTimeout(resolve, 750));
   expect(f.judged).toHaveLength(0);
   expect(directed).toBe(0);
+  expect(f.endings).toEqual([]);
   const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(live.status).toBe('live');
   expect(live.evaluation).toBeNull();
@@ -841,6 +842,162 @@ test('transcript capacity warns before closing after a short quiet drain', async
   expect(ended.status).toBe('ended');
   expect(ended.transcript).toHaveLength(warningAt);
   expect(ended.message).toContain('transcript capacity');
+});
+type Overrides = NonNullable<NonNullable<Parameters<typeof fixture>[0]>['overrides']>;
+const ENDING = 'I will not be spoken to that way. This meeting is over.';
+/** Synthetic walk-out judge: the meeting ends only on an unconditional closing line. */
+const walkOut = (calls: string[] = []): NonNullable<Overrides['evaluateEnding']> => async input => {
+  const last = input.transcript.findLast(entry => entry.speaker === 'client')!;
+  calls.push(last.text);
+  const ended = last.text.includes('meeting is over') && !last.text.includes('one thing first');
+  return { model: 'fixture', durationMs: 1, usage: fixtureUsage, answers: {}, probability: ended ? .95 : .1, passageId: ended ? last.id : null };
+};
+const contempt = (socket: { emit(event: unknown): void }) => {
+  socket.emit({ type: 'session.output_transcript.delta', delta: 'Thanks for coming. Where should we start?', start_ms: 0, end_ms: 900 });
+  socket.emit({ type: 'session.input_transcript.delta', delta: 'You clearly have no idea what you are doing.', start_ms: 1000, end_ms: 1900 });
+  socket.emit({ type: 'session.output_transcript.delta', delta: ENDING, start_ms: 2000, end_ms: 2900 });
+};
+const walkoutEpoch = 1_800_000_000_000;
+/** Starts a scored attempt and returns the snapshot once its client has walked out. */
+async function walkedOut(f: Awaited<ReturnType<typeof fixture>>, calls: string[]) {
+  setSystemTime(walkoutEpoch);
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  contempt(f.socket);
+  setSystemTime(walkoutEpoch + 2000);
+  await waitFor(() => calls.length === 1);
+  await settle(f);
+  return await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>;
+}
+const endingLog = (f: Awaited<ReturnType<typeof fixture>>) => JSON.parse(f.row()!.provenance_json).ending;
+
+test('a client walk-out mutes the trainee, drains the closing line for at most twenty seconds, and ends the attempt', async () => {
+  const calls: string[] = [];
+  const f = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  const live = await walkedOut(f, calls);
+  const closing = live.transcript.at(-1);
+  expect(closing).toMatchObject({ speaker: 'client', text: ENDING });
+  expect(live).toMatchObject({ status: 'live', warning: { kind: 'client', endsAt: walkoutEpoch + 2000 }, clientEnded: { passageId: closing.id, probability: .95, detectedAt: walkoutEpoch + 2000 } });
+  // Morgan is still speaking; the unchanged closing line is not judged again.
+  setSystemTime(walkoutEpoch + 21_000);
+  expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).status).toBe('live');
+  setSystemTime(walkoutEpoch + 22_001);
+  await f.session.fetch(activityPoll(false, true));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  await settle(f);
+  const ended = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(ended).toMatchObject({ status: 'ended', message: 'Morgan ended the meeting.', clientEnded: { passageId: closing.id } });
+  expect(ended.evaluation).not.toBeNull();
+  expect(calls).toEqual([ENDING]);
+  expect(endingLog(f)).toMatchObject({ clientEnded: { passageId: closing.id }, checks: [{ passageId: closing.id, outcome: 'ended', probability: .95, evidenceId: closing.id, startedAt: walkoutEpoch + 2000 }] });
+}, 10_000);
+
+test('End or a lost connection during a walk-out keeps the walk-out as the outcome', async () => {
+  const calls: string[] = [];
+  const ended = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  await walkedOut(ended, calls);
+  const done = await (await ended.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(done.status).toBe('ended');
+  expect(done.clientEnded).toMatchObject({ probability: .95 });
+  await waitFor(() => ended.row()?.archive_state === 'final');
+  expect(endingLog(ended).clientEnded).toMatchObject({ probability: .95 });
+
+  const lostCalls: string[] = [];
+  const lost = await fixture({ overrides: { evaluateEnding: walkOut(lostCalls) } });
+  await walkedOut(lost, lostCalls);
+  await lost.session.fetch(request('pause'));
+  await waitFor(() => lost.row()?.archive_state === 'final');
+  await settle(lost);
+  const result = await (await lost.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(result).toMatchObject({ status: 'ended', message: 'Morgan ended the meeting.', pause: null });
+  expect(lost.socket.sent.at(-1)?.type).toBe('session.close');
+}, 10_000);
+
+test('closing words that reopen the meeting withdraw a walk-out before it ends', async () => {
+  const calls: string[] = [];
+  const f = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  await walkedOut(f, calls);
+  // The closing line continues: a condition, not a goodbye.
+  setSystemTime(walkoutEpoch + 2200);
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: ' Unless you can tell me one thing first.', start_ms: 2900, end_ms: 3800 });
+  setSystemTime(walkoutEpoch + 3500);
+  await waitFor(() => calls.length === 2);
+  await settle(f);
+  const reopened = await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>;
+  expect(reopened).toMatchObject({ status: 'live', warning: null, clientEnded: null });
+  setSystemTime(walkoutEpoch + 30_000);
+  expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).status).toBe('live');
+  await f.session.fetch(request('end'));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(endingLog(f)).toMatchObject({ clientEnded: null, checks: [{ outcome: 'ended' }, { outcome: 'reopened', probability: .1 }] });
+}, 10_000);
+
+test('a walk-out judgment that returns after newer client words is ignored, and End aborts a pending one', async () => {
+  const calls: string[] = [];
+  const judge = walkOut(calls);
+  let release: (() => void) | undefined;
+  const f = await fixture({ overrides: { evaluateEnding: async input => {
+    const result = await judge(input);
+    if (calls.length === 1) await new Promise<void>(resolve => { release = resolve; });
+    if (calls.length === 3) await new Promise<void>((_, reject) => input.signal!.addEventListener('abort', () => reject(new DOMException('Ended', 'AbortError')), { once: true }));
+    return result;
+  } } });
+  setSystemTime(walkoutEpoch);
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  contempt(f.socket);
+  setSystemTime(walkoutEpoch + 2000);
+  await waitFor(() => !!release);
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: ' Unless you can tell me one thing first.', start_ms: 2900, end_ms: 3800 });
+  release!();
+  await settle(f);
+  expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>)).toMatchObject({ status: 'live', warning: null });
+  setSystemTime(walkoutEpoch + 4000);
+  await waitFor(() => calls.length === 2);
+  await settle(f);
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Sorry. Who approves the release?', start_ms: 4000, end_ms: 4900 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Fine. This meeting is over.', start_ms: 5000, end_ms: 5900 });
+  setSystemTime(walkoutEpoch + 8000);
+  await waitFor(() => calls.length === 3);
+  const done = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(done.status).toBe('ended');
+  expect(done.clientEnded ?? null).toBeNull();
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(endingLog(f).checks.map((check: { outcome: string }) => check.outcome)).toEqual(['stale', 'open', 'aborted']);
+}, 10_000);
+
+test('a replacement owner finishes a checkpointed walk-out as ended, not interrupted', async () => {
+  const calls: string[] = [];
+  const active = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  await walkedOut(active, calls);
+  await active.session.alarm();
+  await settle(active);
+  expect(active.row()?.archive_state).toBe('partial');
+  const replacement = await fixture({ values: active.values, archive: active.archive });
+  await replacement.session.alarm();
+  await settle(replacement);
+  const result = await (await replacement.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(result).toMatchObject({ status: 'ended', message: 'Morgan ended the meeting.' });
+  expect(replacement.row()).toMatchObject({ archive_state: 'final', session_status: 'ended' });
+  expect(endingLog(replacement)).toMatchObject({ clientEnded: { probability: .95 }, checks: [{ outcome: 'ended' }] });
+  expect(replacement.endings).toEqual([]);
+  await active.session.fetch(request('end')); // Stop the original fixture's timer after simulating restart.
+}, 10_000);
+
+test('interviews are never judged for a walk-out', async () => {
+  const f = await fixture();
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Thanks for joining. That is all I needed today.', start_ms: 100, end_ms: 900 });
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Happy to help.', start_ms: 1000, end_ms: 2000 });
+    setSystemTime(Date.now() + 12_000);
+    await nextTick();
+    await settle(f);
+    expect(f.endings).toEqual([]);
+  } finally { await f.session.fetch(request('end')); }
+  await settle(f);
+  expect(JSON.parse(f.interviewRow()!.provenance_json).ending).toBeUndefined();
 });
 test('failed provider finalization remains explicit and retains a closure lease', async () => {
   const f = await fixture();

@@ -5,6 +5,7 @@
 .site-nav-link:hover { color: #e7faf5; }
 .site-nav-link.active { color: #44efcd; border-bottom-color: #44efcd; }
 .site-desktop-nav .site-nav-utility { margin-left: 14px; font-size: 11px; font-weight: 400; }
+.site-desktop-nav .site-nav-utility + .site-nav-utility { margin-left: 0; }
 .site-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .site-page-title { margin-left: 0; }
 .site-menu-trigger { display: none; }
@@ -17,6 +18,7 @@
 .site-menu-dialog .site-nav-link { flex-shrink: 0; justify-content: flex-start; min-height: 56px; padding: 12px 14px; border: 1px solid transparent; font-size: 18px; }
 .site-menu-dialog .site-nav-link.active { border-color: #288b83; background: #103b3e; }
 .site-menu-dialog .site-nav-utility { margin-top: auto; min-height: 44px; font-size: 13px; font-weight: 400; }
+.site-menu-dialog .site-nav-utility + .site-nav-utility { margin-top: 0; }
 @media (max-width: 1050px) {
   .game-header.site-header .edition, .game-header.site-header .site-page-title { display: none; }
   .game-header.site-header .site-desktop-nav { gap: 0; }

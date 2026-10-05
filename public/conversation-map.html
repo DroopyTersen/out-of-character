@@ -1,0 +1,1412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How Out of Character's interviewer pairs a fast voice model with slower models that keep a conversation map and pick what to explore next.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>The Conversation Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Silkscreen&display=swap">
+<style>
+/* Layout: a sticky contents rail beside one reading column; figures sit in framed panels inside the column. Palette and pixel display face come from the Out of Character app. */
+:root {
+  --bg: #eef4f7; --surface: #ffffff; --surface-2: #e2ecf2; --fg: #0c2230; --muted: #4a6677; --line: #8aa6b8; --border: #c9d9e3;
+  --accent: #087f6c; --accent-soft: #d2efe8;
+  --participant: #c03a56; --sam: #087f6c; --sol: #1d68a6; --jev: #9a5d05; --luna: #6a45c2; --code: #4d6878; --cue: #f7c325;
+  --font-display: "Silkscreen", ui-monospace, monospace;
+  --font-head: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #061a27; --surface: #0b2535; --surface-2: #11304a; --fg: #e8f3fb; --muted: #8eadc3; --line: #4a7a96; --border: #22506a;
+  --accent: #44efcd; --accent-soft: #0e3a3c;
+  --participant: #ff7f93; --sam: #44efcd; --sol: #5cbcf0; --jev: #f2c14e; --luna: #b8a0ff; --code: #9db6c8; --cue: #ffdc4a; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #061a27; --surface: #0b2535; --surface-2: #11304a; --fg: #e8f3fb; --muted: #8eadc3; --line: #4a7a96; --border: #22506a;
+  --accent: #44efcd; --accent-soft: #0e3a3c;
+  --participant: #ff7f93; --sam: #44efcd; --sol: #5cbcf0; --jev: #f2c14e; --luna: #b8a0ff; --code: #9db6c8; --cue: #ffdc4a; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 17px/1.65 var(--font-body); padding-inline: 20px; padding-block: 0 5rem; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.c-participant { --c: var(--participant); } .c-sam { --c: var(--sam); } .c-sol { --c: var(--sol); } .c-jev { --c: var(--jev); }
+.c-luna { --c: var(--luna); } .c-code { --c: var(--code); } .c-accent { --c: var(--accent); } .c-cue { --c: var(--cue); }
+.cue { fill: var(--cue); stroke: var(--fg); stroke-width: 1.5; stroke-linejoin: round; }
+.c-cue .sw { border: 1.5px solid var(--fg); }
+
+/* Page grid */
+.page { max-width: 78rem; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 3.5rem; }
+header.hero { padding-block: 3.5rem 1.5rem; min-width: 0; }
+main { min-width: 0; max-width: 54rem; }
+nav.toc { min-width: 0; margin-block: .5rem 1rem; }
+@media (min-width: 1100px) {
+  .page { grid-template-columns: 13.5rem minmax(0, 1fr); }
+  header.hero { grid-column: 2; grid-row: 1; }
+  nav.toc { grid-column: 1; grid-row: 1 / span 2; align-self: start; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 1.5rem); margin-block: 3.8rem 0; }
+  main { grid-column: 2; grid-row: 2; }
+}
+
+/* Contents */
+.toc-box { border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; background: var(--surface); }
+.toc ol { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr)); gap: .15rem 1rem; counter-reset: part; }
+@media (min-width: 1100px) { .toc ol { grid-template-columns: 1fr; } }
+.toc li { counter-increment: part; }
+.toc a { display: flex; gap: .55rem; padding: .22rem 0; color: var(--muted); text-decoration: none; font: 500 .84rem/1.35 var(--font-head); }
+.toc a::before { content: counter(part, decimal-leading-zero); font-family: var(--font-mono); font-size: .72rem; color: var(--line); padding-top: .1rem; }
+.toc a:hover, .toc a[aria-current="true"] { color: var(--fg); }
+.toc a[aria-current="true"]::before { color: var(--accent); }
+
+/* Type */
+.eyebrow { font: 400 .72rem/1.2 var(--font-display); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+h1 { font: 400 clamp(2.1rem, 5.4vw, 3.4rem)/1.05 var(--font-display); margin: .9rem 0 1.1rem; letter-spacing: .01em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.dek { font-size: 1.2rem; line-height: 1.55; color: var(--muted); max-width: 40rem; margin: 0; }
+h2 { font: 700 clamp(1.6rem, 3.2vw, 2.05rem)/1.15 var(--font-head); margin: .35rem 0 1rem; text-wrap: balance; letter-spacing: -.005em; }
+h3 { font: 600 1.2rem/1.3 var(--font-head); margin: 2.4rem 0 .6rem; text-wrap: balance; }
+section { padding-top: 3.8rem; scroll-margin-top: 1rem; }
+section > .eyebrow { color: var(--accent); }
+p, ul, ol { margin: 0 0 1rem; }
+.prose > p, .prose > ul, .prose > ol { max-width: 40rem; }
+.prose ul { padding-left: 1.2rem; }
+.prose li { margin-bottom: .45rem; }
+.prose li::marker { color: var(--line); }
+.lead { font-size: 1.08rem; }
+.muted { color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+
+/* Short version */
+.tldr { margin-top: 2rem; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 1.4rem 1.5rem; }
+.tldr ol { list-style: none; padding: 0; margin: .8rem 0 0; display: grid; gap: .85rem; }
+.tldr li { display: grid; grid-template-columns: 1.9rem minmax(0, 1fr); gap: .5rem; }
+.tldr li b { font: 400 .8rem/1.9 var(--font-display); color: var(--accent); }
+
+/* Analogy note */
+.analogy { background: var(--surface-2); border-radius: 10px; padding: 1.1rem 1.3rem; margin: 1.6rem 0; }
+.analogy p:last-child { margin-bottom: 0; }
+.analogy .eyebrow { display: block; margin-bottom: .45rem; color: var(--fg); }
+
+/* Figures */
+figure { margin: 1.8rem 0 2.2rem; }
+.frame { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
+.scroll { overflow-x: auto; }
+.scroll > svg { display: block; width: 100%; min-width: 640px; height: auto; }
+figcaption { font-size: .88rem; line-height: 1.5; color: var(--muted); margin-top: .65rem; max-width: 44rem; }
+.legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .82rem; color: var(--muted); margin-bottom: .9rem; }
+.legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); display: inline-block; flex: none; }
+.sw.diamond { transform: rotate(45deg) scale(.85); border-radius: 1px; }
+.sw.dash { background: transparent; border: 1.5px dashed var(--c); }
+
+/* SVG */
+svg text { font-family: var(--font-body); }
+.n-title { font: 600 15px var(--font-head); fill: var(--fg); }
+.n-title.sm { font-size: 13.5px; }
+.n-sub { font-size: 12px; fill: var(--muted); }
+.n-strong { font-weight: 600; fill: var(--fg); }
+.n-lab { font-size: 11px; fill: var(--muted); }
+.n-eye { font: 600 10px var(--font-head); letter-spacing: .12em; fill: var(--muted); }
+.n-mono { font: 11.5px var(--font-mono); fill: var(--fg); }
+.n-on { fill: var(--bg); font-size: 11px; font-weight: 600; }
+.box { fill: color-mix(in srgb, var(--c) 12%, var(--surface)); stroke: var(--c); stroke-width: 1.5; }
+.box.dash { stroke-dasharray: 5 4; }
+.box.plain { fill: var(--surface-2); stroke: var(--border); }
+.box.soft { fill: var(--surface-2); }
+.ln { stroke: var(--line); stroke-width: 1.5; fill: none; }
+.ln.acc { stroke: var(--accent); }
+.ln.dot { stroke-dasharray: 2 4; }
+.ln.dash { stroke-dasharray: 5 4; }
+.ln.grid { stroke: var(--border); stroke-width: 1; }
+.ah { fill: var(--line); } .ah.acc { fill: var(--accent); }
+.fill-c { fill: var(--c); }
+.seg { fill: var(--c); opacity: .9; }
+.zone { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 3; }
+
+/* Cast cards */
+.cast { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin: 1.6rem 0; }
+@media (min-width: 720px) { .cast { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.who { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.15rem 1.2rem; display: grid; gap: .55rem; align-content: start; }
+.who-head { display: flex; align-items: center; gap: .75rem; }
+.glyph { width: 2.4rem; height: 2.4rem; display: grid; place-items: center; border-radius: 6px; background: color-mix(in srgb, var(--c) 18%, var(--surface)); border: 1.5px solid var(--c); color: var(--c); font: 400 1.05rem var(--font-display); flex: none; }
+.who h3 { margin: 0; font-size: 1.15rem; }
+.who .kind { font-size: .8rem; color: var(--muted); line-height: 1.3; }
+.who p { margin: 0; font-size: .93rem; line-height: 1.55; }
+.who dl { margin: .2rem 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem .7rem; font-size: .84rem; line-height: 1.45; }
+.who dt { color: var(--muted); font-family: var(--font-head); font-weight: 600; }
+.who dd { margin: 0; }
+
+/* Jev's read of one answer: question, answer, what happens */
+.readout-head, .readout li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: .35rem 1.2rem; align-items: start; }
+.readout-head { font: 600 .74rem/1.3 var(--font-head); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 0 1rem .5rem; margin-top: 1.1rem; }
+.readout { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.readout li { margin: 0; background: var(--surface-2); border-radius: 10px; padding: .85rem 1rem; font-size: .9rem; line-height: 1.45; }
+.readout .rq { font-family: var(--font-head); font-weight: 600; display: flex; gap: .55rem; align-items: baseline; }
+.rq-n { flex: none; width: 1.35rem; height: 1.35rem; border-radius: 50%; display: inline-grid; place-items: center; font-size: .75rem; background: color-mix(in srgb, var(--jev) 18%, var(--surface)); color: var(--jev); border: 1.5px solid var(--jev); transform: translateY(-.1rem); }
+.readout .ra b { font-family: var(--font-head); }
+.readout .ra .num { color: var(--jev); font-weight: 600; }
+.rnote { display: block; color: var(--muted); font-size: .84rem; margin-top: .15rem; }
+.rlist { display: grid; gap: .2rem; }
+.rlist > span { display: flex; justify-content: space-between; gap: .8rem; }
+.readout .rx .tag { margin-left: .25rem; }
+.readout .lbl { display: none; }
+@media (max-width: 640px) {
+  .readout-head { display: none; }
+  .readout { margin-top: 1rem; }
+  .readout li { grid-template-columns: minmax(0, 1fr); gap: .55rem; }
+  .readout .lbl { display: block; font: 600 .68rem/1.3 var(--font-head); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .1rem; }
+}
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; line-height: 1.45; }
+th { font: 600 .74rem/1.3 var(--font-head); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; padding: .55rem .7rem; border-bottom: 1.5px solid var(--border); vertical-align: bottom; }
+td { padding: .65rem .7rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.name { font-family: var(--font-head); font-weight: 600; white-space: nowrap; }
+.dots { display: inline-flex; gap: 4px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--c, var(--line)); display: block; }
+.dots i.on { background: var(--c, var(--line)); }
+.matrix td { text-align: center; } .matrix td.name { text-align: left; }
+.matrix th:not(:first-child) { text-align: center; }
+
+/* Principles */
+.principles-box { margin-top: 2rem; }
+.principles-box > p { color: var(--muted); font-size: .95rem; margin: 0; }
+.principles-box .principles { margin: .7rem 0 1rem; }
+.principles { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; gap: 0; border-top: 1px solid var(--border); }
+.principles li { display: grid; grid-template-columns: minmax(0, 13rem) minmax(0, 1fr); gap: .4rem 1.5rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.principles b { font: 600 1.02rem/1.35 var(--font-head); }
+.principles span { color: var(--fg); font-size: .97rem; }
+@media (max-width: 640px) { .principles li { grid-template-columns: minmax(0, 1fr); } }
+
+/* Before / after */
+.vs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.vs > div { border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.2rem; background: var(--surface); }
+.vs h4 { margin: 0 0 .7rem; font: 600 1rem var(--font-head); }
+.vs ul { margin: 0; padding-left: 1.1rem; font-size: .93rem; }
+.vs li { margin-bottom: .45rem; }
+.exchange { display: grid; gap: .7rem; }
+.exchange p { margin: 0; padding: .7rem .9rem; border-radius: 10px; background: color-mix(in srgb, var(--c) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); font-size: .97rem; max-width: 34rem; }
+.exchange p.c-sam { margin-left: auto; }
+.exchange .who-tag { display: block; font: 600 .74rem var(--font-head); letter-spacing: .08em; text-transform: uppercase; color: var(--c); margin-bottom: .2rem; }
+.bubble { font-family: var(--font-mono); font-size: .82rem; background: var(--surface-2); border-radius: 8px; padding: .6rem .75rem; margin-bottom: .8rem; line-height: 1.5; }
+.tag { display: inline-block; font: 600 .7rem/1 var(--font-head); letter-spacing: .08em; text-transform: uppercase; padding: .3rem .45rem; border-radius: 4px; background: color-mix(in srgb, var(--c) 16%, var(--surface)); color: var(--fg); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); white-space: nowrap; }
+
+/* Clock cards */
+.clocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14.5rem, 100%), 1fr)); gap: 1rem; margin: 1.4rem 0; }
+.clock { border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem; background: var(--surface); }
+.clock .speed { font: 400 .74rem var(--font-display); color: var(--c); letter-spacing: .05em; }
+.clock h4 { margin: .35rem 0 .45rem; font: 600 1.05rem var(--font-head); }
+.clock p { margin: 0; font-size: .92rem; line-height: 1.55; }
+
+/* Thread anatomy */
+.anatomy { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.4rem; align-items: start; }
+@media (max-width: 760px) { .anatomy { grid-template-columns: minmax(0, 1fr); } }
+.thread-card { border: 1.5px dashed var(--accent); border-radius: 10px; padding: 1rem 1.1rem; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.thread-card dl { margin: 0; display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: .55rem .9rem; font-size: .92rem; line-height: 1.45; }
+.thread-card dt { font: 600 .74rem/1.6 var(--font-head); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.thread-card dd { margin: 0; }
+.thread-card .hidden-row { opacity: .65; }
+.notes-col { display: grid; gap: .8rem; font-size: .92rem; line-height: 1.5; }
+.notes-col p { margin: 0; }
+.notes-col b { font-family: var(--font-head); }
+
+/* Truth rule */
+.truth { display: grid; gap: .7rem; }
+.truth-row { display: grid; grid-template-columns: minmax(0, 1fr) 1.6rem minmax(0, 1.2fr) 1.6rem minmax(0, 1fr); align-items: center; gap: .3rem; }
+.truth-row > div { border-radius: 10px; padding: .75rem .9rem; font-size: .9rem; line-height: 1.45; }
+.truth-row .src { background: color-mix(in srgb, var(--c) 13%, var(--surface)); border: 1.5px solid var(--c); }
+.truth-row .rule { background: var(--surface-2); }
+.truth-row .out { border: 1.5px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: .75rem; }
+.verdict { flex: none; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center; font: 700 1rem/1 var(--font-head); color: var(--surface); }
+.verdict.yes { background: var(--sam); }
+.verdict.no { background: var(--participant); }
+.truth-row .arrow { text-align: center; color: var(--line); font-size: 1.2rem; padding: 0; }
+.truth-row b { font-family: var(--font-head); display: block; font-size: .95rem; }
+@media (max-width: 680px) { .truth { gap: 1.6rem; } .truth-row { grid-template-columns: minmax(0, 1fr); } .truth-row .arrow { transform: rotate(90deg); line-height: 1; } }
+
+/* Topics */
+.topics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: 1rem; }
+.topic { border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; background: var(--surface); }
+.topic h4 { margin: 0 0 .6rem; font: 600 1rem var(--font-head); }
+.topic ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; font-size: .88rem; }
+.topic li { display: flex; justify-content: space-between; align-items: center; gap: .6rem; }
+.topic li > span:first-child { min-width: 0; }
+.topic li.gap > span:first-child { color: var(--accent); font-weight: 600; }
+.lvl { flex: none; font: 600 .66rem/1 var(--font-head); letter-spacing: .06em; text-transform: uppercase; padding: .3rem .5rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.lvl.explored { background: color-mix(in srgb, var(--jev) 24%, var(--surface)); border-color: var(--jev); color: var(--fg); }
+.lvl.touched { background: color-mix(in srgb, var(--jev) 7%, var(--surface)); border-color: color-mix(in srgb, var(--jev) 55%, transparent); color: var(--fg); }
+.lvl.set-aside { border-style: dashed; }
+.levels { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .7rem 1rem; align-items: baseline; margin: 1.2rem 0 1.4rem; }
+.levels dt, .levels dd { margin: 0; }
+
+/* Jev scorecard */
+.turn-quote { margin: 0 0 1.2rem; padding: .9rem 1.1rem; border-radius: 10px; background: color-mix(in srgb, var(--participant) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--participant) 40%, transparent); font-size: .97rem; }
+.pid { font: 500 .78rem var(--font-mono); color: var(--participant); margin-right: .4rem; }
+.meter { height: 8px; border-radius: 4px; background: var(--surface-2); min-width: 6rem; position: relative; }
+.meter i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); display: block; }
+.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: .85rem; }
+.mcell { display: grid; grid-template-columns: minmax(5rem, 1fr) 2.8rem; align-items: center; gap: .6rem; }
+
+/* Formula */
+.formula { font: 500 clamp(.95rem, 2.2vw, 1.12rem)/1.6 var(--font-mono); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.2rem; margin: 1.2rem 0; overflow-x: auto; }
+.formula .t-n { color: var(--accent); } .formula .t-s { color: var(--jev); } .formula .t-g { color: var(--sol); }
+
+/* Notepad */
+.earnotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: 1rem; }
+.earnote { border: 1.5px dashed var(--sam); border-radius: 12px; padding: 1rem 1.1rem; background: color-mix(in srgb, var(--sam) 5%, var(--surface)); display: grid; grid-template-rows: auto 1fr auto; gap: .8rem; }
+.earnote-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .7rem; }
+.earnote-head h4 { margin: 0; font: 600 1.05rem var(--font-head); }
+.earnote-head span { font-size: .85rem; color: var(--muted); }
+.earnote dl { margin: 0; display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .55rem .9rem; font-size: .92rem; line-height: 1.45; }
+.earnote dt { font: 600 .72rem/1.65 var(--font-head); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.earnote dd { margin: 0; min-width: 0; }
+.earnote-when { margin: 0; padding-top: .7rem; border-top: 1px solid var(--border); font-size: .85rem; color: var(--muted); }
+
+/* Techniques */
+#techniques { counter-reset: tech; }
+.techs { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr)); gap: .8rem; }
+.techs li { counter-increment: tech; border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem 1rem; background: var(--surface); display: grid; gap: .5rem; align-content: start; }
+.techs b { font: 600 1.02rem/1.3 var(--font-head); }
+.techs b::before { content: counter(tech) ". "; color: var(--accent); font-family: var(--font-mono); font-size: .82rem; }
+.techs li > p { margin: 0; font-size: .9rem; line-height: 1.5; }
+.techs .ex { display: grid; gap: .35rem; margin-top: .15rem; padding: .6rem .75rem; background: var(--surface-2); border-radius: 8px; font-size: .88rem; line-height: 1.45; }
+.techs .ex p { margin: 0; display: grid; grid-template-columns: 2.7rem minmax(0, 1fr); gap: .5rem; }
+.techs .ex span { font: 600 .68rem/1.95 var(--font-head); letter-spacing: .07em; text-transform: uppercase; color: var(--c); }
+.techs .ex .c-participant, .techs .ex .c-code { color: var(--muted); }
+.techs .ex .c-sam { font-weight: 500; }
+
+/* Steps */
+.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr)); gap: .6rem; counter-reset: step; }
+.steps li { counter-increment: step; border-radius: 10px; padding: .75rem .85rem; background: var(--surface-2); font-size: .87rem; line-height: 1.45; position: relative; }
+.steps li::before { content: counter(step); display: block; font: 400 .72rem var(--font-display); color: var(--c, var(--accent)); margin-bottom: .3rem; }
+.steps b { font-family: var(--font-head); display: block; margin-bottom: .15rem; }
+.steps.six { grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr)); }
+
+/* Caching bars */
+.cache-rows { display: grid; gap: .65rem; }
+.cache-row { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); align-items: center; gap: .7rem; font-size: .82rem; }
+.cache-row .lbl { font: 600 .82rem var(--font-head); color: var(--muted); }
+.bar { display: flex; height: 30px; gap: 2px; }
+.bar span { display: grid; place-items: center; font-size: .7rem; border-radius: 3px; overflow: hidden; white-space: nowrap; min-width: 0; }
+.bar .fix { background: var(--accent-soft); color: var(--fg); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.bar .log { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.bar .new { background: var(--jev); }
+.bar .tail { background: var(--surface); border: 1.5px solid var(--participant); color: var(--fg); }
+.cost { display: grid; gap: .7rem; margin-top: 1.6rem; }
+.cost .bar { height: 26px; }
+.cost .full { background: var(--line); color: var(--bg); font-weight: 600; }
+.cost .rd { background: var(--accent); }
+.cost-lbl { display: flex; justify-content: space-between; font-size: .84rem; gap: 1rem; flex-wrap: wrap; }
+.cost-lbl b { font-family: var(--font-head); }
+
+/* Walkthrough */
+.duo-head { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; font: 600 .74rem var(--font-head); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 1.5rem 0 .8rem; }
+.duo-head span { display: inline-flex; align-items: center; gap: .45rem; }
+.duo-head i { width: 18px; height: 12px; border-radius: 4px; flex: none; }
+.duo-head .h-call i { background: color-mix(in srgb, var(--fg) 10%, var(--surface)); border: 1px solid var(--border); }
+.duo-head .h-back i { border: 1.5px dashed var(--muted); }
+.duo { list-style: none; padding: 0; margin: 0; display: grid; gap: .7rem; position: relative; }
+.duo > li { display: grid; grid-template-columns: 2.9rem minmax(0, 1fr); gap: .6rem; align-items: start; }
+.duo time { font: 500 .8rem/2.1 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.duo .card { border-radius: 10px; padding: .7rem .9rem; font-size: .95rem; line-height: 1.5; }
+.duo .call .card { background: color-mix(in srgb, var(--c) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
+.duo .back .card { background: var(--surface-2); border: 1.5px dashed color-mix(in srgb, var(--c) 55%, transparent); font-size: .9rem; }
+.duo .who-tag { display: block; font: 600 .74rem var(--font-head); letter-spacing: .08em; text-transform: uppercase; color: var(--c); margin-bottom: .25rem; }
+.duo .card small { display: block; margin-top: .45rem; font-size: .84rem; line-height: 1.45; color: var(--muted); }
+.duo .card p { margin: 0; }
+.duo .card ul { margin: .3rem 0 0; padding-left: 1.1rem; display: grid; gap: .3rem; }
+.duo .card p + ul { margin-top: .4rem; }
+.duo .note-line { display: block; margin-top: .35rem; font: 12.5px/1.6 var(--font-mono); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .45rem .6rem; overflow-wrap: anywhere; }
+@media (min-width: 760px) {
+  .duo-head { display: grid; grid-template-columns: minmax(0, 1fr) 3.6rem minmax(0, 1fr); }
+  .duo-head .h-back { grid-column: 3; }
+  .duo::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--border); }
+  .duo > li { grid-template-columns: minmax(0, 1fr) 3.6rem minmax(0, 1fr); gap: 0; }
+  .duo time { grid-column: 2; grid-row: 1; text-align: center; position: relative; z-index: 1; background: var(--bg); justify-self: center; padding: 0 .25rem; }
+  .duo .call .card { grid-column: 1; grid-row: 1; }
+  .duo .back .card { grid-column: 3; grid-row: 1; }
+}
+
+/* Glossary */
+.gloss { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: .1rem 1.4rem; margin: 1.2rem 0; }
+.gloss dt { font: 600 .98rem/1.5 var(--font-head); padding: .6rem 0; border-top: 1px solid var(--border); }
+.gloss dd { margin: 0; padding: .6rem 0; border-top: 1px solid var(--border); font-size: .95rem; line-height: 1.55; }
+@media (max-width: 600px) { .gloss { grid-template-columns: minmax(0, 1fr); } .gloss dd { border-top: 0; padding-top: 0; } }
+
+footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--border); font-size: .85rem; color: var(--muted); max-width: 44rem; }
+
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+/* Overview diagram in the short version */
+.overview { margin: 1.4rem 0 0; padding-top: 1.2rem; border-top: 1px solid var(--border); }
+.overview p { font-size: .88rem; color: var(--muted); margin: .6rem 0 0; }
+
+/* Breakouts: short primers placed where a concept first matters */
+.breakout { border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 10px; padding: 1rem 1.2rem 1.1rem; margin: 1.6rem 0; }
+.breakout .eyebrow { display: block; color: var(--accent); margin-bottom: .35rem; }
+.breakout h4 { margin: 0 0 .45rem; font: 600 1.05rem/1.3 var(--font-head); }
+.breakout p { font-size: .95rem; }
+.breakout p:last-child { margin-bottom: 0; }
+
+/* Jev's questions in the cast card */
+.who dd ul { margin: .2rem 0 0; padding-left: 1rem; }
+.who dd li { margin-bottom: .15rem; }
+
+/* Limit ticks on the timing chart */
+.tick { stroke: var(--fg); stroke-width: 1.5; stroke-dasharray: 2 2; }
+
+/* The design question, leading the page */
+.pull { font: 600 clamp(1.35rem, 3vw, 1.75rem)/1.3 var(--font-head); color: var(--fg); margin: .2rem 0 1.2rem; padding-left: 1rem; border-left: 3px solid var(--accent); text-wrap: balance; }
+.question { font: 600 clamp(1.2rem, 2.6vw, 1.45rem)/1.35 var(--font-head); color: var(--fg); max-width: 40rem; margin: 0 0 1rem; padding-left: 1rem; border-left: 3px solid var(--accent); text-wrap: pretty; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah" d="M0,1 L9,5 L0,9 z"/></marker>
+    <marker id="ah-acc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah acc" d="M0,1 L9,5 L0,9 z"/></marker>
+  </defs>
+</svg>
+
+<div class="page">
+<header class="hero">
+  <span class="eyebrow">Out of Character · how the interview works</span>
+  <h1>The Conversation <span>Map</span></h1>
+  <p class="question">How do you give a fast, shallow voice model the benefit of slow, careful thinking?</p>
+
+  <div class="tldr">
+    <span class="eyebrow">The short version</span>
+    <ol>
+      <li><b>01</b><span>A voice AI has to keep up in real time, with instant replies and natural interruptions. That speed costs depth: it chats well, but can't keep a 30-minute interview in its head.</span></li>
+      <li><b>02</b><span>So the thinking happens in the background. A careful model keeps a <strong>conversation map</strong>, the interview's memory: what's known and what's missing. A quick judge monitors the transcript, decides when the conversation map needs updating, and picks which area of the map to explore next.</span></li>
+      <li><b>03</b><span>Sam gets short private cues pointing at a gap worth asking about. Sam can ignore them; the participant always comes first.</span></li>
+      <li><b>04</b><span>Only the participant can establish what happened. Every fact on the conversation map points back to their words.</span></li>
+    </ol>
+    <div class="overview">
+      <div class="scroll">
+        <svg viewBox="0 0 760 256" role="img" aria-label="Overview. The participant and Sam talk in real time. In the background, Sol keeps the conversation map, sends Luna for lookups, and suggests a list of cues. Jev monitors the transcript and decides when to act: it wakes Sol when something new comes up, and re-ranks Sol's cues against the live conversation, sending the top one to Sam as a private cue.">
+          <rect class="box plain" x="16" y="8" width="728" height="100" rx="12"/>
+          <text class="n-eye" x="32" y="30">LIVE CONVERSATION</text>
+          <g class="c-participant"><rect class="box" x="32" y="44" width="210" height="50" rx="8"/><text class="n-title" x="137" y="65" text-anchor="middle">Participant</text><text class="n-sub" x="137" y="83" text-anchor="middle">being interviewed</text></g>
+          <g class="c-sam"><rect class="box" x="528" y="44" width="200" height="50" rx="8"/><text class="n-title" x="628" y="65" text-anchor="middle">Sam</text><text class="n-sub" x="628" y="83" text-anchor="middle">voice AI interviewer</text></g>
+          <line class="ln" x1="244" y1="69" x2="526" y2="69" marker-start="url(#ah)" marker-end="url(#ah)"/>
+          <text class="n-lab" x="385" y="61" text-anchor="middle">real time · interruptible</text>
+
+          <line class="ln dot" x1="700" y1="108" x2="700" y2="178" marker-end="url(#ah)"/>
+          <text class="n-lab" x="692" y="134" text-anchor="end">monitors the transcript</text>
+          <line class="ln acc" x1="552" y1="180" x2="552" y2="97" marker-end="url(#ah-acc)"/>
+          <text class="n-lab" x="544" y="142" text-anchor="end">re-ranks the cues live,</text>
+          <text class="n-lab" x="544" y="156" text-anchor="end">sends Sam the top one</text>
+
+          <text class="n-eye" x="16" y="168">IN THE BACKGROUND</text>
+          <g class="c-luna"><rect class="box" x="16" y="180" width="124" height="66" rx="8"/><text class="n-title" x="78" y="203" text-anchor="middle">Luna</text><text class="n-sub" x="78" y="220" text-anchor="middle">web researcher</text><text class="n-lab" x="78" y="236" text-anchor="middle">a few lookups</text></g>
+          <line class="ln" x1="142" y1="213" x2="182" y2="213" marker-start="url(#ah)" marker-end="url(#ah)"/>
+          <g class="c-sol"><rect class="box" x="184" y="180" width="160" height="66" rx="8"/><text class="n-title" x="264" y="203" text-anchor="middle">Sol</text><text class="n-sub" x="264" y="220" text-anchor="middle">reasoning model</text><text class="n-lab" x="264" y="236" text-anchor="middle">keeps the conversation map</text></g>
+          <line class="ln acc" x1="526" y1="204" x2="346" y2="204" marker-end="url(#ah-acc)"/>
+          <text class="n-lab" x="436" y="183" text-anchor="middle">wakes Sol when</text>
+          <text class="n-lab" x="436" y="196" text-anchor="middle">something's new</text>
+          <line class="ln" x1="346" y1="226" x2="526" y2="226" marker-end="url(#ah)"/>
+          <text class="n-lab" x="436" y="243" text-anchor="middle">a list of suggested cues</text>
+          <g class="c-jev"><rect class="box" x="528" y="180" width="200" height="66" rx="8"/><text class="n-title" x="628" y="203" text-anchor="middle">Jev</text><text class="n-sub" x="628" y="220" text-anchor="middle">judge model · ~0.1 s</text><text class="n-lab" x="628" y="236" text-anchor="middle">decides when to act</text></g>
+        </svg>
+      </div>
+      <p>Sol keeps the conversation map and suggests cues. Jev monitors the transcript and decides when to act: it wakes Sol when something new comes up, and re-ranks Sol's cues against the live conversation, passing the best fit privately to Sam. The participant only ever hears Sam.</p>
+    </div>
+  </div>
+
+  <div class="analogy">
+    <span class="eyebrow">Analogy</span>
+    <p>Think of a live news interview. The <strong>anchor</strong> keeps the conversation flowing. Off camera, the <strong>producer</strong> keeps a notepad of where the story could go and what needs checking, and sends a <strong>research assistant</strong> to look things up. When something's worth raising, the producer whispers a cue into the anchor's earpiece, and the anchor finds a natural way to segue. It works because the guest never knows it's happening.</p>
+  </div>
+
+  <div class="principles-box">
+    <span class="eyebrow">Four principles</span>
+    <ul class="principles">
+      <li><b>Split fast from slow</b><span>The voice never waits for the thinking. Slow work runs on the side and lands when it's ready.</span></li>
+      <li><b>Share a map, not a script</b><span>Chart what's been covered, where the blank spots are, and which threads are worth pulling. Sam still picks the route.</span></li>
+      <li><b>Suggest, never command</b><span>Cues are optional. Sam's instructions say the participant comes first.</span></li>
+      <li><b>Only the participant establishes facts</b><span>Every fact cites their words. Sam's guesses and web research never count as project history.</span></li>
+    </ul>
+    <p>None of this is interview-specific. Any live AI conversation, such as coaching, support or tutoring, has the same tension between a voice that must be quick and thinking that takes time.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <div class="toc-box">
+    <span class="eyebrow">Contents</span>
+    <ol>
+      <li><a href="#naive">Why not keep it simple?</a></li>
+      <li><a href="#how">The conversation map solution</a></li>
+      <li><a href="#clocks">Three clocks</a></li>
+      <li><a href="#map">The conversation map</a></li>
+      <li><a href="#topics">Predefined interview topics</a></li>
+      <li><a href="#pick">Picking the cue</a></li>
+      <li><a href="#techniques">Interview techniques</a></li>
+      <li><a href="#research">Looking things up</a></li>
+      <li><a href="#production">Running it for real</a></li>
+      <li><a href="#glossary">Glossary</a></li>
+    </ol>
+  </div>
+</nav>
+
+<main class="prose">
+
+<!-- 1 -->
+<section id="naive">
+  <span class="eyebrow">Part 1</span>
+  <h2>Why not keep it simple?</h2>
+  <p>There are two obvious designs. Both fall short.</p>
+
+  <h3>The voice model alone</h3>
+  <p>In conversation, any lag feels broken. So Sam's voice model is built for real-time talk: instant replies, easy interruptions, natural back-and-forth.</p>
+  <p>The trade-off is intelligence. A model that answers instantly does little thinking first. So letting Sam run the whole interview from a list of topics falls flat. It isn't smart enough to know what's worth digging into, so it reaches for safe, generic follow-ups and works down the list. The interview feels canned, as if Sam isn't really listening.</p>
+
+  <figure>
+    <div class="frame exchange">
+      <p class="c-participant"><span class="who-tag">Participant</span>Honestly, the hardest part was getting baristas to trust the order screen. They'd worked off paper tickets for years.</p>
+      <p class="c-sam"><span class="who-tag">Sam, on its own</span>That makes sense! Next question: how would you rate communication on the project?</p>
+    </div>
+    <figcaption>Illustrative. Friendly, but it walks right past the best story in the answer. A good interviewer would ask what finally won the baristas over.</figcaption>
+  </figure>
+
+  <h3>A smarter model sends instructions</h3>
+  <p>Slower reasoning models can do that thinking, but they're far too slow to talk with. So add one that listens in and sends Sam <strong>instructions</strong>, such as "Ask about the budget cut." It knows what's worth digging into, but careful thinking takes time, and the conversation doesn't wait for it.</p>
+
+  <figure>
+    <div class="frame scroll">
+      <svg viewBox="0 0 720 190" role="img" aria-label="Timeline: the participant mentions a budget cut at 8 seconds. An instruction about it lands about 20 seconds later, while Sam is already talking about testing. A slow one lands 40 seconds or more later.">
+        <g class="c-participant">
+          <rect class="seg" x="40" y="38" width="113" height="28" rx="3"/><text class="n-on" x="96" y="56" text-anchor="middle">budget cut</text>
+          <rect class="seg" x="197" y="38" width="171" height="28" rx="3"/><text class="n-on" x="282" y="56" text-anchor="middle">moves on to testing</text>
+          <rect class="seg" x="412" y="38" width="258" height="28" rx="3"/><text class="n-on" x="541" y="56" text-anchor="middle">talks about launch day</text>
+        </g>
+        <g class="c-sam"><rect class="seg" x="160" y="38" width="31" height="28" rx="3"/><rect class="seg" x="374" y="38" width="31" height="28" rx="3"/></g>
+        <line class="ln" x1="141" y1="26" x2="141" y2="150" stroke-dasharray="3 3"/>
+        <text class="n-lab" x="141" y="20" text-anchor="middle">the moment to ask</text>
+        <line class="ln acc" x1="143" y1="98" x2="378" y2="98" marker-end="url(#ah-acc)"/>
+        <text class="n-sub" x="260" y="91" text-anchor="middle">instruction lands · ~20 s later</text>
+        <line class="ln acc" x1="143" y1="132" x2="642" y2="132" marker-end="url(#ah-acc)"/>
+        <text class="n-sub" x="392" y="125" text-anchor="middle">a slow one · 40 s or more</text>
+        <line class="ln grid" x1="40" y1="160" x2="670" y2="160"/>
+        <g>
+          <text class="n-lab" x="40" y="178" text-anchor="middle">0 s</text><text class="n-lab" x="166" y="178" text-anchor="middle">10 s</text>
+          <text class="n-lab" x="292" y="178" text-anchor="middle">20 s</text><text class="n-lab" x="418" y="178" text-anchor="middle">30 s</text>
+          <text class="n-lab" x="544" y="178" text-anchor="middle">40 s</text><text class="n-lab" x="670" y="178" text-anchor="middle">50 s</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Illustrative, to scale. An instruction lands whenever the thinking finishes, not when the moment is right, and by then the conversation has usually moved on.</figcaption>
+  </figure>
+
+  <p>Lateness is only the first of five ways instructions go wrong:</p>
+  <ul>
+    <li><strong>Late.</strong> The thinking finishes after the moment has passed.</li>
+    <li><strong>Obeyed anyway.</strong> Voice models are trained to follow instructions, so a stale one makes Sam change the subject abruptly.</li>
+    <li><strong>No take-backs.</strong> Once sent, an instruction can't be withdrawn, even if the participant answers it on their own a moment later.</li>
+    <li><strong>Forgetful.</strong> Each instruction starts from scratch. "I wasn't there for that" isn't carried forward, so a later one asks again.</li>
+    <li><strong>Ping-pong.</strong> Instructions written for different moments pull Sam from one topic to another and back.</li>
+  </ul>
+</section>
+
+<!-- 2 -->
+<section id="how">
+  <span class="eyebrow">Part 2</span>
+  <h2>The conversation map solution</h2>
+  <p class="lead">Keep Sam fast, and move the thinking backstage, where slower models can take their time. Instead of sending instructions, the backstage keeps a shared conversation map and passes Sam an occasional, optional cue.</p>
+
+  <h3 id="helpers">Four models, one interviewer</h3>
+  <p>No single AI model is both quick enough to hold a conversation and thoughtful enough to steer it. So the app combines four, each with its own strengths and blind spots. Each does one job well, and together they work as a single interviewer. The names are just labels.</p>
+
+  <div class="cast">
+    <article class="who c-sam">
+      <div class="who-head"><span class="glyph" aria-hidden="true">Sa</span><div><h3>Sam</h3><div class="kind">Realtime voice model</div></div></div>
+      <p>Hears and speaks directly, with no text in between.</p>
+      <dl><dt>Good at</dt><dd>Sounding natural, reacting fast, following the last thing said</dd><dt>Weak at</dt><dd>Long memory, planning, noticing what's missing</dd><dt>In the studio</dt><dd>The news anchor</dd></dl>
+    </article>
+    <article class="who c-sol">
+      <div class="who-head"><span class="glyph" aria-hidden="true">So</span><div><h3>Sol</h3><div class="kind">Reasoning model, the strongest of the four</div></div></div>
+      <p>Thinks privately before answering. Slower, but sees the whole interview.</p>
+      <dl><dt>Good at</dt><dd>Strategy: what we know, what's missing, what's worth pursuing, what's worth looking up</dd><dt>Weak at</dt><dd>Speed, cost</dd><dt>In the studio</dt><dd>The producer</dd></dl>
+    </article>
+    <article class="who c-jev">
+      <div class="who-head"><span class="glyph" aria-hidden="true">Je</span><div><h3>Jev</h3><div class="kind">Judge model, also called a decision model</div></div></div>
+      <p>Answers narrow questions with a confidence score. Never writes prose.</p>
+      <dl><dt>Good at</dt><dd>Quick reads: topic moved? Gap answered? Something new?</dd><dt>Weak at</dt><dd>Open-ended advice</dd><dt>In the studio</dt><dd>The producer's instincts</dd></dl>
+    </article>
+    <article class="who c-luna">
+      <div class="who-head"><span class="glyph" aria-hidden="true">Lu</span><div><h3>Luna</h3><div class="kind">Cost-effective reasoning model with web search</div></div></div>
+      <p>Less capable than Sol, but faster and cheaper.</p>
+      <dl><dt>Good at</dt><dd>Tactical errands: look up a company or product the participant named and bring back a couple of facts, with links</dd><dt>Limit</dt><dd>3 lookups per interview</dd><dt>In the studio</dt><dd>The research assistant</dd></dl>
+    </article>
+  </div>
+
+  <figure>
+    <div class="frame scroll">
+      <svg viewBox="0 0 720 202" role="img" aria-label="Bar chart on a log scale of typical times: Jev about a tenth of a second (limit 3 s), Sam in real time, Sol about 7 seconds (limit 50 s), Luna a few seconds (limit 90 s).">
+        <g>
+          <line class="ln grid" x1="170" y1="18" x2="170" y2="170"/><line class="ln grid" x1="300" y1="18" x2="300" y2="170"/>
+          <line class="ln grid" x1="430" y1="18" x2="430" y2="170"/><line class="ln grid" x1="560" y1="18" x2="560" y2="170"/>
+          <line class="ln grid" x1="690" y1="18" x2="690" y2="170"/>
+        </g>
+        <g class="c-jev"><text class="n-title sm" x="16" y="42">Jev</text><text class="n-lab" x="16" y="56">quick judge</text><rect class="fill-c" x="170" y="28" width="130" height="24" rx="3"/><text class="n-sub" x="308" y="45">about 0.1 s</text><line class="tick" x1="492" y1="24" x2="492" y2="56"/><text class="n-lab" x="486" y="45" text-anchor="end">limit 3 s</text></g>
+        <g class="c-sam"><text class="n-title sm" x="16" y="80">Sam</text><text class="n-lab" x="16" y="94">the news anchor</text><rect class="fill-c" x="170" y="66" width="260" height="24" rx="3"/><text class="n-sub" x="438" y="83">real time</text></g>
+        <g class="c-luna"><text class="n-title sm" x="16" y="118">Luna</text><text class="n-lab" x="16" y="132">research assistant</text><rect class="fill-c" x="170" y="104" width="338" height="24" rx="3"/><text class="n-on" x="500" y="120" text-anchor="end">a few s</text><line class="tick" x1="684" y1="100" x2="684" y2="132"/><text class="n-lab" x="678" y="120" text-anchor="end">limit 90 s</text></g>
+        <g class="c-sol"><text class="n-title sm" x="16" y="156">Sol</text><text class="n-lab" x="16" y="170">the producer</text><rect class="fill-c" x="170" y="142" width="370" height="24" rx="3"/><text class="n-on" x="532" y="158" text-anchor="end">about 7 s</text><line class="tick" x1="651" y1="138" x2="651" y2="170"/><text class="n-lab" x="645" y="158" text-anchor="end">limit 50 s</text></g>
+        <g class="n-lab">
+          <text class="n-lab" x="170" y="190" text-anchor="middle">10 ms</text><text class="n-lab" x="300" y="190" text-anchor="middle">0.1 s</text>
+          <text class="n-lab" x="430" y="190" text-anchor="middle">1 s</text><text class="n-lab" x="560" y="190" text-anchor="middle">10 s</text>
+          <text class="n-lab" x="690" y="190" text-anchor="middle">100 s</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Typical times from recent interviews, on a log scale (each gridline is ten times the last). Dashed ticks mark hard limits. Only Sam is in the live conversation, so only Sam has to be fast.</figcaption>
+  </figure>
+
+  <p>Sol and Luna are both reasoning models. Sol is stronger and slower, so it does the <strong>strategic</strong> thinking, including deciding what's worth looking up. Luna is quicker and cheaper, so it runs the <strong>tactical</strong> errands Sol hands it.</p>
+
+  <figure>
+    <div class="frame table-wrap">
+      <table class="matrix">
+        <thead><tr><th>Model</th><th>Speed</th><th>Sounds natural</th><th>Big-picture thinking</th><th>Quick yes/no calls</th><th>Follows rules exactly</th></tr></thead>
+        <tbody>
+          <tr class="c-sam"><td class="name">Sam</td><td><span class="dots" aria-label="3 of 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></td><td><span class="dots" aria-label="3 of 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td></tr>
+          <tr class="c-sol"><td class="name">Sol</td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td><td><span class="dots" aria-label="0 of 3"><i></i><i></i><i></i></span></td><td><span class="dots" aria-label="3 of 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td><td><span class="dots" aria-label="2 of 3"><i class="on"></i><i class="on"></i><i></i></span></td></tr>
+          <tr class="c-jev"><td class="name">Jev</td><td><span class="dots" aria-label="3 of 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></td><td><span class="dots" aria-label="0 of 3"><i></i><i></i><i></i></span></td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td><td><span class="dots" aria-label="3 of 3"><i class="on"></i><i class="on"></i><i class="on"></i></span></td><td><span class="dots" aria-label="2 of 3"><i class="on"></i><i class="on"></i><i></i></span></td></tr>
+          <tr class="c-luna"><td class="name">Luna</td><td><span class="dots" aria-label="2 of 3"><i class="on"></i><i class="on"></i><i></i></span></td><td><span class="dots" aria-label="0 of 3"><i></i><i></i><i></i></span></td><td><span class="dots" aria-label="2 of 3"><i class="on"></i><i class="on"></i><i></i></span></td><td><span class="dots" aria-label="1 of 3"><i class="on"></i><i></i><i></i></span></td><td><span class="dots" aria-label="2 of 3"><i class="on"></i><i class="on"></i><i></i></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption>A rough comparison. No model is good at everything, so each gets the job that fits.</figcaption>
+  </figure>
+
+  <h3>How they fit together</h3>
+  <p>Here's the full wiring. The conversation map holds what's known so far, plus <strong>threads</strong>: conversational threads worth pulling on, each a gap the participant could fill. The rest of the page zooms in on each part.</p>
+
+  <figure>
+    <div class="frame scroll">
+      <svg viewBox="0 0 760 470" role="img" aria-label="Architecture: the participant and Sam talk live. Their words go into a transcript. After every answer Jev reads it and ranks the conversation map's threads, sending Sam's earpiece a thread note: a cue indicating which thread to pull on. Every 20 to 60 seconds Sol reads the transcript and edits the conversation map, which sends a background map note to Sam's earpiece. Sol can send Luna on web lookups.">
+        <line class="ln" x1="232" y1="50" x2="538" y2="50" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <text class="n-lab" x="385" y="41" text-anchor="middle">live voice · real time</text>
+        <g class="c-participant"><rect class="box" x="30" y="20" width="200" height="60" rx="8"/><text class="n-title" x="130" y="45" text-anchor="middle">Participant</text><text class="n-sub" x="130" y="64" text-anchor="middle">delivery-team member</text></g>
+        <g class="c-sam"><rect class="box" x="540" y="20" width="190" height="60" rx="8"/><text class="n-title" x="635" y="45" text-anchor="middle">Sam</text><text class="n-sub" x="635" y="64" text-anchor="middle">the news anchor</text></g>
+
+        <rect class="box plain" x="30" y="125" width="460" height="40" rx="6"/>
+        <text class="n-sub" x="260" y="149" text-anchor="middle"><tspan class="n-strong">Transcript</tspan> · every finished turn, word for word</text>
+        <line class="ln" x1="130" y1="80" x2="130" y2="122" marker-end="url(#ah)"/>
+        <line class="ln" x1="585" y1="80" x2="486" y2="123" marker-end="url(#ah)"/>
+
+        <g class="c-sam"><rect class="box dash" x="540" y="125" width="190" height="50" rx="6"/><text class="n-title sm" x="635" y="146" text-anchor="middle">Sam's earpiece</text><text class="n-sub" x="635" y="164" text-anchor="middle">private, never spoken</text></g>
+        <line class="ln dot" x1="635" y1="124" x2="635" y2="83" marker-end="url(#ah)"/>
+        <text class="n-lab" x="643" y="108">Sam reads</text>
+
+        <text class="n-eye" x="130" y="194" text-anchor="middle">EVERY ANSWER · ~0.1 S</text>
+        <text class="n-eye" x="390" y="194" text-anchor="middle">EVERY 20–60 S</text>
+
+        <g class="c-jev"><rect class="box" x="30" y="215" width="200" height="60" rx="8"/><text class="n-title" x="130" y="240" text-anchor="middle">Jev</text><text class="n-sub" x="130" y="259" text-anchor="middle">reads answers, ranks threads</text></g>
+        <g class="c-sol"><rect class="box" x="290" y="215" width="200" height="60" rx="8"/><text class="n-title" x="390" y="240" text-anchor="middle">Sol</text><text class="n-sub" x="390" y="259" text-anchor="middle">the producer, keeps the map</text></g>
+        <g class="c-luna"><rect class="box" x="545" y="215" width="110" height="60" rx="8"/><text class="n-title" x="600" y="240" text-anchor="middle">Luna</text><text class="n-sub" x="600" y="259" text-anchor="middle">web lookups</text></g>
+        <line class="ln" x1="130" y1="165" x2="130" y2="212" marker-end="url(#ah)"/>
+        <line class="ln" x1="390" y1="165" x2="390" y2="212" marker-end="url(#ah)"/>
+        <line class="ln" x1="232" y1="245" x2="287" y2="245" marker-end="url(#ah)"/>
+        <text class="n-lab" x="260" y="237" text-anchor="middle">wakes</text>
+        <line class="ln" x1="493" y1="245" x2="542" y2="245" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <text class="n-lab" x="517" y="237" text-anchor="middle">sends</text>
+
+        <g class="c-sol"><rect class="box soft" x="290" y="320" width="200" height="72" rx="8"/><text class="n-title" x="390" y="351" text-anchor="middle">The conversation map</text><text class="n-sub" x="390" y="370" text-anchor="middle">facts + threads to pull on</text></g>
+        <line class="ln" x1="390" y1="275" x2="390" y2="317" marker-end="url(#ah)"/>
+        <text class="n-lab" x="398" y="301">edits</text>
+        <path class="ln" d="M288,356 H175 V278" marker-end="url(#ah)"/>
+        <text class="n-lab" x="231" y="348" text-anchor="middle">threads to pull on</text>
+
+        <path class="ln acc" d="M390,392 V416 H685 V178" marker-end="url(#ah-acc)"/>
+        <text class="n-lab" x="410" y="409">map note · background: what's known so far</text>
+        <path class="ln acc" d="M85,275 V444 H715 V178" marker-end="url(#ah-acc)"/>
+        <text class="n-lab" x="105" y="436">thread note · a cue indicating which thread to pull on</text>
+      </svg>
+    </div>
+    <figcaption>Sam and the participant talk live, and every turn lands in a numbered transcript. After each answer, Jev reads it and re-ranks the threads. Every 20 to 60 seconds, Sol updates the conversation map. Two kinds of note reach Sam's earpiece: the <strong>thread note</strong> is the cue, and the <strong>map note</strong> is background on the participant and what's known so far.</figcaption>
+  </figure>
+
+  <h3 id="flow">Example conversation flow</h3>
+  <p>Here's how that plays out in a made-up interview with a mobile developer who built an order-ahead app for a chain of coffee shops, twelve minutes in. Solid boxes are everything the participant hears. Dashed boxes are what happens behind the scenes. Times are minutes and seconds into the call. Later parts zoom in on each step.</p>
+  <figure>
+    <div class="duo-head" aria-hidden="true"><span class="h-call"><i></i>On the call</span><span class="h-back"><i></i>Behind the scenes</span></div>
+    <ol class="duo">
+    <li class="call c-participant"><time>12:04</time><div class="card"><span class="who-tag">Participant</span>“Honestly, the hardest part was getting baristas to trust the order screen. They'd worked off paper tickets for years, so we piloted it in three stores for a month first.”</div></li>
+    <li class="back c-jev"><time>12:04</time><div class="card"><span class="who-tag">Jev</span><p>Reads the answer in a tenth of a second.</p><ul>
+        <li>It's still about barista trust, so the cue Sam already has, "keep pulling on barista trust," stands. No new note.</li>
+        <li>It also answers "What the app replaced" (paper tickets), so Sam won't be steered back there.</li>
+        <li>The three-store pilot isn't on the conversation map yet, so Jev wakes Sol. Sol needs several seconds.</li></ul></div></li>
+    <li class="call c-sam"><time>12:05</time><div class="card"><span class="who-tag">Sam</span>“Three stores first. What finally got the baristas to trust it?”<small>Sam answers at once with what it already has. It never waits for Sol.</small></div></li>
+    <li class="back c-sol"><time>12:11</time><div class="card"><span class="who-tag">Sol</span><p>While the participant answers, Sol finishes updating the conversation map:</p><ul>
+        <li>Adds the fact "Three-store pilot."</li>
+        <li>Closes "What the app replaced" as answered.</li>
+        <li>Opens a new thread, "Who chose the pilot," with a guess: probably not the developers' idea.</li></ul></div></li>
+    <li class="back c-jev"><time>12:11</time><div class="card"><span class="who-tag">Jev</span><p>Sizes up the new thread: likely to lead to a good story. It isn't the top pick yet, because the participant is still talking about barista trust.</p></div></li>
+    <li class="call c-participant"><time>12:31</time><div class="card"><span class="who-tag">Participant</span>“What did it was the first day of the holiday menu. The paper stores were buried in tickets, and ours kept up.”</div></li>
+    <li class="back c-jev"><time>12:31</time><div class="card"><span class="who-tag">Jev</span><ul>
+        <li>Barista trust is now answered, so the top pick moves to "Who chose the pilot."</li>
+        <li>The pick changed, so a new note goes to Sam's earpiece:<span class="note-line">Worth pulling next (Who chose the pilot): still unknown: who decided to start with three stores, and why. Guess: not the developers' idea.</span></li>
+        <li>The holiday rush is new, so Jev wakes Sol again so it can be added to the conversation map.</li></ul></div></li>
+    <li class="call c-sam"><time>12:32</time><div class="card"><span class="who-tag">Sam</span>“Holiday rush, that'll do it. I'm guessing the pilot wasn't the developers' idea, or…?”<small>Sam reacts first, then turns the note's guess into a question in its own words (“guess and leave it open,” Part 7).</small></div></li>
+    <li class="back c-sol"><time>12:38</time><div class="card"><span class="who-tag">Sol</span><p>Finishes its next update: adds the holiday-menu launch as a fact and closes "Barista trust" as answered.</p></div></li>
+    </ol>
+  </figure>
+  <p>In those 34 seconds, Sam never waited. Only one note went out, at the moment the top pick changed, and Sam was free to use it or not.</p>
+</section>
+
+<!-- 5 -->
+<section id="clocks">
+  <span class="eyebrow">Part 3</span>
+  <h2>Three clocks</h2>
+  <p>The system runs three loops at different speeds. Each does only work it can finish in time for its own clock.</p>
+
+  <figure>
+    <div class="frame">
+      <div class="legend">
+        <span class="c-participant"><i class="sw"></i>Participant speaking</span>
+        <span class="c-sam"><i class="sw"></i>Sam speaking</span>
+        <span class="c-jev"><i class="sw"></i>Jev reading</span>
+        <span class="c-sol"><i class="sw"></i>Sol updating the conversation map</span>
+        <span class="c-cue"><i class="sw diamond"></i>Thread note: a new cue for Sam</span>
+      </div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 226" role="img" aria-label="Two minutes from the middle of an interview, in three rows. Jev reads each answer the moment it ends and re-ranks the threads Sol already wrote. When an answer brings a new detail, Jev also wakes Sol, and once Sol's update lands, Jev rates the new threads and re-ranks again. Sol runs three times: woken by a new detail, by a minute passing, and by another new detail. Thread notes land at 12:25, 12:34, 12:53 and 13:33, each right after a Jev read. Some of Jev's reads change nothing and send no note.">
+          <g>
+            <line class="ln grid" x1="120" y1="18" x2="120" y2="178"/><line class="ln grid" x1="220" y1="18" x2="220" y2="178"/><line class="ln grid" x1="320" y1="18" x2="320" y2="178"/>
+            <line class="ln grid" x1="420" y1="18" x2="420" y2="178"/><line class="ln grid" x1="520" y1="18" x2="520" y2="178"/><line class="ln grid" x1="620" y1="18" x2="620" y2="178"/>
+            <line class="ln grid" x1="720" y1="18" x2="720" y2="178"/>
+          </g>
+          <text class="n-title sm" x="10" y="45">Conversation</text>
+          <text class="n-title sm" x="10" y="99">Jev</text>
+          <text class="n-title sm" x="10" y="149">Sol</text>
+          <g class="c-sam"><rect class="seg" x="120" y="28" width="25" height="24" rx="2"/><rect class="seg" x="245" y="28" width="20" height="24" rx="2"/><rect class="seg" x="385" y="28" width="20" height="24" rx="2"/><rect class="seg" x="525" y="28" width="20" height="24" rx="2"/><rect class="seg" x="665" y="28" width="20" height="24" rx="2"/></g>
+          <g class="c-participant"><rect class="seg" x="150" y="28" width="90" height="24" rx="2"/><rect class="seg" x="270" y="28" width="110" height="24" rx="2"/><rect class="seg" x="410" y="28" width="110" height="24" rx="2"/><rect class="seg" x="550" y="28" width="110" height="24" rx="2"/><rect class="seg" x="690" y="28" width="30" height="24" rx="2"/></g>
+          <g class="c-jev"><rect class="seg" x="241" y="82" width="2" height="24"/><rect class="seg" x="286" y="82" width="2" height="24"/><rect class="seg" x="381" y="82" width="2" height="24"/><rect class="seg" x="521" y="82" width="2" height="24"/><rect class="seg" x="582" y="82" width="2" height="24"/><rect class="seg" x="661" y="82" width="2" height="24"/><rect class="seg" x="710" y="82" width="2" height="24"/></g>
+          <text class="n-lab" x="236" y="122" text-anchor="end">reads an answer</text>
+          <text class="n-lab" x="292" y="122">rates Sol's new threads</text>
+          <g class="c-sol"><rect class="seg" x="245" y="132" width="40" height="24" rx="3"/><rect class="seg" x="545" y="132" width="36" height="24" rx="3"/><rect class="seg" x="665" y="132" width="44" height="24" rx="3"/></g>
+          <line class="ln dot" x1="245" y1="107" x2="245" y2="130"/>
+          <line class="ln dot" x1="665" y1="107" x2="665" y2="130"/>
+          <text class="n-lab" x="245" y="171">woken: new detail</text>
+          <text class="n-lab" x="545" y="171">woken: a minute passed</text>
+          <g><line class="ln dot" x1="242" y1="81" x2="242" y2="52"/><line class="ln dot" x1="287" y1="81" x2="287" y2="52"/><line class="ln dot" x1="382" y1="81" x2="382" y2="52"/><line class="ln dot" x1="583" y1="81" x2="583" y2="52"/></g>
+          <text class="n-lab" x="236" y="18" text-anchor="end">Jev re-ranks existing threads</text>
+          <text class="n-lab" x="293" y="18">Jev → Sol → Jev</text>
+          <g><path class="cue" d="M242,30 L252,40 L242,50 L232,40 Z"/><path class="cue" d="M287,30 L297,40 L287,50 L277,40 Z"/><path class="cue" d="M382,30 L392,40 L382,50 L372,40 Z"/><path class="cue" d="M583,30 L593,40 L583,50 L573,40 Z"/></g>
+          <g>
+            <text class="n-lab" x="120" y="196" text-anchor="middle">12:00</text><text class="n-lab" x="220" y="196" text-anchor="middle">12:20</text><text class="n-lab" x="320" y="196" text-anchor="middle">12:40</text>
+            <text class="n-lab" x="420" y="196" text-anchor="middle">13:00</text><text class="n-lab" x="520" y="196" text-anchor="middle">13:20</text><text class="n-lab" x="620" y="196" text-anchor="middle">13:40</text>
+            <text class="n-lab" x="720" y="196" text-anchor="middle">14:00</text>
+          </g>
+          <text class="n-lab" x="420" y="216" text-anchor="middle">interview clock (minutes:seconds)</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>An illustrative two minutes from mid-interview, drawn to scale, so Sol has already written threads to rank. A cue reaches Sam two ways. Usually Jev re-ranks the existing threads a tenth of a second after an answer ends, so the cue is waiting as Sam starts to speak. When an answer brings something new, Jev also wakes Sol; once Sol's update lands, Jev rates the new threads and re-ranks again. A thread note goes out only when the top pick changes, so some reads send nothing.</figcaption>
+  </figure>
+
+  <div class="clocks">
+    <div class="clock c-sam"><span class="speed">Instant</span><h4>The voice loop</h4><p>Sam listens and replies. Nothing else ever makes Sam wait.</p></div>
+    <div class="clock c-jev"><span class="speed">~0.1 s per answer</span><h4>The turn loop</h4><p>When the participant finishes a turn, Jev reads it and re-ranks the threads. If the top pick changed, a new thread note goes out.</p></div>
+    <div class="clock c-sol"><span class="speed">Every 20–60 s</span><h4>The map loop</h4><p>Sol updates the conversation map, one update at a time, at least 20 seconds apart. Reasons that pile up meanwhile go to the next update together.</p></div>
+  </div>
+
+  <p>Sol wakes for one of three reasons:</p>
+  <ul>
+    <li><strong>Something new.</strong> Jev is at least 0.8 sure the latest answer has something the conversation map lacks.</li>
+    <li><strong>A minute passed</strong> since the last update, and the participant has said something since.</li>
+    <li><strong>Research came back</strong> from Luna.</li>
+  </ul>
+</section>
+
+<!-- 6 -->
+<section id="map">
+  <span class="eyebrow">Part 4</span>
+  <h2>The conversation map</h2>
+  <p class="pull">The conversation map is where the interview's memory lives.</p>
+  <p>It's the producer's running picture of the interview: what's been covered, what's still missing, and what's come up along the way that's worth digging into. Sol writes it, Jev ranks its threads, and Sam hears a short summary. The example is a made-up project: an order-ahead app for a chain of coffee shops, described by the mobile developer who built it.</p>
+
+  <figure>
+    <div class="frame">
+      <div class="legend">
+        <span class="c-sol"><i class="sw"></i>Fact the participant stated</span>
+        <span class="c-participant"><i class="sw"></i>The participant</span>
+        <span class="c-accent"><i class="sw dash"></i>Thread: a gap still open</span>
+      </div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 410" role="img" aria-label="Example conversation map. Facts: the participant, a mobile developer, built the order-ahead app. The barista screen is part of the app. The operations manager works for the coffee chain, which is involved with the app. A three-store pilot involved the app. Open threads: the team, who chose the pilot, and barista trust.">
+          <g class="c-participant"><rect class="box dash" x="40" y="30" width="180" height="56" rx="6"/><text class="n-eye" x="52" y="47">VANTAGE</text><text class="n-sub" x="52" y="64">joined in month three,</text><text class="n-sub" x="52" y="79">not in client meetings</text></g>
+          <line class="ln dot" x1="130" y1="86" x2="130" y2="139"/>
+
+          <g class="c-sol"><rect class="box" x="290" y="30" width="180" height="56" rx="6"/><text class="n-eye" x="302" y="48">PERSON</text><text class="n-title sm" x="302" y="70">Operations manager</text></g>
+          <g class="c-sol"><rect class="box" x="540" y="30" width="180" height="56" rx="6"/><text class="n-eye" x="552" y="48">ORGANIZATION</text><text class="n-title sm" x="552" y="70">Coffee chain</text></g>
+          <g class="c-participant"><rect class="box" x="40" y="140" width="180" height="56" rx="6"/><text class="n-eye" x="52" y="158">PARTICIPANT</text><text class="n-title sm" x="52" y="180">Mobile developer</text></g>
+          <g class="c-sol"><rect class="box" x="290" y="140" width="180" height="56" rx="6"/><text class="n-eye" x="302" y="158">PRODUCT</text><text class="n-title sm" x="302" y="180">Order-ahead app</text></g>
+          <g class="c-sol"><rect class="box" x="540" y="140" width="180" height="56" rx="6"/><text class="n-eye" x="552" y="158">FEATURE</text><text class="n-title sm" x="552" y="180">Barista screen</text></g>
+          <g class="c-sol"><rect class="box" x="290" y="250" width="180" height="56" rx="6"/><text class="n-eye" x="302" y="268">EVENT</text><text class="n-title sm" x="302" y="290">Three-store pilot</text></g>
+
+          <line class="ln" x1="220" y1="168" x2="287" y2="168" marker-end="url(#ah)"/><text class="n-lab" x="254" y="160" text-anchor="middle">built</text>
+          <line class="ln" x1="540" y1="168" x2="473" y2="168" marker-end="url(#ah)"/><text class="n-lab" x="506" y="160" text-anchor="middle">part of</text>
+          <line class="ln" x1="470" y1="58" x2="537" y2="58" marker-end="url(#ah)"/><text class="n-lab" x="504" y="50" text-anchor="middle">works for</text>
+          <line class="ln" x1="560" y1="86" x2="454" y2="138" marker-end="url(#ah)"/><text class="n-lab" x="528" y="122">involved</text>
+          <line class="ln" x1="380" y1="250" x2="380" y2="199" marker-end="url(#ah)"/><text class="n-lab" x="388" y="229">involved</text>
+
+          <g class="c-accent">
+            <rect class="box dash" x="30" y="345" width="200" height="48" rx="6"/><text class="n-eye" x="42" y="362">THREAD · OPEN</text><text class="n-title sm" x="42" y="382">The team</text>
+            <rect class="box dash" x="275" y="345" width="210" height="48" rx="6"/><text class="n-eye" x="287" y="362">THREAD · OPEN</text><text class="n-title sm" x="287" y="382">Who chose the pilot</text>
+            <rect class="box dash" x="525" y="345" width="210" height="48" rx="6"/><text class="n-eye" x="537" y="362">THREAD · OPEN</text><text class="n-title sm" x="537" y="382">Barista trust</text>
+          </g>
+          <line class="ln acc dash" x1="130" y1="345" x2="130" y2="197"/>
+          <line class="ln acc dash" x1="210" y1="345" x2="305" y2="197"/>
+          <line class="ln acc dash" x1="380" y1="345" x2="380" y2="307"/>
+          <line class="ln acc dash" x1="630" y1="345" x2="630" y2="197"/>
+        </svg>
+      </div>
+    </div>
+    <figcaption>A small slice of a conversation map. Solid boxes are facts the participant stated, joined by labeled links. Dashed boxes are threads: gaps, each hanging off the facts it's about.</figcaption>
+  </figure>
+
+  <p>The conversation map has three parts:</p>
+  <ul>
+    <li><strong>Facts.</strong> People, organizations, products, features, events, decisions and terms, each citing the passage it came from, joined by links such as built, part of and works for. Up to 160 items.</li>
+    <li><strong>About the participant.</strong> Their <em>vantage</em> (what they can speak to firsthand, such as "joined in month three; not in client meetings") and <em>preferences</em> (how they like to be interviewed). Both cite the participant.</li>
+    <li><strong>Threads.</strong> Gaps in what we know. Sol keeps roughly 4 to 10 open.</li>
+  </ul>
+
+  <h3 id="truth">Where facts come from</h3>
+  <p>Sam is encouraged to guess and to have opinions, because that draws out good answers. But a guess stays a guess until the participant confirms it.</p>
+
+  <figure>
+    <div class="frame truth">
+      <div class="truth-row c-sam">
+        <div class="src"><b>The participant says it</b>"We piloted it in three stores for a month."</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="rule">Points to the exact words in the transcript. Code checks that the participant really said them.</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="out"><span class="verdict yes" role="img" aria-label="Accepted as a project fact">✓</span><div><b>A fact on the conversation map</b>Three-store pilot</div></div>
+      </div>
+      <div class="truth-row c-participant">
+        <div class="src"><b>Sam guesses it</b>"Sounds like ops pushed for that?"</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="rule">Doesn't count on its own. If the participant confirms it, the fact cites their reply.</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="out"><span class="verdict no" role="img" aria-label="Not a project fact">✗</span><div><b>Still a guess</b>Until they confirm it</div></div>
+      </div>
+      <div class="truth-row c-luna">
+        <div class="src"><b>Luna finds it online</b>"Runs about 40 shops in two states."</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="rule">Cites the lookup, such as <span class="mono">L1</span>, and is kept apart from project facts.</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="out"><span class="verdict no" role="img" aria-label="Not a project fact">✗</span><div><b>Public background</b>Labeled "not project fact" for Sam</div></div>
+      </div>
+    </div>
+    <figcaption>Three sources, three treatments. Only the first can say what happened on the project.</figcaption>
+  </figure>
+  <p>Jev follows the same rule when judging whether a gap was answered. Sam's question or guess alone never answers it. A participant's "yeah, that's right" to Sam's guess does, because the confirmation is theirs.</p>
+
+  <h3>A thread is a gap, never a question</h3>
+  <p>A thread names what's unknown and offers a guess. It doesn't script Sam, so Sam can raise it at the right moment, in its own words, or not at all.</p>
+  <p>The guess matters, because people correct a wrong guess faster than they answer a blank question: <em>"I'm guessing the pilot wasn't the developers' idea, or…?"</em></p>
+
+  <figure>
+    <div class="anatomy">
+      <div class="thread-card">
+        <dl>
+          <dt>Label</dt><dd><strong>Who chose the pilot</strong></dd>
+          <dt>Still unknown</dt><dd>who decided to start with three stores, and why</dd>
+          <dt>Guess</dt><dd>operations insisted after an earlier rollout went badly</dd>
+          <dt>Anchored to</dt><dd>Three-store pilot</dd>
+          <dt>Related</dt><dd>Barista trust</dd>
+          <dt class="hidden-row">Topics</dt><dd class="hidden-row">Decisions &amp; stakeholders <span class="muted">(Sam never sees this)</span></dd>
+          <dt>Status</dt><dd>open</dd>
+        </dl>
+      </div>
+      <div class="notes-col">
+        <p><b>Label:</b> two to six words.</p>
+        <p><b>Still unknown:</b> twelve words at most. The hole, not the question.</p>
+        <p><b>Guess:</b> fifteen words at most. Sam can try it out loud; it never counts as fact.</p>
+        <p><b>Anchors and related:</b> where the gap sits, so code can tell which threads are near each other.</p>
+        <p><b>Topics:</b> which closeout topics its answer would explore. Sol only (Part 5).</p>
+        <p><b>Status:</b> open, done or off, with a reason.</p>
+      </div>
+    </div>
+    <figcaption>The parts of one thread.</figcaption>
+  </figure>
+
+  <p>Two threads start every interview: <strong>the team</strong> (who was on it and the participant's own part) and <strong>a win</strong> (when they show pride in something, find out what made it work).</p>
+
+  <h3>How a thread ends</h3>
+  <figure>
+    <div class="frame scroll">
+      <svg viewBox="0 0 720 220" role="img" aria-label="Thread lifecycle: an open thread becomes done when Sol judges it answered, or off when Sol rules it out.">
+        <g class="c-accent"><rect class="box dash" x="30" y="75" width="160" height="60" rx="8"/><text class="n-title" x="110" y="100" text-anchor="middle">Open</text><text class="n-sub" x="110" y="119" text-anchor="middle">a gap Sam could pull on</text></g>
+        <path class="ln" d="M190,105 H330"/>
+        <path class="ln" d="M330,105 V50 H517" marker-end="url(#ah)"/>
+        <path class="ln" d="M330,105 V165 H517" marker-end="url(#ah)"/>
+        <text class="n-sub" x="425" y="41" text-anchor="middle">Sol: the participant answered it</text>
+        <text class="n-sub" x="425" y="156" text-anchor="middle">Sol: it's ruled out</text>
+        <g class="c-sam"><rect class="box" x="520" y="20" width="175" height="60" rx="8"/><text class="n-title" x="607" y="45" text-anchor="middle">Done</text><text class="n-sub" x="607" y="64" text-anchor="middle">answered · can reopen</text></g>
+        <g class="c-code"><rect class="box" x="520" y="125" width="175" height="82" rx="8"/><text class="n-title" x="607" y="148" text-anchor="middle">Off</text><text class="n-sub" x="607" y="167" text-anchor="middle">declined or dodged twice,</text><text class="n-sub" x="607" y="182" text-anchor="middle">outside what they saw,</text><text class="n-sub" x="607" y="197" text-anchor="middle">or a false premise</text></g>
+      </svg>
+    </div>
+    <figcaption>Only Sol can close a thread. Code can push one down for a few minutes (Part 6), but that's temporary.</figcaption>
+  </figure>
+  <p>When a thread is ruled out, the reason reaches Sam as a fact about the participant ("wasn't in client meetings"), not as a do-not-ask list. Do-not-ask lists tend to put the topic in Sam's mouth.</p>
+</section>
+
+<!-- topics -->
+<section id="topics">
+  <span class="eyebrow">Part 5</span>
+  <h2>Predefined interview topics</h2>
+  <p class="lead">A closeout should cover certain ground: what was delivered, what working with the client was like, and how the team worked. The app breaks that into fourteen <strong>closeout topics</strong>. They shape what Sol puts on the conversation map, but they never reach Sam.</p>
+  <p>That's deliberate. Hand a fast voice a checklist and it works down the list, which is the canned interview from Part 1. So the topics stay backstage. The most they can do is put a well-aimed thread on the conversation map, and that thread still has to earn its way to Sam like any other.</p>
+
+  <figure>
+    <div class="frame">
+      <ol class="steps">
+        <li class="c-sol"><b>Sol has the list</b>Every update starts with the fourteen topics and a test for when each one counts as explored.</li>
+        <li class="c-jev"><b>Jev grades</b>Every few seconds, Jev re-reads the transcript and grades each topic against its test.</li>
+        <li class="c-sol"><b>Sol fills gaps</b>For a topic nothing covers yet, Sol writes a thread anchored in something the participant said.</li>
+        <li class="c-sam"><b>Sam may hear it</b>Only if that thread ranks top, and only its label, unknown and guess. Never the topic.</li>
+      </ol>
+    </div>
+    <figcaption>How a topic turns into something Sam might ask.</figcaption>
+  </figure>
+
+  <h3>Fourteen topics, each with a test</h3>
+  <p>The topics fall into three groups. Each comes with a plain test of what counts, written to rule out near misses. For <em>Pace &amp; approvals</em>, the participant has to describe how quickly the client reviewed, approved or got back to the team, with a concrete effect. How fast the team built its own prototype doesn't count. For <em>Your role</em>, "we built the app" isn't enough. It takes the participant's own part.</p>
+
+  <figure>
+    <div class="frame">
+      <div class="topics">
+        <div class="topic"><h4>What you delivered</h4><ul>
+          <li><span>Deliverables &amp; scope</span><span class="lvl explored">Explored</span></li>
+          <li><span>Your role</span><span class="lvl explored">Explored</span></li>
+          <li><span>Who contributed what</span><span class="lvl touched">Touched</span></li>
+          <li><span>Standouts &amp; growth</span><span class="lvl not-yet">Not yet</span></li>
+        </ul></div>
+        <div class="topic"><h4>Working with the client</h4><ul>
+          <li><span>Onboarding &amp; access</span><span class="lvl not-yet">Not yet</span></li>
+          <li><span>Decisions &amp; stakeholders</span><span class="lvl touched">Touched</span></li>
+          <li class="gap"><span>Pace &amp; approvals</span><span class="lvl not-yet">Not yet</span></li>
+          <li><span>Teams, vendors &amp; silos</span><span class="lvl set-aside">Set aside</span></li>
+          <li><span>Friction &amp; advice for next time</span><span class="lvl explored">Explored</span></li>
+        </ul></div>
+        <div class="topic"><h4>How the team worked</h4><ul>
+          <li><span>What worked well</span><span class="lvl touched">Touched</span></li>
+          <li><span>What could work better</span><span class="lvl not-yet">Not yet</span></li>
+          <li><span>Communication &amp; handoffs</span><span class="lvl touched">Touched</span></li>
+          <li><span>Tools &amp; process</span><span class="lvl not-yet">Not yet</span></li>
+          <li><span>Support, staffing &amp; time</span><span class="lvl not-yet">Not yet</span></li>
+        </ul></div>
+      </div>
+    </div>
+    <figcaption>Illustrative grades twelve minutes into the coffee-shop interview. Nothing open would explore <em>Pace &amp; approvals</em> yet, so it's a candidate for a gap thread.</figcaption>
+  </figure>
+
+  <h3>Jev keeps the grades</h3>
+  <p>In a separate pass every few seconds, whenever there's new talk, Jev re-reads the whole transcript and gives each topic one of four grades:</p>
+  <dl class="levels">
+    <dt><span class="lvl not-yet">Not yet</span></dt><dd>Nothing the participant has said addresses it.</dd>
+    <dt><span class="lvl touched">Touched</span></dt><dd>It came up, but their words don't answer it yet. A passing mention lands here.</dd>
+    <dt><span class="lvl explored">Explored</span></dt><dd>Their own words pass the test. One clear fact can be enough.</dd>
+    <dt><span class="lvl set-aside">Set aside</span></dt><dd>They declined it, don't know, or said it doesn't apply to this project.</dd>
+  </dl>
+  <p>Each grade points to the participant's words that support it. Sam raising a topic, guessing or paraphrasing doesn't count, and neither does a vague "mm." Grades are steadied so a topic doesn't flicker back and forth, and a set-aside topic stays closed until the participant reopens it. Sol reads them at the start of every update, as hints rather than facts.</p>
+
+  <h3>How topics shape the conversation map</h3>
+  <p>Sol uses the topics in two ways.</p>
+  <p><strong>Tagging.</strong> Every thread lists the one or two topics its answer would explore, not ones it merely mentions. That shows Sol which topics already have a thread working toward them.</p>
+  <p><strong>Gap threads.</strong> When a topic is still thin and no open thread would explore it, Sol may write one that would, for at most two topics per update. A gap thread follows the same rules as any other: anchored in something the participant said, with one specific unknown and a guess.</p>
+
+  <div class="vs">
+    <div>
+      <h4>Never a topic as a thread</h4>
+      <div class="bubble">Client review processes</div>
+      <ul>
+        <li>Could come from any interview</li>
+        <li>Nothing the participant said to build on</li>
+        <li>Sam ends up reading out a survey</li>
+      </ul>
+    </div>
+    <div>
+      <h4>A gap thread</h4>
+      <div class="thread-card">
+        <dl>
+          <dt>Label</dt><dd><strong>Holiday menu sign-off</strong></dd>
+          <dt>Still unknown</dt><dd>how long the chain took to approve the holiday menu</dd>
+          <dt>Guess</dt><dd>it waited on the regional manager's weekly call</dd>
+          <dt>Anchored to</dt><dd>Holiday menu launch</dd>
+          <dt class="hidden-row">Topics</dt><dd class="hidden-row">Pace &amp; approvals <span class="muted">(Sam never sees this)</span></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <p>Sol never writes a gap thread for something the participant set aside or can't speak to. And gap threads get no boost when Jev ranks the threads. They compete on interest like everything else, so a topic comes up only when the conversation gives it an opening. If it never does, the topic stays uncovered: the participant comes first.</p>
+  <p>When the interview ends, Jev grades the full transcript one last time, from scratch, and the written summary is organized around the same three groups.</p>
+</section>
+
+<!-- 9 -->
+<section id="pick">
+  <span class="eyebrow">Part 6</span>
+  <h2>Picking the cue</h2>
+  <p>Sol sees the big picture but is too slow to know what fits <em>right now</em>. That's Jev's job, plus some simple math.</p>
+
+  <h3>Jev's quick read of every answer</h3>
+  <p>After every participant turn, Jev answers four narrow questions about it, in about a tenth of a second. Each answer comes with a confidence from 0 (surely no) to 1 (surely yes). Jev never says what Sam should ask. Simple code rules turn the numbers into actions.</p>
+  <p>Here's Jev's read of one answer from the example conversation in Part 2:</p>
+  <figure>
+    <div class="frame">
+      <p class="turn-quote"><span class="pid">Participant</span>“Honestly, the hardest part was getting baristas to trust the order screen. They'd worked off paper tickets for years, so we piloted it in three stores for a month first.”</p>
+      <div class="readout-head" aria-hidden="true"><span>Question</span><span>Jev's answer</span><span>What happens</span></div>
+      <ol class="readout">
+        <li>
+          <div class="rq"><span class="rq-n">1</span>Which open thread is the conversation on?</div>
+          <div class="ra"><span class="lbl">Jev's answer</span><b>Barista trust</b> <span class="num">0.84</span></div>
+          <div class="rx"><span class="lbl">What happens</span>It stays the current thread. Code sticks with it unless another thread clearly scores higher (see Stickiness).</div>
+        </li>
+        <li>
+          <div class="rq"><span class="rq-n">2</span>Does it add anything the conversation map doesn't have?</div>
+          <div class="ra"><span class="lbl">Jev's answer</span><b>Yes: the three-store pilot</b> <span class="num">0.90</span></div>
+          <div class="rx"><span class="lbl">What happens</span>Over 0.8, so Jev wakes Sol to add it to the map. <span class="tag c-sol">wakes Sol</span></div>
+        </li>
+        <li>
+          <div class="rq"><span class="rq-n">3</span>Did it settle any open thread?</div>
+          <div class="ra"><span class="lbl">Jev's answer</span><b>What the app replaced: answered</b> <span class="num">0.86</span><span class="rnote">The other two: still open</span></div>
+          <div class="rx"><span class="lbl">What happens</span>Held down, so Sam isn't steered back to something just covered (see Holds). <span class="tag c-code">held down</span></div>
+        </li>
+        <li>
+          <div class="rq"><span class="rq-n">4</span>Could each open thread be Sam's natural next question?</div>
+          <div class="ra"><span class="lbl">Jev's answer</span><span class="rlist"><span><b>Barista trust</b> <span class="num">0.90</span></span><span><b>The team</b> <span class="num">0.20</span></span><span><b>What the app replaced</b> <span class="num">0.15</span></span></span></div>
+          <div class="rx"><span class="lbl">What happens</span>These numbers feed the score below.</div>
+        </li>
+      </ol>
+    </div>
+    <figcaption>Question 3 is asked about each open thread. Besides answered, a thread can be declined (they don't know, weren't there, or it doesn't apply) or stalled (Sam asked, and the answer went nowhere). Otherwise it stays open.</figcaption>
+  </figure>
+
+  <p>Two more questions are asked once per thread, when Sol creates or rewords it, rather than after every answer:</p>
+  <ul>
+    <li><strong>Spicy:</strong> would the answer reveal friction, a decision, a consequence or a lesson?</li>
+    <li><strong>Grounding:</strong> does Sam need this to understand the project at all: what was built, what it does, and for whom?</li>
+  </ul>
+
+  <h3>The score</h3>
+  <div class="formula">score = <span class="t-n">natural next</span> + <span class="t-s">½ × spicy</span> + <span class="t-g">0.4 × grounding</span> <span class="muted">(grounding fades to zero over the first 5 minutes)</span></div>
+  <p><span style="color:var(--accent);font-weight:600">Natural next</span> counts most, so cues follow the conversation. <span style="color:var(--jev);font-weight:600">Spicy</span> pulls toward the stories worth telling. <span style="color:var(--sol);font-weight:600">Grounding</span> helps early, while Sam learns what was built and for whom, then fades.</p>
+
+  <h3>Stickiness</h3>
+  <p>To prevent topic ping-pong, code keeps pointing at the current thread (the one Jev says the conversation is on) unless a rival beats it by a <strong>margin</strong>.</p>
+
+  <figure>
+    <div class="frame">
+      <div class="legend">
+        <span class="c-accent"><i class="sw"></i>Natural next (×1)</span>
+        <span class="c-jev"><i class="sw"></i>Spicy (×½)</span>
+        <span class="c-sol"><i class="sw"></i>Grounding (×0.4, fading)</span>
+        <span class="c-accent"><i class="sw dash"></i>Margin a rival must clear</span>
+      </div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 340" role="img" aria-label="Two moments. At 2:30, thread B scores 1.29 against current thread A's 1.25, but the margin requires 1.45, so code keeps pulling A. At 3:10, A drops to 0.82 and B scores 1.36, past the 0.97 line, so code tugs toward B.">
+          <g>
+            <line class="ln grid" x1="230" y1="30" x2="230" y2="300"/><line class="ln grid" x1="310" y1="30" x2="310" y2="300"/>
+            <line class="ln grid" x1="390" y1="30" x2="390" y2="300"/><line class="ln grid" x1="470" y1="30" x2="470" y2="300"/>
+          </g>
+          <text class="n-title sm" x="20" y="20">2:30 in · 3rd turn on A · margin 0.20</text>
+          <text class="n-sub" x="20" y="57">A · Route planning <tspan class="n-lab">(current)</tspan></text>
+          <g><rect class="c-accent fill-c" x="230" y="40" width="136" height="24"/><rect class="c-jev fill-c" x="366" y="40" width="48" height="24"/><rect class="c-sol fill-c" x="414" y="40" width="16" height="24"/></g>
+          <rect class="zone" x="430" y="40" width="32" height="24"/>
+          <text class="n-lab" x="446" y="35" text-anchor="middle">margin</text>
+          <text class="n-sub" x="470" y="57">1.25</text>
+          <text class="n-sub" x="20" y="91">B · Who pushed the rewrite</text>
+          <g><rect class="c-accent fill-c" x="230" y="76" width="131" height="24"/><rect class="c-jev fill-c" x="361" y="76" width="72" height="24"/><rect class="c-sol fill-c" x="433" y="76" width="3" height="24"/></g>
+          <text class="n-sub" x="444" y="93">1.29</text>
+          <text class="n-sub" x="20" y="127">C · What the app does</text>
+          <g><rect class="c-accent fill-c" x="230" y="112" width="48" height="24"/><rect class="c-jev fill-c" x="278" y="112" width="8" height="24"/><rect class="c-sol fill-c" x="286" y="112" width="30" height="24"/></g>
+          <text class="n-sub" x="324" y="129">0.54</text>
+          <text class="n-title sm" x="560" y="80">Keep pulling A</text>
+          <text class="n-lab" x="560" y="97">B leads by 0.04, short</text>
+          <text class="n-lab" x="560" y="111">of the 0.20 margin</text>
+
+          <line class="ln grid" x1="20" y1="152" x2="740" y2="152"/>
+
+          <text class="n-title sm" x="20" y="180">3:10 in · 4th turn on A · margin 0.15</text>
+          <text class="n-sub" x="20" y="217">A · Route planning <tspan class="n-lab">(current)</tspan></text>
+          <g><rect class="c-accent fill-c" x="230" y="200" width="72" height="24"/><rect class="c-jev fill-c" x="302" y="200" width="48" height="24"/><rect class="c-sol fill-c" x="350" y="200" width="12" height="24"/></g>
+          <rect class="zone" x="362" y="200" width="24" height="24"/>
+          <text class="n-lab" x="374" y="195" text-anchor="middle">margin</text>
+          <text class="n-sub" x="394" y="217">0.82</text>
+          <text class="n-sub" x="20" y="251">B · Who pushed the rewrite</text>
+          <g><rect class="c-accent fill-c" x="230" y="236" width="144" height="24"/><rect class="c-jev fill-c" x="374" y="236" width="72" height="24"/><rect class="c-sol fill-c" x="446" y="236" width="2" height="24"/></g>
+          <text class="n-sub" x="456" y="253">1.36</text>
+          <text class="n-sub" x="20" y="287">C · What the app does</text>
+          <g><rect class="c-accent fill-c" x="230" y="272" width="48" height="24"/><rect class="c-jev fill-c" x="278" y="272" width="8" height="24"/><rect class="c-sol fill-c" x="286" y="272" width="22" height="24"/></g>
+          <text class="n-sub" x="316" y="289">0.49</text>
+          <text class="n-title sm" x="560" y="240">Tug toward B</text>
+          <text class="n-lab" x="560" y="257">B leads by 0.54, past</text>
+          <text class="n-lab" x="560" y="271">the 0.15 margin</text>
+
+          <g>
+            <text class="n-lab" x="230" y="318" text-anchor="middle">0</text><text class="n-lab" x="310" y="318" text-anchor="middle">0.5</text>
+            <text class="n-lab" x="390" y="318" text-anchor="middle">1.0</text><text class="n-lab" x="470" y="318" text-anchor="middle">1.5</text>
+          </g>
+          <text class="n-lab" x="350" y="334" text-anchor="middle">score</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>Illustrative numbers. At 2:30, B edges ahead but not by enough, so the cue stays put. By 3:10 the participant has drifted toward B: A's natural-next drops, B's rises, and code switches. Note grounding shrinking between the two.</figcaption>
+  </figure>
+
+  <p>The margin shrinks the longer Sam stays on a thread, so no thread holds the floor forever.</p>
+  <figure>
+    <div class="frame scroll">
+      <svg viewBox="0 0 420 200" role="img" aria-label="Margin by turns spent on the current thread: 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.05." style="min-width:340px;max-width:520px">
+        <line class="ln grid" x1="30" y1="160" x2="400" y2="160"/>
+        <g class="c-accent">
+          <rect class="fill-c" x="50" y="40" width="34" height="120" rx="2"/><rect class="fill-c" x="100" y="60" width="34" height="100" rx="2"/>
+          <rect class="fill-c" x="150" y="80" width="34" height="80" rx="2"/><rect class="fill-c" x="200" y="100" width="34" height="60" rx="2"/>
+          <rect class="fill-c" x="250" y="120" width="34" height="40" rx="2"/><rect class="fill-c" x="300" y="140" width="34" height="20" rx="2"/>
+          <rect class="fill-c" x="350" y="140" width="34" height="20" rx="2"/>
+        </g>
+        <g>
+          <text class="n-sub" x="67" y="33" text-anchor="middle">0.30</text><text class="n-sub" x="117" y="53" text-anchor="middle">0.25</text>
+          <text class="n-sub" x="167" y="73" text-anchor="middle">0.20</text><text class="n-sub" x="217" y="93" text-anchor="middle">0.15</text>
+          <text class="n-sub" x="267" y="113" text-anchor="middle">0.10</text><text class="n-sub" x="317" y="133" text-anchor="middle">0.05</text>
+          <text class="n-sub" x="367" y="133" text-anchor="middle">0.05</text>
+        </g>
+        <g>
+          <text class="n-lab" x="67" y="176" text-anchor="middle">1</text><text class="n-lab" x="117" y="176" text-anchor="middle">2</text><text class="n-lab" x="167" y="176" text-anchor="middle">3</text>
+          <text class="n-lab" x="217" y="176" text-anchor="middle">4</text><text class="n-lab" x="267" y="176" text-anchor="middle">5</text><text class="n-lab" x="317" y="176" text-anchor="middle">6</text>
+          <text class="n-lab" x="367" y="176" text-anchor="middle">7+</text>
+        </g>
+        <text class="n-lab" x="217" y="194" text-anchor="middle">turns spent on the current thread</text>
+      </svg>
+    </div>
+    <figcaption>The margin a rival must beat: 0.30 at first, 0.05 less per turn, never below 0.05.</figcaption>
+  </figure>
+
+  <h3>Holds</h3>
+  <ul>
+    <li><strong>Answered or declined:</strong> held down until Sol rules on it (its next update that started after the answer), 2 minutes at most. Sam isn't pointed back at something just covered, and Sol makes the real call.</li>
+    <li><strong>Stalled:</strong> held down for 3 minutes, so Sam doesn't keep hammering it.</li>
+  </ul>
+  <p>Holds are temporary and never written to the conversation map.</p>
+
+  <h3>Nearby</h3>
+  <p>When two threads score within 0.1, the one closer to the current thread wins: first threads Sol marked as related, then threads sharing a fact. Facts linked to nearly everything, like the product itself, don't count, or every thread would look close.</p>
+  <p>The outcome is <strong>keep pulling</strong> the current thread, <strong>worth pulling next</strong> for a different one, or nothing. Up to two other open threads ride along as options.</p>
+
+  <h3 id="notes">What Sam hears</h3>
+  <p>Sam gets two kinds of private note in its earpiece. The <strong>thread note</strong> says what to pull on next. The <strong>map note</strong> says who Sam is talking to and what's known so far. Each new note replaces the last of its kind, and Sam is free to ignore either.</p>
+
+  <figure>
+    <div class="earnotes">
+      <div class="earnote">
+        <div class="earnote-head"><h4>Thread note</h4><span>What to pull on</span></div>
+        <dl>
+          <dt>Thread</dt><dd><strong>Barista trust</strong>: keep pulling</dd>
+          <dt>Still unknown</dt><dd>what finally made baristas rely on it</dd>
+          <dt>A guess</dt><dd>a rush the paper tickets couldn't handle changed their minds</dd>
+          <dt>Nearby</dt><dd>Who chose the pilot · The team</dd>
+        </dl>
+        <p class="earnote-when">Sent only when Jev's top pick changes.</p>
+      </div>
+      <div class="earnote">
+        <div class="earnote-head"><h4>Map note</h4><span>Who Sam's talking to</span></div>
+        <dl>
+          <dt>About them</dt><dd>Mobile developer from month three; not in client meetings</dd>
+          <dt>They prefer</dt><dd>Concrete examples over big-picture questions</dd>
+          <dt>Known so far</dt><dd>Order-ahead app · Barista screen · Three-store pilot</dd>
+          <dt>Background</dt><dd>The coffee chain has about 40 shops in two states <span class="muted">(from a web lookup, not a project fact)</span></dd>
+        </dl>
+        <p class="earnote-when">Sent at most once a minute, when the map changes.</p>
+      </div>
+    </div>
+    <figcaption>Example notes from the coffee-shop interview. The map note carries up to six of the best-connected facts and three pieces of background, so it stays short as the map grows.</figcaption>
+  </figure>
+
+  <p>Sol writes the words; the app sets them in a fixed format, one line per item, so nothing Sol writes can pose as an instruction. With nothing open, the thread note just says to follow the participant.</p>
+
+</section>
+
+<!-- 10 -->
+<section id="techniques">
+  <span class="eyebrow">Part 7</span>
+  <h2>Interview techniques</h2>
+  <p>Everything so far decides <em>what</em> is worth asking about. <em>How</em> Sam asks is a craft of its own. A gap on the conversation map is never read out as a question. Sam turns it into a natural turn using fourteen techniques written into its instructions, borrowed from how good human interviewers work: a specific guess gets a faster, more honest answer than an open question, and short turns keep the participant talking.</p>
+  <p class="pull">Rule one: follow the participant first.</p>
+  <p>The thread note helps Sam pick what connects to what they just said, and ignoring it is fine. Sam drops a thread once they've answered, can't answer, or decline, and doesn't re-ask what the map note already knows. The notes never name a technique; choosing one is Sam's call in the moment.</p>
+  <p>The examples continue the coffee-shop project. They're illustrations, not scripts: Sam's instructions say never to reuse an example's wording.</p>
+
+  <h3>Start from their story</h3>
+  <p>Ground every question in what this participant built and what they bring up.</p>
+  <ol class="techs">
+      <li>
+        <b>Open on what they built</b>
+        <p>Start with the product and who uses it. Every later question depends on Sam being able to picture it, so Sam comes back here whenever it realizes it can’t.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>I mostly worked on the app side.</p><p class="c-sam"><span>Sam</span>Before anything else, what does the app actually do?</p></div>
+      </li>
+      <li>
+        <b>Follow their turn</b>
+        <p>When they bring up something new, such as a person, a decision or a problem, Sam goes with it for a turn or two. That beats anything in the notes. For a new person, Sam pins down who they are and which side they’re on, then returns to the story.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>Then one store manager quietly went back to paper tickets.</p><p class="c-sam"><span>Sam</span>Wait, back to paper? Whose call was that?</p></div>
+      </li>
+  </ol>
+
+  <h3>Make the honest answer the easy one</h3>
+  <p>Open questions like “what were the challenges?” get polished answers. Something specific to react to gets real ones.</p>
+  <ol class="techs">
+      <li>
+        <b>Guess and leave it open</b>
+        <p>Instead of a blank question, Sam offers a specific guess and trails off so they can correct or finish it. People correct a wrong guess faster than they answer an open question, and it draws more out of a one-line answer.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>Launch week was… a lot.</p><p class="c-sam"><span>Sam</span>I’m guessing the morning rush broke something, or…?</p></div>
+      </li>
+      <li>
+        <b>Either/or with the candid option</b>
+        <p>Rather than asking “why?”, Sam offers two plausible answers, the neutral one first and an unflattering one second, so the honest answer is an easy pick. “Or something else?” leaves room for a third.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>We ended up dropping the loyalty feature.</p><p class="c-sam"><span>Sam</span>Was that a real time crunch, or a convenient excuse? Or something else?</p></div>
+      </li>
+      <li>
+        <b>Have an opinion</b>
+        <p>Sam has a perspective and says it briefly, about decisions, the client or people. An opinion invites agreement or correction, and a correction is just as useful. Only the participant’s answer counts as what happened.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>We piloted it in three stores for a month first.</p><p class="c-sam"><span>Sam</span>Smart. Forty stores at once would’ve been chaos. Your team’s idea?</p></div>
+      </li>
+      <li>
+        <b>Voice the other side</b>
+        <p>Sam says what the client, an executive or a user would say, in their voice. The participant confirms or corrects it, and often reveals the real dynamic between the sides.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>Leadership kept asking when it would be in every store.</p><p class="c-sam"><span>Sam</span>So from their chair it’s: it works in three, why not forty?</p></div>
+      </li>
+  </ol>
+
+  <h3>Show Sam is listening</h3>
+  <p>Short reflections that prove Sam heard, check its understanding, and surface what the participant took for granted.</p>
+  <ol class="techs">
+      <li>
+        <b>Play it back with a lean</b>
+        <p>Sam restates the story in one sentence, then guesses the unstated assumption or where it’s heading. It checks Sam’s understanding and surfaces what they took for granted.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>Halfway through, the chain asked us to handle drive-through orders too.</p><p class="c-sam"><span>Sam</span>So the scope grew mid-build. I’m guessing the deadline didn’t move?</p></div>
+      </li>
+      <li>
+        <b>Finish their sentence</b>
+        <p>When they build up to a point and stop short, Sam says the implication in a few words, as a question. If it’s right, they speed up. If it’s wrong, they correct it.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>The menu changed every season, and the prices lived in a spreadsheet marketing kept, and…</p><p class="c-sam"><span>Sam</span>…and nobody owned it?</p></div>
+      </li>
+      <li>
+        <b>Call back</b>
+        <p>Link a new detail to something they said earlier. It shows Sam is listening and often reveals a pattern. Callbacks quote only what this participant said on this call.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>The operations manager signed off on the pilot.</p><p class="c-sam"><span>Sam</span>Is that the same operations manager from the kickoff?</p></div>
+      </li>
+      <li>
+        <b>Define their words, gently</b>
+        <p>When a word carries weight, like “done” or “phase two,” Sam asks what they mean, after a preface that makes clear it isn’t a challenge.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>The rollout was technically done by spring.</p><p class="c-sam"><span>Sam</span>Quick check, since teams mean different things: what’s “technically done”?</p></div>
+      </li>
+  </ol>
+
+  <h3>Handle the hard moments</h3>
+  <p>Bad news is often the most useful part of a closeout, so Sam neither skips past it nor dwells on it.</p>
+  <ol class="techs">
+      <li>
+        <b>Red flag: react, then one impact question</b>
+        <p>Layoffs, people leaving, cut scope, reversed decisions. Sam acknowledges it in a few words, then asks once what it broke or changed. How it felt comes out without a question about feelings.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>Our designer left halfway through.</p><p class="c-sam"><span>Sam</span>Oof, mid-project. What did that break?</p></div>
+      </li>
+      <li>
+        <b>Next-team scenario</b>
+        <p>Once a costly story has been told, Sam turns it into a lesson by putting a future team in the same spot.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>…so the loyalty mess cost us about two months.</p><p class="c-sam"><span>Sam</span>Next team gets this client tomorrow. What’s the first thing you tell them?</p></div>
+      </li>
+  </ol>
+
+  <h3>How every turn sounds</h3>
+  <p>Two habits that apply to everything Sam says.</p>
+  <ol class="techs">
+      <li>
+        <b>Short, one at a time</b>
+        <p>Under about fifteen words, one question per turn, then stop. No two-part questions, and if they start answering, Sam stops talking.</p>
+        <div class="ex"><p class="c-code"><span>Not</span>Can you walk me through how the pilot came about, who was involved, and what you’d change?</p><p class="c-sam"><span>Sam</span>Who picked the three stores?</p></div>
+      </li>
+      <li>
+        <b>Talk like a peer</b>
+        <p>Casual, direct and a little informal, making clear the messy parts are what’s wanted. Sam has no war stories of its own, but it can go first with a hunch.</p>
+        <div class="ex"><p class="c-participant"><span>Them</span>Overall it went pretty smoothly.</p><p class="c-sam"><span>Sam</span>Honestly, the messy parts are the useful ones. What would you never do again?</p></div>
+      </li>
+  </ol>
+
+  <p>The conversation map feeds these techniques: a thread's guess powers "guess and leave it open," map-note facts make callbacks possible, and the vantage tells Sam which questions would be unfair.</p>
+</section>
+
+<!-- 11 -->
+<section id="research">
+  <span class="eyebrow">Part 8</span>
+  <h2>Looking things up</h2>
+  <p>Any Sol update can request a lookup, and Jev usually sets one off, indirectly. Its quick read never asks whether research is needed, only whether an answer adds something new. A newly named company or product usually does, so Jev wakes Sol. Sol then decides whether public background would help Sam ask better questions, and if so, sends Luna. Jev raises the flag, Sol picks what's worth knowing, and Luna does the legwork.</p>
+  <figure>
+    <div class="frame">
+      <ol class="steps">
+        <li class="c-participant"><b>A name is spoken</b>The participant mentions an organization, product or term.</li>
+        <li class="c-jev"><b>Jev flags it as new</b>The conversation map doesn't have it yet, so Jev wakes Sol.</li>
+        <li class="c-sol"><b>Sol decides</b>If background would help, Sol asks for a lookup: the name, plus a short clue such as "coffee chain."</li>
+        <li class="c-luna"><b>Luna searches</b>Only the name and clue leave the session. Up to 2 facts come back, with links.</li>
+        <li class="c-sol"><b>Back on the conversation map</b>Sol may add them as public background, separate from project facts.</li>
+      </ol>
+    </div>
+    <figcaption>At most 3 lookups per interview. Results arriving wake Sol.</figcaption>
+  </figure>
+  <p>The transcript never goes to web search. Sol chooses what's worth looking up, but the app checks that the name and clue are words the participant actually said before anything is sent. That keeps project details, and any name Sol misheard or made up, out of an outside search. Sam may mention background ("I read that they…"), but not lecture, claim prior familiarity, or challenge the participant with something from a website.</p>
+</section>
+
+<!-- 11 -->
+<section id="production">
+  <span class="eyebrow">Part 9</span>
+  <h2>Running it for real</h2>
+  <p class="lead">A real interview runs for half an hour. It has to stay affordable the whole way, and a bad update or a glitch can't be allowed to break it.</p>
+
+  <h3 id="cost">Keeping it affordable</h3>
+  <p>AI services charge by the <em>token</em>, roughly three-quarters of a word. A model keeps nothing between requests, so every Sol update re-sends the whole conversation so far, and a 30-minute interview means dozens of updates, each longer than the last.</p>
+  <p><strong>Prompt caching</strong> helps. The provider remembers the start of a recent prompt: re-reading it costs 5% of the normal price, and saving a new part costs 125%. The catch is that it only works on an exact match from the very start.</p>
+  <p>So Sol's prompt puts the unchanging parts first, then the transcript as a log that only grows at the end, then a small section that changes every time.</p>
+
+  <figure>
+    <div class="frame">
+      <div class="legend">
+        <span><i class="sw" style="background:var(--accent-soft);border:1px solid var(--accent)"></i>Cached: re-read at 5%</span>
+        <span class="c-jev"><i class="sw"></i>Newest log block: saved at 125%</span>
+        <span><i class="sw" style="background:var(--surface);border:1.5px solid var(--participant)"></i>Changing tail: full price</span>
+      </div>
+      <div class="cache-rows" role="img" aria-label="Three consecutive Sol prompts. Each starts with the same instructions and log blocks, adds one new log block, and ends with a changing tail.">
+        <div class="cache-row"><span class="lbl">Update 5</span><div class="bar"><span class="fix" style="width:26%">instructions + topics</span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="new" style="width:6%"></span><span class="tail" style="width:14%">map + why now</span></div></div>
+        <div class="cache-row"><span class="lbl">Update 6</span><div class="bar"><span class="fix" style="width:26%">instructions + topics</span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="new" style="width:6%"></span><span class="tail" style="width:14%">map + why now</span></div></div>
+        <div class="cache-row"><span class="lbl">Update 7</span><div class="bar"><span class="fix" style="width:26%">instructions + topics</span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="log" style="width:6%"></span><span class="new" style="width:6%"></span><span class="tail" style="width:14%">map + why now</span></div></div>
+      </div>
+      <div class="cost">
+        <div class="cost-lbl"><b>One update, without caching</b><span class="num">≈ 14.5k tokens at full price</span></div>
+        <div class="bar"><span class="full" style="width:100%">14.5k</span></div>
+        <div class="cost-lbl"><b>With caching</b><span class="num">≈ 0.6k + 0.4k + 2.5k ≈ 3.5k</span></div>
+        <div class="bar"><span class="rd" style="width:4%" title="cached reads"></span><span class="new" style="width:2.6%" title="new block"></span><span class="tail" style="width:17.2%" title="tail"></span></div>
+      </div>
+    </div>
+    <figcaption>Top rows not to scale; the bottom pair is. Each update re-reads everything before its newest block from the cache, saves one new block, and pays full price only for the changing tail (the conversation map, Jev's coverage grades, why Sol woke, the clock). About four times cheaper input per update.</figcaption>
+  </figure>
+  <p>Research results are added to the end of the log too. Inserting anything earlier would break the match for everything after it.</p>
+
+  <h3 id="updates">How the conversation map gets updated</h3>
+  <p>Sol doesn't rewrite the conversation map each time. It sends an <strong>edit list</strong>, like tracked changes, and code checks every edit before anything changes.</p>
+
+  <figure>
+    <div class="frame scroll">
+      <svg viewBox="0 0 800 210" role="img" aria-label="Sol reads the transcript, current conversation map, why it woke and the clock, and returns an edit list. Code checks it. If every check passes the map becomes version 13; if any fails the old map, version 12, stays.">
+        <rect class="box plain" x="10" y="35" width="172" height="135" rx="8"/>
+        <text class="n-eye" x="22" y="57">SOL READS</text>
+        <text class="n-sub" x="22" y="82">• the transcript so far</text><text class="n-sub" x="22" y="104">• the current map</text>
+        <text class="n-sub" x="22" y="126">• why it woke up</text><text class="n-sub" x="22" y="148">• the interview clock</text>
+        <line class="ln" x1="182" y1="102" x2="205" y2="102" marker-end="url(#ah)"/>
+        <g class="c-sol"><rect class="box" x="208" y="72" width="90" height="60" rx="8"/><text class="n-title" x="253" y="97" text-anchor="middle">Sol</text><text class="n-sub" x="253" y="116" text-anchor="middle">thinks</text></g>
+        <line class="ln" x1="298" y1="102" x2="323" y2="102" marker-end="url(#ah)"/>
+        <rect class="box plain" x="326" y="20" width="215" height="165" rx="8"/>
+        <text class="n-eye" x="340" y="42">EDIT LIST</text>
+        <text class="n-mono" x="340" y="68">+ add event: the pilot</text>
+        <text class="n-mono" x="340" y="92">+ add thread: who chose it</text>
+        <text class="n-mono" x="340" y="116">~ revise thread: the team</text>
+        <text class="n-mono" x="340" y="140">✓ close thread → done</text>
+        <text class="n-mono" x="340" y="164">– drop duplicate fact</text>
+        <line class="ln" x1="541" y1="102" x2="566" y2="102" marker-end="url(#ah)"/>
+        <g class="c-code"><rect class="box" x="569" y="72" width="80" height="60" rx="8"/><text class="n-title" x="609" y="97" text-anchor="middle">Code</text><text class="n-sub" x="609" y="116" text-anchor="middle">checks</text></g>
+        <line class="ln" x1="649" y1="92" x2="672" y2="57" marker-end="url(#ah)"/>
+        <line class="ln" x1="649" y1="112" x2="672" y2="150" marker-end="url(#ah)"/>
+        <g class="c-sam"><rect class="box" x="675" y="25" width="115" height="60" rx="8"/><text class="n-title sm" x="732" y="50" text-anchor="middle">Map v13</text><text class="n-sub" x="732" y="69" text-anchor="middle">all checks pass</text></g>
+        <g class="c-participant"><rect class="box" x="675" y="120" width="115" height="60" rx="8"/><text class="n-title sm" x="732" y="145" text-anchor="middle">v12 stays</text><text class="n-sub" x="732" y="164" text-anchor="middle">any check fails</text></g>
+      </svg>
+    </div>
+    <figcaption>All or nothing. A bad update can't half-apply; the last good conversation map stays and the next update tries again.</figcaption>
+  </figure>
+
+  <h3 id="guardrails">Guardrails</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Risk</th><th>What prevents it</th></tr></thead>
+      <tbody>
+        <tr><td class="name">Stale advice</td><td>Cues are optional, each replaces the last, and the pick is re-checked after every answer.</td></tr>
+        <tr><td class="name">Made-up facts</td><td>Project facts cite the participant's words, and code checks the citation.</td></tr>
+        <tr><td class="name">A broken update</td><td>Code rejects the whole edit list; the last good conversation map stays.</td></tr>
+        <tr><td class="name">Sneaky instructions</td><td>Fixed note templates; Sol's text is flattened to single lines.</td></tr>
+        <tr><td class="name">Asking again</td><td>Ruled-out threads become facts about the participant's vantage, and Sam drops threads they can't answer or decline.</td></tr>
+        <tr><td class="name">Topic ping-pong</td><td>The stickiness margin.</td></tr>
+        <tr><td class="name">Hammering a dead end</td><td>Stalled threads are held down for 3 minutes.</td></tr>
+        <tr><td class="name">Checklist takeover</td><td>Topics are hidden from Sam, and topic threads get no boost.</td></tr>
+        <tr><td class="name">Runaway time or cost</td><td>Hard limits: 50 s per Sol update, 90 updates, 3 s per Jev read, 3 lookups, 100 notes. Prompt caching.</td></tr>
+        <tr><td class="name">Leaking the conversation</td><td>Only a spoken name and short clue go to web search.</td></tr>
+        <tr><td class="name">A pause or restart</td><td>A checkpoint lets the backstage pick up where it left off.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:1.2rem">Everything is recorded with the interview: each map version, Jev reading, note and lookup, and how long each step took. That makes it possible to replay why Sam got a cue at a given moment, and to measure whether changes help.</p>
+</section>
+
+<!-- 12 -->
+<section id="glossary">
+  <span class="eyebrow">Part 10</span>
+  <h2>Glossary</h2>
+  <dl class="gloss">
+    <dt>Participant</dt><dd>The delivery-team member being interviewed about their project.</dd>
+    <dt>Realtime voice model</dt><dd>An AI that listens and speaks directly, fast enough for conversation. Sam is one.</dd>
+    <dt>Reasoning model</dt><dd>An AI that works through a problem privately before answering. Sol and Luna are both; Sol is stronger, Luna faster and cheaper.</dd>
+    <dt>Judge model</dt><dd>Also called a decision model. Answers narrow yes/no or multiple-choice questions with how sure it is. Jev is one.</dd>
+    <dt>Confidence</dt><dd>A judge's answer, from 0 (surely no) to 1 (surely yes).</dd>
+    <dt>Prompt</dt><dd>Everything handed to a model for one request: instructions plus context.</dd>
+    <dt>Token</dt><dd>A word-piece, about three-quarters of a word. AI pricing and limits are counted in tokens.</dd>
+    <dt>Schema</dt><dd>A strict form a model's answer must fit, so code can check it.</dd>
+    <dt>Prompt caching</dt><dd>The provider remembering the start of a recent prompt so re-reading it is cheap.</dd>
+    <dt>Turn / passage</dt><dd>One finished stretch of speech. Passages are numbered so facts can cite them.</dd>
+    <dt>Conversation map</dt><dd>The interview's memory: what's been covered, what's missing, and what's worth digging into. Holds facts, the participant's vantage and preferences, and threads.</dd>
+    <dt>Vantage</dt><dd>What the participant can and can't speak to firsthand.</dd>
+    <dt>Thread</dt><dd>A gap in what we know, with a guess at the answer. Open, done or off.</dd>
+    <dt>Natural next</dt><dd>Jev's read on whether a thread could be Sam's next question without an abrupt change of subject.</dd>
+    <dt>Spicy</dt><dd>The answer would reveal friction, a decision, a consequence or a lesson.</dd>
+    <dt>Grounding</dt><dd>Sam needs it to understand what was built and for whom. Counts early, fades after 5 minutes.</dd>
+    <dt>Hold</dt><dd>Code temporarily pushing a thread down after Jev reads it as answered, declined or stalled.</dd>
+    <dt>Margin</dt><dd>How much a rival thread must out-score the current one before code switches the cue.</dd>
+    <dt>Cue</dt><dd>A short private note pointing Sam at a gap. Sam can use it or ignore it.</dd>
+    <dt>Thread note</dt><dd>The cue about which gap to keep pulling or pull next.</dd>
+    <dt>Map note</dt><dd>The note about the participant, what's known, and public background.</dd>
+    <dt>Earpiece</dt><dd>The private channel notes arrive on. Sam reads it as its own thinking and never speaks it aloud.</dd>
+  </dl>
+</section>
+
+<footer>
+  All project details on this page are invented for illustration. Typical timings come from recent interviews; limits, weights and thresholds are the values in the current build.
+</footer>
+</main>
+</div>
+<script>
+(function () {
+  try {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+    if (!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (a) { a.removeAttribute('aria-current'); });
+        var a = byId[e.target.id]; if (a) a.setAttribute('aria-current', 'true');
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('main section[id]').forEach(function (s) { io.observe(s); });
+  } catch (err) { /* contents highlighting is optional */ }
+})();
+</script>
+</body>
+</html>

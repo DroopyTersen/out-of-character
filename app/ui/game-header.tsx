@@ -7,11 +7,13 @@ const destinations = [
   { to: '/', label: 'Game' },
   { to: '/simulator', label: 'Simulator' },
   { to: '/interview', label: 'The Debrief' },
+  { to: '/conversation-map.html', label: 'Conversation Map', utility: true, page: true },
   { to: '/storybook', label: 'Debugger', utility: true },
 ];
 
+// A static page from public/ sits outside the router, so it loads as a full document
 function NavigationLinks({ onChoose }: { onChoose?: () => void }) {
-  return destinations.map(destination => <NavLink key={destination.to} to={destination.to} end={destination.to === '/'} onClick={onChoose} className={({ isActive }) => `site-nav-link${destination.utility ? ' site-nav-utility' : ''}${isActive ? ' active' : ''}`}>{destination.label}</NavLink>);
+  return destinations.map(destination => <NavLink key={destination.to} to={destination.to} end={destination.to === '/'} reloadDocument={destination.page} onClick={onChoose} className={({ isActive }) => `site-nav-link${destination.utility ? ' site-nav-utility' : ''}${isActive ? ' active' : ''}`}>{destination.label}</NavLink>);
 }
 
 export function GameHeader({ children, simulator = false, interview = false }: { children?: ReactNode; simulator?: boolean; interview?: boolean }) {

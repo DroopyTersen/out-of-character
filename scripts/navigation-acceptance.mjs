@@ -45,7 +45,7 @@ try {
       const trigger = page.getByRole('button', { name: 'Open navigation' });
       if (item.path === '/') assert.equal(await page.locator('.site-header-actions .settings-button').isVisible(), true, 'Game audio action stays in the header');
       if (width === 1440) {
-        assert.equal(await nav.getByRole('link').count(), 4);
+        assert.equal(await nav.getByRole('link').count(), 5);
         assert.equal(await nav.locator('[aria-current="page"]').textContent(), item.label);
         assert.equal(await trigger.isVisible(), false);
       } else {
@@ -59,7 +59,7 @@ try {
         await trigger.click();
         assert.equal(await nav.evaluate(dialog => dialog.open), true);
         assert.equal(await trigger.getAttribute('aria-expanded'), 'true');
-        assert.equal(await nav.getByRole('link').count(), 4);
+        assert.equal(await nav.getByRole('link').count(), 5);
         assert.equal(await nav.locator('[aria-current="page"]').textContent(), item.label);
         assert.equal(await page.evaluate(() => document.activeElement?.closest('dialog') !== null), true);
         await page.keyboard.press('Tab');
@@ -85,6 +85,13 @@ try {
       assert.equal(new URL(page.url()).pathname, '/interview');
       assert.equal(await page.locator('.site-menu-dialog').evaluate(dialog => dialog.open), false);
     }
+    // The explainer is a static page outside the router, so the link loads it as a new document
+    if (width !== 1440) await page.getByRole('button', { name: 'Open navigation' }).click();
+    await page.locator(width === 1440 ? '.site-desktop-nav' : '.site-menu-dialog').getByRole('link', { name: 'Conversation Map' }).click();
+    await page.waitForURL(url => url.pathname.startsWith('/conversation-map'));
+    assert.equal(await page.title(), 'The Conversation Map');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `Conversation map overflows at ${width}px`);
+    await page.screenshot({ path: `${output}/conversation-map-${width}.png` });
     await page.goto(new URL('/storybook/interview-live', base).toString(), { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Screen only' }).click();
     await page.getByRole('button', { name: 'Back to workshop controls' }).waitFor({ state: 'visible' });

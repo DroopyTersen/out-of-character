@@ -4,11 +4,9 @@ import { JEV_MODEL } from '../judging';
 import { COVERAGE_LEVELS, emptyInterviewReadings, interviewReadings, isBackchannel, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../core/interview';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import type { TranscriptEntry } from '../../core/simulator/types';
-import { INTERVIEW_CONDITIONS, type DirectorSignal } from '../../core/simulator/director';
-import { CUE_OUTCOMES, PRODUCER_LIMITS, type CueFollowThrough, type CueOutcome, type DeliveredInterviewBackground, type InterviewCue } from '../../core/interview-producer';
 import { evidenceBatches } from '../simulator/rubric';
 import { interviewScenario, interviewers } from './scenario.server';
-import { interviewQuestions, interviewerQuestions } from './rubric';
+import { interviewQuestions } from './rubric';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
 export type InterviewAnswers = Record<string, Answer>;
@@ -19,10 +17,6 @@ type Input = {
   revision: number;
   apiKey: string;
   signal?: AbortSignal;
-  /** Passage IDs that support saved coverage; they stay visible to Jev after leaving the recent window. */
-  keepIds?: string[];
-  deliveredBackground?: DeliveredInterviewBackground[];
-  cue?: InterviewCue;
 };
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
@@ -92,49 +86,18 @@ function validate(input: Input) {
   if (new Set(input.transcript.map(entry => entry.id)).size !== input.transcript.length) throw new Error('Transcript passage IDs must be unique.');
 }
 
-/** Preserve recent passage IDs while keeping a Jev request bounded as an interview grows. */
-export function recentTranscript(entries: TranscriptEntry[], characterLimit: number): TranscriptEntry[] {
-  let length = 0;
-  let start = entries.length;
-  while (start > 0 && length + entries[start - 1]!.text.length <= characterLimit) {
-    start--;
-    length += entries[start]!.text.length;
-  }
-  return entries.slice(start);
-}
-
-/**
- * The recent window plus each kept passage and the Sam turn before it, in transcript order,
- * so coverage heard early in a long interview can still be re-judged against its evidence.
- */
-export function coverageWindow(entries: TranscriptEntry[], keepIds: string[] = [], characterLimit = 16_000) {
-  const recent = recentTranscript(entries, characterLimit);
-  const included = new Set(recent.map(entry => entry.id));
-  // At most one saved passage per topic, within the session's transcript limit.
-  // Never drop its evidence just because several other topics were explored later.
-  const kept = new Set(keepIds);
-  for (let index = 0; index < entries.length; index++) {
-    if (!kept.has(entries[index]!.id)) continue;
-    included.add(entries[index]!.id);
-    let question = index - 1;
-    while (question >= 0 && entries[question]!.speaker === 'trainee') question--;
-    if (question >= 0) included.add(entries[question]!.id);
-  }
-  const transcript = entries.filter(entry => included.has(entry.id));
-  return { transcript, earlierDialogueOmitted: transcript.length < entries.length };
-}
-
-function state(entries: TranscriptEntry[]) {
+/** The dialogue as every Jev interview call sees it, rendered the same way each time. */
+export function dialogueState(entries: TranscriptEntry[]) {
   return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: entries.map(({ id, speaker, text }) => [id, speaker === 'trainee' ? 'participant' : 'sam', text]) };
 }
 
 export async function evaluateInterview(input: Input) {
   validate(input);
   const started = performance.now();
-  const { transcript, earlierDialogueOmitted } = coverageWindow(input.transcript, input.keepIds);
+  const { transcript } = input;
   const result = await experimental_evaluate({
     model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: { ...state(transcript), earlierDialogueOmitted }, questions: interviewQuestions(transcript),
+    state: dialogueState(transcript), questions: interviewQuestions(transcript),
     abortSignal: input.signal, maxRetries: 0,
   });
   return {
@@ -142,70 +105,4 @@ export async function evaluateInterview(input: Input) {
     revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };
-}
-
-export function readInterviewerSignals(answers: InterviewAnswers): DirectorSignal[] {
-  return INTERVIEW_CONDITIONS.map(condition => ({ condition, probability: booleanProbability(answers, `director:${condition}`) }));
-}
-
-export function readResearchProbability(answers: InterviewAnswers): number | undefined {
-  const answer = answers['research:useful'];
-  // An optional research failure must not suppress a valid corrective concern.
-  return answer?.type === 'boolean' && validProbability(answer.probability) ? answer.probability : undefined;
-}
-
-/** Outside facts are visible only to Sam's interviewer assessment, never participant scoring. */
-export function cueResponseIds(transcript: TranscriptEntry[], cue: InterviewCue): string[] {
-  const after = cue.afterPassageId == null ? -1 : transcript.findIndex(entry => entry.id === cue.afterPassageId);
-  if ((cue.afterPassageId != null && after < 0) || cue.evidenceIds.some(id => !transcript.some(entry => entry.id === id))) return [];
-  // Jev can freeze a passage while Sam is still talking; a new ID need not be a new turn.
-  // A substantive participant reply after receipt gives us a conservative response boundary.
-  const reply = transcript.findIndex((entry, index) => index > after && entry.speaker === 'trainee' && entry.endMs >= cue.endMs
-    && entry.endMs - entry.startMs > 200 && !isBackchannel(entry.text));
-  if (reply < 0) return [];
-  // Live handoffs overlap the reply's end by up to ~600 ms. A frozen remainder of
-  // Sam's ongoing turn starts earlier, with the reply itself.
-  const { startMs, endMs } = transcript[reply]!;
-  const responseStart = Math.max(cue.endMs, endMs - 1000);
-  return recentTranscript(transcript.slice(reply + 1), 12_000).filter(entry => entry.speaker === 'client' && entry.startMs > startMs
-    && entry.startMs >= responseStart && !isBackchannel(entry.text)).map(entry => entry.id);
-}
-
-/** An optional cue judgment must not suppress the other interviewer checks. */
-export function readCueFollowThrough(answers: InterviewAnswers, cue?: InterviewCue, responseIds: string[] = []): CueFollowThrough | undefined {
-  const answer = answers['cue:follow-through'];
-  if (!cue || answer?.type !== 'choice' || !CUE_OUTCOMES.includes(answer.choice as CueOutcome) || !answer.probabilities
-    || CUE_OUTCOMES.some(key => !validProbability(answer.probabilities![key] ?? NaN))) return;
-  const probabilities = Object.fromEntries(CUE_OUTCOMES.map(key => [key, answer.probabilities![key]!])) as Record<CueOutcome, number>;
-  if (Math.abs(Object.values(probabilities).reduce((sum, value) => sum + value, 0) - 1) > .02) return;
-  // Receipt alone cannot prove Sam had a chance to follow or miss an instruction.
-  if (!responseIds.length && (answer.choice === 'followed' || answer.choice === 'missed')) return;
-  return { cueId: cue.id, outcome: answer.choice as CueOutcome, probabilities, responseIds };
-}
-
-export function interviewerState(transcript: TranscriptEntry[], deliveredBackground: DeliveredInterviewBackground[] = [], cue?: InterviewCue) {
-  const kept = cue ? [...cue.evidenceIds, ...(cue.afterPassageId ? [cue.afterPassageId] : [])] : [];
-  const window = coverageWindow(transcript, kept, 12_000);
-  return {
-    ...state(window.transcript),
-    earlierDialogueOmitted: window.earlierDialogueOmitted,
-    ...(cue ? { producerDirection: { ...cue, responseIds: cueResponseIds(window.transcript, cue) } } : {}),
-    deliveredBackground: deliveredBackground.slice(-PRODUCER_LIMITS.research).map(({ target, facts, retrievedAt, afterPassageId, status }) => ({
-      target, facts, retrievedAt, afterPassageId, status,
-    })),
-  };
-}
-
-export async function evaluateInterviewer(input: Input) {
-  validate(input);
-  const started = performance.now();
-  const context = interviewerState(input.transcript, input.deliveredBackground, input.cue);
-  const result = await experimental_evaluate({
-    model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
-    state: context, questions: interviewerQuestions(!!context.producerDirection?.responseIds.length),
-    abortSignal: input.signal, maxRetries: 0,
-  });
-  const followThrough = readCueFollowThrough(result.answers, input.cue, context.producerDirection?.responseIds);
-  return { signals: readInterviewerSignals(result.answers), researchProbability: readResearchProbability(result.answers), ...(followThrough ? { followThrough } : {}), revision: input.revision, model: result.response.modelId,
-    durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers };
 }

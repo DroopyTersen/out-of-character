@@ -6,6 +6,7 @@ import type { ReportResult } from '../simulator/report.server';
 
 export type SummaryInput = { transcript: TranscriptEntry[]; foundry: FoundryConfig; signal: AbortSignal };
 export type SummaryResult = ReportResult<InterviewSummaryContent>;
+export const SUMMARY_VERSION = 'interview-summary-v1';
 
 /** Only summary text crosses the stream; model reasoning stays private. */
 export function summarizeInterview(input: SummaryInput, finish: (result: SummaryResult) => void, request: typeof fetch = fetch): ReadableStream<string> {

@@ -1,115 +1,113 @@
-import { checkCard, generateProducer } from '../../../ai/interview/producer.server';
-import { lookupInterviewBackground, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
-import { DirectorOutputError } from '../../../ai/simulator/sol.server';
-import type { FoundryConfig } from '../../../ai/foundry.server';
-import { JEV_MODEL } from '../../../ai/judging';
-import { coverageBands, isBackchannel, type CoverageLevel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
 import {
-  CHECK_IN_SIGNALS, deliveredBackground, PRODUCER_LIMITS, producerDirection, producerLatency, PRODUCER_VERSION, PROTECTION_CONDITIONS,
-  type AssessmentRecord, type CueFollowThrough, type InterviewCue, type NoteDelivery, type ProducerLogRecord, type ProducerRecord, type ProducerSummary, type ProducerTrigger,
-  type ProtectionCondition, type ResearchRecord, type ResearchRequest, type RundownRecord,
+  appendMapLog, emptyMapLog, generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
+  type MapLog, type MapLogEvent, type MapTail,
+} from '../../../ai/interview/map.server';
+import { evaluateTraits, evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from '../../../ai/interview/ranking.server';
+import { lookupInterviewBackground, researchKey, validateResearchRequest } from '../../../ai/interview/research.server';
+import type { FoundryConfig } from '../../../ai/foundry.server';
+import { callFailure } from '../../../ai/interview/diagnostics.server';
+import { DirectorOutputError } from '../../../ai/simulator/sol.server';
+import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
+import { emptyMap, type ConversationMap, type MapChanges } from '../../../core/interview-map';
+import { emptyListNote, emptyMapNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, mapNoteResearch, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
+import {
+  deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
+  type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
 } from '../../../core/interview-producer';
-import type { DirectorSignal } from '../../../core/simulator/director';
+import {
+  emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits, type Pick, type RankingState,
+} from '../../../core/interview-ranking';
+import type { DirectorUsage } from '../../../core/simulator/director';
 import { activeElapsed, type PauseSpan } from '../../../core/simulator/state';
 import type { TranscriptEntry } from '../../../core/simulator/types';
 
-export const producerServices = { generateProducer, checkCard, lookupInterviewBackground };
+export const producerServices = { generateMap, evaluateTurn, evaluateTraits, lookupInterviewBackground };
 type Options = {
-  clientId: string; startedAt: number; foundry: FoundryConfig; typesafeKey: string; services: typeof producerServices;
+  attemptId: string; startedAt: number; foundry: FoundryConfig; typesafeKey: string; services: typeof producerServices;
+  /** The settled passages in transcript order, stopping at the first one still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
-  canDeliverCue?: () => boolean;
+  /** Defaults to the live channel; each channel has its own note headers. */
+  channel?: NoteChannel;
   /** Connection pauses; elapsed time excludes them. */
   pauses?: () => PauseSpan[];
 };
+type Counts = { maps: number; applied: number; turns: number; traits: number; notes: number; research: number };
+type PendingEvent = { event: MapLogEvent; researchId: string };
 /** Producer state that outlives the isolate. In-flight work is not kept: a restored producer starts idle. */
 export type ProducerCheckpoint = {
-  records: ProducerLogRecord[]; counts: { consultations: number; cues: number; research: number; rundowns: number };
-  lastConsultation: number; consultedDialogue: string; signals: DirectorSignal[]; researchProbability?: number;
-  episodes: ProtectionCondition[]; lastCueAt: number | null; researched: string[]; samTurns: string[];
-  lastRundown: { key: string; at: number } | null; timeRundownSent: boolean;
-};
-export type Assessment = {
-  transcript: TranscriptEntry[]; capturedAt: number; signals: DirectorSignal[]; researchProbability?: number; model?: string;
-  failure?: 'evaluation_error' | 'evaluation_timeout';
-  followThrough?: CueFollowThrough;
+  records: ProducerLogRecord[]; counts: Counts;
+  map: ConversationMap; mapRecordId: string | null; log: MapLog; ranking: RankingState;
+  lastMapStart: number; reasons: string[]; events: PendingEvent[]; behind: boolean;
+  readTurnKey: string; readThrough: number; traitFailures: [string, string][];
+  listKey: string | null; listSent: boolean; mapKey: string | null; lastMapNote: number | null;
+  samTurns: string[]; researched: string[];
 };
 
 const LIMITS = PRODUCER_LIMITS;
 const timedOut = (error: unknown) => error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name);
-const validProbability = (value: number | undefined): value is number => value != null && Number.isFinite(value) && value >= 0 && value <= 1;
-const probabilityOf = (signals: DirectorSignal[], condition: string) => {
-  const signal = signals.find(item => item.condition === condition);
-  return signal && 'probability' in signal ? signal.probability : undefined;
+const round = (value: number) => Math.round(value * 100) / 100;
+const roundAll = (values: Record<string, number>) => Object.fromEntries(Object.entries(values).map(([id, value]) => [id, round(value)]));
+const usageOf = (usage: { inputTokens?: number; outputTokens?: number } | undefined): DirectorUsage | undefined =>
+  usage ? { inputTokens: usage.inputTokens ?? null, outputTokens: usage.outputTokens ?? null } : undefined;
+/** A turn is re-read when its words change, including same-length transcript corrections. */
+const turnKey = (turn: TranscriptEntry[]) => JSON.stringify(turn.map(entry => [entry.id, entry.text]));
+const compactChanges = ({ added, changed, dropped }: MapChanges) => ({ added, changed, dropped });
+const RESEARCH_STATUS: Record<ResearchRecord['outcome'], string> = {
+  pending: 'looking it up', found: 'found; see the event in the log', unresolved: 'found nothing reliable', invalid: 'rejected',
+  duplicate: 'already requested', budget: 'no lookups left', busy: 'another lookup was running', timeout: 'failed', error: 'failed', aborted: 'failed',
 };
-/** Enough to tell whether the settled dialogue moved, without re-serializing it every tick. */
-const dialogueKey = (transcript: TranscriptEntry[]) => { const last = transcript.at(-1); return last ? `${transcript.length}:${last.id}:${last.text}` : ''; };
-const triggerKey = (trigger: ProducerTrigger) => trigger.kind === 'research' ? `research:${trigger.researchId}` : trigger.kind === 'cue-recovery' ? `cue:${trigger.cueId}` : trigger.kind === 'check-in' ? 'check-in' : `${trigger.kind}:${trigger.condition}`;
-const LEVEL_LABELS: [CoverageLevel, string][] = [['touched', 'touched'], ['set-aside', 'set aside'], ['not-yet', 'not yet']];
-const INITIAL_LEVELS = JSON.stringify(Object.fromEntries(coverageBands([]).flatMap(topic => topic.objectives.map(item => [item.id, item.level]))));
-
-export function rundownText(coverage: Pick<InterviewObjectiveReading, 'id' | 'level'>[], elapsedMs: number): string {
-  const minutes = Math.max(0, Math.round(elapsedMs / 60_000));
-  const areas = coverageBands(coverage).flatMap(topic => {
-    const groups = LEVEL_LABELS.flatMap(([level, label]) => {
-      const items = topic.objectives.filter(item => item.level === level).map(item => item.label);
-      return items.length ? [`${label}: ${items.join(', ')}`] : [];
-    });
-    return groups.length ? [`${topic.label}: ${groups.join('; ')}.`] : [];
-  });
-  return [`RUNDOWN (replaces earlier rundowns). About ${minutes} minutes elapsed.`, ...areas].join('\n');
-}
-
-export function researchCard(request: Pick<ResearchRequest, 'kind' | 'name'>, facts: InterviewBackground['facts'], retrievedAt: number): string {
-  return `PUBLIC BACKGROUND on ${request.name} (${request.kind}), requested earlier; use it only if it still fits. Retrieved ${new Date(retrievedAt).toISOString()}. This is current public information, not evidence about this project. Use it only where it helps a neutral question now or later; do not pivot to it or interrupt a developing story. Do not lecture, infer project events, contradict their account, or read this note aloud.\n${facts.map(fact => `${fact.text} (${fact.url})`).join('\n')}`;
-}
 
 /**
- * The interview's producer. One Sol consultation runs at a time; triggers that arrive meanwhile merge
- * into one follow-up on the latest dialogue. Research lookups run beside it and may finish in any order.
- * Owns Sam's private notes only, never audio, grades or the session snapshot.
+ * The interview's producer. Sol keeps the conversation map, one call at a time; wake reasons that arrive meanwhile merge
+ * into the next call, which reads the transcript as of its start. Jev reads each settled participant turn against the
+ * map's open threads, and code picks threads and sends Sam the list and map notes. Luna's lookups come back to Sol as
+ * log events. Owns Sam's private notes only, never audio, grades or the session snapshot.
  */
 export class InterviewProducer {
   readonly records: ProducerLogRecord[] = [];
   private abort = new AbortController();
-  private closed = false;
-  private busy = false;
-  private queue: { triggers: ProducerTrigger[]; triggeredAt: number } | null = null;
-  private lastConsultation: number;
-  private consultedDialogue = '';
-  private signals: DirectorSignal[] = [];
-  private researchProbability: number | undefined;
-  private episodes = new Set<ProtectionCondition>();
-  private lastCueAt: number | null = null;
-  private lookups = 0;
-  private researched = new Set<string>();
-  private samTurns = new Set<string>();
-  private lastRundown: { key: string; at: number } | null = null;
-  private timeRundownSent = false;
   private work = new Set<Promise<void>>();
-  private counts = { consultations: 0, cues: 0, research: 0, rundowns: 0 };
-  private currentCue: ProducerRecord | null = null;
-  private pendingCue: ProducerRecord | null = null;
+  private map: ConversationMap = emptyMap();
+  /** The Sol call whose map is applied. */
+  private mapRecord: MapRecord | null = null;
+  private log: MapLog = emptyMapLog();
+  private ranking: RankingState = emptyRanking();
+  private call: { record: MapRecord; controller: AbortController; unmapped: boolean } | null = null;
+  private lastMapStart: number;
+  private reasons = new Set<string>();
+  private events: PendingEvent[] = [];
+  /** A failed call logged participant text or events the map doesn't reflect yet. */
+  private behind = false;
+  private turnBusy = false;
+  private readTurnKey = '';
+  /** Transcript boundary last read; revisit it for growth, then drain later turns in order. */
+  private readThrough = 0;
+  private traitsBusy = false;
+  /** Thread wording whose trait read failed; not retried until Sol's next applied map, so a failing read can't loop. */
+  private traitFailures = new Map<string, string>();
+  private listKey: string | null = null;
+  private listSent = false;
+  private mapKey: string | null = null;
+  private lastMapNote: number | null = null;
+  private samTurns = new Set<string>();
+  private researched = new Set<string>();
+  private lookups = 0;
+  private counts: Counts = { maps: 0, applied: 0, turns: 0, traits: 0, notes: 0, research: 0 };
+  private closed = false;
+  /** Notes restated for a new provider session are outside the note budget. */
+  private restating = false;
 
-  constructor(private options: Options) { this.lastConsultation = options.startedAt; }
+  constructor(private options: Options) { this.lastMapStart = options.startedAt; }
 
   private get alive() { return !this.abort.signal.aborted; }
   private elapsed(now: number) { return activeElapsed(this.options.startedAt, now, this.options.pauses?.()); }
-  get canObserve() { return this.alive && this.counts.consultations < LIMITS.consultations; }
-  background() { return deliveredBackground(this.records); }
-  cue(): InterviewCue | undefined {
-    const cue = this.currentCue;
-    if (!cue?.result?.cue || cue.delivery?.status !== 'accepted' || cue.delivery.endMs == null) return;
-    const judgment = cue.followThrough;
-    if (judgment && judgment.probabilities[judgment.outcome] >= LIMITS.followThroughPass
-      && (['followed', 'retired'].includes(judgment.outcome) || (judgment.outcome === 'missed' && cue.triggers.some(item => item.kind === 'cue-recovery')))) return;
-    return { id: cue.id, text: cue.result.cue, evidenceIds: [...cue.result.evidenceIds], afterPassageId: cue.delivery.afterPassageId, endMs: cue.delivery.endMs };
-  }
-  publicBackground(): InterviewBackground[] {
-    return this.background().filter(item => item.status === 'accepted').map(({ id, target, facts, retrievedAt }) => ({ id, target, facts, retrievedAt }));
-  }
+  /** Read-only views for tests and probes. */
+  get conversationMap() { return this.map; }
+  get rankingState() { return this.ranking; }
+  publicBackground(): InterviewBackground[] { return deliveredBackground(this.records); }
 
-  /** Waits for all in-flight consultations and lookups, including follow-ups they start. */
+  /** Waits for all in-flight calls, including follow-ups they start. */
   async settle() { while (this.work.size) await Promise.all([...this.work]); }
 
   private track(work: Promise<void>) {
@@ -118,287 +116,336 @@ export class InterviewProducer {
     this.options.waitUntil?.(work);
   }
 
-  /** An interviewer assessment. New protection episodes consult promptly; other signals wait for the next check-in. */
-  observe(input: Assessment) {
-    if (!this.alive) return;
-    const record: AssessmentRecord = {
-      source: 'assessment', id: `assessment-${crypto.randomUUID()}`, snapshotAt: input.capturedAt, completedAt: Date.now(), model: input.model ?? JEV_MODEL,
-      inputCount: input.transcript.length, lastInputId: input.transcript.at(-1)?.id ?? null, signals: input.signals,
-      ...(input.researchProbability != null ? { researchProbability: input.researchProbability } : {}), outcome: input.failure ?? 'observed', concerns: [],
-      ...(input.followThrough ? { followThrough: input.followThrough } : {}),
-    };
-    this.records.push(record);
-    if (input.failure) return;
-    if (input.followThrough && input.followThrough.cueId === this.currentCue?.id && this.currentCue && dialogueKey(input.transcript) === dialogueKey(this.options.settled())) {
-      this.currentCue.followThrough = { ...input.followThrough, lastInputId: input.transcript.at(-1)?.id ?? null };
-    }
-    // A late assessment still describes recent dialogue; Sol sees the latest when consulted.
-    this.signals = input.signals;
-    this.researchProbability = input.researchProbability;
-    const concerns: ProducerTrigger[] = [];
-    for (const condition of PROTECTION_CONDITIONS) {
-      const probability = probabilityOf(input.signals, condition);
-      if (!validProbability(probability)) continue;
-      if (probability < .5) this.episodes.delete(condition);
-      else if (probability >= .6 && !this.episodes.has(condition)) {
-        this.episodes.add(condition);
-        concerns.push({ kind: 'concern', condition, probability });
-        record.concerns.push(condition);
-      }
-    }
-    if (concerns.length) this.trigger(concerns, Date.now());
-  }
-
-  private checkInSignals(): ProducerTrigger[] {
-    return Object.entries(CHECK_IN_SIGNALS).flatMap(([condition, threshold]) => {
-      const probability = condition === 'research' ? this.researchProbability : probabilityOf(this.signals, condition);
-      return validProbability(probability) && probability >= threshold ? [{ kind: 'signal', condition: condition as keyof typeof CHECK_IN_SIGNALS, probability }] : [];
-    });
-  }
-
-  /** Scheduled check-in after a Sam turn, and the rundown. Called on the session tick. */
+  /** Called on the session tick: reads a new participant turn, starts a due Sol call, sends a held map note. */
   tick(now = Date.now()) {
     if (!this.alive) return;
-    if (this.pendingCue) this.deliverCue(this.pendingCue, now);
-    this.rundown(now);
-    const cue = this.currentCue;
-    if (cue?.followThrough && !cue.recoveryUsed && this.recoveryApplies(cue.id) && cue.followThrough.lastInputId === this.options.settled().at(-1)?.id
-      && this.lastCueAt != null && now - this.lastCueAt >= LIMITS.cueSpacing && this.counts.cues < LIMITS.cues && this.counts.consultations < LIMITS.consultations) {
-      cue.recoveryUsed = true;
-      this.trigger([{ kind: 'cue-recovery', cueId: cue.id, probability: cue.followThrough.probabilities.missed }], now);
-      return;
-    }
-    if (this.busy || this.queue || this.counts.consultations >= LIMITS.consultations || now - this.lastConsultation < LIMITS.checkIn) return;
-    const transcript = this.options.settled();
-    const last = transcript.at(-1);
-    if (!last || last.speaker === 'trainee' || isBackchannel(last.text) || !transcript.some(entry => entry.speaker === 'trainee')) return;
-    if (dialogueKey(transcript) === this.consultedDialogue) return;
-    this.trigger([{ kind: 'check-in' }, ...this.checkInSignals()], now);
+    if (this.call && now - this.call.record.startedAt >= LIMITS.mapTimeout) this.abandon(now);
+    this.readTurn(now);
+    this.startMap(now);
+    this.sendMapNote(now);
   }
 
-  private trigger(triggers: ProducerTrigger[], now: number) {
-    if (!this.alive || this.counts.consultations >= LIMITS.consultations) return;
-    if (!this.busy) { this.start(triggers, now, false); return; }
-    const merged = new Map((this.queue?.triggers ?? []).map(item => [triggerKey(item), item]));
-    for (const item of triggers) merged.set(triggerKey(item), item);
-    this.queue = { triggers: [...merged.values()], triggeredAt: this.queue?.triggeredAt ?? now };
+  private wake(reason: string) { if (this.alive) this.reasons.add(reason); }
+
+  // ---- Sol ----
+
+  /** An abandoned call is dropped where it stands; a late result is ignored. */
+  private abandon(now: number) {
+    const { record, controller, unmapped } = this.call!;
+    this.call = null;
+    record.outcome = 'timeout';
+    record.completedAt = now;
+    this.behind ||= unmapped;
+    controller.abort();
   }
 
-  private start(triggers: ProducerTrigger[], triggeredAt: number, queued: boolean) {
-    triggers = triggers.filter(item => item.kind !== 'cue-recovery' || item.cueId === this.cue()?.id);
-    if (!triggers.length) return;
-    const transcript = [...this.options.settled()];
-    if (!transcript.length) return;
-    const now = Date.now();
-    this.busy = true;
-    this.counts.consultations++;
-    this.lastConsultation = now;
-    this.consultedDialogue = dialogueKey(transcript);
-    const record: ProducerRecord = {
-      source: 'producer', id: `producer-${crypto.randomUUID()}`, triggers, queued, model: this.options.foundry.agentModel, effort: 'low',
-      inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null, triggeredAt, startedAt: now, outcome: 'pending',
-      ...(triggers.some(item => item.kind === 'cue-recovery') ? { recoveryUsed: true } : {}),
+  private startMap(now: number) {
+    if (this.call || this.counts.maps >= LIMITS.mapCalls || now - this.lastMapStart < LIMITS.mapFloor) return;
+    const settled = [...this.options.settled()];
+    const unlogged = new Set(unloggedPassages(this.log, settled).map(entry => entry.id));
+    const fresh = settled.some((entry, index) => unlogged.has(entry.id) && said(settled, index));
+    if (now - this.lastMapStart >= LIMITS.mapTimer && (fresh || this.behind)) this.reasons.add('a minute has passed since your last call');
+    if (!this.reasons.size) return;
+    // A wake whose news an earlier call already logged has nothing left to say.
+    if (!fresh && !this.behind && !this.events.length) { this.reasons.clear(); return; }
+    const reasons = [...this.reasons];
+    this.reasons.clear();
+    const events = this.events;
+    this.events = [];
+    const log = appendMapLog(this.log, settled, events.map(item => item.event));
+    this.log = log;
+    this.lastMapStart = now;
+    this.counts.maps++;
+    const record: MapRecord = {
+      source: 'map', id: `map-${crypto.randomUUID()}`, reasons, startedAt: now, outcome: 'pending',
+      inputCount: settled.length, lastInputId: settled.at(-1)?.id ?? null, model: this.options.foundry.agentModel,
     };
     this.records.push(record);
-    const scope = this.abort.signal;
-    this.track(this.consult(record, transcript).finally(() => {
+    for (const { researchId } of events) {
+      const research = this.records.find((item): item is ResearchRecord => item.source === 'research' && item.id === researchId);
+      if (research) research.loggedAt = now;
+    }
+    const controller = new AbortController();
+    const unmapped = fresh || this.behind || events.length > 0;
+    this.call = { record, controller, unmapped };
+    this.track(this.generate(record, controller, log, settled, now, unmapped)
+      .finally(() => { if (this.call?.record === record) this.call = null; }));
+  }
+
+  private tail(settled: TranscriptEntry[], reasons: string[], now: number): MapTail {
+    const reading = this.ranking.reading;
+    const open = new Map(this.map.threads.filter(thread => thread.status === 'open').map(thread => [thread.id, thread]));
+    const signals = reading ? Object.entries(reading.states).flatMap(([threadId, state]) => {
+      const thread = open.get(threadId);
+      return thread && state !== 'open' && reading.keys[threadId] === threadKey(thread) ? [{ threadId, state }] : [];
+    }) : [];
+    const research = this.records.filter((item): item is ResearchRecord => item.source === 'research');
+    return {
+      coverage: this.options.coverage(), signals, reasons, elapsedMs: this.elapsed(now), lastPassageId: settled.at(-1)?.id ?? null,
+      research: {
+        requests: research.map(item => ({ kind: item.request.kind, name: item.request.name, clue: item.request.clue,
+          status: item.outcome === 'invalid' ? `rejected (${item.reason})` : RESEARCH_STATUS[item.outcome] })),
+        left: Math.max(0, LIMITS.research - this.counts.research),
+      },
+    };
+  }
+
+  private async generate(record: MapRecord, controller: AbortController, log: MapLog, settled: TranscriptEntry[], now: number, unmapped: boolean) {
+    const { services, foundry, attemptId } = this.options;
+    const signal = AbortSignal.any([this.abort.signal, controller.signal, AbortSignal.timeout(LIMITS.mapTimeout)]);
+    const live = () => this.alive && this.call?.record === record;
+    let result: Awaited<ReturnType<typeof services.generateMap>>;
+    try {
+      result = await services.generateMap({
+        foundry, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
+        lookups: this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && item.loggedAt != null ? [item.eventId] : []),
+      });
+      if (!live()) return;
+      signal.throwIfAborted();
+    } catch (error) {
+      if (!live()) return;
+      record.failure = callFailure(error);
+      if (error instanceof DirectorOutputError) record.usage = error.usage;
+      if (error instanceof MapOutputError) Object.assign(record, { outcome: 'invalid', defects: error.defects.slice(0, 10), model: error.model, usage: error.usage } satisfies Partial<MapRecord>);
+      else record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
+      record.completedAt = Date.now();
+      this.behind ||= unmapped;
+      return;
+    }
+    // Outside the try: a failure after the map lands is not Sol's, so it neither fails this call nor leaves the map behind.
+    Object.assign(record, {
+      outcome: 'applied', completedAt: Date.now(), model: result.model, usage: result.usage,
+      update: result.update, changes: compactChanges(result.changes), research: result.research,
+    } satisfies Partial<MapRecord>);
+    this.counts.applied++;
+    this.behind = false;
+    this.map = result.map;
+    this.mapRecord = record;
+    this.traitFailures.clear();
+    this.ranking = observeMap(this.ranking, result.map, this.elapsed(record.startedAt));
+    if (result.research) this.request(record, result.research, settled);
+    this.pick(Date.now());
+    this.sendMapNote(Date.now());
+    this.readTraits();
+  }
+
+  // ---- Jev and the list note ----
+
+  private readTurn(now: number) {
+    if (this.turnBusy || this.counts.turns >= LIMITS.turns) return;
+    const transcript = [...this.options.settled()];
+    for (let end = this.readThrough; end <= transcript.length; end++) {
+      const next = transcript[end];
+      if (next && (next.speaker !== 'client' || isBackchannel(next.text))) continue;
+      const settled = upToParticipant(transcript.slice(0, end));
+      const turn = latestTurn(settled);
+      const key = turnKey(turn);
+      if (!turn.length || key === this.readTurnKey) continue;
+      this.readThrough = end;
+      this.readTurnKey = key;
+      this.turnBusy = true;
+      this.counts.turns++;
+      const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId: this.mapRecord?.id ?? null, startedAt: now, outcome: 'pending' };
+      this.records.push(record);
       // A pause already released the slot; a resumed producer may own it now.
+      const scope = this.abort.signal;
+      this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { if (!scope.aborted) this.turnBusy = false; }));
+      return;
+    }
+  }
+
+  /** `turn` is the turn's first passage: a turn that grew keeps it, so its re-read replaces the earlier one. */
+  private async evaluate(record: TurnRecord, settled: TranscriptEntry[], now: number, turn: string) {
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.turnTimeout)]);
+    try {
+      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, apiKey: this.options.typesafeKey, signal, atMs: this.elapsed(now) });
       if (scope.aborted) return;
-      this.busy = false;
-      const next = this.queue;
-      this.queue = null;
-      if (next && this.alive && this.counts.consultations < LIMITS.consultations) this.start(next.triggers, next.triggeredAt, true);
-    }));
+      signal.throwIfAborted();
+      if (Date.now() - record.startedAt >= LIMITS.turnTimeout) { record.outcome = 'timeout'; return; }
+      const { reading } = result;
+      Object.assign(record, {
+        outcome: 'read', durationMs: result.durationMs, usage: usageOf(result.usage),
+        reading: { atMs: reading.atMs, focus: reading.focus, novel: round(reading.novel), natural: roundAll(reading.natural), states: reading.states },
+      } satisfies Partial<TurnRecord>);
+      this.ranking = observeTurn(this.ranking, this.map, reading, turn);
+      if (reading.novel >= RANKING.novel) this.wake(`the participant's latest turn (${reading.passageId}) adds something the map lacks`);
+      record.pick = compactPick(this.pick(Date.now(), record));
+    } catch (error) {
+      if (scope.aborted) return;
+      record.failure = callFailure(error);
+      record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
+    } finally {
+      if (!scope.aborted) record.completedAt = Date.now();
+    }
   }
 
-  private budget() {
-    return { cuesLeft: LIMITS.cues - this.counts.cues, researchLeft: LIMITS.research - this.counts.research, lookupsInFlight: this.lookups };
+  /** Threads Sol added or rewrote get one trait read; the pick is redone when it lands. */
+  private readTraits() {
+    if (!this.alive || this.traitsBusy || this.counts.traits >= LIMITS.traits) return;
+    const threads = threadsNeedingTraits(this.map, this.ranking).filter(thread => this.traitFailures.get(thread.id) !== threadKey(thread));
+    if (!threads.length) return;
+    this.traitsBusy = true;
+    this.counts.traits++;
+    const record: TraitRecord = { source: 'traits', id: `traits-${crypto.randomUUID()}`, mapId: this.mapRecord?.id ?? null, threadIds: threads.map(thread => thread.id), startedAt: Date.now(), outcome: 'pending' };
+    this.records.push(record);
+    const scope = this.abort.signal;
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.traitTimeout)]);
+    const map = this.map;
+    this.track((async () => {
+      try {
+        const result = await this.options.services.evaluateTraits({ map, threads, apiKey: this.options.typesafeKey, signal });
+        if (scope.aborted) return;
+        signal.throwIfAborted();
+        Object.assign(record, {
+          outcome: 'read', durationMs: result.durationMs, usage: usageOf(result.usage),
+          traits: Object.fromEntries(Object.entries(result.traits).map(([id, item]) => [id, [round(item.spicy), round(item.grounding)]])),
+        } satisfies Partial<TraitRecord>);
+        this.ranking = withTraits(this.ranking, result.traits);
+        this.pick(Date.now());
+      } catch (error) {
+        if (scope.aborted) return;
+        record.failure = callFailure(error);
+        record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
+        for (const thread of threads) this.traitFailures.set(thread.id, threadKey(thread));
+      } finally {
+        if (!scope.aborted) {
+          record.completedAt = Date.now();
+          this.traitsBusy = false;
+        }
+      }
+      // Sol may have rewritten threads while this read ran.
+      if (!scope.aborted) this.readTraits();
+    })());
   }
 
-  private recoveryApplies(cueId: string) {
-    const cue = this.currentCue;
-    return cue?.id === cueId && cue.delivery?.status === 'accepted' && cue.followThrough?.outcome === 'missed'
-      && cue.followThrough.probabilities.missed >= LIMITS.followThroughPass;
+  /** Re-picks after a turn reading, a new map or new traits; changed note content supersedes the previous options. */
+  private pick(now: number, turn?: TurnRecord): Pick {
+    const pick = pickThreads(this.map, this.ranking, this.elapsed(now));
+    const key = listNoteKey(this.map, pick);
+    if (key === this.listKey) return pick;
+    const headers = noteHeaders(this.options.channel);
+    const list = listNote(this.map, pick, headers);
+    const text = list ?? (this.listSent ? emptyListNote(headers) : null);
+    if (!text) { this.listKey = key; return pick; }
+    const note = this.note('list', text, now, turn);
+    if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; }
+    return pick;
+  }
+
+  // ---- The map note ----
+
+  private sendMapNote(now: number) {
+    if (!this.mapRecord || (this.lastMapNote != null && now - this.lastMapNote < LIMITS.mapNoteSpacing)) return;
+    const key = mapNoteKey(this.map);
+    if (key === this.mapKey) return;
+    const headers = noteHeaders(this.options.channel);
+    const text = mapNote(this.map, headers) ?? (this.mapKey ? emptyMapNote(headers) : null);
+    if (!text) { this.mapKey = key; return; }
+    // The note carries the lookups its research facts cite; Sol's update was checked to cite only found lookups it had read.
+    const cited = new Set(mapNoteResearch(this.map).map(entity => entity.passageId));
+    const researchIds = this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && cited.has(item.eventId) ? [item.id] : []);
+    const note = this.note('map', text, now, undefined, researchIds);
+    if (!note) return;
+    this.lastMapNote = now;
+    if (note.outcome === 'sent') this.mapKey = key;
   }
 
   // Set delivery before sending: an acknowledgment may arrive immediately.
-  private sendNote(record: { delivery?: NoteDelivery }, eventId: string, content: string, type: 'session.thinking.append' | 'session.instructions.append' = 'session.thinking.append') {
-    record.delivery = { eventId, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' };
-    return this.options.send({ type, event_id: eventId, delegation_id: null, content });
+  private note(kind: NoteRecord['kind'], text: string, now: number, turn?: TurnRecord, researchIds: string[] = []): NoteRecord | null {
+    if (!this.restating) {
+      if (this.counts.notes >= LIMITS.notes) return null;
+      this.counts.notes++;
+    }
+    const id = `note-${crypto.randomUUID()}`;
+    const record: NoteRecord = {
+      source: 'note', id, kind, text, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), sentAt: now, outcome: 'sent',
+      delivery: { eventId: id, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' },
+      ...(researchIds.length ? { researchIds } : {}),
+    };
+    this.records.push(record);
+    const sent = this.options.send({ type: this.options.channel ?? LIVE_NOTE_CHANNEL, event_id: id, delegation_id: null, content: text });
+    if (!sent) record.outcome = 'error';
+    return record;
   }
 
-  private async consult(record: ProducerRecord, transcript: TranscriptEntry[]) {
-    const { services, startedAt } = this.options;
-    const scope = this.abort.signal;
-    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.generation)]);
-    try {
-      const { model, usage, ...result } = await services.generateProducer({
-        clientId: this.options.clientId, transcript, coverage: this.options.coverage(), startedAt, now: Date.now(), pauses: this.options.pauses?.(),
-        triggers: record.triggers, history: this.records, budget: this.budget(), foundry: this.options.foundry, signal,
-      });
-      if (scope.aborted) return;
-      signal.throwIfAborted();
-      if (Date.now() - record.startedAt >= LIMITS.generation) { record.outcome = 'timeout'; return; }
-      Object.assign(record, { generatedAt: Date.now(), result, usage, model });
-      if (result.research) this.request(record, result.research, transcript);
-      if (!result.cue) { record.outcome = 'none'; return; }
-      if (this.counts.cues >= LIMITS.cues) { record.outcome = 'budget'; return; }
-      const urgent = record.triggers.some(item => item.kind === 'concern');
-      if (!urgent && this.lastCueAt != null && Date.now() - this.lastCueAt < LIMITS.cueSpacing) { record.outcome = 'spacing'; return; }
-      // A deferred direction is still active. Cancel only a retired or superseded recovery.
-      if (record.triggers.every(item => item.kind === 'cue-recovery' && item.cueId !== this.cue()?.id)) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; return; }
-      this.deliverCue(record, Date.now());
-    } catch (error) {
-      if (scope.aborted) return;
-      record.outcome = error instanceof DirectorOutputError ? 'invalid' : signal.aborted || timedOut(error) ? 'timeout' : 'error';
-    } finally {
-      if (!scope.aborted && !['sent', 'deferred'].includes(record.outcome) && record.triggers.some(item => item.kind === 'cue-recovery' && item.cueId === this.currentCue?.id)) this.currentCue = null;
-      if (!scope.aborted && record.outcome !== 'deferred') record.completedAt = Date.now();
-    }
-  }
+  // ---- Research ----
 
-  /** Behavioral appends can interrupt Sam. Wait for a measured output opening, without blocking consultations. */
-  private deliverCue(record: ProducerRecord, now: number) {
-    if (this.pendingCue && this.pendingCue !== record) {
-      this.pendingCue.outcome = 'withheld'; this.pendingCue.reason = 'superseded'; this.pendingCue.completedAt = now;
-      this.pendingCue = null;
-    }
-    if (record.deferredAt != null && now - record.deferredAt >= LIMITS.cueWait) {
-      record.outcome = 'withheld'; record.reason = 'no_quiet_opening'; record.completedAt = now; this.pendingCue = null;
-      return;
-    }
-    if (record.triggers.every(item => item.kind === 'cue-recovery' && item.cueId !== this.cue()?.id)) {
-      record.outcome = 'withheld'; record.reason = 'dialogue_changed'; record.completedAt = now; this.pendingCue = null;
-      return;
-    }
-    if (this.options.canDeliverCue && !this.options.canDeliverCue()) {
-      record.outcome = 'deferred'; record.deferredAt ??= now; this.pendingCue = record;
-      return;
-    }
-    this.pendingCue = null;
-    const sent = this.sendNote(record, `cue-${crypto.randomUUID()}`, producerDirection(record.result!.cue!), 'session.instructions.append');
-    record.outcome = sent ? 'sent' : 'error'; record.completedAt = now;
-    if (sent) { this.counts.cues++; this.lastCueAt = record.sentAt = now; this.currentCue = record; }
-  }
-
-  private request(consultation: ProducerRecord, request: ResearchRequest, transcript: TranscriptEntry[]) {
-    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, consultationId: consultation.id, request, model: this.options.foundry.fastModel, requestedAt: Date.now(), outcome: 'pending' };
+  private request(map: MapRecord, request: ResearchRequest, settled: TranscriptEntry[]) {
+    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map.id, request, model: this.options.foundry.fastModel, requestedAt: Date.now(), outcome: 'pending' };
     this.records.push(record);
     const refuse = (outcome: ResearchRecord['outcome'], reason: string) => { record.outcome = outcome; record.reason = reason; record.completedAt = Date.now(); };
-    const valid = validateResearchRequest(request, transcript);
+    const valid = validateResearchRequest(request, settled);
     if (!valid.ok) return refuse('invalid', valid.reason);
     record.request = valid.request;
     const key = researchKey(valid.request);
     if (this.researched.has(key)) return refuse('duplicate', 'duplicate');
     if (this.counts.research >= LIMITS.research) return refuse('budget', 'budget');
-    if (this.lookups >= LIMITS.lookups) return refuse('busy', 'busy');
+    if (this.lookups) return refuse('busy', 'busy');
     this.researched.add(key);
     this.counts.research++;
     this.lookups++;
-    this.track(this.research(record, key).finally(() => { this.lookups--; }));
+    const scope = this.abort.signal;
+    this.track(this.research(record, key).finally(() => { if (!scope.aborted) this.lookups--; }));
   }
 
+  /** A found lookup wakes Sol; one that found nothing waits in the log for Sol's next call. */
   private async research(record: ResearchRecord, key: string) {
-    const { services } = this.options;
     const { kind, name, clue } = record.request;
     const scope = this.abort.signal;
-    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.researchAge)]);
-    const result = (status: 'sent' | 'withheld') => this.trigger([{ kind: 'research', researchId: record.id, status }], Date.now());
+    const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.lookupTimeout)]);
     try {
-      const lookup = await services.lookupInterviewBackground({ target: { kind, name }, clue, foundry: this.options.foundry, signal });
+      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, foundry: this.options.foundry, signal });
       if (scope.aborted) return;
       signal.throwIfAborted();
-      record.lookupAt = Date.now();
+      const now = Date.now();
+      record.lookupAt = now;
       record.queries = lookup.queries;
-      if (Date.now() - record.requestedAt >= LIMITS.researchAge) { record.outcome = 'expired'; record.reason = 'expired'; return; }
-      // Sol sees an unresolved lookup in the research log; consulting now would only prompt an orientation question.
-      if (lookup.status === 'unresolved') { record.outcome = 'unresolved'; record.reason = lookup.reason; return; }
-      record.facts = lookup.facts;
-      record.retrievedAt = lookup.retrievedAt;
-      const transcript = [...this.options.settled()];
-      const checkedDialogue = dialogueKey(transcript);
-      const checkStartedAt = Date.now();
-      const checkSignal = AbortSignal.any([signal, AbortSignal.timeout(LIMITS.check)]);
-      record.check = { probability: null, inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null };
-      const checked = await services.checkCard({
-        transcript, request: record.request, facts: lookup.facts, apiKey: this.options.typesafeKey,
-        signal: checkSignal,
-      });
-      if (scope.aborted) return;
-      checkSignal.throwIfAborted();
-      record.checkedAt = Date.now();
-      record.check = { ...record.check, probability: checked.probability, usage: checked.usage };
-      if (Date.now() - record.requestedAt >= LIMITS.researchAge) { record.outcome = 'expired'; record.reason = 'expired'; return; }
-      if (Date.now() - checkStartedAt >= LIMITS.check) { record.outcome = 'timeout'; return; }
-      if (checkedDialogue !== dialogueKey(this.options.settled())) { record.outcome = 'withheld'; record.reason = 'dialogue_changed'; result('withheld'); return; }
-      if (checked.probability < LIMITS.cardPass) { record.outcome = 'withheld'; record.reason = 'withheld'; result('withheld'); return; }
-      const sent = this.sendNote(record, record.id, researchCard(record.request, lookup.facts, lookup.retrievedAt));
-      record.outcome = sent ? 'sent' : 'error';
-      if (sent) { record.sentAt = Date.now(); result('sent'); }
+      if (lookup.status === 'found') Object.assign(record, { outcome: 'found', facts: lookup.facts, retrievedAt: lookup.retrievedAt } satisfies Partial<ResearchRecord>);
+      else Object.assign(record, { outcome: 'unresolved', reason: lookup.reason } satisfies Partial<ResearchRecord>);
+      const facts = lookup.status === 'found' ? lookup.facts : null;
+      record.eventId = `L${this.records.filter(item => item.source === 'research' && item.eventId != null).length + 1}`;
+      // Log events sit among passages, whose times include connection pauses.
+      this.events.push({ researchId: record.id, event: { id: record.eventId, atMs: now - this.options.startedAt, text: researchLogEvent({ kind, name }, facts, lookup.status === 'unresolved' ? lookup.reason : undefined) } });
+      if (facts?.length) this.wake(`public research arrived about the ${kind} "${name}"`);
     } catch (error) {
       if (scope.aborted) return;
+      record.failure = callFailure(error);
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
+      // A transient failure may be requested again; it still used an attempt.
+      this.researched.delete(key);
     } finally {
-      // Transient failures, and lookups a pause cut short, may be requested again; they still used an attempt.
-      if (['error', 'timeout', 'expired', 'aborted'].includes(record.outcome) || record.reason === 'dialogue_changed') this.researched.delete(key);
       if (!scope.aborted) record.completedAt = Date.now();
     }
   }
 
-  /**
-   * Sent when a topic's band changes (throttled) and once near the target time. Factual state: no Sol or Jev call.
-   * One rundown stays reserved for the time reminder until it is sent, so coverage churn cannot use it up.
-   */
-  private rundown(now: number) {
-    const elapsed = this.elapsed(now);
-    const late = !this.timeRundownSent && elapsed >= LIMITS.rundownAt;
-    if (this.counts.rundowns >= LIMITS.rundowns - (late || this.timeRundownSent ? 0 : 1)) return;
-    const coverage = this.options.coverage();
-    const levels = Object.fromEntries(coverageBands(coverage).flatMap(topic => topic.objectives.map(item => [item.id, item.level])));
-    const key = JSON.stringify(levels);
-    const changed = key !== (this.lastRundown?.key ?? INITIAL_LEVELS);
-    if ((!late && !changed) || (this.lastRundown && now - this.lastRundown.at < LIMITS.rundownSpacing)) return;
-    const record: RundownRecord = { source: 'rundown', id: `rundown-${crypto.randomUUID()}`, sentAt: now, reason: late ? 'time' : 'change',
-      elapsedMinutes: Math.round(elapsed / 6000) / 10, levels, outcome: 'sent' };
-    this.records.push(record);
-    this.counts.rundowns++;
-    const sent = this.sendNote(record, record.id, rundownText(coverage, elapsed));
-    if (!sent) { record.outcome = 'error'; this.counts.rundowns--; }
-    if (late && sent) this.timeRundownSent = true;
-    this.lastRundown = { key: sent ? key : this.lastRundown?.key ?? INITIAL_LEVELS, at: now };
-  }
+  // ---- Session events ----
 
   /** Marks the next substantive Sam passage after a sent note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel. */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
     if (!this.alive || entry.speaker !== 'client' || this.samTurns.has(entry.id) || isBackchannel(entry.text)) return;
     this.samTurns.add(entry.id);
     for (const record of this.records) {
-      if ((record.source === 'producer' || record.source === 'research') && record.sentAt != null && record.sentAt <= now && record.nextSamTurnAt == null) {
+      if (record.source === 'note' && record.outcome === 'sent' && record.sentAt <= now && record.nextSamTurnAt == null) {
         record.nextSamTurnAt = now;
         record.nextSamTurnAfterId = previousId;
       }
     }
   }
 
+  /** A rejected note is sent again at the next change: the list note on the next pick, the map note after its spacing. One a newer note of its kind already replaced is not. */
   providerEvent(id: string, accepted: boolean, timing?: { startMs?: number; endMs?: number }) {
     if (!this.alive) return;
-    const record = this.records.find(item => (item.source === 'producer' || item.source === 'research' || item.source === 'rundown') && item.delivery?.eventId === id);
-    if (record && 'delivery' in record && record.delivery) {
-      record.delivery.status = accepted ? 'accepted' : 'rejected';
-      record.delivery.acknowledgedAt = Date.now();
-      if (timing) Object.assign(record.delivery, timing);
-      if (!accepted && record.source === 'research') {
-        record.outcome = 'error';
-        record.reason = 'delivery_rejected';
-        this.researched.delete(researchKey(record.request));
-      }
-      if (!accepted && record.source === 'rundown' && record.outcome !== 'error' && record.reason !== 'resume') {
-        record.outcome = 'error';
-        this.counts.rundowns--;
-        if (record.reason === 'time') this.timeRundownSent = false;
-        if (this.lastRundown?.at === record.sentAt) this.lastRundown = { key: INITIAL_LEVELS, at: Date.now() };
-      }
-    }
+    const record = this.records.find((item): item is NoteRecord => item.source === 'note' && item.delivery.eventId === id);
+    if (!record) return;
+    record.delivery.status = accepted ? 'accepted' : 'rejected';
+    record.delivery.acknowledgedAt = Date.now();
+    if (timing) Object.assign(record.delivery, timing);
+    if (accepted) return;
+    record.outcome = 'rejected';
+    if (this.records.findLast(item => item.source === 'note' && item.kind === record.kind) !== record) return;
+    if (record.kind === 'list') this.listKey = null;
+    else this.mapKey = null;
   }
 
   delegation(id: string, target: string | null, replied: boolean) {
@@ -406,88 +453,103 @@ export class InterviewProducer {
   }
 
   summary(): ProducerSummary {
+    const { maps, applied, turns, notes, research } = this.counts;
     return {
-      model: this.options.foundry.agentModel, effort: 'low', version: PRODUCER_VERSION, ...this.counts,
-      queued: this.records.filter(item => item.source === 'producer' && item.queued).length, latency: producerLatency(this.records),
+      model: this.options.foundry.agentModel, effort: MAP_EFFORT, version: PRODUCER_VERSION, mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
+      maps, applied, turns, notes, research, latency: producerLatency(this.records),
     };
   }
 
   /**
-   * The connection dropped. In-flight consultations and lookups are abandoned: their results would reach a
-   * provider session that no longer exists. Notes already delivered are restated on resume.
+   * The connection dropped. In-flight calls are abandoned: their notes would reach a provider session that no
+   * longer exists. Whatever they consumed is released, so the work runs again after the resume.
    */
   pause() {
     this.abort.abort();
-    this.busy = false;
-    this.queue = null;
-    this.pendingCue = null;
-    // The resumed session never saw the cue; follow-through and recovery no longer apply.
-    this.currentCue = null;
-    this.abandon();
+    this.call?.controller.abort();
+    this.call = null;
+    this.turnBusy = this.traitsBusy = false;
+    this.lookups = 0;
+    this.release(Date.now());
   }
 
-  /**
-   * A new provider session joined. Its instructions carry the conversation but none of the producer's notes,
-   * so restate the rundown and delivered research. The restatement is outside the rundown budget.
-   */
+  /** A new provider session joined. Its instructions carry the conversation but none of Sam's notes, so restate them. */
   resume(now = Date.now()) {
     if (this.closed || this.alive) return;
     this.abort = new AbortController();
-    // A fresh check-in interval: the next consultation should see the resumed dialogue.
-    this.lastConsultation = now;
-    const coverage = this.options.coverage();
-    const levels = Object.fromEntries(coverageBands(coverage).flatMap(topic => topic.objectives.map(item => [item.id, item.level])));
-    const elapsed = this.elapsed(now);
-    const record: RundownRecord = { source: 'rundown', id: `rundown-${crypto.randomUUID()}`, sentAt: now, reason: 'resume',
-      elapsedMinutes: Math.round(elapsed / 6000) / 10, levels, outcome: 'sent' };
-    this.records.push(record);
-    if (!this.sendNote(record, record.id, rundownText(coverage, elapsed))) record.outcome = 'error';
-    // Deliveries stay tracked on the original records; the restatement is context only.
-    for (const item of this.background()) {
-      this.options.send({ type: 'session.thinking.append', event_id: `background-${crypto.randomUUID()}`, delegation_id: null,
-        content: researchCard(item.target, item.facts, item.retrievedAt) });
-    }
+    this.listKey = this.mapKey = this.lastMapNote = null;
+    this.listSent = false;
+    this.restating = true;
+    try {
+      this.pick(now);
+      this.sendMapNote(now);
+    } finally { this.restating = false; }
+    this.readTraits();
   }
 
   checkpoint(): ProducerCheckpoint {
     return {
-      records: this.records, counts: { ...this.counts }, lastConsultation: this.lastConsultation, consultedDialogue: this.consultedDialogue,
-      signals: this.signals, ...(this.researchProbability != null ? { researchProbability: this.researchProbability } : {}),
-      episodes: [...this.episodes], lastCueAt: this.lastCueAt, researched: [...this.researched], samTurns: [...this.samTurns],
-      lastRundown: this.lastRundown, timeRundownSent: this.timeRundownSent,
+      records: this.records, counts: { ...this.counts }, map: this.map, mapRecordId: this.mapRecord?.id ?? null, log: this.log, ranking: this.ranking,
+      lastMapStart: this.lastMapStart, reasons: [...this.reasons], events: this.events, behind: this.behind,
+      readTurnKey: this.readTurnKey, readThrough: this.readThrough, traitFailures: [...this.traitFailures],
+      listKey: this.listKey, listSent: this.listSent, mapKey: this.mapKey, lastMapNote: this.lastMapNote,
+      samTurns: [...this.samTurns], researched: [...this.researched],
     };
   }
 
   /** Restores a paused producer. In-flight work in the checkpoint was lost with the isolate. */
   restore(checkpoint: ProducerCheckpoint) {
     this.abort.abort();
+    this.call = null;
+    this.turnBusy = this.traitsBusy = false;
+    this.lookups = 0;
     this.records.splice(0, this.records.length, ...checkpoint.records);
     this.counts = { ...checkpoint.counts };
-    this.lastConsultation = checkpoint.lastConsultation;
-    this.consultedDialogue = checkpoint.consultedDialogue;
-    this.signals = checkpoint.signals;
-    this.researchProbability = checkpoint.researchProbability;
-    this.episodes = new Set(checkpoint.episodes);
-    this.lastCueAt = checkpoint.lastCueAt;
-    this.researched = new Set(checkpoint.researched);
+    this.map = checkpoint.map;
+    this.mapRecord = this.records.find((item): item is MapRecord => item.source === 'map' && item.id === checkpoint.mapRecordId) ?? null;
+    this.log = checkpoint.log;
+    this.ranking = checkpoint.ranking;
+    this.lastMapStart = checkpoint.lastMapStart;
+    this.reasons = new Set(checkpoint.reasons);
+    this.events = checkpoint.events;
+    this.behind = checkpoint.behind;
+    this.readTurnKey = checkpoint.readTurnKey;
+    this.readThrough = checkpoint.readThrough;
+    this.traitFailures = new Map(checkpoint.traitFailures);
+    this.listKey = checkpoint.listKey;
+    this.listSent = checkpoint.listSent;
+    this.mapKey = checkpoint.mapKey;
+    this.lastMapNote = checkpoint.lastMapNote;
     this.samTurns = new Set(checkpoint.samTurns);
-    this.lastRundown = checkpoint.lastRundown;
-    this.timeRundownSent = checkpoint.timeRundownSent;
-    this.abandon();
+    this.researched = new Set(checkpoint.researched);
+    this.release(Date.now());
   }
 
-  private abandon() {
-    for (const record of this.records) if ((record.source === 'producer' || record.source === 'research') && ['pending', 'deferred'].includes(record.outcome)) {
+  /** Marks pending work aborted and releases what it held: Sol's logged passages leave the map behind, a turn is re-read, a lookup may be requested again. */
+  private release(now: number) {
+    for (const record of this.records) {
+      if (!(record.source === 'map' || record.source === 'turn' || record.source === 'traits' || record.source === 'research') || record.outcome !== 'pending') continue;
+      if (record.source === 'map') this.behind = true;
+      if (record.source === 'turn') this.readTurnKey = '';
+      if (record.source === 'research') this.researched.delete(researchKey(record.request));
       record.outcome = 'aborted';
-      record.completedAt ??= Date.now();
+      record.completedAt ??= now;
     }
   }
 
   close() {
     this.closed = true;
     this.abort.abort();
-    this.queue = null;
-    this.pendingCue = null;
-    this.abandon();
+    this.call?.controller.abort();
+    this.call = null;
+    this.reasons.clear();
+    this.release(Date.now());
   }
 }
+
+function compactPick(pick: Pick): NonNullable<TurnRecord['pick']> {
+  return { ...pick, ranked: pick.ranked.map(item => [item.id, round(item.score), item.band]) };
+}
+
+/** Exposed for the delivery probe, which sends the same notes outside a session. */
+export const NOTE_KINDS = Object.keys(NOTE_HEADERS) as NoteRecord['kind'][];

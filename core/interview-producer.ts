@@ -1,79 +1,77 @@
 import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } from './interview';
-import type { DirectorSignal, DirectorUsage, INTERVIEW_CONDITIONS } from './simulator/director';
+import type { MapDefect, MapUpdate } from './interview-map';
+import type { Band, Pick, ThreadState } from './interview-ranking';
+import type { DirectorUsage } from './simulator/director';
 
-/** Private producer state for the interview: Sol cues, Luna research cards and the rundown share Sam's earpiece. */
-export const PRODUCER_VERSION = 'interview-producer-v9';
+/**
+ * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
+ * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
+ */
+export const PRODUCER_VERSION = 'interview-producer-v16';
 export const PRODUCER_LIMITS = {
-  consultations: 60, cues: 15, cueSpacing: 30_000, research: 4, lookups: 2, researchAge: 90_000, checkIn: 45_000,
-  rundowns: 30, rundownSpacing: 15_000, rundownAt: 25 * 60_000, targetMinutes: 30, generation: 15_000, check: 3000, cardPass: .5,
-  followThroughPass: .8,
-  cueWait: 15_000,
+  /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
+  mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
+  /** Jev turn readings, including re-reads of a turn that grew, and trait reads of new or rewritten threads. */
+  turns: 300, turnTimeout: 3000, traits: 120, traitTimeout: 3000,
+  /** Every note Sam receives, list and map together; set from the pile-up probe. */
+  notes: 100, mapNoteSpacing: 60_000,
+  research: 3, lookupTimeout: 90_000,
 };
-type InterviewCondition = typeof INTERVIEW_CONDITIONS[number];
-/** A new episode of one of these consults the producer promptly and skips cue spacing. */
-export const PROTECTION_CONDITIONS = ['boundary-pressure', 'leading', 'source-confusion', 'invented-facts'] as const satisfies readonly InterviewCondition[];
-export type ProtectionCondition = typeof PROTECTION_CONDITIONS[number];
-/** Non-urgent signals never summon the producer; they are listed as reasons on the next check-in. */
-export const CHECK_IN_SIGNALS = { 'missed-thread': .6, 'question-stacking': .6, overprobing: .5, research: .5 } as const;
 
-export type ResearchKind = InterviewBackground['target']['kind'];
+export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
+export type ResearchKind = typeof RESEARCH_KINDS[number];
 export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null; passageIds: string[] };
-export const CUE_OUTCOMES = ['followed', 'deferred', 'missed', 'retired', 'not-yet-assessable'] as const;
-/** Used by the live session and voice rehearsals so they exercise the same instruction. */
-export function producerDirection(cue: string): string {
-  return `Producer direction for your next suitable turn: ${cue}\nContinue listening if the participant has the floor. A useful new answer takes priority. Use this only while it remains unanswered and relevant.`;
-}
-export type CueOutcome = typeof CUE_OUTCOMES[number];
-/** A pinned instruction and its context receipt, separate from what Sam subsequently does. */
-export type InterviewCue = { id: string; text: string; evidenceIds: string[]; afterPassageId: string | null; endMs: number };
-export type CueFollowThrough = {
-  cueId: string; outcome: CueOutcome; probabilities: Record<CueOutcome, number>;
-  /** Settled passages eligible to demonstrate a response after estimated context delivery. */
-  responseIds: string[];
-};
-export type ProducerTrigger =
-  | { kind: 'check-in' }
-  | { kind: 'cue-recovery'; cueId: string; probability: number }
-  | { kind: 'concern'; condition: ProtectionCondition; probability: number }
-  | { kind: 'signal'; condition: keyof typeof CHECK_IN_SIGNALS; probability: number }
-  | { kind: 'research'; researchId: string; status: 'sent' | 'withheld' | 'unresolved' };
 export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number; startMs?: number; endMs?: number };
-type Check = { probability: number | null; inputCount: number; lastInputId: string | null; usage?: DirectorUsage };
+/** Safe provider metadata only; never response bodies, request headers or exception messages. */
+export type CallFailure = { name: string; status?: number; requestId?: string; detail?: string };
 
-/** nextSamTurnAfterId precedes the first observed Sam passage after a sent note; it does not prove cue uptake. */
-export type ProducerRecord = {
-  source: 'producer'; id: string; triggers: ProducerTrigger[]; queued: boolean; model: string; effort: 'none' | 'low';
-  inputCount: number; lastInputId: string | null;
-  triggeredAt: number; startedAt: number; generatedAt?: number; checkedAt?: number; deferredAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
-  result?: { cue: string | null; evidenceIds: string[]; research: ResearchRequest | null }; usage?: DirectorUsage;
-  /** Historical delivery checks, retained for reading older archives. New cues go straight to Sam. */
-  check?: Check;
-  outcome: 'pending' | 'deferred' | 'none' | 'sent' | 'withheld' | 'budget' | 'spacing' | 'invalid' | 'timeout' | 'error' | 'aborted';
-  /** An obsolete recovery, or a historical delivery-check rejection. */
-  reason?: 'check' | 'dialogue_changed' | 'superseded' | 'no_quiet_opening';
-  delivery?: NoteDelivery;
-  followThrough?: CueFollowThrough & { lastInputId: string | null };
-  /** Also inherited by a replacement, preventing an automatic recovery chain. */
-  recoveryUsed?: boolean;
+/** One Sol call. The applied updates replay to the map, so the map itself isn't stored; an applied record without one was shed to fit the archive row. */
+export type MapRecord = {
+  source: 'map'; id: string; reasons: string[]; startedAt: number; completedAt?: number;
+  outcome: 'pending' | 'applied' | 'invalid' | 'timeout' | 'error' | 'aborted';
+  inputCount: number; lastInputId: string | null; model: string; usage?: DirectorUsage;
+  update?: MapUpdate; changes?: { added: string[]; changed: string[]; dropped: string[] };
+  /** The first few, for an invalid update. */
+  defects?: MapDefect[];
+  research?: ResearchRequest | null;
+  failure?: CallFailure;
 };
+/** Jev's reading of one settled participant turn and the pick code made from it. Scores are rounded; ranked is [id, score, band]. */
+export type TurnRecord = {
+  source: 'turn'; id: string; passageId: string; mapId: string | null; startedAt: number; completedAt?: number;
+  outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: DirectorUsage;
+  reading?: { atMs: number; focus: string | null; novel: number; natural: Record<string, number>; states: Record<string, ThreadState> };
+  pick?: Omit<Pick, 'ranked'> & { ranked: [id: string, score: number, band: Band][] };
+  failure?: CallFailure;
+};
+/** Spicy and grounding for threads Sol added or rewrote. */
+export type TraitRecord = {
+  source: 'traits'; id: string; mapId: string | null; threadIds: string[]; startedAt: number; completedAt?: number;
+  outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: DirectorUsage;
+  traits?: Record<string, [spicy: number, grounding: number]>;
+  failure?: CallFailure;
+};
+/**
+ * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
+ * research facts cite.
+ */
+export type NoteRecord = {
+  source: 'note'; id: string; kind: 'list' | 'map'; text: string; mapId: string | null; turnId?: string; sentAt: number;
+  outcome: 'sent' | 'error' | 'rejected'; delivery: NoteDelivery; researchIds?: string[];
+  nextSamTurnAt?: number; nextSamTurnAfterId?: string | null;
+};
+/** Sol requests a lookup on its map output; the result reaches Sol as a log event and Sam only through Sol's map. */
 export type ResearchRecord = {
-  source: 'research'; id: string; consultationId: string; request: ResearchRequest; model: string;
-  requestedAt: number; lookupAt?: number; checkedAt?: number; sentAt?: number; nextSamTurnAt?: number; nextSamTurnAfterId?: string | null; completedAt?: number;
-  facts?: InterviewBackground['facts']; retrievedAt?: number; queries?: string[]; reason?: string; check?: Check;
-  outcome: 'pending' | 'invalid' | 'duplicate' | 'budget' | 'busy' | 'unresolved' | 'expired' | 'withheld' | 'sent' | 'timeout' | 'error' | 'aborted';
-  delivery?: NoteDelivery;
-};
-export type RundownRecord = {
-  source: 'rundown'; id: string; sentAt: number; reason: 'change' | 'time' | 'resume'; elapsedMinutes: number;
-  levels: Record<string, CoverageLevel>; outcome: 'sent' | 'error'; delivery?: NoteDelivery;
-};
-export type AssessmentRecord = {
-  source: 'assessment'; id: string; snapshotAt: number; completedAt: number; model: string; inputCount: number; lastInputId: string | null;
-  signals: DirectorSignal[]; researchProbability?: number; outcome: 'observed' | 'evaluation_error' | 'evaluation_timeout'; concerns: ProtectionCondition[];
-  followThrough?: CueFollowThrough;
+  source: 'research'; id: string; mapId: string; request: ResearchRequest; model: string;
+  requestedAt: number; lookupAt?: number; completedAt?: number; loggedAt?: number;
+  /** The ID of the lookup's event in Sol's log, which research facts cite. */
+  eventId?: string;
+  facts?: InterviewBackground['facts']; retrievedAt?: number; queries?: string[]; reason?: string;
+  outcome: 'pending' | 'invalid' | 'duplicate' | 'budget' | 'busy' | 'found' | 'unresolved' | 'timeout' | 'error' | 'aborted';
+  failure?: CallFailure;
 };
 export type DelegationRecord = { source: 'delegation'; id: string; createdAt: number; target: string | null; replied: boolean };
-/** Compact, named tuples keep every grade inside D1's row limit without losing either judgment's evidence. */
+/** Compact, named tuples keep either judgment's evidence small; a live grade without objectives was thinned to fit the archive row. */
 export type GradeObjective = {
   id: string;
   shown: [level: CoverageLevel, evidenceId: string | null];
@@ -83,15 +81,9 @@ export type GradeObjective = {
 export type GradeRecord = {
   source: 'grade'; id: string; final: boolean; revision: number; capturedAt: number; completedAt: number; inputCount: number; lastInputId: string | null;
   outcome: 'graded' | 'stale' | 'aborted' | 'evaluation_timeout' | 'evaluation_error'; durationMs?: number; objectives?: GradeObjective[];
+  failure?: CallFailure;
 };
-export type ProducerLogRecord = ProducerRecord | ResearchRecord | RundownRecord | AssessmentRecord | DelegationRecord | GradeRecord | ContinuityRecord;
-
-/** Retired rescue records remain readable in older preview archives. New sessions never produce these. */
-export type ContinuityRecord = {
-  source: 'continuity'; id: string; participantId: string; afterPassageId: string; sentAt: number; quietMs: number;
-  outcome: 'sent' | 'resumed' | 'unanswered' | 'error'; delivery: NoteDelivery;
-  responseObservedAt?: number; participantResumedAt?: number;
-};
+export type ProducerLogRecord = MapRecord | TurnRecord | TraitRecord | NoteRecord | ResearchRecord | DelegationRecord | GradeRecord;
 
 const round = (value: number) => Math.round(value * 100) / 100;
 export function gradeObjectives(graded: InterviewObjectiveReading[], shown: InterviewObjectiveReading[]): GradeObjective[] {
@@ -104,22 +96,44 @@ export function gradeObjectives(graded: InterviewObjectiveReading[], shown: Inte
   });
 }
 
-export type DeliveredInterviewBackground = InterviewBackground & { afterPassageId: string | null; status: 'accepted' | 'unknown' };
+/** Lookups Sam could have read: a research fact in a map note cites them, and the voice service accepted the note. */
+export function deliveredBackground(records: ProducerLogRecord[]): InterviewBackground[] {
+  const delivered = new Set(records.flatMap(item => item.source === 'note' && item.delivery.status === 'accepted' ? item.researchIds ?? [] : []));
+  return records.flatMap(item => item.source === 'research' && item.outcome === 'found' && delivered.has(item.id) && item.facts?.length && item.retrievedAt != null
+    ? [{ id: item.id, target: { kind: item.request.kind, name: item.request.name }, facts: item.facts, retrievedAt: item.retrievedAt }] : []);
+}
 
-/** Only cards actually sent can explain Sam's public claims; rejected or withheld cards cannot. */
-export function deliveredBackground(records: ProducerLogRecord[]): DeliveredInterviewBackground[] {
-  return records.flatMap(item => {
-    if (item.source !== 'research' || item.outcome !== 'sent' || !item.facts?.length || item.retrievedAt == null || !item.delivery || item.delivery.status === 'rejected') return [];
-    return [{ id: item.id, target: { kind: item.request.kind, name: item.request.name }, facts: item.facts, retrievedAt: item.retrievedAt,
-      afterPassageId: item.delivery.afterPassageId, status: item.delivery.status }];
-  });
+const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+/**
+ * Fits the records to the bytes left in a D1 row. Live grades thin first, evenly in time (every other one, then every
+ * fourth, and so on; the final grade keeps its objectives), then Sol's updates go, oldest first.
+ */
+export function fitRecords(records: ProducerLogRecord[], budget: number): ProducerLogRecord[] {
+  const fitted = [...records];
+  const sizes = fitted.map(bytes);
+  // Brackets and commas.
+  let total = sizes.reduce((sum, size) => sum + size, fitted.length + 1);
+  const shed = (index: number, record: ProducerLogRecord) => { const size = bytes(record); total += size - sizes[index]!; sizes[index] = size; fitted[index] = record; };
+  const live = fitted.flatMap((item, index) => item.source === 'grade' && !item.final && item.objectives ? [index] : []);
+  for (let stride = 2; total > budget && stride < live.length * 2; stride *= 2) {
+    live.forEach((index, position) => {
+      const item = fitted[index]!;
+      if (position % stride && item.source === 'grade' && item.objectives) { const { objectives: _, ...rest } = item; shed(index, rest); }
+    });
+  }
+  for (const [index, item] of fitted.entries()) {
+    if (total <= budget) break;
+    if (item.source === 'map' && item.update) { const { update: _, ...rest } = item; shed(index, rest); }
+  }
+  return fitted;
 }
 
 export type LatencyStat = { count: number; p50: number; p90: number } | null;
 export type ProducerSummary = {
-  model: string; effort: 'none' | 'low'; version: string;
-  consultations: number; cues: number; research: number; rundowns: number; queued: number;
-  latency: { sol: LatencyStat; cueCheck: LatencyStat; triggerToCue: LatencyStat; cueToSam: LatencyStat; lookup: LatencyStat; requestToCard: LatencyStat };
+  model: string; effort: 'none' | 'low'; version: string; mapPrompt: string; rankingRubric: string;
+  maps: number; applied: number; turns: number; notes: number; research: number;
+  latency: { sol: LatencyStat; jevTurn: LatencyStat; traits: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat };
 };
 
 export function latencyStat(values: number[]): LatencyStat {
@@ -130,15 +144,13 @@ export function latencyStat(values: number[]): LatencyStat {
 }
 
 export function producerLatency(records: ProducerLogRecord[]): ProducerSummary['latency'] {
-  const producers = records.filter((item): item is ProducerRecord => item.source === 'producer');
-  const research = records.filter((item): item is ResearchRecord => item.source === 'research');
   const spans = (pairs: [number | undefined, number | undefined][]) => pairs.flatMap(([from, to]) => from != null && to != null ? [to - from] : []);
+  const of = <S extends ProducerLogRecord['source']>(source: S) => records.filter(item => item.source === source) as Extract<ProducerLogRecord, { source: S }>[];
   return {
-    sol: latencyStat(spans(producers.map(item => [item.startedAt, item.generatedAt]))),
-    cueCheck: latencyStat(spans(producers.map(item => [item.generatedAt, item.checkedAt]))),
-    triggerToCue: latencyStat(spans(producers.map(item => [item.triggeredAt, item.sentAt]))),
-    cueToSam: latencyStat(spans(producers.map(item => [item.sentAt, item.nextSamTurnAt]))),
-    lookup: latencyStat(spans(research.map(item => [item.requestedAt, item.lookupAt]))),
-    requestToCard: latencyStat(spans(research.map(item => [item.requestedAt, item.sentAt]))),
+    sol: latencyStat(spans(of('map').filter(item => item.outcome === 'applied').map(item => [item.startedAt, item.completedAt]))),
+    jevTurn: latencyStat(spans(of('turn').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
+    traits: latencyStat(spans(of('traits').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
+    lookup: latencyStat(spans(of('research').map(item => [item.requestedAt, item.lookupAt]))),
+    noteToSam: latencyStat(spans(of('note').map(item => [item.sentAt, item.nextSamTurnAt]))),
   };
 }

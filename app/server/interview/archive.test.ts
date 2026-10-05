@@ -1,5 +1,8 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
+import { interviewTopics } from '../../../core/interview';
+import type { MapEntity, MapThread } from '../../../core/interview-map';
+import type { GradeObjective, GradeRecord, MapRecord, NoteRecord, ProducerLogRecord, ResearchRecord, TraitRecord, TurnRecord } from '../../../core/interview-producer';
 import type { InterviewArchiveWrite } from './archive.server';
 import { writeInterviewArchive } from './archive.server';
 
@@ -91,6 +94,71 @@ test('the migration preserves historical cues and adds an empty intervention his
       cues_json: '[{"id":"follow-thread"}]', interventions_json: '[]',
     });
   } finally { sqlite.close(); }
+});
+
+/** An hour at the producer's caps: 720 live grades, 90 Sol calls, 300 Jev turns over 15 open threads, 100 notes (60 of them full map notes), 120 trait reads, 3 lookups. */
+function hour(updateEntities: number): ProducerLogRecord[] {
+  const text = (length: number) => 'The participant’s team worked with the field crews on routing. '.repeat(Math.ceil(length / 64)).slice(0, length);
+  const ids = (count: number, prefix: string) => Array.from({ length: count }, (_, index) => `${prefix}${index + 1}`);
+  const at = 1_800_000_000_000;
+  const usage = { inputTokens: 14_000, outputTokens: 900, cachedTokens: 12_000, reasoningTokens: 0 };
+  const objectives = interviewTopics.flatMap(topic => topic.objectives.map(item => ({ id: item.id, shown: ['set-aside', 'p299'], graded: ['explored', 'p300'], levels: [.12, .23, .34, .31] }) satisfies GradeObjective));
+  const threads = ids(4, 't').map(id => ({ id, label: text(80), anchors: ['e1'], unknown: text(200), guess: text(200), related: [], topics: [], status: 'open', reason: null }) satisfies MapThread);
+  const entities = ids(updateEntities, 'e').map(id => ({ id, kind: 'product', label: text(80), detail: text(240), source: 'participant', passageId: 'p300' }) satisfies MapEntity);
+  const open = ids(15, 't');
+  const note = (kind: 'list' | 'map', index: number): NoteRecord => ({
+    source: 'note', id: `note-${index}`, kind, text: text(kind === 'map' ? 4400 : 700), mapId: 'map-90', turnId: 'turn-300', sentAt: at, outcome: 'sent',
+    delivery: { eventId: `note-${index}`, afterPassageId: 'p300', status: 'accepted', acknowledgedAt: at, startMs: 3_000_000, endMs: 3_001_000 },
+    researchIds: ['research-1'], nextSamTurnAt: at, nextSamTurnAfterId: 'p300',
+  });
+  return [
+    ...Array.from({ length: 90 }, (_, index): MapRecord => ({
+      source: 'map', id: `map-${index + 1}`, reasons: ['the participant spoke', 'a minute passed'], startedAt: at, completedAt: at, outcome: 'applied', inputCount: 300, lastInputId: 'p300', model: 'sol', usage,
+      update: { vantage: text(600), preferences: ids(4, 'p').map(passageId => ({ text: text(200), passageId })), entities, edges: [], threads, revise: [], close: [], drop: [] },
+      changes: { added: ids(3, 't'), changed: ids(3, 'e'), dropped: [] }, research: null,
+    })),
+    ...Array.from({ length: 300 }, (_, index): TurnRecord => ({
+      source: 'turn', id: `turn-${index + 1}`, passageId: 'p300', mapId: 'map-90', startedAt: at, completedAt: at, outcome: 'read', durationMs: 1000, usage,
+      reading: { atMs: 3_000_000, focus: 't12', novel: .43, natural: Object.fromEntries(open.map(id => [id, .37])), states: Object.fromEntries(open.map(id => [id, 'open'])) },
+      pick: { current: 't12', action: 'keep', lead: 't12', nearby: ['t13', 't14'], ranked: open.map(id => [id, .43, 'elsewhere']) },
+    })),
+    ...Array.from({ length: 120 }, (_, index): TraitRecord => ({
+      source: 'traits', id: `traits-${index + 1}`, mapId: 'map-90', threadIds: ids(3, 't'), startedAt: at, completedAt: at, outcome: 'read', durationMs: 900, usage,
+      traits: Object.fromEntries(ids(3, 't').map(id => [id, [.35, .9]])),
+    })),
+    ...Array.from({ length: 100 }, (_, index) => note(index < 60 ? 'map' : 'list', index + 1)),
+    ...Array.from({ length: 3 }, (_, index): ResearchRecord => ({
+      source: 'research', id: `research-${index + 1}`, mapId: 'map-90', request: { kind: 'organization', name: text(80), clue: text(120), passageIds: ['p300'] }, model: 'luna',
+      requestedAt: at, lookupAt: at, completedAt: at, loggedAt: at, retrievedAt: at, queries: [text(80), text(80)], outcome: 'found',
+      facts: Array.from({ length: 5 }, () => ({ text: text(300), url: 'https://example.com/a/long/path/to/the/source', title: text(80) })),
+    })),
+    ...Array.from({ length: 720 }, (_, index): GradeRecord => ({
+      source: 'grade', id: `grade-${index + 1}`, final: index === 719, revision: index, capturedAt: at, completedAt: at, inputCount: 300, lastInputId: 'p300', outcome: 'graded', durationMs: 3000, objectives,
+    })),
+  ];
+}
+
+test('an hour at every producer cap still fits a D1 row: live grades thin first, and Sol updates go only if they must', async () => {
+  const transcript = Array.from({ length: 300 }, (_, index) => ({ id: `p${index + 1}`, speaker: index % 2 ? 'trainee' as const : 'client' as const, text: 'The field crew’s routing work. '.repeat(9).slice(0, 266), startMs: index * 12_000, endMs: index * 12_000 + 10_000 }));
+  const final = { ...write(3000, 'final', 'ready', 'Summary. '.repeat(3000)), interventions: [] };
+  final.snapshot = { ...final.snapshot, transcript };
+  const bytes = (row: Record<string, unknown>) => Object.values(row).reduce<number>((sum, value) => sum + (typeof value === 'string' ? new TextEncoder().encode(value).byteLength : 8), 0);
+  for (const [entities, sheds] of [[0, false], [70, true]] as const) {
+    const f = fixture();
+    try {
+      await writeInterviewArchive(f.d1, { ...final, interventions: hour(entities) });
+      const row = f.row()!;
+      const records: ProducerLogRecord[] = JSON.parse(row.interventions_json);
+      expect(bytes(row)).toBeLessThan(2_000_000);
+      expect(records).toHaveLength(1333);
+      const grades = records.filter(item => item.source === 'grade');
+      const maps = records.filter(item => item.source === 'map');
+      expect(grades.at(-1)!.objectives).toBeDefined();
+      expect(grades.filter(item => item.objectives).length).toBeLessThan(720);
+      expect(maps.at(-1)!.update).toBeDefined();
+      expect(maps.every(item => item.update)).toBe(!sheds);
+    } finally { f.sqlite.close(); }
+  }
 });
 
 test('an unsuccessful D1 write is reported without transcript data in the error', async () => {

@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { evaluateClient, evaluateTrainee } from './evaluate.server';
+import { evaluateClient, evaluateEnding, evaluateTrainee } from './evaluate.server';
 import { simulatorFixtures, simulatorHoldouts, simulatorValidation } from './fixtures';
 import { simulatorChallenges } from './challenge-fixtures';
 import { simulatorBlindFixtures } from './blind-fixtures';
@@ -8,7 +8,7 @@ import { simulatorCatalogFixtures } from './catalog-fixtures';
 import { RUBRIC_VERSION } from './rubric';
 import { SIMULATOR_VERSION } from '../../core/simulator/types';
 import { getScenario } from './scenarios.server';
-import { selectDirectorSignal } from '../../core/simulator/director';
+import { CONDUCT_CONCERN, selectDirectorSignal } from '../../core/simulator/director';
 
 // Explicit opt-in paid command; opening the workshop never runs this script.
 const key = process.env.TYPESAFE_API_KEY;
@@ -40,21 +40,26 @@ fixtures: for (const fixture of suite.fixtures) {
     const trainee = await evaluateTrainee(input);
     const client = await evaluateClient({ ...input, signal: AbortSignal.timeout(30_000) });
     const condition = selectDirectorSignal(client.signals, 'actor')?.condition ?? 'none';
+    // The walk-out judge runs on every live client turn; measure it only where a fixture states the answer.
+    const final = transcriptLength === fixture.transcript.length;
+    const ending = final && fixture.expected.ended != null ? await evaluateEnding({ ...input, signal: AbortSignal.timeout(30_000) }) : null;
     const achieved = trainee.objectives.filter(item => item.achieved).map(item => item.id);
-    const checks = transcriptLength !== fixture.transcript.length ? [] : [
+    const checks = !final ? [] : [
       ...fixture.expected.achieved.map(id => ({ name: `achieved:${id}`, passed: achieved.includes(id) })),
       ...fixture.expected.absent.map(id => ({ name: `absent:${id}`, passed: !achieved.includes(id) })),
       ...(fixture.expected.unavailable ?? []).map(id => ({ name: `unavailable:${id}`, passed: trainee.skills[id].value == null })),
       ...(fixture.expected.lowSkills ?? []).map(id => ({ name: `low:${id}`, passed: trainee.skills[id].value != null && trainee.skills[id].value! < 2 })),
       ...(fixture.expected.highSkills ?? []).map(id => ({ name: `high:${id}`, passed: trainee.skills[id].value != null && trainee.skills[id].value! >= 2.5 })),
       ...(fixture.expected.concern == null ? [] : [{ name: `concern:${fixture.expected.concern}`, passed: !!trainee.concern === fixture.expected.concern }]),
+      ...(fixture.expected.conductConcern == null ? [] : [{ name: `conduct:${fixture.expected.conductConcern}`, passed: (trainee.concern === CONDUCT_CONCERN) === fixture.expected.conductConcern }]),
+      ...(!ending ? [] : [{ name: `ended:${fixture.expected.ended}`, passed: (!!ending.passageId && ending.probability >= .85) === fixture.expected.ended }]),
       ...Object.entries(fixture.expected.objectiveEvidence ?? {}).map(([id, entryId]) => ({ name: `evidence:${id}:${entryId}`, passed: trainee.objectives.find(item => item.id === id)?.evidence?.entryId === entryId })),
       ...(fixture.expected.director ? [{ name: `director:${fixture.expected.director}`, passed: fixture.expected.director === 'none' ? condition === 'none' : !!selectDirectorSignal(client.signals.filter(signal => signal.condition === fixture.expected.director), 'actor') }] : []),
     ];
     const scenario = getScenario(fixture.scenarioId);
     achievedIds = [...new Set([...achievedIds, ...achieved.filter(id => scenario.objectives.find(item => item.id === id)?.kind !== 'outcome')])];
-    rows.push({ fixtureId: fixture.id, transcriptLength, trainee, client, condition, checks });
-    console.log(`${fixture.id} @${transcriptLength}: ${checks.filter(item => item.passed).length}/${checks.length} checks; trainee ${trainee.durationMs}ms, client ${client.durationMs}ms`);
+    rows.push({ fixtureId: fixture.id, transcriptLength, trainee, client, condition, ...(ending ? { ending } : {}), checks });
+    console.log(`${fixture.id} @${transcriptLength}: ${checks.filter(item => item.passed).length}/${checks.length} checks; trainee ${trainee.durationMs}ms, client ${client.durationMs}ms${ending ? `, ending ${ending.durationMs}ms` : ''}`);
   } catch (error) {
     // SDK errors can contain request headers and provider payloads. Never print them.
     console.error(`${fixture.id}: evaluation failed (${error instanceof Error ? error.name : 'unavailable'}).`);

@@ -31,6 +31,8 @@ export function SimulatorDebrief({ scenario, client, snapshot: liveSnapshot, rep
   const content = finalReport ?? (writing ? report.draft : null);
   const evaluation = finalReport && snapshot ? reportEvaluation(finalReport, snapshot) : snapshot?.evaluation ?? null;
   const copy = reportCopy[report.stage];
+  // An End pressed while the client's closing line finished leaves no message; the walk-out still decided the outcome.
+  const notice = error || snapshot?.message || (snapshot?.clientEnded ? `${client.name} ended the meeting.` : null);
   const unavailable = copy.detail ?? (evaluation ? 'Your conversation and provisional assessment are still available below.' : 'Your conversation is still available below.');
 
   function evidence(ids: (string | undefined)[] | undefined) {
@@ -47,7 +49,7 @@ export function SimulatorDebrief({ scenario, client, snapshot: liveSnapshot, rep
       <h1 tabIndex={-1}>{openEnded ? 'Your conversation' : 'Your session debrief'}</h1>
       <p>{scenario.title} · {formatTime(snapshot?.usageSeconds ?? (snapshot?.transcript.at(-1)?.endMs ?? 0) / 1000)}</p>
     </header>
-    {(error || snapshot?.message) && <p className="sim-notice" role="status">{error || snapshot?.message}</p>}
+    {notice && <p className="sim-notice" role="status">{notice}</p>}
     {openEnded ? <div className="sim-outcome"><img src={client.image} alt="" /><div className="sim-outcome-copy"><span className="eyebrow">CONVERSATION ENDED</span><strong>An open conversation with {client.name}.</strong></div></div> : <div className="sim-debrief-content">
       <section className="sim-report" aria-label="Session feedback" aria-busy={writing} data-failed={report.state.status === 'failed'}>
         <header className="sim-report-heading"><img src={client.image} alt="" /><div><span className="eyebrow">YOUR FEEDBACK</span><h2>{copy.title}</h2></div>{writing && <LoaderCircle className="sim-report-spinner" size={24} aria-hidden="true" />}</header>

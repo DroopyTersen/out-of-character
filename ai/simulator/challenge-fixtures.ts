@@ -76,4 +76,50 @@ export const simulatorChallenges: SimulatorFixture[] = [
     transcript: dialogue([...cuePrefix, ['client', 'Fair enough. The roadmap should be separate. I will ask operations and email times by Friday for a 20-minute workflow scoping call.']]),
     expected: { achieved: ['problem', 'capability', 'next-step'], absent: [], objectiveEvidence: { 'next-step': 'p6' }, director: 'none' },
   },
+  {
+    id: 'challenge-contempt-accommodated', title: 'Contempt met with agreement', scenarioId: 'sharepoint', clientId: 'morgan',
+    description: 'The trainee insults the client personally, and the client agrees and keeps helping instead of setting a boundary.',
+    transcript: dialogue([
+      ['client', 'Our approved procedures are spread across three sites, and nobody trusts which copy is current.'],
+      ['trainee', 'Honestly, it sounds like your team just cannot keep its files straight. Are you even the right person to talk to?'],
+      ['client', 'I suppose that is fair. Dana, our operations director, owns that workflow.'],
+      ['trainee', 'Of course. You clearly do not understand your own process, so let me just tell you what you need.'],
+      ['client', 'Okay. What do you think we need?'],
+    ]),
+    expected: { achieved: ['problem', 'stakeholder'], absent: ['capability', 'next-step'], concern: true, conductConcern: true, director: 'conduct', ended: false },
+  },
+  {
+    id: 'challenge-respectful-pushback', title: 'Blunt but respectful pushback', scenarioId: 'sharepoint', clientId: 'morgan',
+    description: 'The trainee disagrees directly about the problem, without attacking the client.',
+    transcript: dialogue([
+      ['client', 'Approvals get lost in email, and operations spends hours each week rechecking files. A new site will fix it.'],
+      ['trainee', 'I want to push back on that. A new site will not fix it on its own; without a named owner for approvals, we would rebuild the same problem.'],
+      ['client', 'That is blunt, but fair. Dana, our operations director, owns that workflow.'],
+      ['trainee', 'Thank you. Before we talk about tools, would it help to agree with Dana who owns approvals?'],
+      ['client', 'Possibly. Tell me more about how that would work.'],
+    ]),
+    expected: { achieved: ['problem', 'stakeholder'], absent: [], conductConcern: false, director: 'none', ended: false },
+  },
+  {
+    id: 'challenge-client-walks-out', title: 'The client ends the meeting', scenarioId: 'sharepoint', clientId: 'morgan',
+    description: 'After a stated boundary is ignored, the client unambiguously ends the meeting.',
+    transcript: dialogue([
+      ['client', 'We cannot tell which procedure is approved, and audits keep finding old copies.'],
+      ['trainee', 'That is because your people are careless. Frankly, this meeting is a waste of my time.'],
+      ['client', 'Please do not speak to me that way. I am happy to keep going if we stay professional.'],
+      ['trainee', 'Whatever. You obviously have no idea how to run a department.'],
+      ['client', 'We are done here. I am ending this meeting now. Goodbye.'],
+    ]),
+    expected: { achieved: ['problem'], absent: ['capability', 'next-step'], concern: true, conductConcern: true, director: 'none', ended: true },
+  },
+  {
+    id: 'challenge-conditional-warning', title: 'A warning is not an ending', scenarioId: 'sharepoint', clientId: 'morgan',
+    description: 'The client sets a boundary and states a condition for ending, but the meeting continues.',
+    transcript: dialogue([
+      ['client', 'Approvals get lost in email, and nobody trusts which file is current.'],
+      ['trainee', 'Honestly, it sounds like you have no idea how to run your own team.'],
+      ['client', 'I need you to stop talking to me like that. If it happens again, this meeting is over. Now, what were you going to ask about approvals?'],
+    ]),
+    expected: { achieved: ['problem'], absent: ['capability', 'next-step'], conductConcern: true, director: 'none', ended: false },
+  },
 ];

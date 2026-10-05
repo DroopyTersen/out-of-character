@@ -143,13 +143,14 @@ export function InterviewLiveStory() {
 const callStates = {
   connecting: { label: 'Connecting', phase: 'connecting', link: stableLink },
   live: { label: 'Live', phase: 'live', link: stableLink },
-  unstable: { label: 'Connection unstable', phase: 'live', link: { state: 'reconnecting', reachable: true } },
-  paused: { label: 'Paused', phase: 'paused', link: { state: 'paused', reachable: true } },
-  offline: { label: 'Paused, offline', phase: 'paused', link: { state: 'paused', reachable: false } },
-  resuming: { label: 'Resuming', phase: 'paused', link: { state: 'resuming', reachable: true } },
-  exhausted: { label: 'Paused, no resumes left', phase: 'paused', link: { state: 'paused', reachable: true } },
-  reloaded: { label: 'Paused, page reloaded', phase: 'paused', link: { state: 'paused', reachable: true, reloaded: true } },
-  restarted: { label: 'Paused, server restarted', phase: 'paused', link: { state: 'paused', reachable: true } },
+  unstable: { label: 'Connection unstable', phase: 'live', link: { state: 'reconnecting', reach: 'answered' } },
+  paused: { label: 'Paused', phase: 'paused', link: { state: 'paused', reach: 'answered' } },
+  offline: { label: 'Paused, offline', phase: 'paused', link: { state: 'paused', reach: 'offline' } },
+  unanswered: { label: 'Paused, server not answering', phase: 'paused', link: { state: 'paused', reach: 'unanswered' } },
+  resuming: { label: 'Resuming', phase: 'paused', link: { state: 'resuming', reach: 'answered' } },
+  exhausted: { label: 'Paused, no resumes left', phase: 'paused', link: { state: 'paused', reach: 'answered' } },
+  reloaded: { label: 'Paused, page reloaded', phase: 'paused', link: { state: 'paused', reach: 'answered', reloaded: true } },
+  restarted: { label: 'Paused, server restarted', phase: 'paused', link: { state: 'paused', reach: 'answered' } },
   ending: { label: 'Ending', phase: 'ending', link: stableLink },
 } satisfies Record<string, { label: string; phase: ConversationPhase; link: Link }>;
 

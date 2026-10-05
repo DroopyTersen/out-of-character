@@ -1,4 +1,4 @@
-import type { Evidence, ObjectiveReading, SkillReading } from './simulator/types';
+import type { ObjectiveReading, SkillReading } from './simulator/types';
 import { z } from 'zod';
 
 export const INTERVIEW_SCENARIO_ID = 'project-closeout';
@@ -87,13 +87,6 @@ export function mergeCoverage(previous: InterviewObjectiveReading[], current: In
   });
 }
 
-export type CoverageBand = { id: string; label: string; level: CoverageLevel };
-/** The bands Sam sees in the rundown: topic labels and levels only, never probabilities. */
-export function coverageBands(objectives: Pick<InterviewObjectiveReading, 'id' | 'level'>[]): { id: string; label: string; objectives: CoverageBand[] }[] {
-  return interviewTopics.map(topic => ({ id: topic.id, label: topic.label, objectives: topic.objectives.map(item => ({
-    id: item.id, label: item.label, level: objectives.find(reading => reading.id === item.id)?.level ?? 'not-yet',
-  })) }));
-}
 
 export const COVERAGE_LEVEL_LABELS: Record<CoverageLevel, string> = { 'not-yet': 'Not yet', touched: 'Touched on', explored: 'Explored', 'set-aside': 'Set aside' };
 
@@ -104,10 +97,6 @@ export const COVERAGE_LEVEL_LABELS: Record<CoverageLevel, string> = { 'not-yet':
 export function coverageConfidence(reading: Pick<InterviewObjectiveReading, 'level' | 'levels'> | undefined): number | null {
   if (!reading?.levels || reading.level === 'not-yet') return null;
   return reading.level === 'touched' ? 1 - reading.levels['not-yet'] : reading.levels[reading.level];
-}
-
-export function coverageEvidenceIds(objectives: { evidence: Evidence | null }[]): string[] {
-  return [...new Set(objectives.flatMap(item => item.evidence ? [item.evidence.entryId] : []))];
 }
 
 export function emptyInterviewReadings(): InterviewEvaluation['readings'] {

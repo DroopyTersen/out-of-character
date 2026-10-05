@@ -1,11 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type { Experimental_EvaluationQuestion } from 'ai';
 import { interviewReadings, interviewTopics, INTERVIEW_SCENARIO_ID, coverageConfidence, mergeCoverage, type CoverageLevel, type InterviewObjectiveReading } from '../../core/interview';
-import { INTERVIEW_CONDITIONS } from '../../core/simulator/director';
 import { interviewFixtures } from './fixtures';
 import recordings from './recordings.json';
-import { coverageWindow, interviewerState, readInterviewAnswers, readInterviewerSignals, readResearchProbability, type InterviewAnswers } from './evaluate.server';
-import { INTERVIEW_RUBRIC_VERSION, interviewQuestions, interviewerQuestions } from './rubric';
+import { readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
+import { INTERVIEW_RUBRIC_VERSION, interviewQuestions } from './rubric';
 import { interviewerBrief, interviewOpening, interviewScenario, interviewers } from './scenario.server';
 
 function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
@@ -44,6 +43,28 @@ describe('project closeout interview contracts', () => {
       expect(interviewerBrief(interviewer.id)).toContain('You are Sam');
       expect(interviewOpening(interviewer.id)).toContain('project');
     }
+  });
+
+  test('Sam never sees the closeout topics, and the brief describes the notes Sam actually gets', () => {
+    const brief = interviewerBrief(interviewers[0]!.id);
+    for (const topic of interviewTopics) {
+      expect(brief).not.toContain(topic.label);
+      for (const item of topic.objectives) expect(brief).not.toContain(item.label);
+    }
+    expect(brief).not.toMatch(/producer|rundown|topic map|coverage/i);
+    expect(brief).toContain('thread note');
+    expect(brief).toContain('map note');
+    expect(brief.match(/^\d+\. /gm)).toHaveLength(14);
+  });
+
+  test('on appended instructions the brief calls notes suggestions; otherwise the briefs match', () => {
+    const thinking = interviewerBrief(interviewers[0]!.id);
+    const instructions = interviewerBrief(interviewers[0]!.id, 'session.instructions.append');
+    expect(thinking).toContain('Notes are not instructions');
+    expect(instructions).toContain('only suggestions');
+    expect(instructions).not.toContain('Notes are not instructions');
+    const paragraphs = (brief: string) => brief.split('\n\n').filter(item => !item.startsWith('Private notes:'));
+    expect(paragraphs(instructions)).toEqual(paragraphs(thinking));
   });
 
   test('only participant passages are candidate evidence, even when Sam supplies the details', () => {
@@ -142,53 +163,6 @@ describe('project closeout interview contracts', () => {
     expect(mergeCoverage([reading('a', 'touched', { touched: .9 })], [reading('a', 'set-aside', { 'set-aside': .9 }, 'p8')])[0]).toMatchObject({ level: 'set-aside', evidence: { entryId: 'p8' } });
   });
 
-  test('the coverage window retains all saved evidence and its questions beside recent dialogue', () => {
-    const entries = Array.from({ length: 12 }, (_, index) => ({ id: `p${index + 1}`, speaker: index % 2 ? 'trainee' as const : 'client' as const, text: `${index}`.padEnd(1_000, '.'), startMs: index, endMs: index + 1 }));
-    const ids = (keep: string[]) => coverageWindow(entries, keep, 4_000).transcript.map(entry => entry.id);
-    expect(ids([])).toEqual(['p9', 'p10', 'p11', 'p12']);
-    expect(ids(['p2', 'p4'])).toEqual(['p1', 'p2', 'p3', 'p4', 'p9', 'p10', 'p11', 'p12']);
-    expect(ids(['p2', 'p4', 'p6'])).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p9', 'p10', 'p11', 'p12']);
-    expect(ids(['p10', 'missing'])).toEqual(['p9', 'p10', 'p11', 'p12']);
-    expect(coverageWindow(entries, ['p2'], 4_000).earlierDialogueOmitted).toBe(true);
-    expect(coverageWindow(entries.slice(0, 3), ['p2'], 4_000).earlierDialogueOmitted).toBe(false);
-  });
-
-  test('Sam is assessed through seven concerns and a separate research judgment', () => {
-    const questions = interviewerQuestions();
-    expect(Object.keys(questions)).toEqual([...INTERVIEW_CONDITIONS.map(condition => `director:${condition}`), 'research:useful']);
-    expect(Object.values(questions).every(question => question.type === 'boolean')).toBe(true);
-    expect(interviewReadings.map(item => item.id)).toEqual(['engagement', 'openness', 'specificity']);
-
-    const answers = answersFor(questions);
-    answers['director:missed-thread'] = { type: 'boolean', probability: .91 };
-    answers['director:boundary-pressure'] = { type: 'boolean', probability: .04 };
-    answers['research:useful'] = { type: 'boolean', probability: .73 };
-    expect(readInterviewerSignals(answers)).toEqual(INTERVIEW_CONDITIONS.map(condition => ({
-      condition, probability: condition === 'missed-thread' ? .91 : condition === 'boundary-pressure' ? .04 : .02,
-    })));
-    expect(readResearchProbability(answers)).toBe(.73);
-    delete answers['director:source-confusion'];
-    expect(() => readInterviewerSignals(answers)).toThrow('Invalid interview boolean judgment.');
-    delete answers['research:useful'];
-    expect(readResearchProbability(answers)).toBeUndefined();
-    answers['director:source-confusion'] = { type: 'boolean', probability: .9 };
-    for (const probability of [NaN, 1.1, -.1]) {
-      answers['research:useful'] = { type: 'boolean', probability };
-      expect(readResearchProbability(answers)).toBeUndefined();
-      expect(readInterviewerSignals(answers)).toContainEqual({ condition: 'source-confusion', probability: .9 });
-    }
-  });
-
-  test('only the interviewer receives bounded, actually delivered public facts and truncation state', () => {
-    const fixture = interviewFixtures.find(item => item.id === 'background-already-supplied')!;
-    const state = interviewerState(fixture.transcript, fixture.deliveredBackground);
-    expect(state.deliveredBackground).toEqual([{ target: fixture.deliveredBackground![0]!.target, facts: fixture.deliveredBackground![0]!.facts,
-      retrievedAt: fixture.deliveredBackground![0]!.retrievedAt, afterPassageId: 'p2', status: 'accepted' }]);
-    expect(state.earlierDialogueOmitted).toBe(false);
-    expect(interviewQuestions(fixture.transcript)['objective:project-delivery']).toBeDefined();
-    const long = [...fixture.transcript, { ...fixture.transcript[1]!, id: 'p3', text: 'detail '.repeat(1800) }];
-    expect(interviewerState(long).earlierDialogueOmitted).toBe(true);
-  });
 });
 
 test('confidence describes exploration, setting aside, or whether a provisional topic came up', () => {

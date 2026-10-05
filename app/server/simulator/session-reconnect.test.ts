@@ -1,6 +1,7 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../../core/simulator/types';
-import { activityPoll, attempt, capability, fixture, request, settle } from './session-fixture';
+import { emptyMap, type ConversationMap } from '../../../core/interview-map';
+import { activityPoll, attempt, capability, fixture, request, settle, waitFor } from './session-fixture';
 
 // Pause and resume across real session ownership; only the provider and paid judges are substituted.
 afterEach(() => setSystemTime());
@@ -242,14 +243,28 @@ test('a restart holds a live conversation for its browser and closes the orphane
   await f.session.fetch(request('end')); // Stop the original owner's timer.
 });
 
-test('a resumed interview restates its rundown to the new provider session', async () => {
-  const f = await live({}, interviewAttempt);
+test('a resumed interview restates Sam’s notes to the new provider session', async () => {
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  const map: ConversationMap = {
+    ...emptyMap(), participant: { vantage: 'Their team owns the site today.', preferences: [] },
+    entities: [{ id: 'e1', kind: 'product', label: 'Site', detail: 'Owned by the participant’s team.', source: 'participant', passageId: 'p1' }],
+    threads: [{ id: 't1', label: 'Site ownership', anchors: ['e1'], unknown: 'who owned the site before', guess: 'another team', related: [], topics: [], status: 'open', reason: null }],
+    nextIds: { e: 2, r: 1, t: 2 },
+  };
+  const f = await live({ overrides: {
+    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateMap: async () => ({ map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
+  } }, interviewAttempt);
+  const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => event.content);
+  setSystemTime(epoch + 20_500);
+  await waitFor(() => notes(f.socket.sent).length === 2);
+  const delivered = notes(f.socket.sent);
   await lose(f);
   await reconnect(f);
-  const ids = f.socket.sent.map(event => String(event.event_id));
-  expect(ids).toContain('resume-2');
-  expect(ids.some(id => id.startsWith('rundown-'))).toBe(true);
+  expect(notes(f.socket.sent)).toEqual(delivered);
+  expect(f.socket.sent.map(event => String(event.event_id))).toContain('resume-2');
   await f.session.fetch(request('end'));
   await settle(f);
-  expect(JSON.parse(f.interviewRow()!.interventions_json).some((record: { source: string; reason?: string }) => record.source === 'rundown' && record.reason === 'resume')).toBe(true);
+  expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string }) => record.source === 'note')).toHaveLength(4);
 });

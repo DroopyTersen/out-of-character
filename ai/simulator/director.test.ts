@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { fixtureFoundry } from '../foundry-fixture';
-import { directorContext, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
+import { directorContext, DirectorOutputError, generateDirector, recheckDirector, validateDirectorResult, type DirectorInput } from './director.server';
 import { getScenario, getClient } from './scenarios.server';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
 import type { DirectorRecord, DetectorRecord } from '../../core/simulator/director';
@@ -44,7 +44,7 @@ test('actor context excludes consultant plans, scoring, and hint history', () =>
 });
 
 test('interview scenarios are rejected; the interview producer owns Sam direction', () => {
-  expect(() => directorContext({ ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor', reason: { condition: 'missed-thread', probability: .91 } }))
+  expect(() => directorContext({ ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor', reason: { condition: 'knowledge', probability: .91 } }))
     .toThrow('Interview direction uses the interview producer.');
 });
 
@@ -83,8 +83,9 @@ test('Responses request uses Sol low, strict output, no tools, and server-only c
 
 test('incomplete, refused, non-JSON, and HTTP failures never become hints', async () => {
   for (const value of [response(intervention, { status: 'incomplete' }), response(intervention, { output: [{ type: 'message', status: 'completed', content: [{ type: 'refusal', refusal: 'No.' }] }] }), response(intervention, { output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: 'bad json' }] }] })]) {
-    await expect(generateDirector(input, (async () => Response.json(value)))).rejects.toThrow('Director output was invalid.');
+    await expect(generateDirector(input, (async () => Response.json(value)))).rejects.toThrow(DirectorOutputError);
   }
+  await expect(generateDirector(input, (async () => Response.json(response(intervention, { status: 'incomplete' }))))).rejects.toThrow('Director output was incomplete: incomplete.');
   await expect(generateDirector(input, (async () => new Response('private provider detail', { status: 429 })))).rejects.toThrow('Director request failed (429).');
 });
 

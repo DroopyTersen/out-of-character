@@ -4,8 +4,8 @@ import { JEV_MODEL } from '../judging';
 import { emptySkills, skills, type TranscriptEntry } from '../../core/simulator/types';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
 import { getClient, getScenario, type Scenario } from './scenarios.server';
-import { clientQuestions, evidenceBatches, traineeQuestions } from './rubric';
-import { ACTOR_CONDITIONS, MATERIAL_CONCERN, type BooleanCondition, type DirectorSignal } from '../../core/simulator/director';
+import { clientQuestions, endingQuestions, evidenceBatches, traineeQuestions } from './rubric';
+import { ACTOR_CONDITIONS, CONDUCT_CONCERN, MATERIAL_CONCERN, type BooleanCondition, type DirectorSignal } from '../../core/simulator/director';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
 type Answers = Record<string, Answer>;
@@ -70,6 +70,8 @@ export function readTraineeAnswers(scenario: Scenario, transcript: TranscriptEnt
     if (available && evidence?.speaker === 'trainee') readings[skill.id] = { value: value.score, distribution: value.probabilities ?? null, evidence };
   }
   const mistake = yes(answers, 'mistake') >= .85;
+  // Optional like stalled: an invalid conduct judgment is dropped rather than discarding the grade.
+  const disrespect = readSignal(answers, 'disrespect', 'disrespect');
   const objectives = scenario.objectives.map(objective => {
     const p = yes(answers, `objective:${objective.id}`);
     const evidence = readEvidence(answers, `objective:${objective.id}:evidence`, transcript.filter(entry => entry.speaker === (objective.kind === 'behavior' ? 'trainee' : 'client')));
@@ -81,11 +83,13 @@ export function readTraineeAnswers(scenario: Scenario, transcript: TranscriptEnt
   const candidate = scenario.objectives.find(item => item.id === selected.choice);
   const hintId = candidate && !achievedIds.includes(candidate.id) && !objectives.find(item => item.id === candidate.id)?.achieved ? candidate.id : null;
   const signals: DirectorSignal[] = [
+    ...disrespect,
     { condition: 'mistake', probability: yes(answers, 'mistake') },
     ...scenario.objectives.map(item => ({ condition: `objective:${item.id}` as const, selected: hintId === item.id })),
     ...readSignal(answers, 'stalled', 'stalled'),
   ];
-  return { skills: readings, objectives, concern: mistake ? MATERIAL_CONCERN : null, signals };
+  const concern = disrespect.some(signal => 'probability' in signal && signal.probability >= .85) ? CONDUCT_CONCERN : mistake ? MATERIAL_CONCERN : null;
+  return { skills: readings, objectives, concern, signals };
 }
 
 function validateInput(input: Input) {
@@ -187,5 +191,46 @@ export async function evaluateClient(input: Input): Promise<ClientEvaluation> {
     ...readClientAnswers(result.answers), revision: input.revision,
     model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
+  };
+}
+
+export type EndingEvaluation = {
+  model: string;
+  durationMs: number;
+  usage: { inputTokens: number | undefined; outputTokens: number | undefined; totalTokens: number | undefined };
+  answers: Answers;
+  probability: number;
+  passageId: string | null;
+};
+/** The walk-out judgment reads only recent dialogue; the ending, and any reopening, are always recent. */
+export const ENDING_WINDOW = 16;
+const endingCandidates = (transcript: TranscriptEntry[]) => transcript.slice(-ENDING_WINDOW).filter(entry => entry.speaker === 'client');
+
+/** An ending must cite a real recent client passage; otherwise the meeting stays open. */
+export function readEndingAnswers(answers: Answers, transcript: TranscriptEntry[]) {
+  const ended = yes(answers, 'ended');
+  const evidence = choice(answers, 'ended:evidence', ['none', ...endingCandidates(transcript).map(entry => entry.id)]);
+  const passageId = evidence.choice === 'none' ? null : evidence.choice;
+  return { probability: passageId ? ended : Math.min(ended, .49), passageId };
+}
+
+export async function evaluateEnding(input: Input): Promise<EndingEvaluation> {
+  validateInput(input);
+  const scenario = getScenario(input.scenarioId);
+  const client = getClient(input.clientId);
+  const started = performance.now();
+  const recent = input.transcript.slice(-ENDING_WINDOW);
+  const result = await experimental_evaluate({
+    model: createTypeSafeAi({ apiKey: input.apiKey }).evaluationModel(JEV_MODEL),
+    state: {
+      dialogueColumns: ['id', 'speaker', 'text'],
+      recentDialogue: recent.map(({ id, speaker, text }) => [id, speaker, text]),
+      client: { name: client.name, role: scenario.clientRole },
+    },
+    questions: endingQuestions(endingCandidates(input.transcript)), abortSignal: input.signal, maxRetries: 0,
+  });
+  return {
+    ...readEndingAnswers(result.answers, input.transcript),
+    model: result.response.modelId, durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };
 }

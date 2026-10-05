@@ -40,6 +40,7 @@ const server = {
   resumes: 0,
   offline: false,
   calls: [] as string[],
+  polls: [] as unknown[],
   override: undefined as ((action: string) => Reply | undefined) | undefined,
   snapshot(): SessionSnapshot {
     const paused = this.status === 'paused' || (this.status === 'connecting' && this.resumes > 0);
@@ -68,9 +69,10 @@ const globals = globalThis as Record<string, unknown>;
 beforeAll(() => {
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: async () => new FakeStream() }, get onLine() { return browser.onLine; } } });
   Object.assign(globals, { window: new EventTarget(), document: Object.assign(new EventTarget(), { visibilityState: 'visible' }), RTCPeerConnection: FakePeer, AudioContext: FakeAudioContext, Audio: FakeAudio, MediaStream: FakeStream });
-  globalThis.fetch = (async (url: string) => {
+  globalThis.fetch = (async (url: string, options: RequestInit) => {
     const action = url === '/api/simulator/sessions' ? 'start' : url.split('/').at(-1)!;
     server.calls.push(action);
+    if (action === 'poll') server.polls.push(options.body ? JSON.parse(String(options.body)) : null);
     if (server.offline) throw new TypeError('Failed to fetch');
     const { status = 200, body } = server.reply(action);
     return { ok: status < 400, status, json: async () => body };
@@ -83,7 +85,7 @@ afterAll(() => {
 });
 beforeEach(() => {
   jest.useFakeTimers();
-  Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], override: undefined });
+  Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], override: undefined });
   browser.onLine = true;
   FakePeer.all = [];
 });
@@ -142,14 +144,27 @@ test('failing polls show reconnecting, pause after their grace, and a late retur
   await advance(1100);
   expect(states(links)).toEqual(['reconnecting']);
   await advance(10_000);
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: false });
+  // The browser is online, so a silent server leaves Resume available.
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'unanswered' });
   await advance(60_000);
   server.offline = false;
   await advance(5000);
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: true });
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'answered' });
   expect(server.calls).not.toContain('resume');
   await connection.resume();
   expect(links.at(-1)!.state).toBe('stable');
+  expect(server.status).toBe('live');
+  await connection.end();
+});
+
+test('a server answering with errors leaves a paused attempt resumable', async () => {
+  const { connection, links } = await connected();
+  server.override = action => action === 'poll' ? { status: 503, body: { error: 'Unavailable.' } } : undefined;
+  await advance(12_000);
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'unanswered' });
+  expect(server.calls).not.toContain('resume');
+  await connection.resume();
+  expect(links.at(-1)).toEqual({ state: 'stable', reach: 'answered' });
   expect(server.status).toBe('live');
   await connection.end();
 });
@@ -160,7 +175,7 @@ test('the browser going offline pauses at once, and coming back online checks in
   server.offline = true;
   (globals.window as EventTarget).dispatchEvent(new Event('offline'));
   await flush();
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: false });
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'offline' });
   browser.onLine = true;
   server.offline = false;
   (globals.window as EventTarget).dispatchEvent(new Event('online'));
@@ -175,7 +190,7 @@ test('a refused resume returns to the pause with its reason and is not retried a
   server.status = 'paused';
   await advance(1100);
   expect(errors).toEqual(['This attempt has reconnected too many times. End it to keep what was captured.']);
-  expect(links.at(-1)).toEqual({ state: 'paused', reachable: true });
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'answered' });
   // The server already held the attempt; the browser does not report it again.
   expect(server.calls).not.toContain('pause');
   await advance(20_000);
@@ -217,13 +232,14 @@ test('a reloaded page rejoins its attempt paused and waits for the user to resum
   await connection.reattach();
   await advance(100);
   expect(server.calls).toEqual(['pause', 'poll']);
+  expect(server.polls).toEqual([{ active: false, audio: false }]);
   expect(snapshots.at(-1)!.status).toBe('paused');
-  expect(links).toEqual([{ state: 'paused', reachable: true, reloaded: true }]);
+  expect(links).toEqual([{ state: 'paused', reach: 'answered', reloaded: true }]);
   // Audio needs a click on the new page, so the heartbeat never resumes on its own.
   await advance(20_000);
   expect(server.calls).not.toContain('resume');
   await connection.resume();
-  expect(links).toEqual([{ state: 'paused', reachable: true, reloaded: true }, { state: 'resuming', reachable: true }, { state: 'stable', reachable: true }]);
+  expect(links).toEqual([{ state: 'paused', reach: 'answered', reloaded: true }, { state: 'resuming', reach: 'answered' }, { state: 'stable', reach: 'answered' }]);
   expect(server.status).toBe('live');
   await connection.end();
 });

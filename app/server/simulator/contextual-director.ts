@@ -1,14 +1,15 @@
 import { DirectorOutputError, generateDirector, recheckDirector, type DirectorInput } from '../../../ai/simulator/director.server';
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { JEV_MODEL } from '../../../ai/judging';
-import { DirectorGate, DIRECTOR_LIMITS, DIRECTOR_VERSION, MATERIAL_CONCERN, publicHint, type DirectorAudience, type DirectorIssue, type DirectorSignal, type DirectorRecord, type ObservationRecord, type InterventionRecord, type DirectorSummary } from '../../../core/simulator/director';
+import { CONCERN_TEXT, DirectorGate, DIRECTOR_LIMITS, DIRECTOR_VERSION, isConcern, publicHint, type DirectorAudience, type DirectorIssue, type DirectorSignal, type DirectorRecord, type ObservationRecord, type InterventionRecord, type DirectorSummary } from '../../../core/simulator/director';
 import type { LiveHint, ObjectiveReading, TranscriptEntry } from '../../../core/simulator/types';
 
 export const directorServices = { generateDirector, recheckDirector };
 type Observation = { audience: DirectorAudience; transcript: TranscriptEntry[]; revision: number; capturedAt: number };
 type ObservationResult = { signals: DirectorSignal[]; model?: string; failure?: 'evaluation_error' | 'evaluation_timeout' };
 type RecordedObservation = Observation & { record: ObservationRecord };
-export type DirectorCheckpoint = { records: InterventionRecord[]; usage: DirectorGate['usage']; lastConcern?: string };
+/** lastConcern is the pre-v4 single shown concern; shownConcerns supersedes it. Open concerns keep their identity across a restart. */
+export type DirectorCheckpoint = { records: InterventionRecord[]; usage: DirectorGate['usage']; lastConcern?: string; shownConcerns?: string[]; concerns?: DirectorIssue[] };
 type Options = {
   scenarioId: string; clientId: string; objectives: () => ObjectiveReading[];
   foundry: FoundryConfig; typesafeKey: string; services: typeof directorServices;
@@ -21,7 +22,7 @@ export class ContextualDirector {
   readonly records: InterventionRecord[] = [];
   private abort = new AbortController();
   private closed = false;
-  private lastConcern: string | undefined;
+  private shownConcerns = new Set<string>();
   private hint: LiveHint | null = null;
 
   constructor(private options: Options) {}
@@ -77,13 +78,14 @@ export class ContextualDirector {
   }
 
   private showConcern(observation: RecordedObservation, now: number) {
-    const issue = this.gate.concern();
-    if (!issue || this.lastConcern === issue.id) return;
-    this.lastConcern = issue.id;
+    const issue = this.gate.concerns().find(item => !this.shownConcerns.has(item.id));
+    if (!issue || !isConcern(issue.signal.condition)) return;
+    this.shownConcerns.add(issue.id);
+    const text = CONCERN_TEXT[issue.signal.condition];
     // The episode keeps its ID when generation replaces this fixed alert.
     this.records.push({ ...this.recordBase(observation, issue, now), source: 'detector', model: JEV_MODEL,
-      result: { action: 'intervene', text: MATERIAL_CONCERN, evidenceIds: [] }, readyAt: now, deliveredAt: now, outcome: 'published' });
-    this.hint = publicHint(issue, MATERIAL_CONCERN, [], now);
+      result: { action: 'intervene', text, evidenceIds: [] }, readyAt: now, deliveredAt: now, outcome: 'published' });
+    this.hint = publicHint(issue, text, [], now);
   }
 
   private async run(observation: RecordedObservation, issue: DirectorIssue) {
@@ -125,7 +127,7 @@ export class ContextualDirector {
         ? this.options.objectives().some(item => `objective:${item.id}` === issue.signal.condition && item.achieved)
         : !this.gate.current('trainee', issue.id));
       if (Date.now() >= expiry || resolved) { record.outcome = 'stale'; return; }
-      if (observation.audience === 'trainee' && issue.signal.condition !== 'mistake' && this.gate.concern()) { record.outcome = 'stale'; return; }
+      if (observation.audience === 'trainee' && !isConcern(issue.signal.condition) && this.gate.urgentConcerns().length) { record.outcome = 'stale'; return; }
       record.readyAt = Date.now();
       if (observation.audience === 'trainee') {
         this.hint = publicHint(issue, result.text, result.evidenceIds, Date.now());
@@ -171,14 +173,17 @@ export class ContextualDirector {
   }
 
   checkpoint(): DirectorCheckpoint {
-    return { records: this.records, usage: this.gate.usage, ...(this.lastConcern ? { lastConcern: this.lastConcern } : {}) };
+    const concerns = this.gate.concerns();
+    return { records: this.records, usage: this.gate.usage, ...(this.shownConcerns.size ? { shownConcerns: [...this.shownConcerns] } : {}), ...(concerns.length ? { concerns } : {}) };
   }
 
   /** Restores a paused director. Work in flight when the checkpoint was written was lost with the isolate. */
   restore(checkpoint: DirectorCheckpoint) {
     this.records.splice(0, this.records.length, ...checkpoint.records);
-    this.gate.restoreUsage(checkpoint.usage);
-    this.lastConcern = checkpoint.lastConcern;
+    this.shownConcerns = new Set([...(checkpoint.shownConcerns ?? []), ...(checkpoint.lastConcern ? [checkpoint.lastConcern] : [])]);
+    const ids = [...this.shownConcerns, ...(checkpoint.concerns ?? []).map(issue => issue.id), ...checkpoint.records.flatMap(record => 'issueId' in record && record.issueId ? [record.issueId] : [])];
+    const episode = Math.max(0, ...ids.map(id => Number(id.split(':').at(-1))).filter(Number.isInteger));
+    this.gate.restoreUsage(checkpoint.usage, episode, checkpoint.concerns);
     this.pause();
   }
 

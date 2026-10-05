@@ -1,7 +1,9 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
-import { PRODUCER_VERSION, type InterviewCue } from '../../../core/interview-producer';
+import { emptyMap, type ConversationMap } from '../../../core/interview-map';
+import { NOTE_HEADERS } from '../../../core/interview-notes';
+import { PRODUCER_VERSION, type ResearchRequest } from '../../../core/interview-producer';
 import type { producerServices } from './interview-producer';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
 import { LiveSessionGone } from './live.server';
@@ -10,55 +12,87 @@ import { parseArchive } from '../../../scripts/simulator-transcripts';
 import { attempt, capability, request, activityPoll, fixture, settle, waitFor } from './session-fixture';
 afterEach(() => setSystemTime());
 const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
+const fixtureUsage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
+/** Jev finds every participant turn new to the map, so each one wakes Sol once the floor allows. */
+const novelTurn: typeof producerServices.evaluateTurn = async input => ({
+  reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: .9 },
+  model: 'fixture', durationMs: 1, usage: fixtureUsage, answers: {},
+});
+const solMap = (): ConversationMap => ({
+  ...emptyMap(), participant: { vantage: 'PRIVATE VANTAGE: led the 3DEP integration', preferences: [] },
+  entities: [{ id: 'e1', kind: 'product', label: '3DEP integration', detail: 'Built by the participant’s team.', source: 'participant', passageId: 'p1' }],
+  threads: [{ id: 't1', label: 'Integration team', anchors: ['e1'], unknown: 'PRIVATE UNKNOWN: who else worked on it', guess: 'a small team', related: [], topics: [], status: 'open', reason: null }],
+  nextIds: { e: 2, r: 1, t: 2 },
+});
+const mapped = (map: ConversationMap, research: ResearchRequest | null = null) => ({
+  map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
+  changes: { added: [...map.entities, ...map.threads].map(item => item.id), changed: [], dropped: [], kept: [] }, research, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 },
+});
+const noteEvents = (sent: Record<string, unknown>[], kind?: keyof typeof NOTE_HEADERS) =>
+  sent.filter(event => String(event.event_id).startsWith('note-') && (!kind || String(event.content).startsWith(NOTE_HEADERS[kind])));
+const nextTick = () => new Promise(resolve => setTimeout(resolve, 600));
 
-test.each([false, true])('an interview cue requires fresh, settled Sam output (expire: %s)', async expire => {
-  let generated = 0;
+test('the producer reads settled participant turns, maps after its floor, and keeps its notes to Sam private', async () => {
+  const turns: string[] = [];
+  const maps: Parameters<typeof producerServices.generateMap>[0][] = [];
+  let summarized = '';
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateProducer: async () => { generated++; return { cue: 'Ask what changed in the release guide.', evidenceIds: ['p1'], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
+    evaluateTurn: async input => { turns.push(input.transcript.at(-1)!.id); return novelTurn(input); },
+    generateMap: async input => { maps.push(input); return mapped(solMap()); },
+    summarizeInterview: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
+      const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
+    } }); },
   } });
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);
-  const poll = (sequence: number, outputQuietMs: number | null) => f.session.fetch(new Request('https://session/poll', {
-    method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active: false, audio: false, outputQuietMs, sequence }),
-  }));
-  const cues = () => f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
   try {
     await f.session.fetch(request('start', capability, interviewAttempt));
     await f.session.fetch(request('ready'));
-    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'We fixed the permissions before launch.', start_ms: 0, end_ms: 1000 });
-    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'That caught the mistake.', start_ms: 1000, end_ms: 2000 });
-    setSystemTime(epoch + 7000);
-    await poll(1, 0);
-    await waitFor(() => generated === 1);
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
+    await nextTick();
+    expect(turns).toEqual([]); // Still being transcribed.
+    setSystemTime(epoch + 2000);
+    await waitFor(() => turns.length === 1);
+    await nextTick();
+    expect(maps).toHaveLength(0); // Jev's wake waits for Sol's floor.
+    setSystemTime(epoch + 20_500);
+    await waitFor(() => noteEvents(f.socket.sent).length === 2);
     await Promise.all(f.pending);
-    expect(cues()).toHaveLength(0);
-
-    setSystemTime(epoch + 7500);
-    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What happened in the rehearsal?', start_ms: 7000, end_ms: 7400 });
-    setSystemTime(epoch + 7600);
-    await poll(2, 1000);
-    await new Promise(resolve => setTimeout(resolve, 600));
-    expect(cues()).toHaveLength(0); // Text is still growing despite the quiet claim.
-
-    setSystemTime(epoch + 9200);
-    await new Promise(resolve => setTimeout(resolve, 600));
-    expect(cues()).toHaveLength(0); // The earlier quiet report is now stale.
-    await poll(3, null);
-    await poll(2, 60_000); // An older periodic report cannot reopen Sam's floor.
-    await new Promise(resolve => setTimeout(resolve, 600));
-    expect(cues()).toHaveLength(0);
-
-    setSystemTime(epoch + (expire ? 22_000 : 9700));
-    await poll(4, 1000);
-    if (expire) {
-      await new Promise(resolve => setTimeout(resolve, 600));
-      expect(cues()).toHaveLength(0);
-    } else await waitFor(() => cues().length === 1);
+    expect(maps).toHaveLength(1);
+    expect(maps[0]!.attemptId).toBe(interviewAttempt.id);
+    expect(maps[0]!.passages.map(entry => entry.id)).toEqual(['p1']);
+    expect(maps[0]!.tail.reasons).toHaveLength(1);
+    expect(maps[0]!.tail.reasons[0]).toContain('(p1)');
+    const [list, map] = noteEvents(f.socket.sent);
+    expect(list).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('PRIVATE UNKNOWN') });
+    expect(map).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('PRIVATE VANTAGE') });
+    // Notes are never instructions; Sam's silence after the participant spoke drew the greeting once more.
+    expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening', 'opening-again']);
+    f.socket.emit({ type: 'session.thinking.appended', client_event_id: list!.event_id, start_ms: 2000, end_ms: 2400 });
+    setSystemTime(epoch + 22_000);
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
+    const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+    expect(snapshot.coaching).toBeNull();
+    expect(snapshot.evaluation).toBeNull();
+    expect(snapshot.interview.evaluation).toBeDefined();
+    expect(JSON.stringify(snapshot)).not.toContain('PRIVATE');
+    expect(f.judged).toHaveLength(0);
     await f.session.fetch(request('end'));
+    await (await f.session.fetch(request('report'))).text();
     await Promise.all(f.pending);
-    const record = JSON.parse(f.interviewRow()!.interventions_json).find((item: { source: string }) => item.source === 'producer');
-    expect(record).toMatchObject(expire ? { outcome: 'withheld', reason: 'no_quiet_opening' } : { outcome: 'sent' });
+    const row = f.interviewRow()!;
+    const records = JSON.parse(row.interventions_json).filter((record: { source: string }) => record.source !== 'grade');
+    expect(records.map((record: { source: string }) => record.source)).toEqual(['turn', 'map', 'note', 'note', 'traits']);
+    expect(records[0]).toMatchObject({ passageId: 'p1', outcome: 'read', reading: { novel: .9 } });
+    expect(records[1]).toMatchObject({ outcome: 'applied', inputCount: 1, lastInputId: 'p1', changes: { added: ['e1', 't1'] } });
+    expect(records[2]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, nextSamTurnAfterId: 'p1', delivery: { status: 'accepted', startMs: 2000, endMs: 2400 } });
+    expect(records[3]).toMatchObject({ kind: 'map', outcome: 'sent', nextSamTurnAt: epoch + 22_000, delivery: { status: 'unknown' } });
+    expect(JSON.parse(row.cues_json)).toEqual([]);
+    expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', maps: 1, applied: 1, turns: 1, notes: 2, research: 0 });
+    expect(summarized).not.toContain('PRIVATE');
+    expect(summarized).not.toContain('interventions');
+    expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
+    expect(f.row()).toBeNull();
   } finally { await f.session.fetch(request('end')); }
 }, 10_000);
 
@@ -121,31 +155,44 @@ test('the private archive keeps consecutive probability changes, failed grades, 
   } finally { await f.session.fetch(request('end')); }
 }, 10_000);
 
-test.each(['accepted', 'rejected'] as const)('interview research %s is archived privately and cannot grade or summarize the participant', async receipt => {
+test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam only in a map note and cannot grade or summarize the participant', async receipt => {
   let participantInput = '', summaryInput = '';
   const lookups: Record<string, unknown>[] = [];
+  const maps: Parameters<typeof producerServices.generateMap>[0][] = [];
   const fact = { text: 'PUBLIC BACKGROUND FACT', url: 'https://www.usgs.gov/3d-elevation-program', title: 'USGS 3DEP' };
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: .9, signals: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    evaluateInterview: async input => { participantInput = JSON.stringify(input); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    // The producer names what to research on its scheduled check-in after Sam's turn.
-    generateProducer: async input => ({ cue: null, evidenceIds: [], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 },
-      research: input.triggers.some(item => item.kind === 'check-in') ? { kind: 'term', name: '3DEP', clue: null, passageIds: [input.transcript.find(entry => entry.speaker === 'trainee')!.id] } : null }),
+    evaluateTurn: novelTurn,
+    evaluateInterview: async input => { participantInput = JSON.stringify(input); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: fixtureUsage, answers: {} }; },
+    // Sol asks for a lookup, then files what came back as public background.
+    generateMap: async input => {
+      maps.push(input);
+      return maps.length === 1 ? mapped(input.previous, { kind: 'term', name: '3DEP', clue: null, passageIds: ['p1'] })
+        : mapped({ ...input.previous, entities: [{ id: 'e1', kind: 'term', label: '3DEP', detail: fact.text, source: 'research', passageId: 'L1' }], nextIds: { e: 2, r: 1, t: 1 } });
+    },
     lookupInterviewBackground: async input => { lookups.push(input); return { status: 'found', facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }; },
     summarizeInterview: (input, done) => { summaryInput = JSON.stringify(input); return new ReadableStream({ start(controller) {
       const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
     } }); },
   } });
-  setSystemTime(1_800_000_000_000);
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
   await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
-  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did that involve?', start_ms: 1000, end_ms: 2000 });
-  setSystemTime(1_800_000_030_000); await f.session.fetch(request('poll'));
-  setSystemTime(1_800_000_046_000); await f.session.fetch(request('poll'));
-  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('research-')));
+  setSystemTime(epoch + 20_500);
+  // Audio the browser hears keeps the silent-greeting watchdog from replacing the voice session.
+  await f.session.fetch(activityPoll(false, true));
+  await waitFor(() => lookups.length === 1);
   expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, foundry: expect.objectContaining({ resourceName: 'fixture-foundry', agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' }), signal: expect.any(AbortSignal) }]);
-  const note = f.socket.sent.find(event => String(event.event_id).startsWith('research-'))!;
-  expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  await Promise.all(f.pending);
+  expect(noteEvents(f.socket.sent)).toHaveLength(0);
+  // The found lookup wakes Sol, which reads it in its log before Sam hears of it.
+  setSystemTime(epoch + 41_000);
+  await f.session.fetch(activityPoll(false, true));
+  await waitFor(() => noteEvents(f.socket.sent).length === 1);
+  await Promise.all(f.pending);
+  expect(maps[1]!.blocks.join('\n')).toContain('PUBLIC BACKGROUND FACT');
+  const note = noteEvents(f.socket.sent, 'map')[0]!;
+  expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('\nPublic background') });
   const before = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(before.interview.background).toEqual([]);
   f.socket.emit(receipt === 'accepted' ? { type: 'session.thinking.appended', client_event_id: note.event_id } : { type: 'error', error: { client_event_id: note.event_id } });
@@ -158,8 +205,12 @@ test.each(['accepted', 'rejected'] as const)('interview research %s is archived 
   await (await f.session.fetch(request('report'))).text(); await Promise.all(f.pending);
   expect(participantInput).not.toContain('PUBLIC BACKGROUND FACT');
   expect(summaryInput).not.toContain('PUBLIC BACKGROUND FACT');
-  const research = JSON.parse(f.interviewRow()!.interventions_json).find((item: any) => item.source === 'research');
-  expect(research).toMatchObject({ outcome: receipt === 'accepted' ? 'sent' : 'error', delivery: { status: receipt }, facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'] });
+  const records = JSON.parse(f.interviewRow()!.interventions_json);
+  const research = records.find((item: any) => item.source === 'research');
+  expect(research).toMatchObject({ outcome: 'found', facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'], loggedAt: epoch + 41_000 });
+  expect(records.find((item: any) => item.source === 'note')).toMatchObject({
+    kind: 'map', outcome: receipt === 'accepted' ? 'sent' : 'rejected', delivery: { status: receipt }, researchIds: [research.id],
+  });
   expect(f.row()).toBeNull();
 }, 10_000);
 
@@ -296,13 +347,14 @@ test('session ownership, authoritative transcript, close acknowledgment, and pub
   expect(f.socket.readyState).toBe(3);
 });
 
-test('interview End re-grades coverage with its evidence in view and returns pending before one summary completes', async () => {
+test('interview End re-grades coverage over the whole interview and returns pending before one summary completes', async () => {
+  const summaryUsage = { inputTokens: 43, outputTokens: 17, reasoningTokens: 9, cachedTokens: 11 };
   let releaseSummary: ((text: string) => void) | undefined;
   const summarized: { speaker: string; text: string }[][] = [];
-  const interviewJudged: { keepIds: string[]; transcript: { speaker: string; text: string }[] }[] = [];
+  const interviewJudged: { transcript: { speaker: string; text: string }[] }[] = [];
   const f = await fixture({ overrides: {
     evaluateInterview: async input => {
-      interviewJudged.push({ keepIds: [...(input.keepIds ?? [])], transcript: input.transcript });
+      interviewJudged.push({ transcript: input.transcript });
       const passage = input.transcript[0]!;
       const evidence = { entryId: passage.id, speaker: passage.speaker, text: passage.text };
       // The final re-grade sees the whole interview and may withdraw a live checkmark.
@@ -316,7 +368,7 @@ test('interview End re-grades coverage with its evidence in view and returns pen
     },
     summarizeInterview: (input, done) => { summarized.push(input.transcript); return new ReadableStream({ start(controller) {
       controller.enqueue('{\"text\":');
-      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: null }); controller.close(); releaseSummary = undefined; };
+      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: summaryUsage }); controller.close(); releaseSummary = undefined; };
     } }); },
   } });
   f.socket.holdClose = true;
@@ -330,7 +382,6 @@ test('interview End re-grades coverage with its evidence in view and returns pen
     const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     const covered = live.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
     expect(covered).toMatchObject({ level: 'explored', achieved: true, evidence: { speaker: 'trainee', text: 'We built a permit intake portal.' } });
-    expect(interviewJudged[0]!.keepIds).toEqual([]);
     ending = f.session.fetch(request('end'));
     expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ending');
     f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Jen resolved our access issue.', start_ms: 2000, end_ms: 2900 });
@@ -346,7 +397,6 @@ test('interview End re-grades coverage with its evidence in view and returns pen
     expect(ended.transcript.map((entry: { speaker: string }) => entry.speaker)).toEqual(['trainee', 'trainee']);
     expect(f.judged).toHaveLength(0);
     expect(interviewJudged).toHaveLength(2);
-    expect(interviewJudged[1]!.keepIds).toEqual([covered.evidence.entryId]);
     expect(interviewJudged[1]!.transcript.map(entry => entry.text)).toEqual(['We built a permit intake portal.', 'Jen resolved our access issue.']);
     const final = ended.interview.evaluation.objectives.find((item: { id: string }) => item.id === 'project-delivery');
     expect(final).toMatchObject({ level: 'touched', achieved: false, evidence: covered.evidence });
@@ -378,6 +428,10 @@ test('interview End re-grades coverage with its evidence in view and returns pen
     const ready = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     expect(ready.interview.summary).toEqual({ status: 'ready', text: 'The participant credited Jen with resolving the access issue.' });
     expect(f.interviewRow()).toMatchObject({ summary_status: 'ready', summary_text: ready.interview.summary.text });
+    const summaryDiagnostic = JSON.parse(f.interviewRow()!.provenance_json).interviewSummary;
+    expect(summaryDiagnostic).toMatchObject({ model: 'gpt-6.1-sol', version: 'interview-summary-v1', attempts: [{ failure: null, usage: summaryUsage }] });
+    expect(summaryDiagnostic.attempts[0].endedAt).toBeGreaterThanOrEqual(summaryDiagnostic.attempts[0].startedAt);
+    expect(JSON.stringify(ready)).not.toContain('interviewSummary');
     expect(JSON.parse(f.interviewRow()!.transcript_json)).toEqual(ended.transcript);
     expect(f.row()).toBeNull();
   } finally {
@@ -400,142 +454,67 @@ test('a failed interview summary remains unavailable while the participant trans
   const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(snapshot.interview.summary).toEqual({ status: 'unavailable', text: null });
   expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'unavailable', summary_text: null });
+  expect(JSON.parse(f.interviewRow()!.provenance_json).interviewSummary.attempts).toEqual([
+    { startedAt: expect.any(Number), endedAt: expect.any(Number), failure: 'provider', usage: null },
+  ]);
+  expect(f.interviewRow()!.provenance_json).not.toContain('Provider contained');
   expect(JSON.parse(f.interviewRow()!.transcript_json)[0].text).toBe('We shipped the migration despite the handoff delay.');
   expect(JSON.stringify(snapshot)).not.toContain('Provider contained');
   expect(f.row()).toBeNull();
 });
 
-test.each(['cue', 'none'] as const)('interview producer %s stays private and is summoned once by a new protection concern', async action => {
-  const inputs: Parameters<typeof producerServices.generateProducer>[0][] = [];
-  let summarized = '';
+test.each(['accepted', 'rejected'] as const)('a list note receipt %s is archived, and a rejected note goes out again at the next pick', async receipt => {
+  let turns = 0;
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }, { condition: 'missed-thread', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateProducer: async input => {
-      inputs.push(input);
-      const cue = action === 'none' ? null : 'PRIVATE: Ask an open question about the access owner.';
-      return { cue, evidenceIds: cue ? [input.transcript[0]!.id] : [], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
-    },
-    summarizeInterview: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
-      const report = { text: 'The participant described an access delay.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
-    } }); },
+    evaluateTurn: async input => { turns++; return novelTurn(input); },
+    generateMap: async () => mapped(solMap()),
   } });
-  setSystemTime(1_800_000_000_000);
-  await f.session.fetch(request('start', capability, interviewAttempt));
-  await f.session.fetch(request('ready'));
-  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
-  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
-  setSystemTime(1_800_000_002_000);
-  await f.session.fetch(request('poll'));
-  await waitFor(() => inputs.length === 1);
-  await Promise.all(f.pending);
-  expect(inputs[0]!.triggers).toEqual([{ kind: 'concern', condition: 'leading', probability: .99 }]);
-  expect(inputs[0]!.coverage).toEqual(expect.any(Array));
-  const cues = f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'));
-  expect(cues).toHaveLength(action === 'none' ? 0 : 1);
-  if (cues[0]) {
-    expect(cues[0].type).toBe('session.instructions.append');
-    f.socket.emit({ type: 'session.instructions.appended', client_event_id: cues[0].event_id, start_ms: 2000, end_ms: 2400 });
-  }
-  const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
-  expect(snapshot.coaching).toBeNull();
-  expect(snapshot.evaluation).toBeNull();
-  expect(snapshot.interview.evaluation).toBeDefined();
-  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE:');
-  expect(JSON.stringify(snapshot)).not.toContain('signals');
-  expect(f.judged).toHaveLength(0);
-  await f.session.fetch(request('end'));
-  await (await f.session.fetch(request('report'))).text();
-  await Promise.all(f.pending);
-  const row = f.interviewRow()!;
-  const records = JSON.parse(row.interventions_json);
-  expect(records.filter((record: { source: string }) => record.source !== 'grade').map((record: { source: string }) => record.source)).toEqual(['assessment', 'producer']);
-  expect(records.filter((record: { source: string }) => record.source === 'grade').at(-1)).toMatchObject({ final: true, outcome: 'graded', durationMs: 1 });
-  expect(records[0]).toMatchObject({ outcome: 'observed', concerns: ['leading'] });
-  expect(records[1]).toMatchObject({ outcome: action === 'none' ? 'none' : 'sent', ...(action === 'cue' ? { delivery: { status: 'accepted', startMs: 2000, endMs: 2400 } } : {}) });
-  expect(records[1].check).toBeUndefined();
-  expect(JSON.parse(row.cues_json)).toEqual([]);
-  expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', consultations: 1, cues: action === 'none' ? 0 : 1 });
-  expect(summarized).not.toContain('PRIVATE:');
-  expect(summarized).not.toContain('interventions');
-  expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
-  expect(f.row()).toBeNull();
-}, 10_000);
-
-test.each(['accepted', 'rejected'] as const)('interview instruction %s receipt controls follow-through and recovery', async receipt => {
   const epoch = 1_800_000_000_000;
-  const interviewerInputs: { cue?: InterviewCue }[] = [];
-  const producerTriggers: Parameters<typeof producerServices.generateProducer>[0]['triggers'][] = [];
-  const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => {
-      interviewerInputs.push(input);
-      return { revision: input.revision, researchProbability: 0, signals: interviewerInputs.length === 1 ? [{ condition: 'leading', probability: .99 }] : [],
-        ...(input.cue ? { followThrough: { cueId: input.cue.id, outcome: 'missed' as const,
-          probabilities: { followed: .01, deferred: .01, missed: .96, retired: .01, 'not-yet-assessable': .01 }, responseIds: ['p4'] } } : {}),
-        model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} };
-    },
-    generateProducer: async input => {
-      producerTriggers.push(input.triggers);
-      const cue = producerTriggers.length === 1 ? 'PRIVATE: Ask who owned the access handoff.' : null;
-      return { cue, evidenceIds: cue ? ['p1'] : [], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
-    },
-  } });
   setSystemTime(epoch);
   await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
-  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
-  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What tools did you use?', start_ms: 1000, end_ms: 1900 });
-  setSystemTime(epoch + 2000);
-  await f.session.fetch(request('poll'));
-  await waitFor(() => f.socket.sent.some(event => String(event.event_id).startsWith('cue-')));
-  const eventId = f.socket.sent.find(event => String(event.event_id).startsWith('cue-'))!.event_id;
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'I led the 3DEP integration.', start_ms: 0, end_ms: 1000 });
+  setSystemTime(epoch + 20_500);
+  await waitFor(() => noteEvents(f.socket.sent, 'list').length === 1);
+  await Promise.all(f.pending);
+  const first = noteEvents(f.socket.sent, 'list')[0]!;
   f.socket.emit(receipt === 'accepted'
-    ? { type: 'session.instructions.appended', client_event_id: eventId, start_ms: 2000, end_ms: 2400 }
-    : { type: 'error', error: { client_event_id: eventId } });
-  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Our lead coordinated it.', start_ms: 3000, end_ms: 4000 });
-  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Can you describe their role?', start_ms: 5000, end_ms: 6000 });
-  setSystemTime(epoch + 13_000);
-  await f.session.fetch(request('poll'));
-  await waitFor(() => interviewerInputs.length >= 2);
+    ? { type: 'session.thinking.appended', client_event_id: first.event_id, start_ms: 2000, end_ms: 2400 }
+    : { type: 'error', error: { client_event_id: first.event_id } });
+  expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).message).toBeNull();
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Our lead coordinated it.', start_ms: 22_000, end_ms: 23_000 });
+  setSystemTime(epoch + 25_000);
+  await waitFor(() => turns === 2);
   await Promise.all(f.pending);
-  if (receipt === 'accepted') expect(interviewerInputs[1]!.cue).toMatchObject({ id: expect.stringMatching(/^producer-/),
-    text: 'PRIVATE: Ask who owned the access handoff.', evidenceIds: ['p1'], afterPassageId: 'p2', endMs: 2400 });
-  else expect(interviewerInputs[1]!.cue).toBeUndefined();
-  setSystemTime(epoch + 33_000);
-  await f.session.fetch(request('poll'));
-  if (receipt === 'accepted') await waitFor(() => producerTriggers.some(triggers => triggers.some(trigger => trigger.kind === 'cue-recovery')));
-  await Promise.all(f.pending);
+  const lists = noteEvents(f.socket.sent, 'list');
+  expect(lists).toHaveLength(receipt === 'accepted' ? 1 : 2);
+  if (receipt === 'rejected') expect(lists[1]!.content).toBe(first.content);
   await f.session.fetch(request('end'));
   await Promise.all(f.pending);
-  const records = JSON.parse(f.interviewRow()!.interventions_json);
-  const cue = records.find((item: { source: string }) => item.source === 'producer');
-  expect(cue.delivery.status).toBe(receipt);
-  expect(cue.followThrough?.outcome).toBe(receipt === 'accepted' ? 'missed' : undefined);
-  expect(producerTriggers.some(triggers => triggers.some(trigger => trigger.kind === 'cue-recovery'))).toBe(receipt === 'accepted');
-  const snapshot = await (await f.session.fetch(request('poll'))).json();
-  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE:');
+  const notes = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string; kind?: string }) => item.source === 'note' && item.kind === 'list');
+  expect(notes[0]).toMatchObject({ outcome: receipt === 'accepted' ? 'sent' : 'rejected', delivery: { status: receipt, ...(receipt === 'accepted' ? { startMs: 2000, endMs: 2400 } : {}) } });
+  expect(notes).toHaveLength(lists.length);
 }, 10_000);
 
-test('End freezes an unfinished interview direction without delaying its summary', async () => {
-  let release!: () => void;
+test('End freezes an unfinished Sol call without delaying its summary', async () => {
+  let release: (() => void) | undefined;
   const f = await fixture({ overrides: {
-    evaluateInterviewer: async input => ({ revision: input.revision, researchProbability: 0, signals: [{ condition: 'leading', probability: .99 }], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateProducer: async input => {
-      await new Promise<void>(resolve => { release = resolve; });
-      return { cue: 'Late private cue.', evidenceIds: [input.transcript[0]!.id], research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } };
-    },
+    evaluateTurn: novelTurn,
+    generateMap: async () => { await new Promise<void>(resolve => { release = resolve; }); return mapped(solMap()); },
   } });
   setSystemTime(1_800_000_000_000);
   await f.session.fetch(request('start', capability, interviewAttempt)); await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The access handoff took three weeks.', start_ms: 100, end_ms: 900 });
-  setSystemTime(1_800_000_002_000);
+  setSystemTime(1_800_000_020_500);
   await waitFor(() => !!release);
   await f.session.fetch(request('end'));
   await (await f.session.fetch(request('report'))).text();
   await waitFor(() => f.interviewRow()?.summary_status === 'ready');
   const archived = f.interviewRow()!;
-  expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'producer').outcome).toBe('aborted');
-  release(); await Promise.all(f.pending);
+  expect(JSON.parse(archived.interventions_json).find((row: { source: string }) => row.source === 'map').outcome).toBe('aborted');
+  release!(); await Promise.all(f.pending);
   expect(f.interviewRow()).toEqual(archived);
-  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('cue-'))).toHaveLength(0);
+  expect(noteEvents(f.socket.sent)).toHaveLength(0);
 }, 10_000);
 
 test('happy hour archives the client voice without live or final judging', async () => {
@@ -554,6 +533,7 @@ test('happy hour archives the client voice without live or final judging', async
   await new Promise(resolve => setTimeout(resolve, 750));
   expect(f.judged).toHaveLength(0);
   expect(directed).toBe(0);
+  expect(f.endings).toEqual([]);
   const live = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
   expect(live.status).toBe('live');
   expect(live.evaluation).toBeNull();
@@ -862,6 +842,162 @@ test('transcript capacity warns before closing after a short quiet drain', async
   expect(ended.status).toBe('ended');
   expect(ended.transcript).toHaveLength(warningAt);
   expect(ended.message).toContain('transcript capacity');
+});
+type Overrides = NonNullable<NonNullable<Parameters<typeof fixture>[0]>['overrides']>;
+const ENDING = 'I will not be spoken to that way. This meeting is over.';
+/** Synthetic walk-out judge: the meeting ends only on an unconditional closing line. */
+const walkOut = (calls: string[] = []): NonNullable<Overrides['evaluateEnding']> => async input => {
+  const last = input.transcript.findLast(entry => entry.speaker === 'client')!;
+  calls.push(last.text);
+  const ended = last.text.includes('meeting is over') && !last.text.includes('one thing first');
+  return { model: 'fixture', durationMs: 1, usage: fixtureUsage, answers: {}, probability: ended ? .95 : .1, passageId: ended ? last.id : null };
+};
+const contempt = (socket: { emit(event: unknown): void }) => {
+  socket.emit({ type: 'session.output_transcript.delta', delta: 'Thanks for coming. Where should we start?', start_ms: 0, end_ms: 900 });
+  socket.emit({ type: 'session.input_transcript.delta', delta: 'You clearly have no idea what you are doing.', start_ms: 1000, end_ms: 1900 });
+  socket.emit({ type: 'session.output_transcript.delta', delta: ENDING, start_ms: 2000, end_ms: 2900 });
+};
+const walkoutEpoch = 1_800_000_000_000;
+/** Starts a scored attempt and returns the snapshot once its client has walked out. */
+async function walkedOut(f: Awaited<ReturnType<typeof fixture>>, calls: string[]) {
+  setSystemTime(walkoutEpoch);
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  contempt(f.socket);
+  setSystemTime(walkoutEpoch + 2000);
+  await waitFor(() => calls.length === 1);
+  await settle(f);
+  return await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>;
+}
+const endingLog = (f: Awaited<ReturnType<typeof fixture>>) => JSON.parse(f.row()!.provenance_json).ending;
+
+test('a client walk-out mutes the trainee, drains the closing line for at most twenty seconds, and ends the attempt', async () => {
+  const calls: string[] = [];
+  const f = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  const live = await walkedOut(f, calls);
+  const closing = live.transcript.at(-1);
+  expect(closing).toMatchObject({ speaker: 'client', text: ENDING });
+  expect(live).toMatchObject({ status: 'live', warning: { kind: 'client', endsAt: walkoutEpoch + 2000 }, clientEnded: { passageId: closing.id, probability: .95, detectedAt: walkoutEpoch + 2000 } });
+  // Morgan is still speaking; the unchanged closing line is not judged again.
+  setSystemTime(walkoutEpoch + 21_000);
+  expect((await (await f.session.fetch(activityPoll(false, true))).json() as Record<string, any>).status).toBe('live');
+  setSystemTime(walkoutEpoch + 22_001);
+  await f.session.fetch(activityPoll(false, true));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  await settle(f);
+  const ended = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(ended).toMatchObject({ status: 'ended', message: 'Morgan ended the meeting.', clientEnded: { passageId: closing.id } });
+  expect(ended.evaluation).not.toBeNull();
+  expect(calls).toEqual([ENDING]);
+  expect(endingLog(f)).toMatchObject({ clientEnded: { passageId: closing.id }, checks: [{ passageId: closing.id, outcome: 'ended', probability: .95, evidenceId: closing.id, startedAt: walkoutEpoch + 2000 }] });
+}, 10_000);
+
+test('End or a lost connection during a walk-out keeps the walk-out as the outcome', async () => {
+  const calls: string[] = [];
+  const ended = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  await walkedOut(ended, calls);
+  const done = await (await ended.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(done.status).toBe('ended');
+  expect(done.clientEnded).toMatchObject({ probability: .95 });
+  await waitFor(() => ended.row()?.archive_state === 'final');
+  expect(endingLog(ended).clientEnded).toMatchObject({ probability: .95 });
+
+  const lostCalls: string[] = [];
+  const lost = await fixture({ overrides: { evaluateEnding: walkOut(lostCalls) } });
+  await walkedOut(lost, lostCalls);
+  await lost.session.fetch(request('pause'));
+  await waitFor(() => lost.row()?.archive_state === 'final');
+  await settle(lost);
+  const result = await (await lost.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(result).toMatchObject({ status: 'ended', message: 'Morgan ended the meeting.', pause: null });
+  expect(lost.socket.sent.at(-1)?.type).toBe('session.close');
+}, 10_000);
+
+test('closing words that reopen the meeting withdraw a walk-out before it ends', async () => {
+  const calls: string[] = [];
+  const f = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  await walkedOut(f, calls);
+  // The closing line continues: a condition, not a goodbye.
+  setSystemTime(walkoutEpoch + 2200);
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: ' Unless you can tell me one thing first.', start_ms: 2900, end_ms: 3800 });
+  setSystemTime(walkoutEpoch + 3500);
+  await waitFor(() => calls.length === 2);
+  await settle(f);
+  const reopened = await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>;
+  expect(reopened).toMatchObject({ status: 'live', warning: null, clientEnded: null });
+  setSystemTime(walkoutEpoch + 30_000);
+  expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).status).toBe('live');
+  await f.session.fetch(request('end'));
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(endingLog(f)).toMatchObject({ clientEnded: null, checks: [{ outcome: 'ended' }, { outcome: 'reopened', probability: .1 }] });
+}, 10_000);
+
+test('a walk-out judgment that returns after newer client words is ignored, and End aborts a pending one', async () => {
+  const calls: string[] = [];
+  const judge = walkOut(calls);
+  let release: (() => void) | undefined;
+  const f = await fixture({ overrides: { evaluateEnding: async input => {
+    const result = await judge(input);
+    if (calls.length === 1) await new Promise<void>(resolve => { release = resolve; });
+    if (calls.length === 3) await new Promise<void>((_, reject) => input.signal!.addEventListener('abort', () => reject(new DOMException('Ended', 'AbortError')), { once: true }));
+    return result;
+  } } });
+  setSystemTime(walkoutEpoch);
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  contempt(f.socket);
+  setSystemTime(walkoutEpoch + 2000);
+  await waitFor(() => !!release);
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: ' Unless you can tell me one thing first.', start_ms: 2900, end_ms: 3800 });
+  release!();
+  await settle(f);
+  expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>)).toMatchObject({ status: 'live', warning: null });
+  setSystemTime(walkoutEpoch + 4000);
+  await waitFor(() => calls.length === 2);
+  await settle(f);
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Sorry. Who approves the release?', start_ms: 4000, end_ms: 4900 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Fine. This meeting is over.', start_ms: 5000, end_ms: 5900 });
+  setSystemTime(walkoutEpoch + 8000);
+  await waitFor(() => calls.length === 3);
+  const done = await (await f.session.fetch(request('end'))).json() as Record<string, any>;
+  expect(done.status).toBe('ended');
+  expect(done.clientEnded ?? null).toBeNull();
+  await waitFor(() => f.row()?.archive_state === 'final');
+  expect(endingLog(f).checks.map((check: { outcome: string }) => check.outcome)).toEqual(['stale', 'open', 'aborted']);
+}, 10_000);
+
+test('a replacement owner finishes a checkpointed walk-out as ended, not interrupted', async () => {
+  const calls: string[] = [];
+  const active = await fixture({ overrides: { evaluateEnding: walkOut(calls) } });
+  await walkedOut(active, calls);
+  await active.session.alarm();
+  await settle(active);
+  expect(active.row()?.archive_state).toBe('partial');
+  const replacement = await fixture({ values: active.values, archive: active.archive });
+  await replacement.session.alarm();
+  await settle(replacement);
+  const result = await (await replacement.session.fetch(request('poll'))).json() as Record<string, any>;
+  expect(result).toMatchObject({ status: 'ended', message: 'Morgan ended the meeting.' });
+  expect(replacement.row()).toMatchObject({ archive_state: 'final', session_status: 'ended' });
+  expect(endingLog(replacement)).toMatchObject({ clientEnded: { probability: .95 }, checks: [{ outcome: 'ended' }] });
+  expect(replacement.endings).toEqual([]);
+  await active.session.fetch(request('end')); // Stop the original fixture's timer after simulating restart.
+}, 10_000);
+
+test('interviews are never judged for a walk-out', async () => {
+  const f = await fixture();
+  try {
+    await f.session.fetch(request('start', capability, interviewAttempt));
+    await f.session.fetch(request('ready'));
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Thanks for joining. That is all I needed today.', start_ms: 100, end_ms: 900 });
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Happy to help.', start_ms: 1000, end_ms: 2000 });
+    setSystemTime(Date.now() + 12_000);
+    await nextTick();
+    await settle(f);
+    expect(f.endings).toEqual([]);
+  } finally { await f.session.fetch(request('end')); }
+  await settle(f);
+  expect(JSON.parse(f.interviewRow()!.provenance_json).ending).toBeUndefined();
 });
 test('failed provider finalization remains explicit and retains a closure lease', async () => {
   const f = await fixture();

@@ -12,7 +12,7 @@ import type { TranscriptEntry } from '../../core/simulator/types';
 import { interviewScenario } from './scenario.server';
 
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v9';
+export const MAP_PROMPT_VERSION = 'sol-map-v10';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -87,7 +87,7 @@ export const mapInstructions = [
   [
     'Pace. The participant decides when the interview ends. Sam never wraps up on its own and offers the choice to stop only when you allow it; an explicit request to stop needs no permission. Each call, set pace:',
     '- explore, the default, while any open thread is concrete and worth asking, the participant is still telling stories or adding new things, or you are unsure. Time passing is never a reason to stop, and a topic merely touched is still open ground.',
-    '- may-offer-finish only when continuing would add little: the open threads are thin, repeat what is known, or ask what the participant cannot answer firsthand; or several recent answers were short and complete with nothing new; or the participant signaled they are ready to stop ("I think that\'s about it"). Sam then offers once, naming the open threads, and the participant chooses.',
+    '- may-offer-finish only when continuing would add little: the open threads are thin, repeat what is known, or ask what the participant cannot answer firsthand; or several recent answers were short and complete with nothing new; or the participant signaled they are ready to stop ("I think that\'s about it"); or, whatever threads remain open, they are showing strain: more than once in the last few minutes they asked to move on, said they didn\'t follow a question, or said they couldn\'t answer one. Sam then offers once, naming the open threads, and the participant chooses.',
     'After the participant chooses to keep going, return explore until they have covered more ground and the remaining threads have thinned again. The reason is one line, naming the threads still worth asking or why they are thin: "t12 and t13 are concrete and unasked" or "remaining threads repeat answered ground; last four answers short".',
   ].join('\n'),
   'Research. You may request one public lookup per call about an organization, product or term the participant named; most useful is the project client, as soon as the participant names it. Give the name as spoken, an optional identity clue, and the 1-3 participant passage IDs where the name and clue words were spoken. Copy the clue verbatim from a cited passage; it describes only public identity, such as industry, location, website or kind of organization, never what the project did, events, people or opinions. Use the name alone when no literal identity detail was spoken. The RESEARCH section of the current state lists what was requested and how many lookups remain: never repeat a request. Request again only when a participant passage supplies a fuller name or an unused identity clue for a lookup that found nothing. Otherwise set research to null.',

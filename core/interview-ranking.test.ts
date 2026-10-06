@@ -287,7 +287,7 @@ test('a complaint about the interview sets the lead aside until the participant�
   expect(complaint.pick).toMatchObject({ action: 'none', lead: null });
   expect(complaint.text!.split('\n')).toEqual([
     NOTE_HEADERS.list,
-    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it.',
+    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it. If they asked to stop, thank them and say goodbye instead.',
     'Open threads, if useful: Billing cut · Paul’s sign-off',
   ]);
   // Neither a refresh nor a re-read of the same complaint sends anything.

@@ -7,7 +7,7 @@ import type { DirectorUsage } from './simulator/director';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v18';
+export const PRODUCER_VERSION = 'interview-producer-v19';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -21,6 +21,11 @@ export const PRODUCER_LIMITS = {
    */
   offerMaps: 3, offerAfter: 10 * 60_000, offerSpacing: 3 * 60_000,
   research: 3, lookupTimeout: 90_000,
+  /**
+   * Sam sometimes goes quiet after the participant has finished, often after a backchannel. After this much silence
+   * from both sides, Sam gets a turn note, once per participant turn and at most `wakes` times a session.
+   */
+  wakeAfter: 6000, wakes: 12,
 };
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
@@ -65,14 +70,16 @@ export type TraitRecord = {
 };
 /**
  * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
- * research facts cite.
+ * research facts cite. A turn note tells Sam, gone quiet after the participant finished, that the turn is theirs.
  */
 export type NoteRecord = {
-  source: 'note'; id: string; kind: 'list' | 'map'; text: string; mapId: string | null; turnId?: string; sentAt: number;
+  source: 'note'; id: string; kind: 'list' | 'map' | 'turn'; text: string; mapId: string | null; turnId?: string; sentAt: number;
   /** When the note was decided, if it waited for Sam's next words; absent when it went out at once. */
   decidedAt?: number;
   /** The note let Sam offer the participant the choice to stop. */
   offer?: true;
+  /** Sent, or released early, because Sam had gone quiet after the participant finished. */
+  wake?: true;
   outcome: 'sent' | 'error' | 'rejected'; delivery: NoteDelivery; researchIds?: string[];
   nextSamTurnAt?: number; nextSamTurnAfterId?: string | null;
 };
@@ -149,7 +156,7 @@ export type LatencyStat = { count: number; p50: number; p90: number } | null;
 export type ProducerSummary = {
   model: string; effort: 'none' | 'low'; version: string; mapPrompt: string; rankingRubric: string;
   maps: number; applied: number; turns: number; notes: number; research: number;
-  latency: { sol: LatencyStat; jevTurn: LatencyStat; traits: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat };
+  latency: { sol: LatencyStat; jevTurn: LatencyStat; traits: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat; turnToSam?: LatencyStat };
 };
 
 export function latencyStat(values: number[]): LatencyStat {
@@ -167,6 +174,7 @@ export function producerLatency(records: ProducerLogRecord[]): ProducerSummary['
     jevTurn: latencyStat(spans(of('turn').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
     traits: latencyStat(spans(of('traits').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
     lookup: latencyStat(spans(of('research').map(item => [item.requestedAt, item.lookupAt]))),
-    noteToSam: latencyStat(spans(of('note').map(item => [item.sentAt, item.nextSamTurnAt]))),
+    noteToSam: latencyStat(spans(of('note').filter(item => item.kind !== 'turn').map(item => [item.sentAt, item.nextSamTurnAt]))),
+    turnToSam: latencyStat(spans(of('note').filter(item => item.kind === 'turn').map(item => [item.sentAt, item.nextSamTurnAt]))),
   };
 }

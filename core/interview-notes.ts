@@ -65,10 +65,16 @@ export function complaintNote(map: ConversationMap, open: string[], headers = NO
   const names = labels(map, open);
   return [
     headers.list,
-    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it.',
+    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it. If they asked to stop, thank them and say goodbye instead.',
     ...(names.length ? [`Open threads, if useful: ${names.join(' · ')}`] : []),
   ].join('\n');
 }
+
+/**
+ * Sam went quiet after the participant finished. It supersedes nothing, so the thread note in force still stands, and
+ * names no thread, so the nudge can't point Sam anywhere the notes don't.
+ */
+export const TURN_NOTE = 'Turn note: they’ve finished and are waiting for you to speak. It’s your turn now.';
 
 /** Withdraws the previous note when Sol has removed all its facts, vantage and preferences. */
 export const emptyMapNote = (headers = NOTE_HEADERS) => `${headers.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;

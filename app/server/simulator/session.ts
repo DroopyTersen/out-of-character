@@ -279,6 +279,7 @@ export class SimulatorSession extends DurableObject<Env> {
         settled: prefix, coverage: () => this.snapshot!.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.ctx.waitUntil(work),
         pauses: () => this.pauseSpans(),
         talking: () => { const ready = new Set(settled()); return this.snapshot!.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); },
+        heard: () => Math.max(this.lastAudio, this.lastSpeech),
       });
     } else if (getScenario(snapshot.scenarioId).objectives.length) this.contextual = new ContextualDirector({
       scenarioId: snapshot.scenarioId, clientId: snapshot.clientId,

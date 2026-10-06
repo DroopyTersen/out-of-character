@@ -259,6 +259,8 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   } }, interviewAttempt);
   const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => event.content);
   setSystemTime(epoch + 20_500);
+  // Sam's opening is still playing, so the silence watchdog stays out of it.
+  await f.session.fetch(activityPoll(true, true));
   await waitFor(() => maps === 1);
   await settle(f);
   f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });

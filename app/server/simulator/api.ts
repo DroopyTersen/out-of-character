@@ -7,7 +7,12 @@ import { foundryConfigured } from '../../../ai/foundry.server';
 const uuid = z.string().uuid();
 const quietDuration = z.number().int().min(0).max(60_000).nullable().optional();
 // Accept and discard legacy mutual quiet from tabs opened before producer v8.
-export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), quietMs: quietDuration, outputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional() }).strict()
+const packets = z.number().int().min(0).max(1_000_000);
+const delay = z.number().int().min(0).max(60_000).nullable();
+const network = z.object({ ms: z.number().int().min(0).max(600_000), received: packets, lost: packets, concealed: z.number().min(0).max(1).nullable(), jitterMs: delay, sentLost: packets.nullable(), rttMs: delay }).strict();
+export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), quietMs: quietDuration, outputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  // Diagnostics only: a report this server cannot read is dropped, never a failed poll.
+  network: network.optional().catch(undefined) }).strict()
   .transform(({ quietMs: _legacy, ...activity }) => activity);
 // Foundry does not filter frontend events; deny data channels so actor context stays private.
 const offer = z.string().min(20).max(60_000).startsWith('v=0').refine(sdp => !/^m=(?!audio )/m.test(sdp), 'Only audio media is allowed.');

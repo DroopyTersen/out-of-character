@@ -1,4 +1,5 @@
 import type { SessionSnapshot } from '../../core/simulator/types';
+import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../../core/simulator/network';
 import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
 
 /** Browser media health once a conversation has started: unstable media reconnects in place; lost media pauses until resumed. */
@@ -70,6 +71,8 @@ export class LiveConnection {
   private outputQuietSince: number | undefined;
   private meterUpdatedAt = 0;
   private activitySequence = 0;
+  /** The current media connection's last stats read; reports carry the change since. */
+  private networkCounters: NetworkCounters | undefined;
   private muted = false;
   private autoMuted = false;
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
@@ -150,6 +153,7 @@ export class LiveConnection {
     this.stream = stream;
     this.applyMute();
     const pc = this.pc = new RTCPeerConnection();
+    this.networkCounters = undefined;
     for (const track of stream.getTracks()) pc.addTrack(track, stream);
     // The audio context survives pauses: a resume may not have a user gesture to start a new one.
     this.context ??= new AudioContext();
@@ -235,6 +239,19 @@ export class LiveConnection {
       outputQuietMs: fresh && this.canMeasureOutput() && this.outputQuietSince != null ? Math.min(60_000, now - this.outputQuietSince) : null };
   }
 
+  /** Media quality since the last read, at most every few seconds. A slow or failed read is skipped, never waited on. */
+  private async network(): Promise<NetworkSample | undefined> {
+    const pc = this.pc;
+    if (!pc || pc.connectionState !== 'connected' || Date.now() - (this.networkCounters?.at ?? 0) < NETWORK_SAMPLE_MS) return;
+    try {
+      const report = await Promise.race([pc.getStats(), new Promise<undefined>(resolve => setTimeout(resolve, 300))]);
+      if (!report || pc !== this.pc) return;
+      const { counters, sample } = readNetwork(report.values(), this.networkCounters, Date.now());
+      this.networkCounters = counters;
+      return sample;
+    } catch { return; }
+  }
+
   /** Starts the live loops for the current media connection. */
   private live() {
     this.reloaded = false;
@@ -269,9 +286,11 @@ export class LiveConnection {
     if (this.ending || segment.signal.aborted) return;
     this.pollTimer = setTimeout(async () => {
       try {
+        const network = await this.network();
+        if (this.ending || segment.signal.aborted) return;
         const active = this.activeSincePoll;
         this.activeSincePoll = false;
-        const snapshot = await this.request('poll', this.activity(active), { signal: segment.signal }) as SessionSnapshot;
+        const snapshot = await this.request('poll', { ...this.activity(active), ...(network ? { network } : {}) }, { signal: segment.signal }) as SessionSnapshot;
         if (this.ending || segment.signal.aborted) return;
         this.pollFailingSince = undefined;
         this.updateLink();

@@ -3,12 +3,13 @@ import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { MAP_PROMPT_VERSION, MapOutputError } from '../../../ai/interview/map.server';
 import { RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
 import { DirectorHttpError, DirectorOutputError } from '../../../ai/simulator/sol.server';
-import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from '../../../core/interview-map';
+import { emptyMap, type ConversationMap, type MapEntity, type MapPace, type MapThread } from '../../../core/interview-map';
 import { emptyListNote, NOTE_HEADERS, noteHeaders } from '../../../core/interview-notes';
 import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
 import { threadKey, type TurnReading } from '../../../core/interview-ranking';
 import type { PauseSpan } from '../../../core/simulator/state';
 import type { TranscriptEntry } from '../../../core/simulator/types';
+import type { InterviewObjectiveReading } from '../../../core/interview';
 import { InterviewProducer, producerServices } from './interview-producer';
 
 afterEach(() => setSystemTime());
@@ -34,7 +35,7 @@ const mapWith = (threads: MapThread[], over: Partial<ConversationMap> = {}): Con
   ({ ...emptyMap(), entities: [routing], threads, nextIds: { e: 2, r: 1, t: threads.length + 1 }, ...over });
 const mapped = (map: ConversationMap, research: ResearchRequest | null = null): Mapped => ({
   map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
-  changes: { added: [], changed: [], dropped: [], kept: [] }, research, model: 'gpt-6.1-sol', usage,
+  changes: { added: [], changed: [], dropped: [], kept: [] }, research, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage,
 });
 /** Jev read every open thread in its current wording; nothing is natural, answered or new unless a test says so. */
 function reading(input: Input<'evaluateTurn'>, over: Partial<TurnReading> = {}): Read {
@@ -50,20 +51,23 @@ function deferred<T>() {
 }
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setTimeout(done, 0)); };
 
-// Only the paid calls are substituted; timing, the log, ranking, validation, budgets and delivery are real.
-function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructions.append') {
+// Only the paid calls are substituted; timing, the log, ranking, validation, budgets and delivery are real. Notes go
+// out as soon as they're decided unless `held`, which waits for Sam's words as the live session does.
+function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructions.append', { held = false } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = [
     { id: 'p1', speaker: 'client', text: 'What did the team build?', startMs: 0, endMs: 1000 },
     { id: 'p2', speaker: 'trainee', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
   let connected: boolean | 'throw' = true;
+  let talking = false;
+  let coverage: InterviewObjectiveReading[] = [];
   const sent: Record<string, unknown>[] = [];
   const calls = { map: [] as Input<'generateMap'>[], turn: [] as Input<'evaluateTurn'>[], traits: [] as Input<'evaluateTraits'>[], lookup: [] as Input<'lookupInterviewBackground'>[] };
   const pauses: PauseSpan[] = [];
   const producer = new InterviewProducer({
-    attemptId: 'attempt-1', startedAt: epoch, foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture', channel, pauses: () => pauses,
-    settled: () => transcript, coverage: () => [], send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
+    attemptId: 'attempt-1', startedAt: epoch, foundry: fixtureFoundry, typesafeKey: 'typesafe-fixture', channel, pauses: () => pauses, immediate: !held,
+    settled: () => transcript, coverage: () => coverage, talking: () => talking, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
       evaluateTurn: async input => { calls.turn.push(input); return overrides.evaluateTurn ? overrides.evaluateTurn(input) : reading(input); },
@@ -83,13 +87,20 @@ function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructi
     transcript = transcript.map(entry => entry.id === id ? { ...entry, text } : entry);
     return transcript.find(entry => entry.id === id)!;
   };
+  /** Sam starts speaking, as the live transcript reports each of Sam's deltas. */
+  const sam = (text = 'Tell me more?') => { const previous = transcript.at(-1)?.id ?? null; const entry = say('client', text); producer.transcriptChanged(entry, previous); return entry; };
   /** Sam asks, the participant answers, and the tick reads the new turn. */
   const turn = async (ms: number, text = 'It took a while to get right.') => { at(ms); say('client', 'Tell me more?'); say('trainee', text); await step(); };
   const at = (ms: number) => setSystemTime(epoch + ms);
   const step = async (ms?: number) => { if (ms != null) at(ms); producer.tick(Date.now()); await flush(); };
   const of = <S extends ProducerLogRecord['source']>(source: S) => producer.records.filter(item => item.source === source) as Extract<ProducerLogRecord, { source: S }>[];
   const notes = (kind?: keyof typeof NOTE_HEADERS) => sent.filter(event => !kind || String(event.content).startsWith(NOTE_HEADERS[kind])).map(event => String(event.content));
-  return { producer, sent, calls, pauses, say, grow, turn, at, step, of, notes, setConnected: (value: boolean | 'throw') => { connected = value; } };
+  return {
+    producer, sent, calls, pauses, say, sam, grow, turn, at, step, of, notes,
+    setConnected: (value: boolean | 'throw') => { connected = value; },
+    setTalking: (value: boolean) => { talking = value; },
+    setCoverage: (levels: InterviewObjectiveReading['level'][]) => { coverage = levels.map((level, i) => ({ id: `o${i}`, level, achieved: level === 'explored', probability: null, levels: null, evidence: null })); },
+  };
 }
 
 test('Sol calls on the minute only when participant text is unlogged, and a wake an earlier call already logged is dropped', async () => {
@@ -145,6 +156,61 @@ test('a novel turn wakes Sol at its floor, and wakes during a call merge into on
   expect(f.calls.map[1]!.tail.reasons).toEqual([novelReason('p6'), novelReason('p8')]);
   expect(f.calls.map[1]!.tail.lastPassageId).toBe('p8');
   expect(f.calls.map[1]!.passages.map(item => item.id)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
+});
+
+test('two fairly new turns since Sol’s last call wake it, a turn that grew counting once', async () => {
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: .6 }) });
+  await f.step(0);
+  f.grow('p2', 'We integrated OpenStreetMap and Mapbox for the routing layer, then rebuilt it twice.');
+  await f.step(1000);
+  expect(f.calls.turn).toHaveLength(2);
+  await f.step(21_000);
+  expect(f.calls.map).toHaveLength(0);
+  await f.turn(22_000);
+  await f.step(22_500);
+  expect(f.calls.map.map(item => item.tail.reasons)).toEqual([["the participant's last 2 turns add things the map lacks"]]);
+  // The call starts the count over.
+  await f.turn(45_000);
+  await f.step(46_000);
+  expect(f.calls.map).toHaveLength(1);
+});
+
+test('a stall on the thread the participant is on wakes Sol to ask it another way; a stall elsewhere doesn’t', async () => {
+  const f = fixture({
+    evaluateTurn: async input => {
+      const id = input.transcript.at(-1)!.id;
+      return reading(input, id === 'p2' ? { novel: .9 } : { focus: 't1', states: id === 'p4' ? { t2: 'stalled' } : { t1: 'stalled' } });
+    },
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(30_000);
+  await f.step(41_000);
+  expect(f.calls.map).toHaveLength(1);
+  await f.turn(45_000);
+  await f.step(45_500);
+  expect(f.calls.map[1]!.tail.reasons).toEqual(["the participant's latest turn (p6) didn't move the thread they're on (t1); its gap may need asking another way"]);
+  // No hold: the thread waits for Sol's rewrite, not three minutes.
+  expect(f.producer.rankingState.holds).toEqual({});
+});
+
+test('a new participant preference reaches Sam without waiting out the map-note spacing', async () => {
+  const prefer = (vantage: string, preferences: string[] = []) => mapWith([], { participant: { vantage, preferences: preferences.map(text => ({ text, passageId: 'p4' })) } });
+  const maps = [prefer('Led the routing integration'), prefer('Led routing and the offline cache'), prefer('Led routing and the offline cache', ['Shorter questions, one at a time'])];
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(maps[f.calls.map.length - 1]!) });
+  await f.step(0);
+  await f.step(20_000);
+  expect(f.notes('map')).toHaveLength(1);
+  // A reworded vantage waits for the spacing.
+  await f.turn(25_000);
+  await f.step(40_000);
+  expect(f.notes('map')).toHaveLength(1);
+  // A preference doesn't, and carries the vantage change with it.
+  await f.turn(45_000);
+  await f.step(60_000);
+  expect(f.notes('map')).toHaveLength(2);
+  expect(f.notes('map')[1]).toBe(`${NOTE_HEADERS.map}\nAbout the participant: Led routing and the offline cache.\nThey prefer: Shorter questions, one at a time.\nKnown so far: Routing layer: Built on OpenStreetMap and Mapbox.`);
 });
 
 test('a Sol call past its timeout is abandoned, its late result is ignored, and the minute retries the unmapped text', async () => {
@@ -241,7 +307,7 @@ test('a failed Sol call that carried only a lookup is retried on the minute', as
   expect(f.of('map')[2]!.outcome).toBe('applied');
 });
 
-test('an applied map sends the list note, then the map note, and reads traits for its new threads', async () => {
+test('an applied map sends the map note, reads traits for its new threads, and sends the list note once a thread scores', async () => {
   const map = mapWith([thread('t1', { label: 'Field crews', unknown: 'how crews used the routing layer offline', guess: 'paper maps as a backup' })],
     { participant: { vantage: 'Led the routing integration', preferences: [] } });
   const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(map) });
@@ -249,15 +315,16 @@ test('an applied map sends the list note, then the map note, and reads traits fo
   await f.step(20_000);
   await f.producer.settle();
   const [solCall] = f.of('map');
+  // Before the traits land, every thread scores nothing, so no thread leads yet.
   expect(f.notes()).toEqual([
-    `${NOTE_HEADERS.list}\nWorth pulling next (Field crews): still unknown: how crews used the routing layer offline. Guess: paper maps as a backup.`,
     `${NOTE_HEADERS.map}\nAbout the participant: Led the routing integration.\nKnown so far: Routing layer: Built on OpenStreetMap and Mapbox.`,
+    `${NOTE_HEADERS.list}\nWorth pulling next (Field crews): still unknown: how crews used the routing layer offline. Guess: paper maps as a backup.`,
   ]);
   const notes = f.of('note');
   expect(f.sent.map(event => [event.type, event.event_id, event.delegation_id])).toEqual(notes.map(note => ['session.thinking.append', note.id, null]));
   expect(notes.map(note => [note.kind, note.mapId, note.sentAt, note.delivery])).toEqual([
-    ['list', solCall!.id, epoch + 20_000, { eventId: notes[0]!.id, afterPassageId: 'p2', status: 'unknown' }],
-    ['map', solCall!.id, epoch + 20_000, { eventId: notes[1]!.id, afterPassageId: 'p2', status: 'unknown' }],
+    ['map', solCall!.id, epoch + 20_000, { eventId: notes[0]!.id, afterPassageId: 'p2', status: 'unknown' }],
+    ['list', solCall!.id, epoch + 20_000, { eventId: notes[1]!.id, afterPassageId: 'p2', status: 'unknown' }],
   ]);
   expect(f.of('traits')).toEqual([{ source: 'traits', id: expect.any(String), mapId: solCall!.id, threadIds: ['t1'], startedAt: epoch + 20_000, completedAt: epoch + 20_000,
     outcome: 'read', durationMs: 5, usage: { inputTokens: 10, outputTokens: 5 }, traits: { t1: [.5, .5] } }]);
@@ -281,10 +348,10 @@ test('appended instructions carry the same notes under that channel’s softer h
   await f.step(20_000);
   expect(f.sent.map(event => event.type)).toEqual(['session.instructions.append', 'session.instructions.append']);
   const headers = noteHeaders('session.instructions.append');
-  expect(f.sent.map(event => String(event.content).split('\n')[0])).toEqual([headers.list, headers.map]);
+  expect(f.sent.map(event => String(event.content).split('\n')[0])).toEqual([headers.map, headers.list]);
 });
 
-test('the list note follows the pick: keep pulling on the focus, and the empty note once Sol closes the lead', async () => {
+test('the list note follows the lead: taking up the thread doesn’t resend it, and the empty note replaces it once Sol closes the lead', async () => {
   const maps = [mapWith([thread('t1'), thread('t2')]), mapWith([thread('t1', { status: 'done', reason: 'Answered in p4.' }), thread('t2', { status: 'off', reason: 'Not their area.' })])];
   const f = fixture({
     evaluateTurn: async input => {
@@ -296,29 +363,28 @@ test('the list note follows the pick: keep pulling on the focus, and the empty n
   await f.step(0);
   await f.step(20_000);
   await f.producer.settle();
-  expect(f.notes('list')).toEqual([`${NOTE_HEADERS.list}\nWorth pulling next (Thread t1): still unknown: what happened with t1. Guess: a guess about t1.\nAlso open: Thread t2`]);
+  expect(f.notes('list')).toEqual([`${NOTE_HEADERS.list}\nWorth pulling next (Thread t1): still unknown: what happened with t1. Guess: a guess about t1.\nIf that’s answered, then (Thread t2): still unknown: what happened with t2. Guess: a guess about t2.`]);
 
   await f.turn(25_000, 'The field crews did.');
   const read = f.of('turn')[1]!;
   expect(read.pick).toEqual({ current: 't1', action: 'keep', lead: 't1', nearby: ['t2'], ranked: [['t1', .43, 'nearby'], ['t2', .43, 'nearby']] });
-  expect(f.of('note').at(-1)).toMatchObject({ kind: 'list', turnId: read.id });
-  expect(f.notes('list').at(-1)).toBe(`${NOTE_HEADERS.list}\nKeep pulling (Thread t1): still unknown: what happened with t1. Guess: a guess about t1.\nNearby: Thread t2`);
-
-  // The same pick is not sent again; Sol closing every thread replaces the note with the empty one, once.
+  // The tug became keep-pulling on the same thread: Sam already has it, so nothing is sent.
+  expect(f.notes('list')).toHaveLength(1);
   await f.turn(30_000, 'They worked from the trucks.');
-  expect(f.notes('list')).toHaveLength(2);
+  expect(f.notes('list')).toHaveLength(1);
+  // Sol closing every thread replaces the note with the empty one, once.
   await f.step(40_000);
   await f.producer.settle();
-  expect(f.notes('list')).toHaveLength(3);
+  expect(f.notes('list')).toHaveLength(2);
   expect(f.notes('list').at(-1)).toBe(emptyListNote());
   await f.turn(45_000, 'That was most of it.');
-  expect(f.notes('list')).toHaveLength(3);
+  expect(f.notes('list')).toHaveLength(2);
 });
 
-test('a thread the list note named as open is closed or dropped, so the note is replaced without it', async () => {
+test('a thread the list note named is closed, off or done, so the note is replaced without it', async () => {
   const maps = [
     mapWith([thread('t1'), thread('t2'), thread('t3')]),
-    mapWith([thread('t1'), thread('t2')]),
+    mapWith([thread('t1'), thread('t2'), thread('t3', { status: 'off', reason: 'Not their area.' })]),
     mapWith([thread('t1'), thread('t2', { status: 'done', reason: 'Answered in p6.' })]),
   ];
   const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(maps[f.calls.map.length - 1]!) });
@@ -330,7 +396,8 @@ test('a thread the list note named as open is closed or dropped, so the note is 
   await f.step(60_000);
   expect(f.calls.map).toHaveLength(3);
   const lead = `${NOTE_HEADERS.list}\nWorth pulling next (Thread t1): still unknown: what happened with t1. Guess: a guess about t1.`;
-  expect(f.notes('list')).toEqual([`${lead}\nAlso open: Thread t2 · Thread t3`, `${lead}\nAlso open: Thread t2`, lead]);
+  const next = 'If that’s answered, then (Thread t2): still unknown: what happened with t2. Guess: a guess about t2.';
+  expect(f.notes('list')).toEqual([`${lead}\n${next}\nAlso open: Thread t3`, `${lead}\n${next}`, lead]);
 });
 
 test('a declined nearby thread is removed from Sam’s note before Sol revises the map', async () => {
@@ -343,12 +410,226 @@ test('a declined nearby thread is removed from Sam’s note before Sol revises t
   await f.step(0);
   await f.step(20_000);
   await f.turn(25_000, 'I built that part myself.');
-  expect(f.notes('list').at(-1)).toContain('Nearby: Thread t2 · Thread t3');
+  expect(f.notes('list').at(-1)).toContain('If that’s answered, then (Thread t2)');
+  expect(f.notes('list').at(-1)).toContain('Also open: Thread t3');
   await f.turn(26_000, 'I can discuss the build, but cannot speak to the launch.');
   expect(f.calls.map).toHaveLength(1);
   expect(f.notes('list').at(-1)).toContain('Keep pulling (Thread t1)');
-  expect(f.notes('list').at(-1)).toContain('Nearby: Thread t3');
+  expect(f.notes('list').at(-1)).toContain('If that’s answered, then (Thread t3)');
   expect(f.notes('list').at(-1)).not.toContain('Thread t2');
+});
+
+test('a reading that lands while the participant is talking again waits for them to stop before it moves the lead', async () => {
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
+    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, id === 'p2' ? { novel: .9 } : { natural: { t2: 1 } }); },
+  });
+  await f.step(0);
+  await f.step(20_000);
+  expect(f.notes('list')).toHaveLength(1);
+  expect(f.notes('list')[0]).toContain('(Thread t1)');
+  f.setTalking(true);
+  await f.turn(25_000);
+  await f.step(26_000);
+  const [, record] = f.of('turn');
+  expect(record!.deferred).toBe(true);
+  expect(f.notes('list')).toHaveLength(1);
+  expect(f.producer.checkpoint().deferredTurnId).toBe(record!.id);
+  f.setTalking(false);
+  await f.step(27_000);
+  expect(f.notes('list')).toHaveLength(2);
+  expect(f.notes('list')[1]).toContain('Worth pulling next (Thread t2)');
+  expect(record!.pick?.lead).toBe('t2');
+  expect(f.of('note').filter(note => note.kind === 'list')[1]!.turnId).toBe(record!.id);
+  expect(f.producer.checkpoint().deferredTurnId).toBeNull();
+});
+
+test('a lead Sol closes while the participant is talking is replaced once they stop', async () => {
+  let maps = 0;
+  const f = fixture({
+    generateMap: async () => ++maps === 1 ? mapped(mapWith([thread('t1'), thread('t2')])) : mapped(mapWith([thread('t1', { status: 'done' }), thread('t2')])),
+    evaluateTurn: async input => reading(input, input.transcript.at(-1)!.id === 'p2' ? { novel: .9 } : {}),
+  });
+  await f.step(0);
+  await f.step(20_000);
+  expect(f.notes('list')).toHaveLength(1);
+  f.at(79_000); f.say('trainee', 'And the field crews tested it.');
+  await f.step();
+  expect(f.calls.turn).toHaveLength(2);
+  f.setTalking(true);
+  await f.step(80_000);
+  expect(f.calls.map).toHaveLength(2);
+  expect(f.of('turn').some(record => record.deferred)).toBe(false);
+  await f.step(81_000);
+  expect(f.notes('list')).toHaveLength(1);
+  f.setTalking(false);
+  await f.step(82_000);
+  expect(f.notes('list')).toHaveLength(2);
+  expect(f.notes('list')[1]).toContain('(Thread t2)');
+});
+
+test('a complaint about the interview sets the lead aside for one turn, and a refresh doesn’t restore it', async () => {
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
+    evaluateTurn: async input => {
+      const last = input.transcript.at(-1)!;
+      return reading(input, last.id === 'p2' ? { novel: .9 } : { complaint: last.text.includes('same question') ? .9 : .1, natural: { t2: 1 } });
+    },
+  });
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(25_000, 'You keep asking me the same question.');
+  const complaint = f.notes('list').at(-1)!;
+  expect(complaint).toContain('feedback on the interview itself');
+  expect(complaint).not.toContain('pulling');
+  expect(f.of('turn').at(-1)!.reading?.complaint).toBe(.9);
+  await f.step(80_000);
+  expect(f.calls.map).toHaveLength(2);
+  expect(f.notes('list').at(-1)).toBe(complaint);
+  await f.turn(85_000, 'Fine, the crews used it every day.');
+  expect(f.notes('list').at(-1)).toContain('Worth pulling next (Thread t2)');
+});
+
+const OFFER_LINE = /^Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on with Thread t1 or Thread t2\. Their call\.$/m;
+/** Sol allows an offer to stop on every map; a turn that says "new" adds what the map lacks. */
+function pacedFixture(held = false) {
+  let pace: MapPace = { verdict: 'may-offer-finish', reason: 'Only thin threads remain.' };
+  let wait: Promise<unknown> | null = null;
+  const f = fixture({
+    generateMap: async () => { const verdict = pace; if (wait) await wait; return { ...mapped(mapWith([thread('t1'), thread('t2')])), pace: verdict }; },
+    evaluateTurn: async input => { const last = input.transcript.at(-1)!; return reading(input, { focus: 't1', novel: last.id === 'p2' || last.text.includes('new') ? .9 : 0 }); },
+  }, undefined, { held });
+  return { ...f, setPace: (value: MapPace) => { pace = value; }, setWait: (value: Promise<unknown> | null) => { wait = value; } };
+}
+const offers = (f: ReturnType<typeof fixture>) => f.of('note').filter(note => note.offer);
+
+test('Sam may offer to stop only once Sol allows it, three maps and ten minutes in, and the participant’s answer spends the grant', async () => {
+  const f = pacedFixture();
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(30_000);
+  await f.step(85_000);
+  await f.turn(90_000);
+  await f.step(150_000);
+  expect(f.of('map').filter(item => item.outcome === 'applied')).toHaveLength(3);
+  expect(f.of('map')[0]!.pace).toEqual({ verdict: 'may-offer-finish', reason: 'Only thin threads remain.' });
+  await f.turn(590_000);
+  expect(f.notes('list').join('\n')).not.toContain('Pace:');
+
+  await f.turn(600_000);
+  expect(f.notes('list').at(-1)).toMatch(OFFER_LINE);
+  expect(offers(f)).toHaveLength(1);
+  // The offer is made once: neither a refresh nor a turn that doesn't answer it resends it.
+  await f.step(660_000);
+  await f.producer.settle();
+  expect(offers(f)).toHaveLength(1);
+  // The participant answers it; the grant is spent and the note goes out again without the offer.
+  await f.turn(665_000, 'Let’s keep going.');
+  expect(f.notes('list').at(-1)).not.toContain('Pace:');
+  expect(offers(f)).toHaveLength(1);
+  // Sol's next grant waits out the spacing since the last offer.
+  await f.step(725_000);
+  await f.producer.settle();
+  await f.turn(770_000);
+  expect(offers(f)).toHaveLength(1);
+  await f.turn(781_000);
+  expect(offers(f)).toHaveLength(2);
+});
+
+test('a turn that adds what the map lacks spends Sol’s grant before an offer, explore never offers, and Sol’s next call grants afresh', async () => {
+  const f = pacedFixture();
+  await f.step(0);
+  await f.step(20_000);
+  await f.turn(30_000);
+  await f.step(85_000);
+  await f.turn(90_000);
+  await f.step(150_000);
+  // Sol's call on this turn is still running when it is read: its newness outdates the grant Sol made before it.
+  const blocked = deferred<void>();
+  f.setWait(blocked.promise);
+  f.setPace({ verdict: 'explore', reason: 'They just raised something new.' });
+  await f.turn(600_000, 'Something new came up.');
+  expect(f.of('map').at(-1)!.outcome).toBe('pending');
+  expect(offers(f)).toHaveLength(0);
+  f.setWait(null);
+  blocked.resolve();
+  await f.producer.settle();
+  await f.turn(665_000);
+  expect(offers(f)).toHaveLength(0);
+  f.setPace({ verdict: 'may-offer-finish', reason: 'Only thin threads remain.' });
+  await f.turn(730_000);
+  expect(offers(f)).toHaveLength(1);
+});
+
+test('notes decided while Sam is quiet wait for Sam’s next words, map first and latest of each kind, so none lands in the participant’s pause', async () => {
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')], { participant: { vantage: 'Routing lead.', preferences: [] } })),
+    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, natural: id === 'p2' ? {} : { t2: 1 } }); },
+  }, undefined, { held: true });
+  await f.step(0);
+  await f.step(20_000);
+  expect(f.of('map')).toHaveLength(1);
+  expect(f.sent).toHaveLength(0);
+  // Neither a backchannel nor the participant releases them.
+  f.at(21_000);
+  f.sam('Mm-hmm.');
+  f.say('trainee', 'And then the crews');
+  await f.step(25_000);
+  expect(f.sent).toHaveLength(0);
+  // Their turn moved the lead before Sam spoke: only the newer thread note goes out.
+  f.at(26_000);
+  const next = f.sam('Who');
+  expect(f.notes().map(text => text.split('\n')[0])).toEqual([NOTE_HEADERS.map, NOTE_HEADERS.list]);
+  expect(f.notes('list')[0]).toContain('(Thread t2)');
+  const [map, list] = f.of('note');
+  expect([map!.decidedAt, map!.sentAt, list!.decidedAt, list!.sentAt, list!.nextSamTurnAt, list!.delivery.afterPassageId])
+    .toEqual([epoch + 20_000, epoch + 26_000, epoch + 25_000, epoch + 26_000, epoch + 26_000, next.id]);
+  expect(f.producer.summary().notes).toBe(2);
+  // Sam's next delta has nothing left to send.
+  f.producer.transcriptChanged(f.grow(next.id, 'Who used it?'), 'p4');
+  expect(f.sent).toHaveLength(2);
+});
+
+test('a held note is dropped by a pause, the resume restates at once, and a held offer is dropped if the participant spoke since', async () => {
+  const f = pacedFixture(true);
+  await f.step(0);
+  await f.step(20_000);
+  f.sam();
+  expect(f.sent).toHaveLength(2);
+  await f.turn(30_000);
+  await f.step(85_000);
+  await f.turn(90_000);
+  await f.step(150_000);
+  f.sam();
+  const before = f.sent.length;
+  // An offer decided in their pause waits; they speak again before Sam does, so it is dropped and decided afresh.
+  await f.turn(600_000);
+  f.say('trainee', 'Oh, and one more thing.');
+  f.setTalking(true);
+  f.sam('Right, and then?');
+  expect(f.sent).toHaveLength(before);
+  expect(offers(f)).toHaveLength(0);
+  f.setTalking(false);
+  await f.step(602_000);
+  f.sam('So what then?');
+  expect(offers(f)).toHaveLength(1);
+  expect(f.notes('list').at(-1)).toMatch(OFFER_LINE);
+
+  await f.turn(605_000, 'Let’s keep going.');
+  f.at(606_000);
+  const span: PauseSpan = { from: epoch + 606_000, to: null };
+  f.pauses.push(span);
+  f.producer.pause();
+  f.at(620_000);
+  span.to = epoch + 620_000;
+  const sent = f.sent.length;
+  f.producer.resume(Date.now());
+  // The notes in force are restated without waiting for Sam; the held one was dropped.
+  expect(f.sent.length).toBeGreaterThan(sent);
+  expect(f.notes('list').at(-1)).not.toContain('Pace:');
+  const restated = f.sent.length;
+  f.sam('Where were we?');
+  expect(f.sent).toHaveLength(restated);
 });
 
 test('withdrawing every map fact supersedes the previous map note', async () => {
@@ -404,29 +685,29 @@ test('map notes wait 60 s between sends, carry a reworded fact, and a rejected o
 });
 
 test('a rejected or unsent list note goes out again at the next pick, and receipts record their timing', async () => {
-  const focus: Record<string, string | null> = { p4: 't1', p6: 't1', p8: null, p10: null };
+  const natural: Record<string, string> = { p4: 't2', p6: 't2', p8: 't1', p10: 't1' };
   const f = fixture({
-    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, focus: focus[id] ?? null }); },
-    generateMap: async () => mapped(mapWith([thread('t1')])),
+    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, natural: natural[id] ? { [natural[id]]: 1 } : {} }); },
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
   });
   await f.step(0);
   await f.step(20_000);
-  const first = f.of('note')[0]!;
+  const first = f.of('note').find(note => note.kind === 'list')!;
   f.at(21_000);
   f.producer.providerEvent(first.id, true, { startMs: 2000, endMs: 2400 });
   expect(first.delivery).toEqual({ eventId: first.id, afterPassageId: 'p2', status: 'accepted', acknowledgedAt: epoch + 21_000, startMs: 2000, endMs: 2400 });
 
   await f.turn(25_000);
-  const keep = f.of('note').filter(note => note.kind === 'list')[1]!;
-  f.producer.providerEvent(keep.id, false);
+  const next = f.of('note').filter(note => note.kind === 'list')[1]!;
+  f.producer.providerEvent(next.id, false);
   await f.turn(30_000);
   f.setConnected(false);
   await f.turn(35_000);
   f.setConnected(true);
   await f.turn(40_000);
   const list = f.of('note').filter(note => note.kind === 'list');
-  expect(list.map(note => [note.outcome, note.text.split('\n')[1]!.split(' (')[0]])).toEqual([
-    ['sent', 'Worth pulling next'], ['rejected', 'Keep pulling'], ['sent', 'Keep pulling'], ['error', 'Worth pulling next'], ['sent', 'Worth pulling next'],
+  expect(list.map(note => [note.outcome, /\((Thread t\d)\)/.exec(note.text)![1]])).toEqual([
+    ['sent', 'Thread t1'], ['rejected', 'Thread t2'], ['sent', 'Thread t2'], ['error', 'Thread t1'], ['sent', 'Thread t1'],
   ]);
   expect(list[2]!.text).toBe(list[1]!.text);
   expect(f.notes('list')).toHaveLength(4);
@@ -434,21 +715,21 @@ test('a rejected or unsent list note goes out again at the next pick, and receip
 
 test('rejecting a list note a newer one replaced does not resend the newer one', async () => {
   const f = fixture({
-    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, focus: id === 'p2' ? null : 't1' }); },
-    generateMap: async () => mapped(mapWith([thread('t1')])),
+    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, natural: id === 'p2' ? {} : { t2: 1 } }); },
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
   });
   await f.step(0);
   await f.step(20_000);
   await f.turn(25_000);
-  const [first, keep] = f.of('note').filter(note => note.kind === 'list');
-  expect(keep!.text).toStartWith(`${NOTE_HEADERS.list}\nKeep pulling`);
+  const [first, next] = f.of('note').filter(note => note.kind === 'list');
+  expect(next!.text).toContain('(Thread t2)');
   f.producer.providerEvent(first!.id, false);
   expect(first!.outcome).toBe('rejected');
   await f.turn(30_000);
   expect(f.notes('list')).toHaveLength(2);
-  f.producer.providerEvent(keep!.id, false);
+  f.producer.providerEvent(next!.id, false);
   await f.turn(35_000);
-  expect(f.notes('list')).toEqual([first!.text, keep!.text, keep!.text]);
+  expect(f.notes('list')).toEqual([first!.text, next!.text, next!.text]);
 });
 
 test('the note cap stops every note, list and map alike', async () => {
@@ -473,12 +754,12 @@ test('the note cap stops every note, list and map alike', async () => {
 
 test('Sam’s next substantive passage after a note is recorded, ignoring backchannels, the participant and growth of a counted passage', async () => {
   const f = fixture({
-    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, focus: id === 'p4' ? 't1' : null }); },
-    generateMap: async () => mapped(mapWith([thread('t1')])),
+    evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, natural: id === 'p4' ? { t2: 1 } : {} }); },
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
   });
   await f.step(0);
   await f.step(20_000);
-  const [list, map] = f.of('note');
+  const [map, list] = f.of('note');
   f.at(21_000);
   f.producer.transcriptChanged(f.say('client', 'Mm-hmm.'), 'p2');
   expect(list!.nextSamTurnAt).toBeUndefined();
@@ -787,7 +1068,8 @@ test('End aborts pending work, ignores late results, and records nothing after',
   expect(f.sent).toHaveLength(sent);
   expect(f.producer.conversationMap.threads.map(item => item.id)).toEqual(['t1']);
   expect(f.of('delegation')).toEqual([{ source: 'delegation', id: 'delegation-1', createdAt: epoch + 20_000, target: 'notes', replied: true }]);
-  expect(f.producer.summary()).toMatchObject({ maps: 2, applied: 1, turns: 2, notes: 2, research: 1 });
+  // t1 never scored, so only the map note went out.
+  expect(f.producer.summary()).toMatchObject({ maps: 2, applied: 1, turns: 2, notes: 1, research: 1 });
 });
 
 test('a pause abandons and releases in-flight work, and the resume restates Sam’s notes outside the budget on a clock that skips the pause', async () => {
@@ -796,7 +1078,7 @@ test('a pause abandons and releases in-flight work, and the resume restates Sam�
   const traitRead = deferred<Traits>();
   const lookup = deferred<Lookup>();
   const f = fixture({
-    evaluateTurn: async input => f.calls.turn.length === 2 ? turnRead.promise : reading(input, { novel: .9 }),
+    evaluateTurn: async input => { const n = f.calls.turn.length; return n === 3 ? turnRead.promise : reading(input, n === 2 ? { natural: { t1: 1 } } : { novel: .9 }); },
     generateMap: async () => f.calls.map.length === 2 ? solCall.promise : mapped(mapWith([thread('t1')]), request('OpenStreetMap')),
     evaluateTraits: async input => f.calls.traits.length === 1 ? traitRead.promise : traits(input),
     lookupInterviewBackground: () => lookup.promise,
@@ -804,6 +1086,7 @@ test('a pause abandons and releases in-flight work, and the resume restates Sam�
   await f.step(0);
   await f.step(20_000);
   await f.turn(25_000);
+  await f.turn(70_000);
   await f.step(80_000);
   const before = { list: f.notes('list'), map: f.notes('map') };
   expect([before.list.length, before.map.length]).toEqual([1, 1]);
@@ -813,12 +1096,12 @@ test('a pause abandons and releases in-flight work, and the resume restates Sam�
   f.pauses.push(span);
   f.producer.pause();
   expect(f.producer.records.filter(item => item.source !== 'note' && item.source !== 'delegation').map(item => [item.source, item.outcome]))
-    .toEqual([['turn', 'read'], ['map', 'applied'], ['research', 'aborted'], ['traits', 'aborted'], ['turn', 'aborted'], ['map', 'aborted']]);
+    .toEqual([['turn', 'read'], ['map', 'applied'], ['research', 'aborted'], ['traits', 'aborted'], ['turn', 'read'], ['turn', 'aborted'], ['map', 'aborted']]);
   expect(f.calls.map[1]!.signal.aborted).toBe(true);
   const archived = JSON.stringify(f.producer.records);
   // Late results from the dropped session change nothing, and a paused producer does no work.
   solCall.resolve(mapped(mapWith([thread('t1'), thread('t2')])));
-  turnRead.resolve(reading(f.calls.turn[1]!, { novel: .9 }));
+  turnRead.resolve(reading(f.calls.turn[2]!, { novel: .9 }));
   traitRead.resolve(traits(f.calls.traits[0]!));
   lookup.resolve({ status: 'found', facts, retrievedAt: Date.now(), queries: [] });
   await f.producer.settle();
@@ -837,8 +1120,8 @@ test('a pause abandons and releases in-flight work, and the resume restates Sam�
 
   // The abandoned turn is read again, Sol is behind, and the abandoned lookup may be requested again.
   await f.step(142_000);
-  expect(f.calls.turn).toHaveLength(3);
-  expect(f.calls.turn[2]!.atMs).toBe(82_000);
+  expect(f.calls.turn).toHaveLength(4);
+  expect(f.calls.turn[3]!.atMs).toBe(82_000);
   expect(f.calls.map).toHaveLength(3);
   expect(f.calls.map[2]!.tail).toMatchObject({ reasons: [MINUTE], elapsedMs: 82_000 });
   await f.producer.settle();

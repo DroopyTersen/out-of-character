@@ -252,12 +252,16 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
     threads: [{ id: 't1', label: 'Site ownership', anchors: ['e1'], unknown: 'who owned the site before', guess: 'another team', related: [], topics: [], status: 'open', reason: null }],
     nextIds: { e: 2, r: 1, t: 2 },
   };
+  let maps = 0;
   const f = await live({ overrides: {
     evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateMap: async () => ({ map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
+    generateMap: async () => { maps++; return { map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
   } }, interviewAttempt);
   const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => event.content);
   setSystemTime(epoch + 20_500);
+  await waitFor(() => maps === 1);
+  await settle(f);
+  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });
   await waitFor(() => notes(f.socket.sent).length === 2);
   const delivered = notes(f.socket.sent);
   await lose(f);

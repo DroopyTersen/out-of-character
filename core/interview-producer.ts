@@ -1,5 +1,5 @@
 import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } from './interview';
-import type { MapDefect, MapUpdate } from './interview-map';
+import type { MapDefect, MapPace, MapUpdate } from './interview-map';
 import type { Band, Pick, ThreadState } from './interview-ranking';
 import type { DirectorUsage } from './simulator/director';
 
@@ -7,7 +7,7 @@ import type { DirectorUsage } from './simulator/director';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v16';
+export const PRODUCER_VERSION = 'interview-producer-v18';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -15,6 +15,11 @@ export const PRODUCER_LIMITS = {
   turns: 300, turnTimeout: 3000, traits: 120, traitTimeout: 3000,
   /** Every note Sam receives, list and map together; set from the pile-up probe. */
   notes: 100, mapNoteSpacing: 60_000,
+  /**
+   * When Sam may offer the participant the choice to stop, once Sol allows it: never before this many applied maps or
+   * this much active time, and not again within the spacing of the last offer. Ending is otherwise the participant's call.
+   */
+  offerMaps: 3, offerAfter: 10 * 60_000, offerSpacing: 3 * 60_000,
   research: 3, lookupTimeout: 90_000,
 };
 
@@ -31,17 +36,24 @@ export type MapRecord = {
   outcome: 'pending' | 'applied' | 'invalid' | 'timeout' | 'error' | 'aborted';
   inputCount: number; lastInputId: string | null; model: string; usage?: DirectorUsage;
   update?: MapUpdate; changes?: { added: string[]; changed: string[]; dropped: string[] };
+  /** Sol's call on whether Sam may offer to stop; absent before v18. */
+  pace?: MapPace;
   /** The first few, for an invalid update. */
   defects?: MapDefect[];
   research?: ResearchRequest | null;
   failure?: CallFailure;
 };
-/** Jev's reading of one settled participant turn and the pick code made from it. Scores are rounded; ranked is [id, score, band]. */
+/**
+ * Jev's reading of one settled participant turn and the pick code made from it. Scores are rounded; ranked is
+ * [id, score, band]. A reading that landed while the participant was talking again is `deferred`: its pick waited
+ * until they stopped, unless a later reading replaced it.
+ */
 export type TurnRecord = {
   source: 'turn'; id: string; passageId: string; mapId: string | null; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: DirectorUsage;
-  reading?: { atMs: number; focus: string | null; novel: number; natural: Record<string, number>; states: Record<string, ThreadState> };
+  reading?: { atMs: number; focus: string | null; novel: number; complaint?: number; natural: Record<string, number>; states: Record<string, ThreadState> };
   pick?: Omit<Pick, 'ranked'> & { ranked: [id: string, score: number, band: Band][] };
+  deferred?: true;
   failure?: CallFailure;
 };
 /** Spicy and grounding for threads Sol added or rewrote. */
@@ -57,6 +69,10 @@ export type TraitRecord = {
  */
 export type NoteRecord = {
   source: 'note'; id: string; kind: 'list' | 'map'; text: string; mapId: string | null; turnId?: string; sentAt: number;
+  /** When the note was decided, if it waited for Sam's next words; absent when it went out at once. */
+  decidedAt?: number;
+  /** The note let Sam offer the participant the choice to stop. */
+  offer?: true;
   outcome: 'sent' | 'error' | 'rejected'; delivery: NoteDelivery; researchIds?: string[];
   nextSamTurnAt?: number; nextSamTurnAfterId?: string | null;
 };

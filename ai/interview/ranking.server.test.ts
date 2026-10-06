@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { emptyMap, type ConversationMap, type MapThread } from '../../core/interview-map';
 import { threadKey } from '../../core/interview-ranking';
+import { yieldsTurn } from '../../core/interview';
 import type { TranscriptEntry } from '../../core/simulator/types';
 import type { InterviewAnswers } from './evaluate.server';
 import { evaluateTurn, latestTurn, readTraitAnswers, readTurnAnswers, traitQuestions, traitState, turnQuestions, upToParticipant } from './ranking.server';
@@ -43,6 +44,22 @@ test('short confirmations after Sam speaks are kept, while acknowledgments withi
   expect(latestTurn([...reply('It ran every morning.'), { id: 'p6', speaker: 'trainee', text: 'Yeah.', startMs: 6500, endMs: 6700 }]).map(entry => entry.id)).toEqual(['p5']);
 });
 
+test('Sam yields hand the floor back; questions and full replies take a turn', () => {
+  for (const text of ['Oh,', 'I mean,', 'good.', 'Checking.', 'Right. So', 'When you', 'Sorry, go ahead.', 'Oh. Go on, I’m listening.', '[laughs]', '... Oh, sorry, I thought you were finished. Go ahead.']) expect(yieldsTurn(text)).toBe(true);
+  for (const text of ['What about design?', 'Pretty lean. And your part in that?', 'like an outside group? [laughs]', 'So the bids team used it daily.', 'Thanks for walking me through the whole rollout today.']) expect(yieldsTurn(text)).toBe(false);
+});
+
+test('a participant who resumes after a Sam yield is still on the same turn', () => {
+  const cut: TranscriptEntry[] = [
+    ...transcript.slice(0, 2), { id: 'p3', speaker: 'client', text: 'Oh,', startMs: 4100, endMs: 4300 },
+    { id: 'p4', speaker: 'trainee', text: 'and the bids team ran it every morning.', startMs: 4400, endMs: 6000 },
+  ];
+  expect(latestTurn(cut).map(entry => entry.id)).toEqual(['p2', 'p4']);
+  expect(latestTurn(cut.slice(0, 3)).map(entry => entry.id)).toEqual(['p2']);
+  const asked: TranscriptEntry[] = [...cut, { id: 'p5', speaker: 'client', text: 'Who asked for that?', startMs: 6100, endMs: 7000 }, { id: 'p6', speaker: 'trainee', text: 'The bids lead.', startMs: 7200, endMs: 8000 }];
+  expect(latestTurn(asked).map(entry => entry.id)).toEqual(['p6']);
+});
+
 test('the turn is read up to the participant’s last words, after Sam has started to reply', () => {
   const replied: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'Who used it most?', startMs: 4400, endMs: 6000 }];
   expect(upToParticipant(replied).map(entry => entry.id)).toEqual(['p1', 'p2']);
@@ -60,33 +77,35 @@ test('a short reply can confirm a declarative guess without a question mark', ()
 
 test('turn questions cover focus, newness and each open thread; closed threads, guesses and topics stay out', () => {
   const questions = turnQuestions(map, latestTurn(transcript));
-  expect(Object.keys(questions)).toEqual(['focus', 'new', 'natural:t1', 'state:t1', 'natural:t3', 'state:t3']);
+  expect(Object.keys(questions)).toEqual(['focus', 'new', 'complaint', 'natural:t1', 'state:t1', 'natural:t3', 'state:t3']);
   expect(Object.keys((questions.focus as { criteria: object }).criteria)).toEqual(['none', 't1', 't3']);
   expect(Object.keys((questions['state:t1'] as { criteria: object }).criteria)).toEqual(['open', 'answered', 'declined', 'stalled']);
   expect(JSON.stringify(questions.new)).toContain('Route Planner (Plans routes for field crews.)');
   expect(JSON.stringify(questions['state:t1'])).toContain('What does the latest participant turn do to this gap?');
   expect(JSON.stringify(questions['state:t1'])).toContain('The latest participant turn is p2,');
   expect(JSON.stringify(questions.new)).toContain('(p2)');
+  expect(JSON.stringify(questions.complaint)).toContain('criticizing the interview itself in the latest turn (p2)');
   const text = JSON.stringify(questions);
   expect(text).not.toContain('a guess Jev never sees');
   expect(text).not.toContain('client-decisions');
-  expect(Object.keys(turnQuestions({ ...map, threads: [] }, latestTurn(transcript)))).toEqual(['new']);
+  expect(Object.keys(turnQuestions({ ...map, threads: [] }, latestTurn(transcript)))).toEqual(['new', 'complaint']);
 });
 
 test('turn answers become a reading; an invalid answer rejects the whole reading', () => {
   const answers: InterviewAnswers = {
-    focus: { type: 'choice', choice: 't3' }, new: { type: 'boolean', probability: .7 },
+    focus: { type: 'choice', choice: 't3' }, new: { type: 'boolean', probability: .7 }, complaint: { type: 'boolean', probability: .1 },
     'natural:t1': { type: 'boolean', probability: .2 }, 'state:t1': { type: 'choice', choice: 'stalled' },
     'natural:t3': { type: 'boolean', probability: .9 }, 'state:t3': { type: 'choice', choice: 'open' },
   };
   expect(readTurnAnswers(map, answers, 'p2', 5000)).toEqual({
-    passageId: 'p2', atMs: 5000, focus: 't3', novel: .7, keys: { t1: threadKey(map.threads[0]!), t3: threadKey(map.threads[2]!) },
+    passageId: 'p2', atMs: 5000, focus: 't3', novel: .7, complaint: .1, keys: { t1: threadKey(map.threads[0]!), t3: threadKey(map.threads[2]!) },
     natural: { t1: .2, t3: .9 }, states: { t1: 'stalled', t3: 'open' },
   });
   expect(readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 'none' } }, 'p2', 5000).focus).toBeNull();
   expect(() => readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 't2' } }, 'p2', 5000)).toThrow('focus');
   expect(() => readTurnAnswers(map, { ...answers, 'state:t1': { type: 'choice', choice: 'later' } }, 'p2', 5000)).toThrow('state:t1');
-  expect(readTurnAnswers({ ...map, threads: [] }, { new: { type: 'boolean', probability: .1 } }, 'p2', 5000)).toMatchObject({ focus: null, natural: {}, states: {} });
+  expect(() => readTurnAnswers(map, { ...answers, complaint: { type: 'choice', choice: 'yes' } }, 'p2', 5000)).toThrow('complaint');
+  expect(readTurnAnswers({ ...map, threads: [] }, { new: { type: 'boolean', probability: .1 }, complaint: { type: 'boolean', probability: .1 } }, 'p2', 5000)).toMatchObject({ focus: null, natural: {}, states: {} });
 });
 
 test('trait questions read spicy and grounding per thread against the map’s facts, keyed to the thread’s wording', () => {
@@ -103,7 +122,7 @@ test('a Jev selection that isn’t its own top option is retried once; a second 
   const reply = (focus: Record<string, number>) => ({
     model: 'jev-1.13.0', usage: { input_tokens: 900, output_tokens: 6 },
     answers: {
-      focus: state('t3', focus), new: { type: 'noul', noul: .2 }, 'natural:t1': { type: 'noul', noul: .1 }, 'natural:t3': { type: 'noul', noul: .8 },
+      focus: state('t3', focus), new: { type: 'noul', noul: .2 }, complaint: { type: 'noul', noul: .05 }, 'natural:t1': { type: 'noul', noul: .1 }, 'natural:t3': { type: 'noul', noul: .8 },
       'state:t1': state('open', { open: .9, answered: .05, declined: .03, stalled: .02 }), 'state:t3': state('open', { open: .6, answered: .3, declined: .05, stalled: .05 }),
     },
   });

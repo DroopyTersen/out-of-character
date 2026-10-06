@@ -6,10 +6,10 @@
  * A map applies once its Sol call finished (start plus latency); the replay stops a cadence after the last Sol call. The report holds transcript-derived notes: keep it out of the repo.
  */
 import { evaluateTraits, evaluateTurn, latestTurn } from '../ai/interview/ranking.server';
-import { isBackchannel } from '../core/interview';
+import { yieldsTurn } from '../core/interview';
 import type { ConversationMap } from '../core/interview-map';
-import { listNote, listNoteKey, mapNote, mapNoteKey } from '../core/interview-notes';
-import { emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadsNeedingTraits, withTraits, type Pick, type TurnReading } from '../core/interview-ranking';
+import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../core/interview-notes';
+import { emptyRanking, observeMap, observeTurn, RANKING, threadsNeedingTraits, withTraits, type Pick, type TurnReading } from '../core/interview-ranking';
 import type { TranscriptEntry } from '../core/simulator/types';
 
 const [path, reportPath, ...flags] = Bun.argv.slice(2);
@@ -36,16 +36,16 @@ const visibleAt: number[] = [];
 transcript.forEach((entry, index) => visibleAt.push(Math.max(index ? visibleAt[index - 1]! : 0, entry.endMs + SETTLE_MS)));
 // Past the Sol probe's last call plus one cadence the map would be stale, so the replay stops there.
 const end = Math.max(...report.rows.map(item => item.atMs)) + report.cadence;
-// A participant turn ends where Sam says more than a backchannel, as latestTurn reads it.
+// A participant turn ends where Sam takes a turn rather than a backchannel or a yield, as latestTurn reads it.
 const samRepliesAfter = (index: number) => {
-  for (const entry of transcript.slice(index + 1)) { if (entry.speaker === 'trainee') return false; if (!isBackchannel(entry.text)) return true; }
+  for (const entry of transcript.slice(index + 1)) { if (entry.speaker === 'trainee') return false; if (!yieldsTurn(entry.text)) return true; }
   return true;
 };
 const turns = transcript.flatMap((entry, index) => entry.speaker === 'trainee' && samRepliesAfter(index) && visibleAt[index]! <= end
   ? [{ index, atMs: visibleAt[index]! }] : []);
 
 type Row = {
-  passageId: string; atMs: number; mapCall: number | null; focus: string | null; novel: number; durationMs: number; inputTokens?: number;
+  passageId: string; atMs: number; mapCall: number | null; focus: string | null; novel: number; complaint?: number; durationMs: number; inputTokens?: number;
   natural?: TurnReading['natural']; states?: TurnReading['states']; holds?: string[];
   pick: Omit<Pick, 'ranked'> & { top: [string, number, string][] }; listNote?: string; mapNote?: string; error?: string;
 };
@@ -53,7 +53,7 @@ const rows: Row[] = [];
 const traitCalls: { mapCall: number; threads: number; durationMs: number; inputTokens?: number; error?: string }[] = [];
 let state = emptyRanking();
 let applied: (typeof maps)[number] | null = null;
-let lastList = '';
+let list = emptyListState();
 let lastMap = '';
 let backchannels = 0;
 console.log(`Ranking probe · ${turns.length} participant turns · ${maps.length} maps`);
@@ -83,15 +83,17 @@ for (const turn of turns.slice(0, limit)) {
   let item: Row;
   try {
     const result = await evaluateTurn({ transcript: settled, map, apiKey, atMs: turn.atMs, signal: AbortSignal.timeout(10_000) });
-    state = observeTurn(state, map, result.reading);
-    const { ranked, ...pick } = pickThreads(map, state, turn.atMs);
+    state = observeTurn(state, map, result.reading, latestTurn(settled)[0]!.id);
+    // The producer's thread note as of interview-producer-v17, picked as if the participant had stopped talking.
+    const decision = nextListNote(map, state, turn.atMs, list, { turn: true });
+    list = decision.state;
+    const { ranked, ...pick } = decision.pick;
     item = {
-      passageId, atMs: turn.atMs, mapCall: applied!.call, focus: result.reading.focus, novel: result.reading.novel, durationMs: result.durationMs, inputTokens: result.usage.inputTokens,
+      passageId, atMs: turn.atMs, mapCall: applied!.call, focus: result.reading.focus, novel: result.reading.novel, complaint: result.reading.complaint, durationMs: result.durationMs, inputTokens: result.usage.inputTokens,
       natural: result.reading.natural, states: result.reading.states, holds: Object.keys(state.holds),
       pick: { ...pick, top: ranked.slice(0, 4).map(entry => [entry.id, +entry.score.toFixed(2), entry.band]) },
     };
-    const key = listNoteKey(map, { ...pick, ranked });
-    if (key !== lastList) { lastList = key; const note = listNote(map, { ...pick, ranked }); if (note) item.listNote = note; }
+    if (decision.text) item.listNote = decision.text;
     const mapKey = mapNoteKey(map);
     if (mapKey !== lastMap) { lastMap = mapKey; const note = mapNote(map); if (note) item.mapNote = note; }
   } catch (error) {
@@ -100,7 +102,7 @@ for (const turn of turns.slice(0, limit)) {
   }
   rows.push(item);
   const top = item.pick.top.map(([id, value, band]) => `${id}:${value}${band === 'right-there' ? '★' : band === 'nearby' ? '·' : ''}`).join(' ');
-  console.log(`${passageId.padStart(5)} ${(turn.atMs / 60_000).toFixed(1).padStart(5)}  map ${String(item.mapCall).padStart(2)}  ${String(item.durationMs).padStart(5)}ms  focus ${String(item.focus ?? '—').padEnd(4)} new ${item.novel.toFixed(2)}  ${item.pick.action.padEnd(4)} ${String(item.pick.lead ?? '—').padEnd(4)} | ${top}${item.error ? `  ERROR ${item.error}` : ''}`);
+  console.log(`${passageId.padStart(5)} ${(turn.atMs / 60_000).toFixed(1).padStart(5)}  map ${String(item.mapCall).padStart(2)}  ${String(item.durationMs).padStart(5)}ms  focus ${String(item.focus ?? '—').padEnd(4)} new ${item.novel.toFixed(2)}${(item.complaint ?? 0) >= RANKING.complaint ? ` complaint ${item.complaint!.toFixed(2)}` : ''}  ${item.pick.action.padEnd(4)} ${String(item.pick.lead ?? '—').padEnd(4)} | ${top}${item.error ? `  ERROR ${item.error}` : ''}`);
   const states = Object.entries(item.states ?? {}).map(([id, value]) => `${id}=${value}`).join(' ');
   if (states || item.holds?.length) console.log(`        states ${states || '—'} · holding ${item.holds?.join(',') || '—'}`);
   if (item.listNote) console.log(`        ${item.listNote.split('\n').slice(1).join('\n        ')}`);
@@ -116,6 +118,7 @@ const summary = {
   turnInputTokens: { p50: quantile(ok.flatMap(item => item.inputTokens ?? []), .5), max: Math.max(...ok.flatMap(item => item.inputTokens ?? [0])) },
   traitCalls: traitCalls.length, traitErrors: traitCalls.filter(item => item.error).length,
   novelWakes: ok.filter(item => item.novel >= RANKING.novel).length,
+  complaints: ok.filter(item => (item.complaint ?? 0) >= RANKING.complaint).length,
   noPick: ok.filter(item => item.pick.action === 'none').length,
   // A→B→A: the lead changes back to one of the two leads before the one it just left.
   leadReturns: leads.reduce((count, lead, index) => { const changes = leads.slice(0, index).filter((value, i, list) => value !== list[i - 1]); return count + (lead != null && lead !== leads[index - 1] && changes.slice(-3, -1).includes(lead) ? 1 : 0); }, 0),

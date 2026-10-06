@@ -54,7 +54,22 @@ describe('project closeout interview contracts', () => {
     expect(brief).not.toMatch(/producer|rundown|topic map|coverage/i);
     expect(brief).toContain('thread note');
     expect(brief).toContain('map note');
-    expect(brief.match(/^\d+\. /gm)).toHaveLength(14);
+    expect(brief.match(/^\d+\. /gm)).toHaveLength(13);
+  });
+
+  test('the brief puts turn-taking before techniques, never fills a pause, and leaves the ending to the participant', () => {
+    const brief = interviewerBrief(interviewers[0]!.id);
+    const paragraphs = brief.split('\n\n');
+    const guide = paragraphs.find(item => item.startsWith('Technique guide'))!;
+    const ending = paragraphs.find(item => item.startsWith('The participant decides when the interview ends'))!;
+    expect(brief.indexOf('Turn-taking:')).toBeLessThan(brief.indexOf('Technique guide'));
+    expect(brief.indexOf(ending)).toBeLessThan(brief.indexOf('Technique guide'));
+    // GPT-Live repeats example lines, so no example may fill a pause or trail off on “or”.
+    expect(guide).not.toMatch(/\bgo (?:ahead|on)\b|take your time|^\d+\. Finish their sentence|or…\?|or\.\.\.\?/im);
+    // Only the ending policy names the interview-level closers, to ban them.
+    for (const item of paragraphs.filter(paragraph => paragraph !== ending)) expect(item).not.toMatch(/anything else|did we miss/i);
+    expect(ending).toMatch(/no interview-level “anything else\?” or “did we miss anything\?”/);
+    expect(brief).not.toMatch(/wrapping up is premature|ground is still unexplored|ask whether anything important was missed/i);
   });
 
   test('on appended instructions the brief calls notes suggestions; otherwise the briefs match', () => {

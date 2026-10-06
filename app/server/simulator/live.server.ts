@@ -17,7 +17,7 @@ export function liveConfiguration(scenarioId: string, clientId: string, context?
   const client = getClient(clientId);
   return {
     model: LIVE_MODEL, instructions: [actorBrief(getScenario(scenarioId), client), context].filter(Boolean).join('\n\n'),
-    delegation: { type: 'client' }, store: false,
+    store: false,
     audio: { output: { voice: client.voice } },
   };
 }

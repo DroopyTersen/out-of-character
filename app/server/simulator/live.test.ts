@@ -9,10 +9,12 @@ test('WebRTC creation uses Foundry and the configured Live deployment with priva
     expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     const body = JSON.parse(String(options?.body));
     expect(body).toMatchObject({
-      session: { model: 'live-deployment', delegation: { type: 'client' }, store: false, audio: { output: { voice: 'cedar' } } },
+      session: { model: 'live-deployment', store: false, audio: { output: { voice: 'cedar' } } },
       transport: { type: 'webrtc', sdp: 'v=0\r\nsynthetic offer' },
     });
     expect(body.session.instructions.length).toBeGreaterThan(0);
+    // Neither role runs outside work, so the session offers no delegation target.
+    expect(body.session).not.toHaveProperty('delegation');
     expect(JSON.stringify(body)).not.toContain('fixture-secret');
     return Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
   }) as typeof fetch);

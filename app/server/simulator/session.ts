@@ -18,6 +18,7 @@ import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices, type DirectorCheckpoint } from './contextual-director';
 import { InterviewProducer, producerServices, type ProducerCheckpoint } from './interview-producer';
 import { gradeObjectives, type GradeRecord } from '../../../core/interview-producer';
+import { NETWORK_SAMPLES, type NetworkRecord } from '../../../core/simulator/network';
 import { generateReport, REPORT_PROVENANCE } from '../../../ai/simulator/report.server';
 import { idleReport, type CoachingReport, type ReportState } from '../../../core/simulator/report';
 import { SessionReport, within, type ReportArchive } from './report';
@@ -31,6 +32,8 @@ type Segment = {
   closeReason: string | null; finalization: SessionSnapshot['finalization']; usageSeconds: number | null;
   /** Absent before the session went live, and on checkpoints saved before it was recorded. */
   greeting?: GreetingLog;
+  /** The browser's periodic media-quality reports for this connection, for diagnostics. */
+  network?: NetworkRecord[];
 };
 type PauseRecord = { epoch: number; reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; endedAt: number | null };
 /** What a lost instance needs to finish the attempt. In-flight paid work is not kept. */
@@ -157,6 +160,8 @@ export class SimulatorSession extends DurableObject<Env> {
         if (activity.sequence != null) this.activitySequence = activity.sequence;
         if (activity.active || activity.audio) this.lastActivity = Date.now();
         if (activity.audio) this.lastAudio = Date.now();
+        const segment = this.segment;
+        if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: Date.now(), ...activity.network });
       }
     }
     // A best-effort report from a browser that lost its media; the server never depends on it.
@@ -273,6 +278,7 @@ export class SimulatorSession extends DurableObject<Env> {
         foundry: foundryConfig(this.env), typesafeKey: this.env.TYPESAFE_API_KEY!, services: this.paid,
         settled: prefix, coverage: () => this.snapshot!.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.ctx.waitUntil(work),
         pauses: () => this.pauseSpans(),
+        talking: () => { const ready = new Set(settled()); return this.snapshot!.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); },
       });
     } else if (getScenario(snapshot.scenarioId).objectives.length) this.contextual = new ContextualDirector({
       scenarioId: snapshot.scenarioId, clientId: snapshot.clientId,

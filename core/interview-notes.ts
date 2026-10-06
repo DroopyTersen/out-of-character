@@ -1,5 +1,5 @@
-import type { ConversationMap, MapEntity } from './interview-map';
-import { threadKey, type Pick } from './interview-ranking';
+import type { ConversationMap, MapEntity, MapThread } from './interview-map';
+import { pickThreads, RANKING, threadKey, type Pick, type RankingState } from './interview-ranking';
 
 /**
  * Sam's two notes. Sol writes every content word; code only fills these fixed templates, so no topic label or
@@ -28,30 +28,100 @@ export const MAP_NOTE_LIMITS = { known: 6, research: 3 };
 export const oneLine = (text: string) => text.replace(/[\s\p{Cc}]+/gu, ' ').trim();
 const sentence = (text: string) => { const line = oneLine(text); return /[.!?]$/.test(line) ? line : `${line}.`; };
 
-/** Keep pulling on the current thread, or a thread worth tugging, plus up to two others by label. */
-export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADERS): string | null {
+const gap = (thread: MapThread) => `still unknown: ${sentence(thread.unknown)}${thread.guess ? ` Guess: ${sentence(thread.guess)}` : ''}`;
+
+/**
+ * Sol judged the ground covered: Sam's next turn after an answer offers, once, a real choice between the threads still open and
+ * stopping. The note reaches Sam as it starts a turn, so the offer is for the turn after their next answer.
+ */
+const offerLine = (names: string[]) => `Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on${names.length ? ` with ${names.join(' or ')}` : ''}. Their call.`;
+
+/**
+ * Keep pulling on the current thread, or a thread worth tugging. The runner-up comes with its gap, so Sam has a next
+ * question the moment the lead is answered, before a new note can arrive; one more is named by label.
+ */
+export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADERS, offer = false): string | null {
   const threads = new Map(map.threads.map(thread => [thread.id, thread]));
   const lead = pick.lead == null ? undefined : threads.get(pick.lead);
   if (!lead) return null;
-  const nearby = pick.nearby.flatMap(id => { const thread = threads.get(id); return thread ? [oneLine(thread.label)] : []; });
+  const [next, ...rest] = pick.nearby.flatMap(id => threads.get(id) ?? []);
   return [
     headers.list,
-    `${pick.action === 'keep' ? 'Keep pulling' : 'Worth pulling next'} (${oneLine(lead.label)}): still unknown: ${sentence(lead.unknown)}${lead.guess ? ` Guess: ${sentence(lead.guess)}` : ''}`,
-    ...(nearby.length ? [`${pick.action === 'keep' ? 'Nearby' : 'Also open'}: ${nearby.join(' · ')}`] : []),
+    ...(offer ? [offerLine([lead, ...(next ? [next] : [])].map(thread => oneLine(thread.label)))] : []),
+    `${pick.action === 'keep' ? 'Keep pulling' : 'Worth pulling next'} (${oneLine(lead.label)}): ${gap(lead)}`,
+    ...(next ? [`If that’s answered, then (${oneLine(next.label)}): ${gap(next)}`] : []),
+    ...(rest.length ? [`${pick.action === 'keep' ? 'Nearby' : 'Also open'}: ${rest.map(thread => oneLine(thread.label)).join(' · ')}`] : []),
   ].join('\n');
 }
 
+const labels = (map: ConversationMap, ids: string[]) => ids.flatMap(id => { const thread = map.threads.find(item => item.id === id); return thread ? [oneLine(thread.label)] : []; });
+
 /** Replaces a list note whose lead Sol has since closed, when no open thread is left to pull on. */
-export const emptyListNote = (headers = NOTE_HEADERS) => `${headers.list}\nNo open thread right now: follow the participant.`;
+export const emptyListNote = (headers = NOTE_HEADERS, offer = false) =>
+  [headers.list, ...(offer ? [offerLine([])] : []), 'No open thread right now: follow the participant.'].join('\n');
+
+/** After the participant objects to the interview itself: no thread is pushed, only a few left open if useful. */
+export function complaintNote(map: ConversationMap, open: string[], headers = NOTE_HEADERS): string {
+  const names = labels(map, open);
+  return [
+    headers.list,
+    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it.',
+    ...(names.length ? [`Open threads, if useful: ${names.join(' · ')}`] : []),
+  ].join('\n');
+}
 
 /** Withdraws the previous note when Sol has removed all its facts, vantage and preferences. */
 export const emptyMapNote = (headers = NOTE_HEADERS) => `${headers.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;
 
-/** A changed lead or set of nearby options supersedes the note; nearby ordering alone does not. */
-export function listNoteKey(map: ConversationMap, pick: Pick): string {
-  const lead = map.threads.find(thread => thread.id === pick.lead);
-  const nearby = [...pick.nearby].sort().map(id => [id, map.threads.find(thread => thread.id === id)?.label]);
-  return JSON.stringify([pick.action, pick.current, pick.lead, lead ? threadKey(lead) : null, nearby]);
+/** The thread note in force, so a later pick knows what Sam was last told; `named` are the other threads it lists. */
+export type ListState = { lead: string | null; key: string | null; sent: boolean; complaint: boolean; named: string[] };
+export const emptyListState = (): ListState => ({ lead: null, key: null, sent: false, complaint: false, named: [] });
+/** `offer` is whether `text` lets Sam offer to stop. */
+export type ListDecision = { pick: Pick; text: string | null; state: ListState; offer: boolean };
+const NO_LEAD = '"none"';
+const COMPLAINT = '"complaint"';
+/** A note is keyed by its lead, that thread's wording and the offer: a new nearby set, or keep versus tug, alone doesn't resend. */
+const leadKey = (map: ConversationMap, id: string) => { const thread = map.threads.find(item => item.id === id)!; return JSON.stringify([id, threadKey(thread)]); };
+const OFFER = '+offer';
+
+/**
+ * The thread note after a settled participant turn (`turn`), or a refresh: a new map, new traits, or a new provider
+ * session to restate notes to. Only a turn picks a new lead. A refresh keeps the lead in force, re-sending only when
+ * Sol rewrote it, and picks afresh only once Sol has closed it or before any lead, and then only a thread that scored.
+ * A note that names a thread the participant has since declined, or Sol has since closed, goes out again without it.
+ * A turn in which the participant objected to the interview itself gets an acknowledge-and-adapt note instead, and
+ * nothing leads again until their next turn. `offer` lets Sam offer to stop; granting or withdrawing it resends.
+ * `state` is what to keep once `text` is sent, or right away when it's null.
+ */
+export function nextListNote(
+  map: ConversationMap, ranking: RankingState, nowMs: number, previous: ListState,
+  { turn = false, offer = false, headers = NOTE_HEADERS }: { turn?: boolean; offer?: boolean; headers?: NoteHeaders } = {},
+): ListDecision {
+  const fresh = pickThreads(map, ranking, nowMs);
+  const complaint = turn ? (ranking.reading?.complaint ?? 0) >= RANKING.complaint : previous.complaint;
+  // Sam shouldn't be pointed at ground the participant has declined or already answered, even as an aside.
+  const gone = (id: string) => map.threads.find(thread => thread.id === id)?.status !== 'open' || ranking.holds[id]?.state === 'declined';
+  const stale = previous.named.some(gone);
+  const decide = (pick: Pick, key: string, text: string | null, offers = false): ListDecision => {
+    const send = key === previous.key && !(stale && text) ? null : text;
+    const named = send != null ? pick.nearby : previous.named;
+    return { pick, text: send, offer: send != null && offers, state: { lead: pick.lead, key, sent: previous.sent || send != null, complaint, named } };
+  };
+  if (complaint) {
+    const open = fresh.ranked.slice(0, RANKING.nearby).map(item => item.id);
+    return decide({ ...fresh, action: 'none', lead: null, nearby: open }, COMPLAINT, complaintNote(map, open, headers));
+  }
+  const inForce = turn ? undefined : map.threads.find(thread => thread.id === previous.lead && thread.status === 'open');
+  let pick: Pick = fresh;
+  if (inForce) {
+    const others = fresh.ranked.filter(item => item.id !== inForce.id && item.id !== fresh.current);
+    pick = { ...fresh, action: fresh.current === inForce.id ? 'keep' : 'tug', lead: inForce.id, nearby: others.slice(0, RANKING.nearby).map(item => item.id) };
+  } else if (!turn && !((fresh.ranked.find(item => item.id === fresh.lead)?.score ?? 0) > 0)) {
+    pick = { ...fresh, action: 'none', lead: null, nearby: [] };
+  }
+  const suffix = offer ? OFFER : '';
+  if (pick.lead == null) return decide(pick, NO_LEAD + suffix, previous.sent || offer ? emptyListNote(headers, offer) : null, offer);
+  return decide(pick, leadKey(map, pick.lead) + suffix, listNote(map, pick, headers, offer), offer);
 }
 
 /** The most connected participant facts, in map order, so the note stays short as the map grows. */

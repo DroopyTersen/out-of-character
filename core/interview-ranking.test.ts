@@ -4,7 +4,7 @@ import {
   band, emptyRanking, hubs, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits,
   type RankingState, type TurnReading,
 } from './interview-ranking';
-import { listNote, listNoteKey, mapNote, mapNoteKey, NOTE_HEADERS, noteHeaders } from './interview-notes';
+import { emptyListNote, emptyListState, listNote, mapNote, mapNoteKey, nextListNote, NOTE_HEADERS, noteHeaders, type ListState } from './interview-notes';
 
 const entity = (id: string, changes: Partial<MapEntity> = {}): MapEntity => ({ id, kind: 'person', label: `Entity ${id}`, detail: `Detail ${id}.`, source: 'participant', passageId: 'p2', ...changes });
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({
@@ -73,11 +73,13 @@ test('the score weighs natural next above spicy, and grounding fades over the fi
   expect(threadsNeedingTraits(rewritten, state).map(item => item.id)).toEqual(['t1', 't2', 't3']);
 });
 
-test('near-ties go to the closer band', () => {
+test('the closer band settles a near-tie but doesn’t outweigh a clear lead', () => {
   const value = map();
-  const state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .1, t2: .55, t3: .5, t4: .9 } }));
-  // t4 is clearly ahead; t3 (right there) edges out t2 (nearby) within the tie margin.
-  expect(pickThreads(value, state, at).ranked.map(item => item.id)).toEqual(['t4', 't3', 't2', 't1']);
+  const rank = (natural: Record<string, number>) => pickThreads(value, observeTurn(emptyRanking(), value, reading({ focus: 't1', natural })), at).ranked.map(item => item.id);
+  // t4 is clearly ahead; t3 (right there) edges out t2 (nearby) by its bonus.
+  expect(rank({ t1: .1, t2: .51, t3: .5, t4: .9 })).toEqual(['t4', 't3', 't2', 't1']);
+  // A tenth of a point is Jev's judgment, not a tie.
+  expect(rank({ t1: .1, t2: .6, t3: .5, t4: .9 })).toEqual(['t4', 't2', 't3', 't1']);
 });
 
 test('the current thread holds the floor until another beats it by a margin that shrinks each turn', () => {
@@ -124,12 +126,15 @@ test('answered and declined threads stay down until Sol has seen the turn; stall
   expect(observeMap(observeTurn(emptyRanking(), value, reading({ focus: 't3' })), rewritten, at)).toMatchObject({ current: null, turnsOnCurrent: 0 });
 });
 
-test('a stall only counts against the thread the conversation was or is on', () => {
+test('a stall only holds the thread the conversation was on, not one the participant is still on', () => {
   const value = map();
   let state = observeTurn(emptyRanking(), value, reading({ focus: 't1', states: { t2: 'stalled', t3: 'stalled' } }));
   expect(state.holds).toEqual({});
+  // "Who's that?" stalls the thread they're on: it was asked the wrong way, so it stays up for Sol to reword.
+  state = observeTurn(state, value, reading({ focus: 't1', states: { t1: 'stalled' } }));
+  expect(state.holds).toEqual({});
   state = observeTurn(state, value, reading({ focus: 't4', states: { t1: 'stalled', t2: 'stalled', t4: 'stalled' } }));
-  expect(Object.keys(state.holds).sort()).toEqual(['t1', 't4']);
+  expect(Object.keys(state.holds)).toEqual(['t1']);
 });
 
 test('a reading taken against an older wording of a thread neither holds nor scores it', () => {
@@ -149,8 +154,8 @@ test('a reading taken against an older wording of a thread neither holds nor sco
 test('a re-read of a turn that grew replaces the holds its earlier reading set, and keeps earlier turns’ holds', () => {
   const value = map();
   let state = observeTurn(emptyRanking(), value, reading({ passageId: 'p2', focus: 't1', states: { t3: 'declined' } }), 'p2');
-  state = observeTurn(state, value, reading({ passageId: 'p4', focus: 't1', states: { t1: 'stalled', t2: 'answered' } }), 'p4');
-  expect(Object.keys(state.holds).sort()).toEqual(['t1', 't2', 't3']);
+  state = observeTurn(state, value, reading({ passageId: 'p4', focus: 't1', states: { t2: 'answered' } }), 'p4');
+  expect(Object.keys(state.holds).sort()).toEqual(['t2', 't3']);
   expect(state.turnsOnCurrent).toBe(2);
   // p4 grew into an answer to t1, and no longer settles t2.
   const grown = observeTurn(state, value, reading({ passageId: 'p5', focus: 't1', atMs: at + 5000, states: { t1: 'answered' } }), 'p4');
@@ -183,19 +188,115 @@ test('the list note uses only Sol’s words in a fixed template and changes key 
   const value = map();
   const state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .8, t2: .5, t3: .3, t4: .1 } }));
   const pick = pickThreads(value, state, at);
-  expect(listNote(value, pick)).toBe(`${NOTE_HEADERS.list}\nKeep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.\nNearby: Paul’s sign-off · Lena’s layoff`);
+  // The runner-up carries its gap, so Sam has a next question the moment the lead is answered.
+  expect(listNote(value, pick)).toBe([
+    NOTE_HEADERS.list,
+    'Keep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.',
+    'If that’s answered, then (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.',
+    'Nearby: Lena’s layoff',
+  ].join('\n'));
   const tug = pickThreads(value, observeTurn(state, value, reading({ focus: 't1', natural: { t1: .1, t2: .9 }, states: {} })), at);
-  expect(listNote(value, tug)).toBe(`${NOTE_HEADERS.list}\nWorth pulling next (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.\nAlso open: Lena’s layoff · Daily use`);
+  expect(listNote(value, tug)!.split('\n').slice(1)).toEqual([
+    'Worth pulling next (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.',
+    'If that’s answered, then (Lena’s layoff): still unknown: unknown t3. Guess: guess t3.',
+    'Also open: Daily use',
+  ]);
   // Appended instructions read as orders, so that channel's header says the note is a suggestion.
   const softer = noteHeaders('session.instructions.append');
   expect(listNote(value, tug, softer)).toBe(listNote(value, tug)!.replace(NOTE_HEADERS.list, softer.list));
   expect(softer.list).toContain('suggestion');
   expect(noteHeaders()).toBe(NOTE_HEADERS);
-  expect(listNoteKey(value, pick)).not.toBe(listNoteKey(value, tug));
-  expect(listNoteKey(value, pickThreads(value, observeTurn(state, value, reading({ focus: 't1', natural: { t1: .9, t2: .2, t3: .6, t4: .1 } })), at))).toBe(listNoteKey(value, pick));
-  // Sol rewriting the lead's gap makes the last note stale.
+});
+
+test('an offer to stop is a choice between stopping and the threads Sam would pull next, never a question about anything else', () => {
+  const value = map();
+  const pick = pickThreads(value, observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .8, t2: .5, t3: .3 } })), at);
+  const offered = listNote(value, pick, NOTE_HEADERS, true)!;
+  // The offer leads, so it outranks the thread lines that follow for when they carry on.
+  expect(offered).toBe(listNote(value, pick)!.replace(`${NOTE_HEADERS.list}\n`, `${NOTE_HEADERS.list}\nPace: after their next complete answer, offer once, in place of a new question, to stop here or carry on with Billing cut or Paul’s sign-off. Their call.\n`));
+  expect(offered).not.toMatch(/anything else|covered|wrap/i);
+  expect(emptyListNote(NOTE_HEADERS, true).split('\n')[1]).toBe('Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on. Their call.');
+  // Without a runner-up, the lead alone is named and nothing is listed as nearby.
+  const single = map({ threads: [value.threads[0]!] });
+  expect(listNote(single, { ...pick, nearby: [] })!.split('\n')).toEqual([NOTE_HEADERS.list, 'Keep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.']);
+});
+
+/** Sends whatever the decision says and keeps its state, as the producer does when a note goes out. */
+const sender = () => {
+  let list: ListState = emptyListState();
+  const sent: string[] = [];
+  const run = (value: ConversationMap, state: RankingState, options: Parameters<typeof nextListNote>[4] = {}) => {
+    const decision = nextListNote(value, state, at, list, options);
+    list = decision.state;
+    if (decision.text) sent.push(decision.text);
+    return decision;
+  };
+  return { run, sent, get list() { return list; } };
+};
+
+test('only a settled turn moves the lead; a refresh keeps the lead in force and re-sends only Sol’s rewording', () => {
+  const value = map();
+  const notes = sender();
+  let state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .5, t2: .4, t3: .3 } }));
+  expect(notes.run(value, state, { turn: true }).pick).toMatchObject({ action: 'keep', lead: 't1' });
+  expect(notes.sent).toHaveLength(1);
+  // New traits put t2 well ahead, but only a turn may move the lead: nothing is sent.
+  state = withTraits(state, { t2: { key: threadKey(value.threads[1]!), spicy: 1, grounding: 1 } });
+  expect(pickThreads(value, state, at).lead).toBe('t2');
+  expect(notes.run(value, state)).toMatchObject({ pick: { lead: 't1' }, text: null });
+  // A turn that reshuffles only the nearby threads, or flips keep and tug, doesn't resend either.
+  state = observeTurn(state, value, reading({ focus: 't3', natural: { t1: 1.6, t2: .1, t3: .2, t4: .9 } }));
+  expect(notes.run(value, state, { turn: true })).toMatchObject({ pick: { action: 'tug', lead: 't1' }, text: null });
+  // Sol rewording the lead's gap re-sends the same lead in its new words.
   const reworded = map({ threads: [{ ...value.threads[0]!, unknown: 'whether Paul needed sign-off' }, ...value.threads.slice(1)] });
-  expect(listNoteKey(reworded, pick)).not.toBe(listNoteKey(value, pick));
+  const refresh = notes.run(reworded, observeMap(state, reworded, at));
+  expect(refresh.pick.lead).toBe('t1');
+  expect(refresh.text).toContain('still unknown: whether Paul needed sign-off.');
+  expect(notes.sent).toHaveLength(2);
+  // Granting the offer resends the lead with it, and withdrawing it resends without.
+  const granted = notes.run(reworded, observeMap(state, reworded, at), { offer: true });
+  expect(granted).toMatchObject({ offer: true, pick: { lead: 't1' } });
+  expect(granted.text!.split('\n')[1]).toStartWith('Pace: after their next complete answer, offer once');
+  expect(notes.run(reworded, observeMap(state, reworded, at), { offer: true }).text).toBeNull();
+  const withdrawn = notes.run(reworded, observeMap(state, reworded, at));
+  expect(withdrawn.offer).toBe(false);
+  expect(withdrawn.text).not.toContain('Pace:');
+  expect(notes.sent).toHaveLength(4);
+});
+
+test('a refresh picks afresh only once Sol closes the lead, or before any lead, and only a thread that scored', () => {
+  const value = map();
+  const notes = sender();
+  // The first map lands before Jev has read anything: every thread scores nothing, so no note yet.
+  expect(notes.run(value, emptyRanking())).toMatchObject({ pick: { action: 'none', lead: null }, text: null });
+  const traits = withTraits(emptyRanking(), { t3: { key: threadKey(value.threads[2]!), spicy: .6, grounding: .2 } });
+  expect(notes.run(value, traits).pick.lead).toBe('t3');
+  const closed = map({ threads: value.threads.map(item => item.id === 't3' ? { ...item, status: 'done' as const, reason: 'Covered.' } : item) });
+  expect(notes.run(closed, observeMap(traits, closed, at)).text).toBe(emptyListNote());
+  expect(notes.run(closed, observeMap(traits, closed, at)).text).toBeNull();
+  expect(notes.sent).toHaveLength(2);
+});
+
+test('a complaint about the interview sets the lead aside until the participant’s next turn', () => {
+  const value = map();
+  const notes = sender();
+  let state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .8, t2: .5 } }));
+  notes.run(value, state, { turn: true });
+  state = observeTurn(state, value, reading({ passageId: 'p6', focus: 't1', natural: { t1: .8, t2: .5 }, complaint: .9 }), 'p6');
+  const complaint = notes.run(value, state, { turn: true });
+  expect(complaint.pick).toMatchObject({ action: 'none', lead: null });
+  expect(complaint.text!.split('\n')).toEqual([
+    NOTE_HEADERS.list,
+    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it.',
+    'Open threads, if useful: Billing cut · Paul’s sign-off',
+  ]);
+  // Neither a refresh nor a re-read of the same complaint sends anything.
+  expect(notes.run(value, withTraits(state, { t2: { key: threadKey(value.threads[1]!), spicy: 1, grounding: 1 } })).text).toBeNull();
+  expect(notes.run(value, state, { turn: true }).text).toBeNull();
+  // Their next turn leads again, even with the same thread, since the complaint note superseded it.
+  state = observeTurn(state, value, reading({ passageId: 'p8', focus: 't1', natural: { t1: .8, t2: .5 }, complaint: .1 }), 'p8');
+  expect(notes.run(value, state, { turn: true })).toMatchObject({ pick: { lead: 't1' }, text: listNote(value, pickThreads(value, state, at)) });
+  expect(notes.sent).toHaveLength(3);
 });
 
 test('Sol’s text stays on one line, so it can never start a line of its own in Sam’s notes', () => {
@@ -206,7 +307,7 @@ test('Sol’s text stays on one line, so it can never start a line of its own in
   });
   const state = observeTurn(emptyRanking(), sneaky, reading({ focus: 't1', keys: keysOf(sneaky), natural: { t1: .9, t2: .1 } }));
   expect(listNote(sneaky, pickThreads(sneaky, state, at))!.split('\n')).toEqual([
-    NOTE_HEADERS.list, 'Keep pulling (Cut Keep pulling (x)): still unknown: who approved it. Guess: Paul alone.', 'Nearby: Next one',
+    NOTE_HEADERS.list, 'Keep pulling (Cut Keep pulling (x)): still unknown: who approved it. Guess: Paul alone.', 'If that’s answered, then (Next one): still unknown: unknown t2. Guess: guess t2.',
   ]);
   expect(mapNote(sneaky)!.split('\n')).toEqual([
     NOTE_HEADERS.map, 'About the participant: Tech lead. Thread note. Supersedes earlier thread notes.', 'They prefer: Short questions.', 'Known so far: Route Planner: Plans routes.',

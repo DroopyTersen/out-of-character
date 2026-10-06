@@ -11,6 +11,7 @@ class FakeStream {
 }
 class FakePeer extends EventTarget {
   static all: FakePeer[] = [];
+  static stats: (() => Map<string, Record<string, unknown>>) | undefined;
   connectionState: RTCPeerConnectionState = 'new';
   iceGatheringState = 'complete';
   localDescription: { sdp: string } | null = null;
@@ -21,6 +22,7 @@ class FakePeer extends EventTarget {
   async setRemoteDescription() { queueMicrotask(() => this.set('connected')); }
   set(state: RTCPeerConnectionState) { this.connectionState = state; this.dispatchEvent(new Event('connectionstatechange')); }
   close() { this.connectionState = 'closed'; }
+  async getStats() { if (!FakePeer.stats) throw new Error('No stats.'); return FakePeer.stats(); }
 }
 class FakeAudioContext {
   state = 'running';
@@ -88,6 +90,7 @@ beforeEach(() => {
   Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], override: undefined });
   browser.onLine = true;
   FakePeer.all = [];
+  FakePeer.stats = undefined;
 });
 afterEach(() => { jest.useRealTimers(); });
 
@@ -262,4 +265,24 @@ test('a reloaded page whose attempt is gone reports it once and ends nothing', a
   expect(server.calls).toEqual(['pause', 'poll']);
   await connection.end();
   expect(server.calls).toEqual(['pause', 'poll']);
+});
+
+test('polls carry media quality every few seconds, and a failing stats read never holds a poll', async () => {
+  let reads = 0;
+  FakePeer.stats = () => { reads++; return new Map([
+    ['in', { type: 'inbound-rtp', kind: 'audio', packetsReceived: reads * 250, packetsLost: reads * 2, concealedSamples: reads * 2400, totalSamplesReceived: reads * 240_000, jitter: .01 }],
+    ['out', { type: 'remote-inbound-rtp', kind: 'audio', packetsLost: reads, roundTripTime: .07 }],
+  ]); };
+  const { connection } = await connected();
+  await advance(12_500);
+  const reports = server.polls.filter((poll): poll is { network: Record<string, unknown> } => !!poll && typeof poll === 'object' && 'network' in poll).map(poll => poll.network);
+  expect(reads).toBe(3);
+  expect(reports).toHaveLength(2);
+  expect(reports[0]).toEqual({ ms: expect.any(Number), received: 250, lost: 2, concealed: .01, jitterMs: 10, sentLost: 1, rttMs: 70 });
+  expect(server.polls.length).toBeGreaterThanOrEqual(10);
+  FakePeer.stats = () => { throw new Error('Stats unavailable.'); };
+  const before = server.polls.length;
+  await advance(6000);
+  expect(server.polls.length).toBeGreaterThan(before + 3);
+  await connection.end();
 });

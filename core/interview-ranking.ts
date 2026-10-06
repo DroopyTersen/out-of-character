@@ -15,8 +15,8 @@ export const RANKING = {
   weights: { natural: 1, spicy: .5, grounding: .4 },
   /** Grounding matters while Sam is still learning what was built and for whom. */
   groundingFadeMs: 5 * 60_000,
-  /** Scores this close are a tie, and the closer band wins. */
-  tie: .1,
+  /** A small lift for an easy segue from the current thread: enough to settle a near-tie, never to outweigh Jev's reading. */
+  bandBonus: { 'right-there': .04, nearby: .02, elsewhere: 0 } satisfies Record<Band, number>,
   /** How far another thread must beat the current one; it shrinks with each turn spent on the current thread. */
   margin: { start: .3, step: .05, min: .05 },
   stalledHoldMs: 3 * 60_000,
@@ -30,12 +30,16 @@ export const RANKING = {
   nearby: 2,
   /** Jev's "substantially new" probability that wakes Sol early. */
   novel: .8,
+  /** Or this many turns since Sol's last call, each at least this likely to be new. */
+  novelRun: { probability: .6, turns: 2 },
+  /** Jev's probability that the participant objected to the interview itself, which sets the thread note aside for a turn. */
+  complaint: .5,
 };
 
 /** Jev's reading after one settled participant turn; `keys` is each open thread's wording in the map Jev was shown. */
 export type TurnReading = {
   passageId: string; atMs: number; focus: string | null; keys: Record<string, string>;
-  natural: Record<string, number>; states: Record<string, ThreadState>; novel: number;
+  natural: Record<string, number>; states: Record<string, ThreadState>; novel: number; complaint?: number;
 };
 /** Jev's reading of a thread when Sol adds or rewrites it; `key` is the thread content it was read against. */
 export type ThreadTraits = { key: string; spicy: number; grounding: number };
@@ -80,12 +84,14 @@ export function observeTurn(state: RankingState, map: ConversationMap, reading: 
   const read = (id: string | null) => { const thread = id == null ? undefined : open.get(id); return thread && reading.keys[thread.id] === threadKey(thread) ? thread : undefined; };
   const focus = read(reading.focus)?.id ?? null;
   const regrown = turn != null && turn === state.turn;
-  // Stalled means Sam asked and the answer didn't move it, so it only counts for the thread the conversation was or is on.
-  const asked = new Set([focus, state.current]);
+  // Stalled means Sam asked and the answer didn't move it, so it only counts for the thread the conversation was on. A
+  // stall on the thread the participant is still on, such as a counter-question, means it was asked the wrong way, not
+  // that it should be dropped; Sol rewrites it.
+  const asked = new Set([state.current]);
   const holds = Object.fromEntries(Object.entries(state.holds).filter(([, hold]) => !regrown || hold.turn !== turn));
   for (const [id, threadState] of Object.entries(reading.states)) {
     const thread = read(id);
-    if (!thread || threadState === 'open' || (threadState === 'stalled' && !asked.has(id))) continue;
+    if (!thread || threadState === 'open' || (threadState === 'stalled' && (id === focus || !asked.has(id)))) continue;
     // An active hold isn't extended, so repeated readings can't pin a thread down past Sol's next call.
     if (active(holds[id], thread, reading.atMs)) continue;
     holds[id] = { state: threadState, atMs: reading.atMs, key: threadKey(thread), turn };
@@ -161,18 +167,10 @@ export function score(state: RankingState, thread: MapThread, nowMs: number): nu
   return weights.natural * natural + weights.spicy * (traits?.spicy ?? 0) + weights.grounding * fade * (traits?.grounding ?? 0);
 }
 
-/** Highest score first; scores within the tie margin of the best go to the closer band. */
+/** Highest score plus band bonus first; an exact tie keeps map order. */
 function order(items: Ranked[]): Ranked[] {
-  const rest = [...items];
-  const sorted: Ranked[] = [];
-  while (rest.length) {
-    const top = Math.max(...rest.map(item => item.score));
-    const pool = rest.filter(item => item.score >= top - RANKING.tie);
-    const best = pool.reduce((a, b) => BANDS.indexOf(b.band) < BANDS.indexOf(a.band) || (b.band === a.band && b.score > a.score) ? b : a);
-    sorted.push(best);
-    rest.splice(rest.indexOf(best), 1);
-  }
-  return sorted;
+  const lifted = (item: Ranked) => item.score + RANKING.bandBonus[item.band];
+  return [...items].sort((a, b) => lifted(b) - lifted(a));
 }
 
 /**

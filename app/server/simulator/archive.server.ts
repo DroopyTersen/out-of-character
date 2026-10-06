@@ -5,6 +5,7 @@ import { SIMULATOR_VERSION, type ClientEnding, type SessionPause, type SessionSn
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../core/interview-producer';
+import type { NetworkRecord } from '../../../core/simulator/network';
 import type { ReportArchive, ReportAttempt } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
@@ -37,7 +38,7 @@ export type EndingCheck = {
 /** When a provider session was asked to speak, acknowledged it, was asked again, first spoke, and was given up on. */
 export type GreetingLog = { sentAt: number; acknowledgedAt: number | null; retriedAt: number | null; repliedAt: number | null; abandonedAt: number | null };
 export type ConnectionLog = {
-  segments: { epoch: number; startedAt: number; endedAt: number | null; closeReason: string | null; finalization: 'pending' | 'confirmed' | 'unconfirmed'; usageSeconds: number | null; greeting?: GreetingLog }[];
+  segments: { epoch: number; startedAt: number; endedAt: number | null; closeReason: string | null; finalization: 'pending' | 'confirmed' | 'unconfirmed'; usageSeconds: number | null; greeting?: GreetingLog; network?: NetworkRecord[] }[];
   pauses: { reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; durationMs: number }[];
 };
 

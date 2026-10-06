@@ -7,15 +7,17 @@ import { lookupInterviewBackground, researchKey, validateResearchRequest } from 
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { callFailure } from '../../../ai/interview/diagnostics.server';
 import { DirectorOutputError } from '../../../ai/simulator/sol.server';
-import { isBackchannel, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
-import { emptyMap, type ConversationMap, type MapChanges } from '../../../core/interview-map';
-import { emptyListNote, emptyMapNote, LIVE_NOTE_CHANNEL, listNote, listNoteKey, mapNote, mapNoteKey, mapNoteResearch, NOTE_HEADERS, noteHeaders, type NoteChannel } from '../../../core/interview-notes';
+import { isBackchannel, yieldsTurn, type InterviewBackground, type InterviewObjectiveReading } from '../../../core/interview';
+import { emptyMap, type ConversationMap, type MapChanges, type MapPace } from '../../../core/interview-map';
+import {
+  emptyListState, emptyMapNote, LIVE_NOTE_CHANNEL, mapNote, mapNoteKey, mapNoteResearch, nextListNote, NOTE_HEADERS, noteHeaders, type ListState, type NoteChannel,
+} from '../../../core/interview-notes';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
 } from '../../../core/interview-producer';
 import {
-  emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits, type Pick, type RankingState,
+  emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits, type Pick, type RankingState, type TurnReading,
 } from '../../../core/interview-ranking';
 import type { DirectorUsage } from '../../../core/simulator/director';
 import { activeElapsed, type PauseSpan } from '../../../core/simulator/state';
@@ -31,17 +33,34 @@ type Options = {
   channel?: NoteChannel;
   /** Connection pauses; elapsed time excludes them. */
   pauses?: () => PauseSpan[];
+  /** Whether the participant is speaking or their latest words are still settling; a turn's new pick waits until they stop. */
+  talking?: () => boolean;
+  /** Sends each note as soon as it's decided rather than at Sam's next words: for tests of what is sent, not when. */
+  immediate?: boolean;
 };
 type Counts = { maps: number; applied: number; turns: number; traits: number; notes: number; research: number };
 type PendingEvent = { event: MapLogEvent; researchId: string };
+/** A decided note waiting for Sam's next words. */
+type HeldNote = { text: string; decidedAt: number; mapId: string | null; turnId?: string; researchIds: string[]; offer: boolean };
+/**
+ * Sol's latest pace call. A grant to offer stopping is spent once the participant answers an offer (a turn after
+ * `offeredAfter`), or says something the map lacks after the transcript Sol judged (a turn after `inputId`).
+ */
+type PaceState = MapPace & { mapId: string; inputId: string | null; offeredAfter?: string | null; spent?: 'answered' | 'novel' };
 /** Producer state that outlives the isolate. In-flight work is not kept: a restored producer starts idle. */
 export type ProducerCheckpoint = {
   records: ProducerLogRecord[]; counts: Counts;
   map: ConversationMap; mapRecordId: string | null; log: MapLog; ranking: RankingState;
   lastMapStart: number; reasons: string[]; events: PendingEvent[]; behind: boolean;
+  /** Absent on checkpoints saved before two fairly new turns woke Sol. */
+  novelTurns?: string[];
   readTurnKey: string; readThrough: number; traitFailures: [string, string][];
-  listKey: string | null; listSent: boolean; mapKey: string | null; lastMapNote: number | null;
+  /** Absent on checkpoints saved before the lead in force was kept. */
+  list: ListState; deferredTurnId?: string | null;
+  mapKey: string | null; lastMapNote: number | null;
   samTurns: string[]; researched: string[];
+  /** Absent on checkpoints saved before Sol judged pace. `lastOffer` is in active time. */
+  pace?: PaceState | null; lastOffer?: number | null;
 };
 
 const LIMITS = PRODUCER_LIMITS;
@@ -76,6 +95,8 @@ export class InterviewProducer {
   private call: { record: MapRecord; controller: AbortController; unmapped: boolean } | null = null;
   private lastMapStart: number;
   private reasons = new Set<string>();
+  /** Turns since Sol's last call that Jev read as fairly new, by first passage, so a re-read isn't counted twice. */
+  private novelTurns = new Set<string>();
   private events: PendingEvent[] = [];
   /** A failed call logged participant text or events the map doesn't reflect yet. */
   private behind = false;
@@ -86,10 +107,18 @@ export class InterviewProducer {
   private traitsBusy = false;
   /** Thread wording whose trait read failed; not retried until Sol's next applied map, so a failing read can't loop. */
   private traitFailures = new Map<string, string>();
-  private listKey: string | null = null;
-  private listSent = false;
+  private list: ListState = emptyListState();
+  /** A turn reading that landed while the participant was talking; its pick waits for them to stop. */
+  private deferred: TurnRecord | null = null;
+  /** A new map or traits would have moved the lead while the participant was talking; the pick waits for them to stop. */
+  private heldRefresh = false;
   private mapKey: string | null = null;
   private lastMapNote: number | null = null;
+  /** Notes decided while Sam was quiet: the latest of each kind goes out when Sam next speaks, so none lands in a pause the participant may still be thinking in. */
+  private held = new Map<NoteRecord['kind'], HeldNote>();
+  private pace: PaceState | null = null;
+  /** Active time of the last offer to stop that reached Sam. */
+  private lastOffer: number | null = null;
   private samTurns = new Set<string>();
   private researched = new Set<string>();
   private lookups = 0;
@@ -116,13 +145,21 @@ export class InterviewProducer {
     this.options.waitUntil?.(work);
   }
 
-  /** Called on the session tick: reads a new participant turn, starts a due Sol call, sends a held map note. */
+  /** Called on the session tick: reads a new participant turn, starts a due Sol call, sends a held map note, makes a held pick. */
   tick(now = Date.now()) {
     if (!this.alive) return;
     if (this.call && now - this.call.record.startedAt >= LIMITS.mapTimeout) this.abandon(now);
     this.readTurn(now);
     this.startMap(now);
     this.sendMapNote(now);
+    // A reading of the turn they just finished may still be on its way, and it replaces the held one.
+    if ((this.deferred || this.heldRefresh) && !this.turnBusy && !this.options.talking?.()) {
+      const record = this.deferred;
+      this.deferred = null;
+      this.heldRefresh = false;
+      const pick = this.pick(now, record ?? undefined);
+      if (record) record.pick = compactPick(pick);
+    }
   }
 
   private wake(reason: string) { if (this.alive) this.reasons.add(reason); }
@@ -150,6 +187,7 @@ export class InterviewProducer {
     if (!fresh && !this.behind && !this.events.length) { this.reasons.clear(); return; }
     const reasons = [...this.reasons];
     this.reasons.clear();
+    this.novelTurns.clear();
     const events = this.events;
     this.events = [];
     const log = appendMapLog(this.log, settled, events.map(item => item.event));
@@ -215,12 +253,13 @@ export class InterviewProducer {
     // Outside the try: a failure after the map lands is not Sol's, so it neither fails this call nor leaves the map behind.
     Object.assign(record, {
       outcome: 'applied', completedAt: Date.now(), model: result.model, usage: result.usage,
-      update: result.update, changes: compactChanges(result.changes), research: result.research,
+      update: result.update, changes: compactChanges(result.changes), research: result.research, pace: result.pace,
     } satisfies Partial<MapRecord>);
     this.counts.applied++;
     this.behind = false;
     this.map = result.map;
     this.mapRecord = record;
+    this.pace = { ...result.pace, mapId: record.id, inputId: record.lastInputId };
     this.traitFailures.clear();
     this.ranking = observeMap(this.ranking, result.map, this.elapsed(record.startedAt));
     if (result.research) this.request(record, result.research, settled);
@@ -236,7 +275,7 @@ export class InterviewProducer {
     const transcript = [...this.options.settled()];
     for (let end = this.readThrough; end <= transcript.length; end++) {
       const next = transcript[end];
-      if (next && (next.speaker !== 'client' || isBackchannel(next.text))) continue;
+      if (next && (next.speaker !== 'client' || yieldsTurn(next.text))) continue;
       const settled = upToParticipant(transcript.slice(0, end));
       const turn = latestTurn(settled);
       const key = turnKey(turn);
@@ -247,9 +286,7 @@ export class InterviewProducer {
       this.counts.turns++;
       const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId: this.mapRecord?.id ?? null, startedAt: now, outcome: 'pending' };
       this.records.push(record);
-      // A pause already released the slot; a resumed producer may own it now.
-      const scope = this.abort.signal;
-      this.track(this.evaluate(record, settled, now, turn[0]!.id).finally(() => { if (!scope.aborted) this.turnBusy = false; }));
+      this.track(this.evaluate(record, settled, now, turn[0]!.id));
       return;
     }
   }
@@ -266,17 +303,23 @@ export class InterviewProducer {
       const { reading } = result;
       Object.assign(record, {
         outcome: 'read', durationMs: result.durationMs, usage: usageOf(result.usage),
-        reading: { atMs: reading.atMs, focus: reading.focus, novel: round(reading.novel), natural: roundAll(reading.natural), states: reading.states },
+        reading: {
+          atMs: reading.atMs, focus: reading.focus, novel: round(reading.novel), ...(reading.complaint != null ? { complaint: round(reading.complaint) } : {}),
+          natural: roundAll(reading.natural), states: reading.states,
+        },
       } satisfies Partial<TurnRecord>);
       this.ranking = observeTurn(this.ranking, this.map, reading, turn);
-      if (reading.novel >= RANKING.novel) this.wake(`the participant's latest turn (${reading.passageId}) adds something the map lacks`);
+      this.wakeOnReading(reading, turn);
+      this.spendPace(record.passageId, reading.novel);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
       if (scope.aborted) return;
       record.failure = callFailure(error);
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
-      if (!scope.aborted) record.completedAt = Date.now();
+      // Freed with the pick, so a map that lands next knows this turn is read. A pause already released the slot; a
+      // resumed producer may own it now.
+      if (!scope.aborted) { record.completedAt = Date.now(); this.turnBusy = false; }
     }
   }
 
@@ -319,54 +362,133 @@ export class InterviewProducer {
     })());
   }
 
-  /** Re-picks after a turn reading, a new map or new traits; changed note content supersedes the previous options. */
+  /**
+   * Re-picks after a turn reading, a new map or new traits. Only a turn reading picks a new lead, and only once the
+   * participant has stopped talking; until then it refreshes the lead in force like a map does. A refresh that would
+   * move the lead, because Sol closed it, waits for them to stop as well.
+   */
   private pick(now: number, turn?: TurnRecord): Pick {
-    const pick = pickThreads(this.map, this.ranking, this.elapsed(now));
-    const key = listNoteKey(this.map, pick);
-    if (key === this.listKey) return pick;
-    const headers = noteHeaders(this.options.channel);
-    const list = listNote(this.map, pick, headers);
-    const text = list ?? (this.listSent ? emptyListNote(headers) : null);
-    if (!text) { this.listKey = key; return pick; }
-    const note = this.note('list', text, now, turn);
-    if (note?.outcome === 'sent') { this.listKey = key; this.listSent = true; }
-    return pick;
+    // A new provider session hears its notes at once.
+    const talking = !this.restating && !!this.options.talking?.();
+    // Offer to stop only once the participant's latest turn is read: this pick is that reading's, or none is pending.
+    const offer = !talking && (!!turn || !this.turnBusy) && this.offering(now);
+    if (turn && talking) {
+      turn.deferred = true;
+      this.deferred = turn;
+      turn = undefined;
+    } else if (turn) this.deferred = null;
+    const decision = nextListNote(this.map, this.ranking, this.elapsed(now), this.list, { turn: !!turn, offer, headers: noteHeaders(this.options.channel) });
+    if (!decision.text) { this.list = decision.state; return decision.pick; }
+    // Sam's lead doesn't move under the participant: a refresh that would change it waits for them to stop, too.
+    if (talking && decision.state.lead !== this.list.lead) { this.heldRefresh = true; return decision.pick; }
+    this.heldRefresh = false;
+    const outcome = this.note('list', decision.text, now, { turn, offer: decision.offer });
+    if (outcome === 'sent' || outcome === 'held') this.list = decision.state;
+    return decision.pick;
+  }
+
+  /** Sol allows an offer to stop, and the producer's own floors and spacing are met. */
+  private offering(now: number): boolean {
+    const pace = this.pace;
+    if (pace?.verdict !== 'may-offer-finish' || pace.spent || this.counts.applied < LIMITS.offerMaps) return false;
+    const elapsed = this.elapsed(now);
+    return elapsed >= LIMITS.offerAfter && (this.lastOffer == null || elapsed - this.lastOffer >= LIMITS.offerSpacing);
+  }
+
+  /** A turn after an offer reached Sam answers it; one after Sol's transcript that adds what the map lacks outdates Sol's call. */
+  private spendPace(passageId: string, novel: number) {
+    const pace = this.pace;
+    if (pace?.verdict !== 'may-offer-finish' || pace.spent) return;
+    const ids = this.options.settled().map(entry => entry.id);
+    const after = (mark: string | null) => mark == null || ids.indexOf(passageId) > ids.indexOf(mark);
+    if (pace.offeredAfter !== undefined && after(pace.offeredAfter)) pace.spent = 'answered';
+    else if (novel >= RANKING.novel && after(pace.inputId)) pace.spent = 'novel';
+  }
+
+  /**
+   * Wakes Sol, still no sooner than the floor, when a turn adds something the map lacks, when two turns since its last
+   * call add a fair amount, or when the thread the participant is on stalled: that thread isn't held down, so its gap
+   * needs asking another way.
+   */
+  private wakeOnReading(reading: TurnReading, turn: string) {
+    const { novel, novelRun } = RANKING;
+    if (reading.novel >= novel) this.wake(`the participant's latest turn (${reading.passageId}) adds something the map lacks`);
+    else if (reading.novel >= novelRun.probability && this.novelTurns.add(turn).size >= novelRun.turns) {
+      this.wake(`the participant's last ${this.novelTurns.size} turns add things the map lacks`);
+    }
+    const focus = this.ranking.current;
+    if (focus && reading.states[focus] === 'stalled') this.wake(`the participant's latest turn (${reading.passageId}) didn't move the thread they're on (${focus}); its gap may need asking another way`);
   }
 
   // ---- The map note ----
 
+  /** A change to how the participant wants to be interviewed goes to Sam without waiting out the spacing. */
   private sendMapNote(now: number) {
-    if (!this.mapRecord || (this.lastMapNote != null && now - this.lastMapNote < LIMITS.mapNoteSpacing)) return;
+    if (!this.mapRecord) return;
     const key = mapNoteKey(this.map);
     if (key === this.mapKey) return;
+    const spaced = this.lastMapNote == null || now - this.lastMapNote >= LIMITS.mapNoteSpacing;
+    if (!spaced && preferencesLine(key) === preferencesLine(this.mapKey)) return;
     const headers = noteHeaders(this.options.channel);
     const text = mapNote(this.map, headers) ?? (this.mapKey ? emptyMapNote(headers) : null);
     if (!text) { this.mapKey = key; return; }
     // The note carries the lookups its research facts cite; Sol's update was checked to cite only found lookups it had read.
     const cited = new Set(mapNoteResearch(this.map).map(entity => entity.passageId));
     const researchIds = this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && cited.has(item.eventId) ? [item.id] : []);
-    const note = this.note('map', text, now, undefined, researchIds);
-    if (!note) return;
+    const outcome = this.note('map', text, now, { researchIds });
+    if (!outcome) return;
     this.lastMapNote = now;
-    if (note.outcome === 'sent') this.mapKey = key;
+    if (outcome !== 'error') this.mapKey = key;
+  }
+
+  /**
+   * Decides a note. Unless a new provider session needs it at once, it waits for Sam's next words, replacing any held
+   * note of its kind: a note that lands while Sam is quiet can prompt Sam to speak into the participant's pause, and
+   * Sam replies faster than a note can arrive, so holding it costs nothing. Null when the budget is spent.
+   */
+  private note(kind: NoteRecord['kind'], text: string, now: number, { turn, researchIds = [], offer = false }: { turn?: TurnRecord; researchIds?: string[]; offer?: boolean } = {}): NoteRecord['outcome'] | 'held' | null {
+    if (!this.restating && this.counts.notes >= LIMITS.notes) return null;
+    const held: HeldNote = { text, decidedAt: now, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), researchIds, offer };
+    if (this.restating || this.options.immediate) return this.send(kind, held, now).outcome;
+    this.held.set(kind, held);
+    return 'held';
   }
 
   // Set delivery before sending: an acknowledgment may arrive immediately.
-  private note(kind: NoteRecord['kind'], text: string, now: number, turn?: TurnRecord, researchIds: string[] = []): NoteRecord | null {
-    if (!this.restating) {
-      if (this.counts.notes >= LIMITS.notes) return null;
-      this.counts.notes++;
-    }
+  private send(kind: NoteRecord['kind'], note: HeldNote, now: number): NoteRecord {
+    if (!this.restating) this.counts.notes++;
     const id = `note-${crypto.randomUUID()}`;
     const record: NoteRecord = {
-      source: 'note', id, kind, text, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), sentAt: now, outcome: 'sent',
+      source: 'note', id, kind, text: note.text, mapId: note.mapId, ...(note.turnId ? { turnId: note.turnId } : {}), sentAt: now,
+      ...(note.decidedAt !== now ? { decidedAt: note.decidedAt } : {}), ...(note.offer ? { offer: true as const } : {}), outcome: 'sent',
       delivery: { eventId: id, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' },
-      ...(researchIds.length ? { researchIds } : {}),
+      ...(note.researchIds.length ? { researchIds: note.researchIds } : {}),
     };
     this.records.push(record);
-    const sent = this.options.send({ type: this.options.channel ?? LIVE_NOTE_CHANNEL, event_id: id, delegation_id: null, content: text });
+    const sent = this.options.send({ type: this.options.channel ?? LIVE_NOTE_CHANNEL, event_id: id, delegation_id: null, content: note.text });
     if (!sent) record.outcome = 'error';
+    if (note.offer && sent && this.pace) {
+      this.pace.offeredAfter = record.delivery.afterPassageId;
+      this.lastOffer = this.elapsed(now);
+    }
     return record;
+  }
+
+  /**
+   * Sam has started speaking: the held notes go out, map first. A held offer to stop is dropped if the participant has
+   * spoken since it was decided, since what they said may outdate it; their turn's reading decides again.
+   */
+  private deliver(now: number) {
+    for (const kind of ['map', 'list'] as const) {
+      const held = this.held.get(kind);
+      if (!held) continue;
+      this.held.delete(kind);
+      const unsent = held.offer && this.options.talking?.() ? null : this.counts.notes < LIMITS.notes ? this.send(kind, held, now) : null;
+      if (unsent?.outcome === 'sent') continue;
+      // Not sent: the next pick or the map note after its spacing goes out again.
+      if (kind === 'list') this.list = { ...this.list, key: null };
+      else this.mapKey = null;
+    }
   }
 
   // ---- Research ----
@@ -421,9 +543,14 @@ export class InterviewProducer {
 
   // ---- Session events ----
 
-  /** Marks the next substantive Sam passage after a sent note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel. */
+  /**
+   * Sam's substantive words release the held notes. Also marks the next substantive Sam passage at or after a sent note,
+   * not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
+   */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
-    if (!this.alive || entry.speaker !== 'client' || this.samTurns.has(entry.id) || isBackchannel(entry.text)) return;
+    if (!this.alive || entry.speaker !== 'client' || !entry.text.trim() || isBackchannel(entry.text)) return;
+    this.deliver(now);
+    if (this.samTurns.has(entry.id)) return;
     this.samTurns.add(entry.id);
     for (const record of this.records) {
       if (record.source === 'note' && record.outcome === 'sent' && record.sentAt <= now && record.nextSamTurnAt == null) {
@@ -443,8 +570,8 @@ export class InterviewProducer {
     if (timing) Object.assign(record.delivery, timing);
     if (accepted) return;
     record.outcome = 'rejected';
-    if (this.records.findLast(item => item.source === 'note' && item.kind === record.kind) !== record) return;
-    if (record.kind === 'list') this.listKey = null;
+    if (this.held.has(record.kind) || this.records.findLast(item => item.source === 'note' && item.kind === record.kind) !== record) return;
+    if (record.kind === 'list') this.list = { ...this.list, key: null };
     else this.mapKey = null;
   }
 
@@ -470,6 +597,8 @@ export class InterviewProducer {
     this.call = null;
     this.turnBusy = this.traitsBusy = false;
     this.lookups = 0;
+    // The resume restates every note.
+    this.held.clear();
     this.release(Date.now());
   }
 
@@ -477,12 +606,13 @@ export class InterviewProducer {
   resume(now = Date.now()) {
     if (this.closed || this.alive) return;
     this.abort = new AbortController();
-    this.listKey = this.mapKey = this.lastMapNote = null;
-    this.listSent = false;
+    this.mapKey = this.lastMapNote = null;
+    // The new session has no thread note to supersede, so nothing is sent until there is a lead.
+    this.list = { ...this.list, key: null, sent: false };
     this.restating = true;
     try {
-      this.pick(now);
       this.sendMapNote(now);
+      this.pick(now);
     } finally { this.restating = false; }
     this.readTraits();
   }
@@ -490,10 +620,10 @@ export class InterviewProducer {
   checkpoint(): ProducerCheckpoint {
     return {
       records: this.records, counts: { ...this.counts }, map: this.map, mapRecordId: this.mapRecord?.id ?? null, log: this.log, ranking: this.ranking,
-      lastMapStart: this.lastMapStart, reasons: [...this.reasons], events: this.events, behind: this.behind,
+      lastMapStart: this.lastMapStart, reasons: [...this.reasons], events: this.events, behind: this.behind, novelTurns: [...this.novelTurns],
       readTurnKey: this.readTurnKey, readThrough: this.readThrough, traitFailures: [...this.traitFailures],
-      listKey: this.listKey, listSent: this.listSent, mapKey: this.mapKey, lastMapNote: this.lastMapNote,
-      samTurns: [...this.samTurns], researched: [...this.researched],
+      list: this.list, deferredTurnId: this.deferred?.id ?? null, mapKey: this.mapKey, lastMapNote: this.lastMapNote,
+      samTurns: [...this.samTurns], researched: [...this.researched], pace: this.pace, lastOffer: this.lastOffer,
     };
   }
 
@@ -511,17 +641,21 @@ export class InterviewProducer {
     this.ranking = checkpoint.ranking;
     this.lastMapStart = checkpoint.lastMapStart;
     this.reasons = new Set(checkpoint.reasons);
+    this.novelTurns = new Set(checkpoint.novelTurns ?? []);
     this.events = checkpoint.events;
     this.behind = checkpoint.behind;
     this.readTurnKey = checkpoint.readTurnKey;
     this.readThrough = checkpoint.readThrough;
     this.traitFailures = new Map(checkpoint.traitFailures);
-    this.listKey = checkpoint.listKey;
-    this.listSent = checkpoint.listSent;
+    this.list = checkpoint.list ?? emptyListState();
+    this.deferred = this.records.find((item): item is TurnRecord => item.source === 'turn' && item.id === checkpoint.deferredTurnId) ?? null;
     this.mapKey = checkpoint.mapKey;
     this.lastMapNote = checkpoint.lastMapNote;
     this.samTurns = new Set(checkpoint.samTurns);
     this.researched = new Set(checkpoint.researched);
+    this.pace = checkpoint.pace ?? null;
+    this.lastOffer = checkpoint.lastOffer ?? null;
+    this.held.clear();
     this.release(Date.now());
   }
 
@@ -543,9 +677,12 @@ export class InterviewProducer {
     this.call?.controller.abort();
     this.call = null;
     this.reasons.clear();
+    this.held.clear();
     this.release(Date.now());
   }
 }
+
+const preferencesLine = (key: string | null) => key?.split('\n').find(line => line.startsWith('They prefer: ')) ?? '';
 
 function compactPick(pick: Pick): NonNullable<TurnRecord['pick']> {
   return { ...pick, ranked: pick.ranked.map(item => [item.id, round(item.score), item.band]) };

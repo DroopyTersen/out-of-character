@@ -11,8 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { foundryConfig } from '../ai/foundry.server';
 import { appendMapLog, emptyMapLog, generateMap, MapOutputError, MAP_EFFORT, MAP_PROMPT_VERSION, renderMapTail, researchLogEvent, settledPrefix, type MapLogEvent, type MapTail } from '../ai/interview/map.server';
 import { DirectorOutputError } from '../ai/simulator/sol.server';
-import { emptyMap, renderMapForSol, type MapChanges, type MapDefect } from '../core/interview-map';
-import { isBackchannel, type CoverageLevel, type InterviewBackground } from '../core/interview';
+import { emptyMap, renderMapForSol, type MapChanges, type MapDefect, type MapPace } from '../core/interview-map';
+import { yieldsTurn, type CoverageLevel, type InterviewBackground } from '../core/interview';
 import { PRODUCER_LIMITS } from '../core/interview-producer';
 import type { DirectorUsage } from '../core/simulator/director';
 import type { TranscriptEntry } from '../core/simulator/types';
@@ -68,7 +68,7 @@ type Row = {
   call: number; atMs: number; reasons: string[]; blocks: number; latencyMs: number; outcome: 'ok' | 'defects' | 'incomplete' | 'error' | 'timeout';
   usage?: DirectorUsage; defects?: MapDefect[]; error?: string; changes?: Omit<MapChanges, 'kept'> & { kept: number }; open: number; closed: number; entities: number;
   /** The uncached tail Sol read and the update it returned, to debug a row without rerunning it. */
-  tail: string; update?: unknown;
+  tail: string; update?: unknown; pace?: MapPace;
 };
 const rows: Row[] = [];
 const maps: { call: number; map: ReturnType<typeof emptyMap> }[] = [];
@@ -87,9 +87,9 @@ const request = async (url: string, options: RequestInit) => {
   }
   return response;
 };
-// A participant turn is a run of participant passages; Sam's backchannels don't split one.
+// A participant turn is a run of participant passages; Sam's backchannels and yields don't split one.
 const turnsIn = (entries: TranscriptEntry[]) => entries.filter((entry, index) => entry.speaker === 'trainee'
-  && entries.slice(0, index).findLast(item => item.speaker === 'trainee' || !isBackchannel(item.text))?.speaker !== 'trainee').length;
+  && entries.slice(0, index).findLast(item => item.speaker === 'trainee' || !yieldsTurn(item.text))?.speaker !== 'trainee').length;
 let loggedTurns = 0;
 const participantIndexes = transcript.flatMap((entry, index) => entry.speaker === 'trainee' ? [index] : []);
 const nextParticipantAt = (count: number) => { const index = participantIndexes[count]; return index == null ? null : visibleAt[index]!; };
@@ -121,7 +121,7 @@ while (at != null && rows.length < limit) {
     const value = await generateMap({ foundry, signal: AbortSignal.timeout(timeout), attemptId, blocks: log.blocks, previous: map, passages: settled, lookups: events.filter(event => event.used && event.found).map(event => event.id), cache, effort, tail }, request);
     map = value.map;
     maps.push({ call: base.call, map });
-    result = { ...base, latencyMs: Math.round(performance.now() - started), outcome: 'ok', usage: value.usage, changes: { ...value.changes, kept: value.changes.kept.length }, update: lastUpdate, ...counts() };
+    result = { ...base, latencyMs: Math.round(performance.now() - started), outcome: 'ok', usage: value.usage, changes: { ...value.changes, kept: value.changes.kept.length }, update: lastUpdate, pace: value.pace, ...counts() };
   } catch (error) {
     const latencyMs = Math.round(performance.now() - started);
     if (error instanceof MapOutputError) result = { ...base, latencyMs, outcome: 'defects', usage: error.usage, defects: error.defects, update: error.value, ...counts() };
@@ -159,7 +159,7 @@ function print(item: Row) {
   const usage = item.usage;
   const visible = usage?.outputTokens == null ? null : usage.outputTokens - (usage.reasoningTokens ?? 0);
   const cell = (value: number | null | undefined, width: number) => String(value ?? '—').padStart(width);
-  const status = item.outcome === 'ok' ? `ok +${item.changes!.added.length} ~${item.changes!.changed.length} -${item.changes!.dropped.length} · ${item.open} open ${item.closed} closed ${item.entities} entities`
+  const status = item.outcome === 'ok' ? `ok +${item.changes!.added.length} ~${item.changes!.changed.length} -${item.changes!.dropped.length} · ${item.open} open ${item.closed} closed ${item.entities} entities${item.pace ? ` · ${item.pace.verdict}: ${item.pace.reason}` : ''}`
     : item.outcome === 'defects' ? `DEFECTS ${item.defects!.map(defect => `${defect.kind}:${defect.id}${defect.detail ? `(${defect.detail})` : ''}`).join(' ')}`
       : `${item.outcome.toUpperCase()} ${item.error ?? ''}`;
   console.log(`${String(item.call).padStart(4)} ${(item.atMs / 60_000).toFixed(1).padStart(5)}  ${item.reasons.join(', ').slice(0, 24).padEnd(24)} ${cell(item.blocks, 5)} ${cell(item.latencyMs, 6)} ${cell(usage?.inputTokens, 7)} ${cell(usage?.cachedTokens, 7)} ${cell(usage?.cacheWriteTokens, 8)} ${cell(tailTokens(usage), 6)} ${cell(usage?.outputTokens, 7)} ${cell(usage?.reasoningTokens, 7)} ${cell(visible, 8)}  ${status}`);

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Client } from '../../core/simulator/types';
-import { SPECTRUM_BANDS, type AudioLevels } from './audio-levels';
+import { SPECTRUM_BANDS, type AudioLevels } from '../../interview-engine/client/audioLevels';
 
 export function VoiceDisplay({ client, levels, phase, muted, compact = false, relationship = 'client' }: {
   client: Client; levels: AudioLevels; phase: 'connecting' | 'live' | 'paused' | 'ending'; muted: boolean; compact?: boolean; relationship?: 'client' | 'interviewer';

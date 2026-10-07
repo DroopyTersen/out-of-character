@@ -3,9 +3,9 @@ import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic,
 import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewEvaluation, type InterviewReadingId, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
 import type { InterviewSnapshot as EngineSnapshot } from '../../interview-engine/shared/snapshot';
-import type { AudioLevels } from '../simulator/audio-levels';
+import type { AudioLevels } from '../../interview-engine/client/audioLevels';
 import { ConnectionPaused, ConnectionUnstable, formatTime, type ConversationPhase } from '../simulator/conversation';
-import { stableLink, type Link } from '../simulator/live-connection';
+import { stableLink, type Link } from '../../interview-engine/client/liveConnection';
 import { VoiceDisplay } from '../simulator/voice-display';
 import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 

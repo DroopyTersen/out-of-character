@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
-import { LiveConnection, stableLink, type Attempt, type Link } from './live-connection';
-import { silentLevels } from './audio-levels';
+import { LiveConnection, stableLink, type Attempt, type Link } from '../../interview-engine/client/liveConnection';
+import { silentLevels } from '../../interview-engine/client/audioLevels';
+import { pollTarget, pollTransport } from '../../interview-engine/client/transport';
 import type { ReportActions } from './use-report';
 
 export type SimulatorPhase = 'selection' | 'connecting' | 'live' | 'paused' | 'ending' | 'debrief';
 export type AttemptChoice = { scenarioId: string; clientId: string };
 /** `left` marks an attempt its page held on the way out; a duplicated tab copies the storage without it. */
 type SavedAttempt = Attempt & AttemptChoice & { left?: boolean };
+
+/** Both the practice and interview pages run their attempts through the simulator's session routes. */
+const SESSIONS = '/api/simulator/sessions';
+const transport = pollTransport(SESSIONS);
 
 /** A started attempt survives a reload of its tab: the page rejoins it paused. */
 const savedAttempts = {
@@ -43,7 +48,7 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
   const [muted, setMuted] = useState(false);
   const [levels, setLevels] = useState(silentLevels);
   const [link, setLink] = useState<Link>(stableLink);
-  const connection = useRef<LiveConnection | null>(null);
+  const connection = useRef<LiveConnection<SessionSnapshot> | null>(null);
   const generation = useRef(0);
   // Connection callbacks outlive renders; submit with the endpoint prepared at Start.
   const reportActions = useRef(report);
@@ -83,8 +88,8 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
     let reachedLive = false;
     setError(null); setSnapshot(null); setMuted(false); setLevels(silentLevels); setLink(stableLink); setPhase(saved ? 'paused' : 'connecting');
     const active = () => generation.current === attempt;
-    const beginReport = () => reportActions.current.begin(live.reportTarget.id);
-    const live = new LiveConnection({
+    const beginReport = () => reportActions.current.begin(live.attempt.id);
+    const live = new LiveConnection<SessionSnapshot>(transport, {
       snapshot: value => {
         if (!active()) return;
         // A rejoined attempt had already started.
@@ -118,7 +123,7 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
       },
     }, saved);
     connection.current = live;
-    reportActions.current.prepare(live.reportTarget);
+    reportActions.current.prepare(pollTarget(SESSIONS, live.attempt));
     void (saved ? live.reattach() : live.start(choice.scenarioId, choice.clientId));
   }
 

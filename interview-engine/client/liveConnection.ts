@@ -1,6 +1,22 @@
-import { SPEECH_QUIET_MS, type SessionSnapshot } from '../../core/simulator/types';
-import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../../core/simulator/network';
-import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
+import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../shared/network';
+import type { SessionPause, SessionStatus } from '../shared/snapshot';
+import { readAudio, silentLevels, type AudioLevels } from './audioLevels';
+import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolAction, type ProtocolTransport } from './transport';
+
+export type { Attempt } from './transport';
+/**
+ * Sam's playback below the speech level this long has stopped. The same value as `SPEECH_QUIET_MS` in
+ * core/simulator/types.ts, which the server's producer reads.
+ */
+// TODO(phase4): share one constant with the server once the session timing moves into the engine.
+const SPEECH_QUIET_MS = 300;
+/** The part of the host's snapshot the connection reads: an InterviewSnapshot, or the practice simulator's snapshot. */
+export type ConnectionSnapshot = {
+  id: string;
+  status: SessionStatus;
+  warning: { kind: string; endsAt: number } | null;
+  pause?: Pick<SessionPause, 'resumes' | 'maxResumes'> | null;
+};
 
 /** Browser media health once a conversation has started: unstable media reconnects in place; lost media pauses until resumed. */
 export type LinkState = 'stable' | 'reconnecting' | 'paused' | 'resuming';
@@ -12,23 +28,16 @@ export type Reach = 'answered' | 'unanswered' | 'offline';
 export type Link = { state: LinkState; reach: Reach; reloaded?: boolean };
 export const stableLink: Link = { state: 'stable', reach: 'answered' };
 
-/** What a reloaded page needs to rejoin its attempt. */
-export type Attempt = { id: string; capability: string };
-type Callbacks = {
-  snapshot: (value: SessionSnapshot) => void;
+export type Callbacks<S extends ConnectionSnapshot = ConnectionSnapshot> = {
+  snapshot: (value: S) => void;
   levels: (value: AudioLevels) => void;
   error: (message: string, fatal?: boolean) => void;
   link: (value: Link) => void;
 };
-class SessionRequestError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
-}
-/** No reply arrived: the network failed, or the server took too long. */
-class SessionUnanswered extends Error {}
 const offline = (reach: Reach): Reach => navigator.onLine ? reach : 'offline';
 const lostStatuses = [401, 403, 404, 410];
 const isLost = (error: unknown) => error instanceof SessionRequestError && lostStatuses.includes(error.status);
-const terminal = (snapshot: SessionSnapshot) => snapshot.status === 'ended' || snapshot.status === 'interrupted';
+const terminal = (snapshot: ConnectionSnapshot) => snapshot.status === 'ended' || snapshot.status === 'interrupted';
 /** WebRTC can recover from `disconnected` on its own; past this it pauses instead. */
 const DISCONNECT_GRACE_MS = 15_000;
 /** Continuous failed polls past this pause the conversation. */
@@ -38,7 +47,7 @@ const HEARTBEAT_MS = 5000;
 const AUTO_RESUME_MS = 60_000;
 
 /** Browser media only. The server owns transcripts, judgments, actor context, and the paused hold. */
-export class LiveConnection {
+export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private id: string = crypto.randomUUID();
   private capability = [...crypto.getRandomValues(new Uint8Array(32))].map(value => value.toString(16).padStart(2, '0')).join('');
   private pc: RTCPeerConnection | undefined;
@@ -79,35 +88,22 @@ export class LiveConnection {
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
   private ending: Promise<void> | undefined;
 
-  constructor(private callbacks: Callbacks, existing?: Attempt) {
+  constructor(private transport: ProtocolTransport, private callbacks: Callbacks<S>, existing?: Attempt) {
     this.audio.autoplay = true;
     if (existing) ({ id: this.id, capability: this.capability } = existing);
   }
 
   get attempt(): Attempt { return { id: this.id, capability: this.capability }; }
-  get reportTarget() { return { id: this.id, url: `/api/simulator/sessions/${this.id}`, headers: { Authorization: `Bearer ${this.capability}` } }; }
-
-  private async request(action: string, body?: unknown, { keepalive = false, signal = this.controller.signal }: { keepalive?: boolean; signal?: AbortSignal } = {}): Promise<unknown> {
-    const timeout = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : 30_000;
-    const response = await fetch(action === 'start' ? '/api/simulator/sessions' : `/api/simulator/sessions/${this.id}/${action}`, {
-      method: 'POST', headers: { Authorization: `Bearer ${this.capability}`, 'Content-Type': 'application/json' },
-      ...(body ? { body: JSON.stringify(body) } : {}), keepalive,
-      signal: keepalive ? AbortSignal.timeout(timeout) : AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
-    }).catch((error: unknown) => {
-      if (error instanceof TypeError) throw new SessionUnanswered(navigator.onLine ? 'The server could not be reached.' : 'This browser is offline.');
-      if (error instanceof DOMException && error.name === 'TimeoutError') throw new SessionUnanswered('The server took too long to answer.');
-      throw error;
-    });
-    const result = await response.json().catch(() => null) as { error?: string } | null;
-    if (!response.ok || !result) throw new SessionRequestError(result?.error || 'The simulator connection is unavailable.', response.status);
-    return result;
+  private request(action: ProtocolAction, body?: unknown, { keepalive = false, signal = this.controller.signal }: { keepalive?: boolean; signal?: AbortSignal } = {}): Promise<unknown> {
+    const timeoutMs = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : 30_000;
+    return this.transport.request(action, body, { attempt: this.attempt, timeoutMs, keepalive, signal });
   }
 
   async start(scenarioId: string, clientId: string) {
     try {
       const connected = await this.connect(async sdp => {
         this.requested = true;
-        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp }) as { sdp: string; snapshot: SessionSnapshot };
+        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp }) as { sdp: string; snapshot: S };
         if (this.ending) return null;
         this.callbacks.snapshot(created.snapshot);
         return created.sdp;
@@ -176,7 +172,7 @@ export class LiveConnection {
     await pc.setRemoteDescription({ type: 'answer', sdp: answer });
     await this.until(pc, 'connectionstatechange', () => pc.connectionState === 'connected', 15_000, 'The voice connection timed out.', segment.signal);
     if (stopped()) return false;
-    const ready = await this.request('ready') as SessionSnapshot;
+    const ready = await this.request('ready') as S;
     if (stopped()) return false;
     this.callbacks.snapshot(ready);
     return true;
@@ -298,7 +294,7 @@ export class LiveConnection {
         if (this.ending || segment.signal.aborted) return;
         const active = this.activeSincePoll;
         this.activeSincePoll = false;
-        const snapshot = await this.request('poll', { ...this.activity(active), ...(network ? { network } : {}) }, { signal: segment.signal }) as SessionSnapshot;
+        const snapshot = await this.request('poll', { ...this.activity(active), ...(network ? { network } : {}) }, { signal: segment.signal }) as S;
         if (this.ending || segment.signal.aborted) return;
         this.pollFailingSince = undefined;
         this.updateLink();
@@ -338,7 +334,7 @@ export class LiveConnection {
     if (this.ending || this.link.state !== 'paused') return;
     this.heartbeatTimer = setTimeout(async () => {
       try {
-        const snapshot = await this.request('poll', { active: false, audio: false }) as SessionSnapshot;
+        const snapshot = await this.request('poll', { active: false, audio: false }) as S;
         if (this.ending || this.link.state !== 'paused') return;
         this.setLink({ state: 'paused', reach: 'answered' });
         this.callbacks.snapshot(snapshot);
@@ -369,7 +365,7 @@ export class LiveConnection {
     let accepted = false;
     try {
       const connected = await this.connect(async sdp => {
-        const resumed = await this.request('resume', { sdp }) as { sdp: string; snapshot: SessionSnapshot };
+        const resumed = await this.request('resume', { sdp }) as { sdp: string; snapshot: S };
         accepted = true;
         if (this.ending) return null;
         this.callbacks.snapshot(resumed.snapshot);
@@ -435,7 +431,7 @@ export class LiveConnection {
     if (this.ending) return this.ending;
     const drain = this.link.state !== 'paused' && this.pc?.connectionState === 'connected';
     this.ending = (async () => {
-      let ended: SessionSnapshot | undefined;
+      let ended: S | undefined;
       // Silence lets the server finish the last utterance during its short grace.
       // A stalled HTTP response must not retain local resources indefinitely.
       this.silence();
@@ -443,7 +439,7 @@ export class LiveConnection {
       const closeDeadline = setTimeout(() => this.release(), 3000);
       try {
         if (this.requested) {
-          ended = await this.request('end', undefined, { keepalive: true }) as SessionSnapshot;
+          ended = await this.request('end', undefined, { keepalive: true }) as S;
           if (!this.disposed && ended.id) this.callbacks.snapshot(ended);
         }
       } catch {

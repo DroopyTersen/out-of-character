@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, jest, test } from 'bun:test';
-import type { SessionSnapshot } from '../../core/simulator/types';
-import type { Link } from './live-connection';
+import type { ConnectionSnapshot, Link } from './liveConnection';
+import { pollTransport } from './transport';
 
 // Browser media and the session server are substituted; the connection's own pause, heartbeat, and resume logic is real.
 class FakeTrack { enabled = true; stopped = false; stop() { this.stopped = true; } }
@@ -40,16 +40,16 @@ class FakeAudio { autoplay = false; paused = true; srcObject: unknown = null; as
 
 type Reply = { status?: number; body: unknown };
 const server = {
-  status: 'connecting' as SessionSnapshot['status'],
+  status: 'connecting' as ConnectionSnapshot['status'],
   resumes: 0,
   offline: false,
   calls: [] as string[],
   polls: [] as unknown[],
   override: undefined as ((action: string) => Reply | undefined) | undefined,
-  snapshot(): SessionSnapshot {
+  snapshot(): ConnectionSnapshot {
     const paused = this.status === 'paused' || (this.status === 'connecting' && this.resumes > 0);
     return { id: 'attempt', status: this.status, warning: null, message: null, transcript: [],
-      pause: paused ? { reason: 'provider', pausedAt: 0, resumeBy: Date.now() + 15 * 60_000, resumes: this.resumes, maxResumes: 5 } : null } as unknown as SessionSnapshot;
+      pause: paused ? { reason: 'provider', pausedAt: 0, resumeBy: Date.now() + 15 * 60_000, resumes: this.resumes, maxResumes: 5 } : null } as unknown as ConnectionSnapshot;
   },
   reply(action: string): Reply {
     const override = this.override?.(action);
@@ -105,9 +105,9 @@ async function advance(ms: number) {
   }
 }
 async function connected() {
-  const { LiveConnection } = await import('./live-connection');
+  const { LiveConnection } = await import('./liveConnection');
   const links: Link[] = [], errors: string[] = [];
-  const connection = new LiveConnection({ snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: link => links.push(link) });
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: link => links.push(link) });
   await connection.start('sharepoint', 'morgan');
   expect(server.status).toBe('live');
   return { connection, links, errors, peer: () => FakePeer.all.at(-1)! };
@@ -225,9 +225,9 @@ test('a reconnect that fails after the server accepted it holds the attempt agai
 
 const saved = { id: '00000000-0000-4000-8000-000000000000', capability: 'a'.repeat(64) };
 async function reattached() {
-  const { LiveConnection } = await import('./live-connection');
-  const links: Link[] = [], errors: [string, boolean | undefined][] = [], snapshots: SessionSnapshot[] = [];
-  const connection = new LiveConnection({ snapshot: value => snapshots.push(value), levels: () => {}, error: (message, fatal) => errors.push([message, fatal]), link: link => links.push(link) }, saved);
+  const { LiveConnection } = await import('./liveConnection');
+  const links: Link[] = [], errors: [string, boolean | undefined][] = [], snapshots: ConnectionSnapshot[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: (message, fatal) => errors.push([message, fatal]), link: link => links.push(link) }, saved);
   return { connection, links, errors, snapshots };
 }
 

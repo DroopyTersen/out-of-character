@@ -16,6 +16,7 @@ const interventionsMigration = await Bun.file(new URL('../../../migrations/0002_
 const reportMigration = await Bun.file(new URL('../../../migrations/0003_simulator_report.sql', import.meta.url)).text();
 const interviewMigration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
 const interviewInterventionsMigration = await Bun.file(new URL('../../../migrations/0003_interview_interventions.sql', import.meta.url)).text();
+const interviewSpecMigration = await Bun.file(new URL('../../../migrations/0004_interview_attempts_spec.sql', import.meta.url)).text();
 export async function waitFor(check: () => boolean, timeout = 2500) {
   const deadline = performance.now() + timeout;
   while (!check()) {
@@ -43,6 +44,7 @@ function archiveDatabase() {
   sqlite.exec(reportMigration);
   sqlite.exec(interviewMigration);
   sqlite.exec(interviewInterventionsMigration);
+  sqlite.exec(interviewSpecMigration);
   let failNext = false;
   let held: { entered: () => void; wait: Promise<void> } | undefined;
   const d1 = {

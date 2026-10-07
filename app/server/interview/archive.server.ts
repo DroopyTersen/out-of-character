@@ -2,6 +2,7 @@ import type { InterviewSession } from '../../../core/interview';
 import type { SessionSnapshot } from '../../../core/simulator/types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
 import { fitRecords, type ProducerLogRecord } from '../../../core/interview-producer';
+import { spec } from '../../../interviews/project-closeout/spec';
 
 export type InterviewArchiveWrite = {
   state: 'partial' | 'final';
@@ -24,7 +25,7 @@ export async function writeInterviewArchive(db: D1Database, { state, capturedAt,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.interview.evaluation ? JSON.stringify(snapshot.interview.evaluation) : null,
     summary?.status ?? 'pending', summary?.text ?? null,
-    JSON.stringify(provenance), '[]',
+    JSON.stringify(provenance), '[]', spec.id, spec.version,
   ];
   // Producer records take whatever the rest of the row leaves.
   const used = columns.reduce<number>((sum, value) => sum + (typeof value === 'string' ? encoder.encode(value).byteLength : 8), 0);
@@ -33,8 +34,8 @@ export async function writeInterviewArchive(db: D1Database, { state, capturedAt,
     INSERT INTO interview_attempts (
       id, scenario_id, interviewer_id, started_at, updated_at, ended_at, archive_state,
       session_status, finalization, feedback_status, usage_seconds, message,
-      transcript_json, evaluation_json, summary_status, summary_text, provenance_json, cues_json, interventions_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      transcript_json, evaluation_json, summary_status, summary_text, provenance_json, cues_json, spec_id, spec_version, interventions_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       scenario_id = excluded.scenario_id, interviewer_id = excluded.interviewer_id,
       started_at = excluded.started_at, updated_at = excluded.updated_at,
@@ -44,7 +45,8 @@ export async function writeInterviewArchive(db: D1Database, { state, capturedAt,
       message = excluded.message, transcript_json = excluded.transcript_json,
       evaluation_json = excluded.evaluation_json, summary_status = excluded.summary_status,
       summary_text = excluded.summary_text, provenance_json = excluded.provenance_json,
-      cues_json = excluded.cues_json, interventions_json = excluded.interventions_json
+      cues_json = excluded.cues_json, spec_id = excluded.spec_id, spec_version = excluded.spec_version,
+      interventions_json = excluded.interventions_json
     WHERE (interview_attempts.archive_state = 'partial' OR excluded.archive_state = 'final')
       AND (excluded.updated_at >= interview_attempts.updated_at OR
         (interview_attempts.archive_state = 'partial' AND excluded.archive_state = 'final'))

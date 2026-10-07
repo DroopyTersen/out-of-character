@@ -8,6 +8,7 @@ import { writeInterviewArchive } from './archive.server';
 
 const migration = await Bun.file(new URL('../../../migrations/0002_interview_attempts.sql', import.meta.url)).text();
 const interventionsMigration = await Bun.file(new URL('../../../migrations/0003_interview_interventions.sql', import.meta.url)).text();
+const specMigration = await Bun.file(new URL('../../../migrations/0004_interview_attempts_spec.sql', import.meta.url)).text();
 const simulatorMigration = await Bun.file(new URL('../../../migrations/0001_simulator_attempts.sql', import.meta.url)).text();
 
 function fixture() {
@@ -15,6 +16,7 @@ function fixture() {
   sqlite.exec(simulatorMigration);
   sqlite.exec(migration);
   sqlite.exec(interventionsMigration);
+  sqlite.exec(specMigration);
   const d1 = {
     prepare: (sql: string) => ({ bind: (...values: (string | number | null)[]) => ({
       run: async () => { sqlite.prepare(sql).run(...values); return { success: true }; },
@@ -63,7 +65,7 @@ test('interview transcript and summary stay in their own table; newer final summ
     await writeInterviewArchive(f.d1, write(5000, 'final', 'pending'));
     await writeInterviewArchive(f.d1, write(6000, 'partial', 'pending'));
     const row = f.row()!;
-    expect(row).toMatchObject({ archive_state: 'final', updated_at: 4000, ended_at: 3000, summary_status: 'ready' });
+    expect(row).toMatchObject({ archive_state: 'final', updated_at: 4000, ended_at: 3000, summary_status: 'ready', spec_id: 'project-closeout', spec_version: 'project-closeout-v1' });
     expect(row.summary_text).toBe(markdown);
     expect(JSON.parse(row.transcript_json)[0].text).toBe('Jen helped us fix the access issue.');
     expect(f.sqlite.query('SELECT count(*) AS count FROM simulator_attempts').get()).toEqual({ count: 0 });
@@ -93,6 +95,25 @@ test('the migration preserves historical cues and adds an empty intervention his
     expect(sqlite.query('SELECT cues_json, interventions_json FROM interview_attempts').get()).toEqual({
       cues_json: '[{"id":"follow-thread"}]', interventions_json: '[]',
     });
+  } finally { sqlite.close(); }
+});
+
+test('the spec migration leaves earlier rows without a spec', () => {
+  const sqlite = new Database(':memory:');
+  try {
+    sqlite.exec(migration);
+    sqlite.exec(interventionsMigration);
+    sqlite.prepare(`INSERT INTO interview_attempts
+      (id, scenario_id, interviewer_id, started_at, updated_at, archive_state, session_status,
+       finalization, feedback_status, transcript_json, summary_status, provenance_json, cues_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run('old', 'project-closeout', 'sam-cedar', 1, 2, 'final', 'ended', 'confirmed', 'current', '[]', 'ready', '{}', '[]');
+    sqlite.exec(specMigration);
+    expect(sqlite.query('SELECT spec_id, spec_version FROM interview_attempts').get()).toEqual({ spec_id: null, spec_version: null });
+    const columns = sqlite.query('PRAGMA table_info(interview_attempts)').all() as { name: string; type: string; notnull: number }[];
+    expect(columns.filter(column => column.name.startsWith('spec_'))).toMatchObject([
+      { name: 'spec_id', type: 'TEXT', notnull: 0 }, { name: 'spec_version', type: 'TEXT', notnull: 0 },
+    ]);
   } finally { sqlite.close(); }
 });
 

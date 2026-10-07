@@ -75,6 +75,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private closeReceived: (() => void) | undefined;
   private lastSeen = Date.now();
   private lastActivity = Date.now();
+  /** When the browser last heard Sam's playback; the participant's speech is known only from their transcript. */
   private lastAudio = Date.now();
   private connectingSince: number | undefined;
   private capacityDeadline: number | null = null;
@@ -108,6 +109,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private seenEvents = new Set<string>();
   /** The current provider session's instruction to speak, kept to ask once more if it is met with silence. */
   private greeting: { eventId: string; content: string } | undefined;
+  /** When either side's transcript last grew. */
   private lastSpeech = 0;
   private replacedSilent = false;
   private readonly paid: typeof services;
@@ -468,7 +470,7 @@ export class SimulatorSession extends DurableObject<Env> {
   private unanswered(now: number) {
     const greeting = this.segment?.greeting;
     if (!greeting || !this.greeting || greeting.repliedAt != null || greeting.abandonedAt != null) return;
-    // Speech, or audio the browser is already hearing, is not silence.
+    // Speech, or Sam audible in the browser, is not silence.
     const quiet = now - Math.max(greeting.sentAt, this.lastSpeech, this.lastAudio);
     if (quiet >= GREETING_REPLACE_MS) {
       greeting.abandonedAt = now;
@@ -527,7 +529,7 @@ export class SimulatorSession extends DurableObject<Env> {
     snapshot.warning = warning;
     if (!warning || now < warning.endsAt) return false;
     // Automatic limits give current speech a short bounded drain. Explicit End remains immediate.
-    if (warning.kind !== 'idle' && now < warning.endsAt + 20_000 && (now < warning.endsAt + 3000 || now - this.lastAudio < 2500)) return true;
+    if (warning.kind !== 'idle' && now < warning.endsAt + 20_000 && (now < warning.endsAt + 3000 || now - Math.max(this.lastAudio, this.lastSpeech) < 2500)) return true;
     snapshot.message = warning.kind === 'idle' ? 'Practice ended after five minutes without activity.' : warning.kind === 'client' ? this.walkedOut() : warning.kind === 'limit' ? 'Practice reached the 60-minute safety limit.' : 'Practice reached its transcript capacity.';
     this.ctx.waitUntil(this.end());
     return true;

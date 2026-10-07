@@ -267,13 +267,12 @@ export class LiveConnection {
       const now = Date.now();
       const previousQuiet = this.outputQuietSince;
       const running = this.context?.state === 'running';
-      const inputEnabled = !this.muted && !this.autoMuted;
-      const outputAudible = output.level > .03 && !this.audio.paused;
-      const speaking = running && inputEnabled && input.level > .08;
-      const heard = speaking || (running && outputAudible);
+      // Only Sam's playback counts as audio: the microphone's loudness can't tell speech from a fan or a room, so the
+      // participant's speech reaches the server as their transcript, and their level only draws the on-screen meter.
+      const samAudible = running && output.level > .03 && !this.audio.paused;
       this.meterUpdatedAt = now;
       this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
-      if (heard) {
+      if (samAudible) {
         this.keepActive();
         this.lastAudioAt = now;
       }

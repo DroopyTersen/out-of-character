@@ -905,6 +905,28 @@ test('transcript capacity warns before closing after a short quiet drain', async
   expect(ended.transcript).toHaveLength(warningAt);
   expect(ended.message).toContain('transcript capacity');
 });
+test("the closing drain waits for the participant's transcript, not their microphone", async () => {
+  const f = await fixture();
+  await f.session.fetch(request('start'));
+  await f.session.fetch(request('ready'));
+  const warningAt = Math.ceil(TRANSCRIPT_LIMIT.entries * .9);
+  for (let turn = 0; turn < warningAt; turn++) {
+    f.socket.emit({
+      type: turn % 2 ? 'session.output_transcript.delta' : 'session.input_transcript.delta',
+      delta: `Turn ${turn}.`, start_ms: turn * 3000, end_ms: turn * 3000 + 1000,
+    });
+  }
+  const warning = (await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).warning;
+  setSystemTime(warning.endsAt + 2900);
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'One last thought.', start_ms: warningAt * 3000, end_ms: warningAt * 3000 + 1000 });
+  setSystemTime(warning.endsAt + 5000);
+  expect((await (await f.session.fetch(activityPoll(false))).json() as Record<string, any>).status).toBe('live');
+  setSystemTime(warning.endsAt + 5500);
+  await f.session.fetch(activityPoll(false));
+  await waitFor(() => f.socket.sent.some(event => event.type === 'session.close'));
+  await Promise.all(f.pending);
+  expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).status).toBe('ended');
+});
 type Overrides = NonNullable<NonNullable<Parameters<typeof fixture>[0]>['overrides']>;
 const ENDING = 'I will not be spoken to that way. This meeting is over.';
 /** Synthetic walk-out judge: the meeting ends only on an unconditional closing line. */

@@ -322,3 +322,17 @@ test("Sam's playback starting and going quiet is reported at once with how long 
   expect(stopped[0]).toBeLessThan(400);
   await connection.end();
 });
+
+test("a loud microphone alone is not activity; Sam's playback is", async () => {
+  const { connection, peer } = await connected();
+  const reported = () => server.polls.map(poll => { const { active, audio } = poll as { active: boolean; audio: boolean }; return [active, audio]; });
+  FakeAudioContext.loud = true;
+  await advance(3000);
+  expect(reported().length).toBeGreaterThan(1);
+  expect(new Set(reported().map(String))).toEqual(new Set(['false,false']));
+  const seen = server.polls.length;
+  peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
+  await advance(2000);
+  expect(reported().slice(seen)).toContainEqual([true, true]);
+  await connection.end();
+});

@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
-import type { FoundryConfig } from './foundry.server';
+import { testFoundry } from './testFoundry.server';
 import { gptLiveProvider, LiveSessionGone } from './gptLive.server';
 import type { WebSocketLike } from './voice.server';
 
-const foundry: FoundryConfig = { resourceName: 'fixture-foundry', apiKey: 'fixture-secret', agentModel: 'agent', fastModel: 'fast', liveModel: 'live-deployment' };
+const foundry = testFoundry;
 const answer = () => Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
 
 /** A control socket that confirms closure when asked, or never does. */

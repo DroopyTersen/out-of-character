@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
-import { fitRecords, gradeObjectives, type GradeRecord, type MapRecord, type ProducerLogRecord } from './interview-producer';
-import { interviewTopics, type CoverageLevel, type InterviewObjectiveReading } from './interview';
+import type { CoverageLevel, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
+import type { WireSpeaker } from '../wire';
+import { fitRecords, gradeObjectives, type GradeRecord, type MapRecord, type ProducerLogRecord } from './records';
+import { testSpec } from './testSpec';
+
+type InterviewObjectiveReading = Reading<WireSpeaker>;
+const interviewTopics = testSpec.topics;
 
 const reading = (id: string, level: CoverageLevel, entryId: string | null, levels: Partial<Record<CoverageLevel, number>> | null = null): InterviewObjectiveReading => ({
   id, level, achieved: level === 'explored', probability: levels?.explored ?? null,

@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test';
-import { formatTimelineRows, interviewTurnGaps, parseTimelineExport, producerTimeline } from './interview-timeline';
-import type { GradeObjective, GradeRecord, ProducerLogRecord } from './interview-producer';
+import type { GradeObjective, GradeRecord, ProducerLogRecord } from '../conversation/records';
+import { testSpec } from '../conversation/testSpec';
+import * as timeline from './timeline';
+import { formatTimelineRows, interviewTurnGaps, parseTimelineExport } from './timeline';
+
+const producerTimeline = (input: Omit<Parameters<typeof timeline.producerTimeline>[0], 'topics'>) => timeline.producerTimeline({ ...input, topics: testSpec.topics });
 
 const startedAt = 1_800_000_000_000;
 

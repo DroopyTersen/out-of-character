@@ -1,12 +1,21 @@
 import { expect, test } from 'bun:test';
-import { fixtureFoundry } from '../foundry-fixture';
-import {
-  appendMapLog, emptyMapLog, generateMap, mapCacheKey, mapInstructions, mapMessages, mapOutputSchema, mapSeed, MapOutputError, MAP_PROMPT_VERSION,
-  mapWireSchema, renderMapTail, researchLogEvent, settledPrefix, unloggedPassages,
-} from './map.server';
-import { emptyMap, MAP_LIMITS, PARTICIPANT_ID } from '../../core/interview-map';
-import { DirectorOutputError } from '../simulator/sol.server';
-import type { TranscriptEntry } from '../../core/simulator/types';
+import { testFoundry } from '../../providers/testFoundry.server';
+import { DirectorOutputError } from '../../providers/structured.server';
+import type { WireEntry as TranscriptEntry } from '../wire';
+import { emptyMap, MAP_LIMITS, PARTICIPANT_ID, type ConversationMap } from './map';
+import * as map from './map.server';
+import { emptyMapLog, mapCacheKey, MapOutputError, MAP_PROMPT_VERSION, researchLogEvent, settledPrefix, unloggedPassages, type MapLog, type MapLogEvent, type MapTail } from './map.server';
+import { testSpec as spec } from './testSpec';
+
+const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
+const mapInstructions = map.mapInstructions(spec);
+const mapSeed = () => map.mapSeed(spec);
+const mapOutputSchema = map.mapOutputSchema(spec);
+const mapWireSchema = map.mapWireSchema(spec);
+const appendMapLog = (log: MapLog, settled: TranscriptEntry[], events?: MapLogEvent[]) => map.appendMapLog(spec, log, settled, events);
+const renderMapTail = (previous: ConversationMap, tail: MapTail) => map.renderMapTail(spec, previous, tail);
+const mapMessages = (blocks: string[], tail: string) => map.mapMessages(spec, blocks, tail);
+const generateMap = (input: Omit<Parameters<typeof map.generateMap>[0], 'spec'>, request?: Parameters<typeof map.generateMap>[1]) => map.generateMap({ ...input, spec }, request);
 
 const transcript: TranscriptEntry[] = [
   { id: 'p1', speaker: 'client', text: 'What did the project deliver, and who was the client?', startMs: 0, endMs: 4000 },
@@ -85,7 +94,7 @@ test('research reaches the log as labeled public background', () => {
 
 test('the seed and instructions are static, name every topic and never carry the clock', () => {
   expect(mapSeed()).toBe(mapSeed());
-  expect(mapSeed()).toContain('- client-pace - Pace & approvals: The participant describes the actual pace');
+  expect(mapSeed()).toContain('- client-pace - Pace & approvals: The participant covers pace & approvals.');
   expect(mapInstructions).not.toMatch(/\d+(\.\d+)? minutes elapsed/);
   const rendered = renderMapTail(emptyMap(), { ...tail, signals: [{ threadId: 't1', state: 'answered' }] });
   expect(rendered).toContain('PREVIOUS MAP (empty: this is your first call)');
@@ -179,7 +188,7 @@ test('a rejected update reports every defect with what Sol returned', async () =
 });
 
 test('existing JSON-context Sol callers send no cache options', async () => {
-  const { requestSol } = await import('../simulator/sol.server');
+  const { requestSol } = await import('../../providers/structured.server');
   const { z } = await import('zod');
   let body: Record<string, any> = {};
   await requestSol({ foundry: fixtureFoundry, signal: new AbortController().signal, instructions: 'x', context: { a: 1 }, name: 'n', schema: z.strictObject({}) },

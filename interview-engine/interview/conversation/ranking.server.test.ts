@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { emptyMap, type ConversationMap, type MapThread } from '../../core/interview-map';
-import { threadKey } from '../../core/interview-ranking';
-import { yieldsTurn } from '../../core/interview';
-import type { TranscriptEntry } from '../../core/simulator/types';
+import type { WireEntry as TranscriptEntry } from '../wire';
+import { emptyMap, type ConversationMap, type MapThread } from './map';
+import { threadKey } from './ranking';
+import { yieldsTurn } from './turns';
 import type { InterviewAnswers } from './evaluate.server';
 import { evaluateTurn, latestTurn, readTraitAnswers, readTurnAnswers, traitQuestions, traitState, turnQuestions, upToParticipant } from './ranking.server';
 

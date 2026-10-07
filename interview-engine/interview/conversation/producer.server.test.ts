@@ -1,16 +1,26 @@
-import { fixtureFoundry } from '../../../ai/foundry-fixture';
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { MAP_PROMPT_VERSION, MapOutputError } from '../../../ai/interview/map.server';
-import { RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
-import { DirectorHttpError, DirectorOutputError } from '../../../ai/simulator/sol.server';
-import { emptyMap, type ConversationMap, type MapEntity, type MapPace, type MapThread } from '../../../core/interview-map';
-import { CANCEL_NOTE, emptyListNote, HOLD_NOTE, NOTE_HEADERS, noteHeaders, TURN_NOTE } from '../../../core/interview-notes';
-import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
-import { threadKey, type TurnReading } from '../../../core/interview-ranking';
-import type { PauseSpan } from '../../../core/simulator/state';
-import type { TranscriptEntry } from '../../../core/simulator/types';
-import type { InterviewObjectiveReading } from '../../../core/interview';
-import { InterviewProducer, producerServices } from './interview-producer';
+import { DirectorHttpError, DirectorOutputError } from '../../providers/structured.server';
+import { testFoundry } from '../../providers/testFoundry.server';
+import type { InterviewObjectiveReading as Reading } from '../../shared/snapshot';
+import type { PauseSpan } from '../../shared/timing';
+import type { WireEntry as TranscriptEntry, WireSpeaker } from '../wire';
+import { emptyMap, type ConversationMap, type MapEntity, type MapPace, type MapThread } from './map';
+import { MAP_PROMPT_VERSION, MapOutputError } from './map.server';
+import { CANCEL_NOTE, emptyListNote, HOLD_NOTE, NOTE_HEADERS, noteHeaders, TURN_NOTE } from './notes';
+import * as engine from './producer.server';
+import { producerServices } from './producer.server';
+import { threadKey, type TurnReading } from './ranking';
+import { RANKING_RUBRIC_VERSION } from './ranking.server';
+import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from './records';
+import { testSpec } from './testSpec';
+
+type InterviewObjectiveReading = Reading<WireSpeaker>;
+const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
+type Options = ConstructorParameters<typeof engine.InterviewProducer>[0];
+/** The producer with the test spec, as the session constructs it with its own. */
+class InterviewProducer extends engine.InterviewProducer {
+  constructor(options: Omit<Options, 'spec'>) { super({ spec: testSpec, ...options }); }
+}
 
 afterEach(() => setSystemTime());
 const epoch = 1_800_000_000_000;

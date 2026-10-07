@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test';
-import { fixtureFoundry } from '../foundry-fixture';
+import { testFoundry } from '../../providers/testFoundry.server';
+import type { ResearchRequest } from './records';
 import { lookupInterviewBackground, normalizeResearchName, researchKey, validateResearchRequest } from './research.server';
-import type { ResearchRequest } from '../../core/interview-producer';
+
+const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
 
 const transcript = [
   { id: 's1', speaker: 'client' as const, text: 'Did Acme Field Systems cause the delay?', startMs: 0, endMs: 1000 },

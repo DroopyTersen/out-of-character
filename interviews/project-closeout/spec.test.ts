@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { INTERVIEW_SCENARIO_ID, interviewSummarySchema, interviewTopics } from '../../core/interview';
 import { SUMMARY_VERSION } from '../../ai/interview/summary.server';
+import { mapSeed } from '../../interview-engine/interview/conversation/map.prompt';
 import { spec } from './spec';
 
 test('the closeout spec carries the closeout content the app already uses', async () => {
@@ -17,4 +18,8 @@ test('the closeout spec carries the closeout content the app already uses', asyn
   const browser = await Bun.file(new URL('./public.ts', import.meta.url)).text();
   expect(browser).not.toContain('narrative.prompt');
   expect(browser).not.toContain('rubric.prompt');
+});
+
+test('the map seed names every closeout topic with what explored means', () => {
+  expect(mapSeed(spec)).toContain('- client-pace - Pace & approvals: The participant describes the actual pace');
 });

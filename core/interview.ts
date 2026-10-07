@@ -62,18 +62,11 @@ export type InterviewBackground = {
   retrievedAt: number;
 };
 /**
- * How Sam listens while the participant pauses, chosen per test interview. Code times the turn: after a complete answer,
- * Sam speaks once both sides have been quiet for the window.
+ * `listening` marks a session in which code times Sam's turn: Sam stays quiet through the participant's pauses and speaks
+ * once a turn note hands over the floor. It is absent on sessions started before the listening hold, which ran without
+ * it. Sessions started while a short acknowledgment could be chosen may say 'ack'; they resume with quiet listening.
  */
-export const listeningModes = [
-  { id: 'quiet', label: 'Quiet listening', description: 'Sam stays silent through pauses and asks after 2.5 seconds of quiet.', windowMs: 2500 },
-  { id: 'ack', label: 'Brief acknowledgment', description: 'Sam makes one short listening sound, then asks after 1 second of quiet.', windowMs: 1000 },
-] as const;
-export type ListeningMode = typeof listeningModes[number]['id'];
-export const DEFAULT_LISTENING: ListeningMode = 'quiet';
-export const listeningMode = (id: ListeningMode) => listeningModes.find(mode => mode.id === id)!;
-/** `listening` is absent on sessions started before the mode could be chosen; they ran without the listening hold. */
-export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[]; listening?: ListeningMode };
+export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[]; listening?: 'quiet' | 'ack' };
 
 const BACKCHANNEL = /^(?:mm+(?:[- ]?hm*)?|hmm+|uh[- ]?huh|ah+|oh+|['’]?kay|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i;
 export const isBackchannel = (text: string) => BACKCHANNEL.test(text.trim());

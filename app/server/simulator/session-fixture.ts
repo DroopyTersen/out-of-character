@@ -103,7 +103,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     if (!sockets.has(id)) sockets.set(id, new ProviderSocket());
     return sockets.get(id)!;
   };
-  const created: { context?: string; listening?: string }[] = [];
+  const created: { context?: string; listening?: boolean }[] = [];
   let ready = Promise.resolve();
   let alarm = 0;
   let creations = 0;

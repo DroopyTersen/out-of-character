@@ -1,4 +1,3 @@
-import type { ListeningMode } from '../../core/interview';
 import { SPEECH_QUIET_MS, type SessionSnapshot } from '../../core/simulator/types';
 import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../../core/simulator/network';
 import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
@@ -107,12 +106,11 @@ export class LiveConnection {
     return result;
   }
 
-  /** `listening` is an interview's listening mode. */
-  async start(scenarioId: string, clientId: string, listening?: ListeningMode) {
+  async start(scenarioId: string, clientId: string) {
     try {
       const connected = await this.connect(async sdp => {
         this.requested = true;
-        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp, ...(listening ? { listening } : {}) }) as { sdp: string; snapshot: SessionSnapshot };
+        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp }) as { sdp: string; snapshot: SessionSnapshot };
         if (this.ending) return null;
         this.callbacks.snapshot(created.snapshot);
         return created.sdp;

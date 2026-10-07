@@ -72,7 +72,7 @@ describe('project closeout interview contracts', () => {
     expect(brief).not.toMatch(/wrapping up is premature|ground is still unexplored|ask whether anything important was missed/i);
   });
 
-  test('a listening mode changes only how Sam pauses and takes the turn: Sam waits for the turn note, silent or after one listening sound', () => {
+  test('the listening hold changes only how Sam pauses and takes the turn: Sam stays silent and waits for the turn note', () => {
     const id = interviewers[0]!.id;
     const legacy = interviewerBrief(id);
     const pause = 'Never fill their pause: no “mm”, “right”, or “yeah”';
@@ -80,22 +80,15 @@ describe('project closeout interview contracts', () => {
     expect(legacy).toContain(pause);
     expect(legacy).toContain(next);
     expect(legacy).not.toContain('turn note');
-    for (const mode of ['quiet', 'ack'] as const) {
-      const brief = interviewerBrief(id, undefined, mode);
-      const changed = brief.split('\n\n').filter((paragraph, index) => paragraph !== legacy.split('\n\n')[index]);
-      expect(changed.map(paragraph => paragraph.slice(0, 12))).toEqual(['Turn-taking:', 'When the tur']);
-      expect(brief).not.toContain(next);
-      expect(brief).toContain('when a turn note says it is your turn');
-      expect(brief).toContain('When the turn note comes, the next move is yours');
-      expect(interviewerBrief(id, 'session.instructions.append', mode)).toContain('when a turn note says it is your turn');
-    }
-    const quiet = interviewerBrief(id, undefined, 'quiet');
-    const ack = interviewerBrief(id, undefined, 'ack');
-    expect(quiet).toContain(pause);
-    expect(quiet).toContain('say nothing yet: no sound and no word');
-    expect(ack).not.toContain(pause);
-    expect(ack).toContain('one short, quiet sound that shows you heard them');
-    expect(ack).toContain('one question, without another acknowledgment');
+    const brief = interviewerBrief(id, undefined, true);
+    const changed = brief.split('\n\n').filter((paragraph, index) => paragraph !== legacy.split('\n\n')[index]);
+    expect(changed.map(paragraph => paragraph.slice(0, 12))).toEqual(['Turn-taking:', 'When the tur']);
+    expect(brief).not.toContain(next);
+    expect(brief).toContain(pause);
+    expect(brief).toContain('say nothing yet: no sound and no word');
+    expect(brief).toContain('Speak only when a turn note says it is your turn.');
+    expect(brief).toContain('When the turn note comes, the next move is yours');
+    expect(interviewerBrief(id, 'session.instructions.append', true)).toContain('Speak only when a turn note says it is your turn.');
   });
 
   test('on appended instructions the brief calls notes suggestions; otherwise the briefs match', () => {

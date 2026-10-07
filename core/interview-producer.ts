@@ -1,4 +1,4 @@
-import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading, ListeningMode } from './interview';
+import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } from './interview';
 import type { MapDefect, MapPace, MapUpdate } from './interview-map';
 import type { Band, Pick, ThreadState } from './interview-ranking';
 import type { DirectorUsage } from './simulator/director';
@@ -8,7 +8,7 @@ import { SPEECH_QUIET_MS } from './simulator/types';
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v20';
+export const PRODUCER_VERSION = 'interview-producer-v21';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -29,10 +29,16 @@ export const PRODUCER_LIMITS = {
   wakeAfter: 6000, wakes: 12,
   /**
    * The listening hold: once the participant's microphone has been quiet for `holdAfter`, Sam gets a hold note; once
-   * both sides have been quiet for the mode's window after a complete answer, a turn note. Hold and cancel notes are
-   * outside the note budget: a hold goes out at most once per pause, a cancel once per turn note.
+   * both sides have been quiet for `listenWindow` after a complete answer, the turn is handed over. The handover waits
+   * up to `readWait` more for Jev's reading of that answer, so the thread note it picks goes out with the turn note.
+   * Hold and cancel notes are outside the note budget: a hold goes out at most once per pause, a cancel once per turn note.
    */
-  holdAfter: SPEECH_QUIET_MS, holds: 400, handovers: 200, cancels: 60,
+  holdAfter: SPEECH_QUIET_MS, listenWindow: 2500, readWait: 2000, holds: 400, handovers: 200, cancels: 60,
+  /**
+   * The voice service takes at most 500 tokens an event. A handover's notes go as one event when they fit in this many
+   * characters; otherwise the map note goes first, on its own.
+   */
+  handoverChars: 1600,
   /** A topic note waits until the participant's microphone has been quiet this long, so it never lands as they speak. */
   releaseQuiet: 500,
 };
@@ -81,7 +87,8 @@ export type TraitRecord = {
  * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
  * research facts cite. A turn note tells Sam the turn is theirs: after the listening window, or after Sam went quiet
  * past it. A hold note asks Sam to keep listening through a pause; a cancel note withdraws a turn note the participant
- * talked past.
+ * talked past. Notes sent together share one provider event, and so its `delivery.eventId`: the turn note goes last,
+ * after the thread and map notes it hands over with.
  */
 export type NoteRecord = {
   source: 'note'; id: string; kind: 'list' | 'map' | 'turn' | 'hold' | 'cancel'; text: string; mapId: string | null; turnId?: string; sentAt: number;
@@ -168,8 +175,8 @@ export function fitRecords(records: ProducerLogRecord[], budget: number): Produc
 }
 
 export type LatencyStat = { count: number; p50: number; p90: number } | null;
-/** The listening mode the session ran with and what its timing sent; absent before v20. */
-export type ListeningSummary = { mode: ListeningMode; windowMs: number; holdAfterMs: number; holds: number; handovers: number; cancels: number; wakes: number };
+/** What the listening hold's timing sent; absent before v20. Sessions before v21 could run a short acknowledgment ('ack'). */
+export type ListeningSummary = { mode: 'quiet' | 'ack'; windowMs: number; holdAfterMs: number; readWaitMs?: number; holds: number; handovers: number; cancels: number; wakes: number };
 export type ProducerSummary = {
   model: string; effort: 'none' | 'low'; version: string; mapPrompt: string; rankingRubric: string;
   maps: number; applied: number; turns: number; notes: number; research: number;

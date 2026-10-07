@@ -61,18 +61,21 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held while the participant still has the floor.
     setSystemTime(epoch + 22_000);
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
-    await waitFor(() => noteEvents(f.socket.sent).length === 2);
+    await waitFor(() => noteEvents(f.socket.sent).length === 1);
     expect(maps).toHaveLength(1);
     expect(maps[0]!.attemptId).toBe(interviewAttempt.id);
     expect(maps[0]!.passages.map(entry => entry.id)).toEqual(['p1']);
     expect(maps[0]!.tail.reasons).toHaveLength(1);
     expect(maps[0]!.tail.reasons[0]).toContain('(p1)');
-    const [map, list] = noteEvents(f.socket.sent);
-    expect(list).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('PRIVATE UNKNOWN') });
-    expect(map).toMatchObject({ type: 'session.thinking.append', delegation_id: null, content: expect.stringContaining('PRIVATE VANTAGE') });
+    // One event, the thread note first.
+    const [handed] = noteEvents(f.socket.sent);
+    const content = String(handed!.content);
+    expect(handed).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+    expect(content.startsWith(NOTE_HEADERS.list)).toBe(true);
+    expect(content).toMatch(/PRIVATE UNKNOWN[^]*PRIVATE VANTAGE/);
     // Notes are never instructions; Sam's silence after the participant spoke drew the greeting once more.
     expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening', 'opening-again']);
-    f.socket.emit({ type: 'session.thinking.appended', client_event_id: list!.event_id, start_ms: 2000, end_ms: 2400 });
+    f.socket.emit({ type: 'session.thinking.appended', client_event_id: handed!.event_id, start_ms: 2000, end_ms: 2400 });
     const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     expect(snapshot.coaching).toBeNull();
     expect(snapshot.evaluation).toBeNull();
@@ -88,8 +91,9 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     expect(records[0]).toMatchObject({ passageId: 'p1', outcome: 'read', reading: { novel: .9 } });
     expect(records[1]).toMatchObject({ outcome: 'applied', inputCount: 1, lastInputId: 'p1', changes: { added: ['e1', 't1'] } });
     // Both notes were decided at Sol's map and held until Sam took the floor.
-    expect(records[3]).toMatchObject({ kind: 'map', outcome: 'sent', sentAt: epoch + 22_000, decidedAt: epoch + 20_500, delivery: { status: 'unknown' } });
-    expect(records[4]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, nextSamTurnAfterId: 'p1', delivery: { status: 'accepted', startMs: 2000, endMs: 2400 } });
+    const delivery = { eventId: handed!.event_id, status: 'accepted', startMs: 2000, endMs: 2400 };
+    expect(records[3]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, nextSamTurnAfterId: 'p1', delivery });
+    expect(records[4]).toMatchObject({ kind: 'map', outcome: 'sent', sentAt: epoch + 22_000, decidedAt: epoch + 20_500, delivery });
     expect(JSON.parse(row.cues_json)).toEqual([]);
     expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', maps: 1, applied: 1, turns: 1, notes: 2, research: 0 });
     expect(summarized).not.toContain('PRIVATE');
@@ -497,7 +501,8 @@ test.each(['accepted', 'rejected'] as const)('a list note receipt %s is archived
   await settle(f);
   const lists = noteEvents(f.socket.sent, 'list');
   expect(lists).toHaveLength(receipt === 'accepted' ? 1 : 2);
-  if (receipt === 'rejected') expect(lists[1]!.content).toBe(first.content);
+  // The thread note goes out again; the map note sent with it waits for its spacing.
+  if (receipt === 'rejected') expect(String(first.content).startsWith(`${lists[1]!.content}\n\n${NOTE_HEADERS.map}`)).toBe(true);
   await f.session.fetch(request('end'));
   await Promise.all(f.pending);
   const notes = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string; kind?: string }) => item.source === 'note' && item.kind === 'list');

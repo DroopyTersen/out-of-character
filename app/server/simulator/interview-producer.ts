@@ -8,11 +8,11 @@ import type { FoundryConfig } from '../../../ai/foundry.server';
 import { callFailure } from '../../../ai/interview/diagnostics.server';
 import { DirectorOutputError } from '../../../ai/simulator/sol.server';
 import {
-  asksToEnd, finishesTurn, isBackchannel, listeningMode, spokenWords, yieldsTurn, type InterviewBackground, type InterviewObjectiveReading, type ListeningMode,
+  asksToEnd, finishesTurn, isBackchannel, spokenWords, yieldsTurn, type InterviewBackground, type InterviewObjectiveReading,
 } from '../../../core/interview';
 import { emptyMap, type ConversationMap, type MapChanges, type MapPace } from '../../../core/interview-map';
 import {
-  CANCEL_NOTE, emptyListState, emptyMapNote, HOLD_NOTES, LIVE_NOTE_CHANNEL, mapNote, mapNoteKey, mapNoteResearch, nextListNote, NOTE_HEADERS, noteHeaders, TURN_NOTE,
+  CANCEL_NOTE, emptyListState, emptyMapNote, HOLD_NOTE, LIVE_NOTE_CHANNEL, mapNote, mapNoteKey, mapNoteResearch, nextListNote, NOTE_HEADERS, noteHeaders, TURN_NOTE,
   type ListState, type NoteChannel,
 } from '../../../core/interview-notes';
 import {
@@ -42,8 +42,8 @@ type Options = {
   heard?: () => number;
   /** Sends each note as soon as it's decided rather than at Sam's next words: for tests of what is sent, not when. */
   immediate?: boolean;
-  /** How Sam listens through the participant's pauses. Without a mode, only the silence watchdog times Sam's turn. */
-  listening?: ListeningMode;
+  /** Code times Sam's turn through the participant's pauses. Without it, only the silence watchdog does. */
+  listening?: boolean;
   /** The whole transcript, settling or not: the listening window closes on the participant's latest words. */
   transcript?: () => TranscriptEntry[];
 };
@@ -56,12 +56,14 @@ const unheard = (): Hearing => ({ inputAt: null, inputActive: false, outputAt: n
 /**
  * The participant's floor, from when their microphone was last loud. `owed`: Sam has said nothing substantive since.
  * `clear`: it began while Sam was inaudible, so it isn't Sam's own audio heard back. `held`: this pause has its hold
- * note. `handed`: it has its turn note. `mark` is where Sam's latest passage stood then; `sam` is Sam's words since, by passage.
+ * note. `handedAt`: when it got its turn note. `retried`: a handover the voice service rejected was sent again.
+ * `mark` is where Sam's latest passage stood then; `sam` is Sam's words since, by passage.
  */
-type Floor = { owed: boolean; clear: boolean; held: boolean; handed: boolean; mark: { id: string; length: number } | null; sam: Map<string, string> };
-const idleFloor = (): Floor => ({ owed: false, clear: false, held: false, handed: false, mark: null, sam: new Map() });
+type Floor = { owed: boolean; clear: boolean; held: boolean; handedAt: number | null; retried: boolean; mark: { id: string; length: number } | null; sam: Map<string, string> };
+const idleFloor = (): Floor => ({ owed: false, clear: false, held: false, handedAt: null, retried: false, mark: null, sam: new Map() });
 type NoteMarks = { wake?: true; handover?: true; quietMs?: number };
 type PendingEvent = { event: MapLogEvent; researchId: string };
+type NotePart = [kind: NoteRecord['kind'], note: HeldNote];
 /** A decided note waiting for Sam's next words. */
 type HeldNote = { text: string; decidedAt: number; mapId: string | null; turnId?: string; researchIds: string[]; offer: boolean };
 /**
@@ -187,22 +189,33 @@ export class InterviewProducer {
     this.readTurn(now);
     this.startMap(now);
     this.sendMapNote(now);
-    // A reading of the turn they just finished may still be on its way, and it replaces the held one.
-    if ((this.deferred || this.heldRefresh) && !this.turnBusy && !this.options.talking?.()) {
-      const record = this.deferred;
-      this.deferred = null;
-      this.heldRefresh = false;
-      const pick = this.pick(now, record ?? undefined);
-      if (record) record.pick = compactPick(pick);
-    }
+    this.pickHeld(now);
     this.listen(now);
     this.unstall(now);
   }
 
+  /** Makes a pick that waited for the participant to stop. A reading of the turn they just finished may still be on its way, and it replaces the held one. */
+  private pickHeld(now: number) {
+    if (!(this.deferred || this.heldRefresh) || this.turnBusy || this.options.talking?.()) return;
+    const record = this.deferred;
+    this.deferred = null;
+    this.heldRefresh = false;
+    const pick = this.pick(now, record ?? undefined);
+    if (record) record.pick = compactPick(pick);
+  }
+
+  /** The participant's latest words aren't read yet: still settling, being read, or read while they were still talking. */
+  private unread(): boolean {
+    if (this.turnBusy || this.deferred || this.heldRefresh || this.options.talking?.()) return true;
+    if (this.counts.turns >= LIMITS.turns) return false;
+    const turn = latestTurn(upToParticipant([...this.options.settled()]));
+    return turn.length > 0 && turnKey(turn) !== this.readTurnKey;
+  }
+
   /**
    * Sam has gone quiet after the participant finished: nothing transcribed and nothing heard for `wakeAfter`, their
-   * latest words complete, and nothing from Sam since but a backchannel or a short reaction. The held notes go out at
-   * once, then a turn note. Not after a hanging clause, a request for time or a request to stop, and once per
+   * latest words complete, and nothing from Sam since but a backchannel or a short reaction. The turn is handed over
+   * as the listening window does. Not after a hanging clause, a request for time or a request to stop, and once per
    * participant turn.
    */
   private unstall(now: number) {
@@ -217,8 +230,19 @@ export class InterviewProducer {
     // Sam's question, or a prompt such as "Walk me through the handoff.", leaves the turn with them: their quiet is thinking time.
     if (settled.slice(index + 1).some(entry => entry.speaker === 'client' && (entry.text.includes('?') || !yieldsTurn(entry.text)))) return;
     this.woken.add(key);
-    this.deliver(now, { wake: true });
-    this.send('turn', this.fixed(TURN_NOTE, now), now, { wake: true });
+    this.handOver(now, { wake: true });
+  }
+
+  /**
+   * Gives Sam the turn: the held notes and the turn note go as one event, the thread note first and the turn note last,
+   * so Sam has what to ask before it's told to speak. The voice service may still answer before it has read the whole
+   * event; what it acts on is up to the model. A held offer to stop is dropped if the participant's latest words aren't
+   * read: what they said may outdate it.
+   */
+  private handOver(now: number, marks: NoteMarks) {
+    // A pause with its turn note gets no hold note after it.
+    if (this.floor.owed) Object.assign(this.floor, { handedAt: now, held: true });
+    this.deliver(now, marks, this.fixed(TURN_NOTE, now), this.unread());
   }
 
   private fixed(text: string, now: number): HeldNote { return { text, decidedAt: now, mapId: this.mapRecord?.id ?? null, researchIds: [], offer: false }; }
@@ -253,13 +277,15 @@ export class InterviewProducer {
 
   /** `pausedMs`: how long both sides had been quiet when the participant spoke again. */
   private heardInput(now: number, pausedMs: number, overSam: boolean) {
-    // Sam had the turn note but hasn't begun the question: it waits. Once Sam's audio plays, a note can't stop it.
-    if (this.floor.handed && this.floor.owed && !overSam && this.counts.cancels < LIMITS.cancels) {
+    // Sam had the turn note but hasn't begun the question: it waits. Once Sam's words are under way, the microphone
+    // may be hearing them come back, and a note can't stop audio already playing.
+    const { handedAt, owed } = this.floor;
+    if (handedAt != null && owed && this.lastSam < handedAt && !overSam && this.counts.cancels < LIMITS.cancels) {
       this.counts.cancels++;
-      this.send('cancel', this.fixed(CANCEL_NOTE, now), now, { quietMs: pausedMs });
+      this.send([['cancel', this.fixed(CANCEL_NOTE, now)]], now, { quietMs: pausedMs });
     }
-    // Heard over Sam's listening sound, it may be that sound coming back: the pause keeps its notes.
-    if (overSam && this.floor.owed) return;
+    // Heard over Sam's few words, it may be them coming back: the pause keeps its notes.
+    if (overSam && owed) return;
     this.floor = { ...idleFloor(), owed: true, clear: !overSam, mark: this.latestSam && { ...this.latestSam } };
   }
 
@@ -289,32 +315,31 @@ export class InterviewProducer {
   }
 
   /**
-   * Once the participant's microphone goes quiet, Sam gets the mode's hold note; once both sides have been quiet for
-   * the mode's window after a complete answer, the held notes go out, then a turn note. Not after a hanging clause, a
-   * request for time or a request to stop, and once per pause. A held note Sam's words released waits for their
-   * microphone to go quiet. The session also calls it when `floorDue` comes.
+   * Once the participant's microphone goes quiet, Sam gets the hold note; once both sides have been quiet for the
+   * window after a complete answer, the turn is handed over, as soon as Jev has read the answer or `readWait` later.
+   * Not after a hanging clause, a request for time or a request to stop, and once per pause. A held note Sam's words
+   * released waits for their microphone to go quiet. The session also calls it when `floorDue` comes.
    */
   listen(now = Date.now()) {
     if (!this.alive || this.restating) return;
     const { inputAt, inputActive, outputActive } = this.hearing;
     if (this.releaseDue && !inputActive && (inputAt == null || now - inputAt > LIMITS.releaseQuiet)) this.deliver(now);
-    const mode = this.options.listening;
     const floor = this.floor;
-    if (!mode || !floor.owed || inputActive || outputActive || inputAt == null) return;
+    if (!this.options.listening || !floor.owed || inputActive || outputActive || inputAt == null) return;
     // A pause that began over Sam's audio counts once the participant's words are transcribed.
     if (!floor.held && now - inputAt >= LIMITS.holdAfter && ![...floor.sam.values()].join('').trim() && this.counts.holds < LIMITS.holds && (floor.clear || this.answer())) {
       floor.held = true;
       this.counts.holds++;
-      this.send('hold', this.fixed(HOLD_NOTES[mode], now), now, { quietMs: now - this.quietSince(now) });
+      this.send([['hold', this.fixed(HOLD_NOTE, now)]], now, { quietMs: now - this.quietSince(now) });
     }
     const quietMs = now - this.quietSince(now);
-    if (floor.handed || quietMs < listeningMode(mode).windowMs || this.counts.handovers >= LIMITS.handovers) return;
+    if (floor.handedAt != null || quietMs < LIMITS.listenWindow || this.counts.handovers >= LIMITS.handovers) return;
     const last = this.answer();
     if (!last || !finishesTurn(last.text) || asksToEnd(last.text)) return;
-    floor.handed = true;
+    this.pickHeld(now);
+    if (quietMs < LIMITS.listenWindow + LIMITS.readWait && this.unread()) { this.readTurn(now); return; }
     this.counts.handovers++;
-    this.deliver(now, { handover: true });
-    this.send('turn', this.fixed(TURN_NOTE, now), now, { handover: true, quietMs });
+    this.handOver(now, { handover: true, quietMs });
   }
 
   /** When the listening hold next needs a look, if it waits on the clock alone; the session sets a timer for it. */
@@ -322,10 +347,9 @@ export class InterviewProducer {
     const { inputAt, inputActive, outputActive } = this.hearing;
     if (!this.alive || inputAt == null || inputActive) return null;
     const due = this.releaseDue ? [inputAt + LIMITS.releaseQuiet + 1] : [];
-    const mode = this.options.listening;
-    if (mode && this.floor.owed && !outputActive) {
+    if (this.options.listening && this.floor.owed && !outputActive) {
       if (!this.floor.held) due.push(inputAt + LIMITS.holdAfter);
-      if (!this.floor.handed) due.push(this.quietSince(now) + listeningMode(mode).windowMs);
+      if (this.floor.handedAt == null) due.push(this.quietSince(now) + LIMITS.listenWindow, this.quietSince(now) + LIMITS.listenWindow + LIMITS.readWait);
     }
     // Anything already due waits on words, not the clock: the next transcript change or tick looks again.
     const next = due.filter(at => at > now);
@@ -488,8 +512,8 @@ export class InterviewProducer {
       record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
     } finally {
       // Freed with the pick, so a map that lands next knows this turn is read. A pause already released the slot; a
-      // resumed producer may own it now.
-      if (!scope.aborted) { record.completedAt = Date.now(); this.turnBusy = false; }
+      // resumed producer may own it now. A handover may be waiting for this reading.
+      if (!scope.aborted) { record.completedAt = Date.now(); this.turnBusy = false; this.listen(Date.now()); }
     }
   }
 
@@ -619,49 +643,69 @@ export class InterviewProducer {
   private note(kind: NoteRecord['kind'], text: string, now: number, { turn, researchIds = [], offer = false }: { turn?: TurnRecord; researchIds?: string[]; offer?: boolean } = {}): NoteRecord['outcome'] | 'held' | null {
     if (!this.restating && this.counts.notes >= LIMITS.notes) return null;
     const held: HeldNote = { text, decidedAt: now, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), researchIds, offer };
-    if (this.restating || this.options.immediate) return this.send(kind, held, now).outcome;
+    if (this.restating || this.options.immediate) return this.send([[kind, held]], now)[0]!.outcome;
     this.held.set(kind, held);
     this.releaseDue = false;
     return 'held';
   }
 
-  // Set delivery before sending: an acknowledgment may arrive immediately.
-  private send(kind: NoteRecord['kind'], note: HeldNote, now: number, marks: NoteMarks = {}): NoteRecord {
-    // Turn-taking notes have their own limits.
-    if (!this.restating && (kind === 'list' || kind === 'map')) this.counts.notes++;
-    const id = `note-${crypto.randomUUID()}`;
-    const record: NoteRecord = {
-      source: 'note', id, kind, text: note.text, mapId: note.mapId, ...(note.turnId ? { turnId: note.turnId } : {}), sentAt: now,
-      ...(note.decidedAt !== now ? { decidedAt: note.decidedAt } : {}), ...(note.offer ? { offer: true as const } : {}), ...marks, outcome: 'sent',
-      delivery: { eventId: id, afterPassageId: this.options.settled().at(-1)?.id ?? null, status: 'unknown' },
-      ...(note.researchIds.length ? { researchIds: note.researchIds } : {}),
-    };
-    this.records.push(record);
-    const sent = this.options.send({ type: this.options.channel ?? LIVE_NOTE_CHANNEL, event_id: id, delegation_id: null, content: note.text });
-    if (!sent) record.outcome = 'error';
-    if (note.offer && sent && this.pace) {
-      this.pace.offeredAfter = record.delivery.afterPassageId;
+  /**
+   * Sends notes as one provider event, in order, each with its own record. The voice service applies an event as a
+   * whole or rejects it, so a turn note never arrives without the notes sent with it. Set delivery before sending: an
+   * acknowledgment may arrive immediately.
+   */
+  private send(parts: NotePart[], now: number, marks: NoteMarks = {}): NoteRecord[] {
+    const eventId = `note-${crypto.randomUUID()}`;
+    const afterPassageId = this.options.settled().at(-1)?.id ?? null;
+    const records = parts.map(([kind, note], index): NoteRecord => {
+      // Turn-taking notes have their own limits.
+      if (!this.restating && (kind === 'list' || kind === 'map')) this.counts.notes++;
+      return {
+        source: 'note', id: index ? `note-${crypto.randomUUID()}` : eventId, kind, text: note.text, mapId: note.mapId, ...(note.turnId ? { turnId: note.turnId } : {}), sentAt: now,
+        ...(note.decidedAt !== now ? { decidedAt: note.decidedAt } : {}), ...(note.offer ? { offer: true as const } : {}), ...marks, outcome: 'sent',
+        delivery: { eventId, afterPassageId, status: 'unknown' },
+        ...(note.researchIds.length ? { researchIds: note.researchIds } : {}),
+      };
+    });
+    this.records.push(...records);
+    const sent = this.options.send({ type: this.options.channel ?? LIVE_NOTE_CHANNEL, event_id: eventId, delegation_id: null, content: parts.map(([, note]) => note.text).join('\n\n') });
+    if (!sent) for (const record of records) record.outcome = 'error';
+    if (sent && this.pace && parts.some(([, note]) => note.offer)) {
+      this.pace.offeredAfter = afterPassageId;
       this.lastOffer = this.elapsed(now);
     }
-    return record;
+    return records;
   }
 
   /**
-   * Sam has started speaking, or has the turn: the held notes go out, map first. A held offer to stop is dropped if the
-   * participant has spoken since it was decided, since what they said may outdate it; their turn's reading decides again.
+   * Sam has started speaking, or has the turn: the held notes go out, the thread note first, then the map note and the
+   * turn note if there is one. A held offer to stop is dropped if the participant has spoken since it was decided, or
+   * `stale` says what they said is unread, since it may outdate the offer; their turn's reading decides again.
    */
-  private deliver(now: number, marks: NoteMarks = {}) {
+  private deliver(now: number, marks: NoteMarks = {}, turn?: HeldNote, stale = false) {
     this.releaseDue = false;
-    for (const kind of ['map', 'list'] as const) {
+    const parts: NotePart[] = [];
+    let budget = LIMITS.notes - this.counts.notes;
+    for (const kind of ['list', 'map'] as const) {
       const held = this.held.get(kind);
       if (!held) continue;
       this.held.delete(kind);
-      const unsent = held.offer && this.options.talking?.() ? null : this.counts.notes < LIMITS.notes ? this.send(kind, held, now, marks) : null;
-      if (unsent?.outcome === 'sent') continue;
-      // Not sent: the next pick or the map note after its spacing goes out again.
-      if (kind === 'list') this.list = { ...this.list, key: null };
-      else this.mapKey = null;
+      if (!(held.offer && (stale || this.options.talking?.())) && budget-- > 0) parts.push([kind, held]);
+      else this.unsent(kind);
     }
+    if (turn) parts.push(['turn', turn]);
+    if (!parts.length) return;
+    const fits = parts.reduce((length, [, note]) => length + note.text.length + 2, 0) <= LIMITS.handoverChars;
+    const events = fits ? [parts] : [parts.filter(([kind]) => kind === 'map'), parts.filter(([kind]) => kind !== 'map')];
+    for (const event of events.filter(item => item.length)) {
+      for (const record of this.send(event, now, marks)) if (record.outcome !== 'sent') this.unsent(record.kind);
+    }
+  }
+
+  /** A thread or map note that didn't reach Sam goes out again: the thread note at the next pick, the map note after its spacing. */
+  private unsent(kind: NoteRecord['kind']) {
+    if (kind === 'list') this.list = { ...this.list, key: null };
+    else if (kind === 'map') this.mapKey = null;
   }
 
   // ---- Research ----
@@ -717,9 +761,10 @@ export class InterviewProducer {
   // ---- Session events ----
 
   /**
-   * Sam's substantive words release the held notes. With a listening mode, a reaction of a few words doesn't, and they
-   * wait for the participant's microphone to go quiet. Also marks the next substantive Sam passage at or after a sent
-   * note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
+   * Sam's substantive words release the held notes. With the listening hold, a reaction of a few words doesn't; they
+   * wait for the participant's microphone to go quiet, and notes decided after a handover wait for the next one rather
+   * than reach Sam in the middle of the question it's asking. Also marks the next substantive Sam passage at or after
+   * a sent note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
    */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
     if (!this.alive) return;
@@ -727,7 +772,7 @@ export class InterviewProducer {
     if (entry.speaker === 'client' && entry.text.trim()) this.samSaid(entry, now);
     if (entry.speaker !== 'client' || !entry.text.trim() || isBackchannel(entry.text)) { this.listen(now); return; }
     if (!this.options.listening) this.deliver(now);
-    else if (!yieldsTurn(entry.text)) this.releaseDue = this.held.size > 0;
+    else if (!yieldsTurn(entry.text)) this.releaseDue = this.held.size > 0 && this.floor.handedAt == null;
     this.listen(now);
     if (this.samTurns.has(entry.id)) return;
     this.samTurns.add(entry.id);
@@ -739,20 +784,28 @@ export class InterviewProducer {
     }
   }
 
-  /** A rejected note is sent again at the next change: the list note on the next pick, the map note after its spacing. One a newer note of its kind already replaced is not. */
+  /**
+   * The voice service's acknowledgment of an event, for every note sent in it. A rejected thread or map note is sent
+   * again: the thread note is picked again at once, the map note after its spacing. One a newer note of its kind
+   * already replaced is not. Other notes are nudges in the moment, but a rejected handover is handed over again once,
+   * with the thread note picked again, while the participant is still quiet and Sam hasn't spoken.
+   */
   providerEvent(id: string, accepted: boolean, timing?: { startMs?: number; endMs?: number }) {
     if (!this.alive) return;
-    const record = this.records.find((item): item is NoteRecord => item.source === 'note' && item.delivery.eventId === id);
-    if (!record) return;
-    record.delivery.status = accepted ? 'accepted' : 'rejected';
-    record.delivery.acknowledgedAt = Date.now();
-    if (timing) Object.assign(record.delivery, timing);
+    const records = this.records.filter((item): item is NoteRecord => item.source === 'note' && item.delivery.eventId === id);
+    if (!records.length) return;
+    const now = Date.now();
+    for (const record of records) Object.assign(record.delivery, { status: accepted ? 'accepted' : 'rejected', acknowledgedAt: now }, timing);
     if (accepted) return;
-    record.outcome = 'rejected';
-    // A turn-taking note is a nudge in the moment; resending it later would be out of place.
-    if ((record.kind !== 'list' && record.kind !== 'map') || this.held.has(record.kind) || this.records.findLast(item => item.source === 'note' && item.kind === record.kind) !== record) return;
-    if (record.kind === 'list') this.list = { ...this.list, key: null };
-    else this.mapKey = null;
+    for (const record of records) {
+      record.outcome = 'rejected';
+      if ((record.kind === 'list' || record.kind === 'map') && !this.held.has(record.kind) && this.records.findLast(item => item.source === 'note' && item.kind === record.kind) === record) this.unsent(record.kind);
+    }
+    const handover = records.find(record => record.kind === 'turn');
+    const floor = this.floor;
+    if (handover && floor.handedAt === handover.sentAt && floor.owed && !floor.retried && this.lastSam < floor.handedAt) Object.assign(floor, { handedAt: null, retried: true });
+    if (records.some(record => record.kind === 'list')) this.pick(now);
+    this.listen(now);
   }
 
   delegation(id: string, target: string | null, replied: boolean) {
@@ -765,7 +818,7 @@ export class InterviewProducer {
       model: this.options.foundry.agentModel, effort: MAP_EFFORT, version: PRODUCER_VERSION, mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
       maps, applied, turns, notes, research, latency: producerLatency(this.records),
       ...(this.options.listening ? { listening: {
-        mode: this.options.listening, windowMs: listeningMode(this.options.listening).windowMs, holdAfterMs: LIMITS.holdAfter,
+        mode: 'quiet', windowMs: LIMITS.listenWindow, holdAfterMs: LIMITS.holdAfter, readWaitMs: LIMITS.readWait,
         holds: this.counts.holds, handovers: this.counts.handovers, cancels: this.counts.cancels, wakes: this.woken.size,
       } } : {}),
     };

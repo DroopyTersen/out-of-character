@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { DEFAULT_LISTENING, emptyInterviewReadings, interviewTopics, type CoverageLevel, type ListeningMode, type InterviewBackground, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
+import { emptyInterviewReadings, interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
 import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
 import { illustrativeLevels } from './simulator-voice-story';
 import { streamedReportView } from '../simulator/use-report';
@@ -111,10 +111,9 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, summary: In
 
 export function InterviewSetupStory() {
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>('sam-cedar');
-  const [listening, setListening] = useState<ListeningMode>(DEFAULT_LISTENING);
   const [enabled, setEnabled] = useState(true);
   const [notice, setNotice] = useState('');
-  return <><div className="workshop-controls"><label className="workshop-check"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /> Live interviews available</label>{notice && <span role="status">{notice}</span>}</div><InterviewSetup voiceId={voiceId} onVoice={setVoiceId} listening={listening} onListening={setListening} onStart={() => setNotice('Workshop preview: no microphone or paid session was opened.')} enabled={enabled} /></>;
+  return <><div className="workshop-controls"><label className="workshop-check"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /> Live interviews available</label>{notice && <span role="status">{notice}</span>}</div><InterviewSetup voiceId={voiceId} onVoice={setVoiceId} onStart={() => setNotice('Workshop preview: no microphone or paid session was opened.')} enabled={enabled} /></>;
 }
 
 export function InterviewLiveStory() {

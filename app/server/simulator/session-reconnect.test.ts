@@ -264,11 +264,12 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   await waitFor(() => maps === 1);
   await settle(f);
   f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });
-  await waitFor(() => notes(f.socket.sent).length === 2);
-  const delivered = notes(f.socket.sent);
+  // Sam's words released both notes in one event; the new session gets the same notes, each in its own.
+  await waitFor(() => notes(f.socket.sent).length === 1);
+  const [delivered] = notes(f.socket.sent);
   await lose(f);
   await reconnect(f);
-  expect(notes(f.socket.sent)).toEqual(delivered);
+  expect(notes(f.socket.sent).map(String).sort()).toEqual(String(delivered).split('\n\n').sort());
   expect(f.socket.sent.map(event => String(event.event_id))).toContain('resume-2');
   await f.session.fetch(request('end'));
   await settle(f);

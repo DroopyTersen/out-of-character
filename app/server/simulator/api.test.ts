@@ -58,15 +58,14 @@ test('poll forwards the participant microphone quiet with the output quiet, boun
   expect((await handleSimulator(f.request(path, { active: false, audio: false, inputQuietMs: 60_000, outputQuietMs: 60_000, sequence: Number.MAX_SAFE_INTEGER, network }), f.env))!.status).toBe(200);
   expect(f.calls).toHaveLength(2);
 });
-test('an interview start may name a listening mode; practice starts and unknown modes may not', async () => {
+test('an interview start from a tab that could still choose a listening mode is accepted and the choice discarded', async () => {
   const f = fixture();
   const interview = { ...f.start, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
   for (const listening of ['quiet', 'ack']) {
     expect((await handleSimulator(f.request('sessions', { ...interview, listening }), f.env))!.status).toBe(200);
-    expect((await f.calls.at(-1)!.json() as { listening: string }).listening).toBe(listening);
+    expect(await f.calls.at(-1)!.json()).not.toHaveProperty('listening');
   }
   expect((await handleSimulator(f.request('sessions', { ...interview, listening: 'chatty' }), f.env))!.status).toBe(400);
-  expect((await handleSimulator(f.request('sessions', { ...f.start, listening: 'quiet' }), f.env))!.status).toBe(400);
   expect(f.calls).toHaveLength(2);
 });
 test('legacy mutual quiet is validated and discarded for already-open tabs', async () => {

@@ -4,12 +4,12 @@ import { MAP_PROMPT_VERSION, MapOutputError } from '../../../ai/interview/map.se
 import { RANKING_RUBRIC_VERSION } from '../../../ai/interview/ranking.server';
 import { DirectorHttpError, DirectorOutputError } from '../../../ai/simulator/sol.server';
 import { emptyMap, type ConversationMap, type MapEntity, type MapPace, type MapThread } from '../../../core/interview-map';
-import { CANCEL_NOTE, emptyListNote, HOLD_NOTES, NOTE_HEADERS, noteHeaders, TURN_NOTE } from '../../../core/interview-notes';
+import { CANCEL_NOTE, emptyListNote, HOLD_NOTE, NOTE_HEADERS, noteHeaders, TURN_NOTE } from '../../../core/interview-notes';
 import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from '../../../core/interview-producer';
 import { threadKey, type TurnReading } from '../../../core/interview-ranking';
 import type { PauseSpan } from '../../../core/simulator/state';
 import type { TranscriptEntry } from '../../../core/simulator/types';
-import type { InterviewObjectiveReading, ListeningMode } from '../../../core/interview';
+import type { InterviewObjectiveReading } from '../../../core/interview';
 import { InterviewProducer, producerServices } from './interview-producer';
 
 afterEach(() => setSystemTime());
@@ -54,7 +54,7 @@ const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done =
 // Only the paid calls are substituted; timing, the log, ranking, validation, budgets and delivery are real. Notes go
 // out as soon as they're decided unless `held`, which waits for Sam's words as the live session does. `hearing` reports
 // when audio was last heard, which lets a silent Sam be told the turn is theirs.
-function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructions.append', { held = false, hearing = false, listening }: { held?: boolean; hearing?: boolean; listening?: ListeningMode } = {}) {
+function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructions.append', { held = false, hearing = false, listening }: { held?: boolean; hearing?: boolean; listening?: boolean } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = [
     { id: 'p1', speaker: 'client', text: 'What did the team build?', startMs: 0, endMs: 1000 },
@@ -502,14 +502,15 @@ test('a complaint about the interview sets the lead aside for one turn, and a re
 
 const OFFER_LINE = /^Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on with Thread t1 or Thread t2\. Their call\.$/m;
 /** Sol allows an offer to stop on every map; a turn that says "new" adds what the map lacks. */
-function pacedFixture(held = false) {
+function pacedFixture(held = false, listening = false) {
   let pace: MapPace = { verdict: 'may-offer-finish', reason: 'Only thin threads remain.' };
   let wait: Promise<unknown> | null = null;
+  let read: Promise<unknown> | null = null;
   const f = fixture({
     generateMap: async () => { const verdict = pace; if (wait) await wait; return { ...mapped(mapWith([thread('t1'), thread('t2')])), pace: verdict }; },
-    evaluateTurn: async input => { const last = input.transcript.at(-1)!; return reading(input, { focus: 't1', novel: last.id === 'p2' || last.text.includes('new') ? .9 : 0 }); },
-  }, undefined, { held });
-  return { ...f, setPace: (value: MapPace) => { pace = value; }, setWait: (value: Promise<unknown> | null) => { wait = value; } };
+    evaluateTurn: async input => { if (read) await read; const last = input.transcript.at(-1)!; return reading(input, { focus: 't1', novel: last.id === 'p2' || last.text.includes('new') ? .9 : 0 }); },
+  }, undefined, { held, listening });
+  return { ...f, setPace: (value: MapPace) => { pace = value; }, setWait: (value: Promise<unknown> | null) => { wait = value; }, setRead: (value: Promise<unknown> | null) => { read = value; } };
 }
 const offers = (f: ReturnType<typeof fixture>) => f.of('note').filter(note => note.offer);
 
@@ -571,7 +572,7 @@ test('a turn that adds what the map lacks spends Sol’s grant before an offer, 
   expect(offers(f)).toHaveLength(1);
 });
 
-test('notes decided while Sam is quiet wait for Sam’s next words, map first and latest of each kind, so none lands in the participant’s pause', async () => {
+test('notes decided while Sam is quiet wait for Sam’s next words, in one event with the thread note first and the latest of each kind, so none lands in the participant’s pause', async () => {
   const f = fixture({
     generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')], { participant: { vantage: 'Routing lead.', preferences: [] } })),
     evaluateTurn: async input => { const id = input.transcript.at(-1)!.id; return reading(input, { novel: id === 'p2' ? .9 : 0, natural: id === 'p2' ? {} : { t2: 1 } }); },
@@ -589,18 +590,20 @@ test('notes decided while Sam is quiet wait for Sam’s next words, map first an
   // Their turn moved the lead before Sam spoke: only the newer thread note goes out.
   f.at(26_000);
   const next = f.sam('Who');
-  expect(f.notes().map(text => text.split('\n')[0])).toEqual([NOTE_HEADERS.map, NOTE_HEADERS.list]);
+  expect(f.sent).toHaveLength(1);
+  expect(f.notes()[0]!.split('\n')[0]).toBe(NOTE_HEADERS.list);
   expect(f.notes('list')[0]).toContain('(Thread t2)');
-  const [map, list] = f.of('note');
+  const [list, map] = f.of('note');
+  expect([list!.kind, map!.kind]).toEqual(['list', 'map']);
   expect([map!.decidedAt, map!.sentAt, list!.decidedAt, list!.sentAt, list!.nextSamTurnAt, list!.delivery.afterPassageId])
     .toEqual([epoch + 20_000, epoch + 26_000, epoch + 25_000, epoch + 26_000, epoch + 26_000, next.id]);
   expect(f.producer.summary().notes).toBe(2);
   // Sam's next delta has nothing left to send.
   f.producer.transcriptChanged(f.grow(next.id, 'Who used it?'), 'p4');
-  expect(f.sent).toHaveLength(2);
+  expect(f.sent).toHaveLength(1);
 });
 
-test('a Sam silent after the participant finished gets the held notes, then a turn note, once per turn', async () => {
+test('a Sam silent after the participant finished gets the held notes and a turn note in one event, the turn note last, once per turn', async () => {
   const f = fixture({
     generateMap: async () => mapped(mapWith([thread('t1')], { participant: { vantage: 'Routing lead.', preferences: [] } })),
     evaluateTurn: async input => reading(input, { novel: .9 }),
@@ -614,10 +617,12 @@ test('a Sam silent after the participant finished gets the held notes, then a tu
   expect(f.of('map')).toHaveLength(1);
   expect(f.sent).toHaveLength(0);
   await f.step(26_000);
-  expect(f.notes().map(text => text.split('\n')[0])).toEqual([NOTE_HEADERS.map, NOTE_HEADERS.list, TURN_NOTE]);
-  expect(f.of('note').map(note => [note.kind, note.wake, note.sentAt])).toEqual([['map', true, epoch + 26_000], ['list', true, epoch + 26_000], ['turn', true, epoch + 26_000]]);
+  const [list, map] = f.of('note');
+  expect(f.notes()).toEqual([[list!.text, map!.text, TURN_NOTE].join('\n\n')]);
+  expect([list!.text, map!.text].map(text => text.split('\n')[0])).toEqual([NOTE_HEADERS.list, NOTE_HEADERS.map]);
+  expect(f.of('note').map(note => [note.kind, note.wake, note.sentAt, note.delivery.eventId])).toEqual(['list', 'map', 'turn'].map(kind => [kind, true, epoch + 26_000, f.sent[0]!.event_id as string]));
   await f.step(40_000);
-  expect(f.sent).toHaveLength(3);
+  expect(f.sent).toHaveLength(1);
   f.at(41_000);
   f.sam('Who used it first?');
   expect(f.producer.summary().latency.turnToSam).toEqual({ count: 1, p50: 15_000, p90: 15_000 });
@@ -675,46 +680,130 @@ test('no turn note after Sam’s prompt without a question mark, but one after S
   expect(turns()).toBe(1);
 });
 
-test('the listening hold: a quiet microphone gets the mode’s hold, and a complete answer the turn once both sides are quiet for the mode’s window', async () => {
-  for (const [mode, windowMs] of [['quiet', 2500], ['ack', 1000]] as const) {
-    const f = fixture({}, undefined, { held: true, listening: mode });
-    f.sam('What did the crews think?');
-    f.hear(1000, 0);
-    f.at(1500);
-    f.say('trainee', 'They liked the offline maps.');
-    f.hear(2000, 100);
-    expect(f.sent).toHaveLength(0);
-    // Quiet since 1900.
-    f.hear(2200, 300);
-    expect(f.notes()).toEqual([HOLD_NOTES[mode]]);
-    expect(f.due()).toBe(1900 + windowMs);
-    f.listen(1900 + windowMs - 1);
-    expect(f.sent).toHaveLength(1);
-    f.listen(1900 + windowMs);
-    expect(f.notes()).toEqual([HOLD_NOTES[mode], TURN_NOTE]);
-    expect(f.of('note').map(note => [note.kind, note.quietMs, note.handover ?? false])).toEqual([['hold', 300, false], ['turn', windowMs, true]]);
-    // Once per pause, and Sam's question ends their floor.
-    f.listen(20_000);
-    expect(f.due()).toBeNull();
-    f.at(21_000);
-    f.sam('Which maps did they use most?');
-    f.listen(40_000);
-    expect(f.sent).toHaveLength(2);
-    expect(f.producer.summary()).toMatchObject({ notes: 0, listening: { mode, windowMs, holdAfterMs: 300, holds: 1, handovers: 1, cancels: 0, wakes: 0 } });
-  }
+test('the listening hold: a quiet microphone gets the hold note, and a complete answer the turn once both sides are quiet for the window and Jev has read it', async () => {
+  const f = fixture({}, undefined, { held: true, listening: true });
+  f.sam('What did the crews think?');
+  f.hear(1000, 0);
+  f.at(1500);
+  f.say('trainee', 'They liked the offline maps.');
+  f.hear(2000, 100);
+  expect(f.sent).toHaveLength(0);
+  // Quiet since 1900.
+  f.hear(2200, 300);
+  expect(f.notes()).toEqual([HOLD_NOTE]);
+  expect(f.due()).toBe(4400);
+  f.listen(4399);
+  expect(f.sent).toHaveLength(1);
+  f.listen(4400);
+  // Their answer isn't read yet; the handover waits for the reading.
+  expect(f.sent).toHaveLength(1);
+  await flush();
+  expect(f.calls.turn.map(input => input.transcript.at(-1)!.id)).toEqual(['p2', 'p4']);
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE]);
+  expect(f.of('note').map(note => [note.kind, note.quietMs, note.handover ?? false])).toEqual([['hold', 300, false], ['turn', 2500, true]]);
+  // Once per pause, and Sam's question ends their floor.
+  f.listen(20_000);
+  expect(f.due()).toBeNull();
+  f.at(21_000);
+  f.sam('Which maps did they use most?');
+  f.listen(40_000);
+  expect(f.sent).toHaveLength(2);
+  expect(f.producer.summary()).toMatchObject({ notes: 0, listening: { mode: 'quiet', windowMs: 2500, holdAfterMs: 300, readWaitMs: 2000, holds: 1, handovers: 1, cancels: 0, wakes: 0 } });
   expect(fixture().producer.summary()).not.toHaveProperty('listening');
 });
 
+test('the handover carries the held notes in one event, thread note first and turn note last, and splits off the map note only when the whole is too long', async () => {
+  for (const vantage of ['Routing lead.', `Routing lead. ${'They ran the depot rollout. '.repeat(60)}`]) {
+    const f = fixture({
+      generateMap: async () => mapped(mapWith([thread('t1')], { participant: { vantage, preferences: [] } })),
+      evaluateTurn: async input => reading(input, { novel: .9 }),
+    }, undefined, { held: true, listening: true });
+    f.sam('So what came next?');
+    f.say('trainee', 'We shipped the routing layer in March.');
+    await f.step(0);
+    await f.step(20_000);
+    expect(f.of('map')).toHaveLength(1);
+    f.hear(21_000, 0);
+    f.hear(21_400, 300);
+    expect(f.notes()).toEqual([HOLD_NOTE]);
+    f.listen(23_600);
+    const handed = f.of('note').slice(1);
+    const [list, map, turn] = (['list', 'map', 'turn'] as const).map(kind => handed.find(note => note.kind === kind));
+    expect(handed).toHaveLength(3);
+    expect([list, map, turn].every(note => note!.handover && note!.quietMs === 2500 && note!.sentAt === epoch + 23_600)).toBe(true);
+    if (vantage.length < 100) {
+      expect(f.notes().slice(1)).toEqual([[list!.text, map!.text, TURN_NOTE].join('\n\n')]);
+      expect(new Set([list, map, turn].map(note => note!.delivery.eventId))).toEqual(new Set([f.sent[1]!.event_id as string]));
+      expect(list!.id).toBe(f.sent[1]!.event_id as string);
+    } else {
+      // A provider event holds at most 500 tokens: the map note goes first on its own, then the thread note with the turn note.
+      expect(f.notes().slice(1)).toEqual([map!.text, [list!.text, TURN_NOTE].join('\n\n')]);
+      expect([map, list, turn].map(note => note!.delivery.eventId)).toEqual([f.sent[1]!.event_id as string, f.sent[2]!.event_id as string, f.sent[2]!.event_id as string]);
+    }
+    expect(f.producer.summary()).toMatchObject({ notes: 2, listening: { handovers: 1 } });
+  }
+});
+
+test('the handover waits for Jev’s reading at most the read wait, and a thread note decided after it waits for the next handover', async () => {
+  const late = deferred<Read>();
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
+    evaluateTurn: async input => input.transcript.at(-1)!.id === 'p4' ? late.promise : reading(input, { novel: .9 }),
+  }, undefined, { held: true, listening: true });
+  await f.step(0);
+  await f.step(20_000);
+  f.sam('So what came next?');
+  // Sam's words with no microphone report release the held notes.
+  expect(f.sent).toHaveLength(1);
+  f.hear(21_000, 0);
+  f.at(21_200);
+  f.say('trainee', 'We shipped the routing layer in March.');
+  f.hear(22_000, 400);
+  expect(f.notes().at(-1)).toBe(HOLD_NOTE);
+  expect(f.due()).toBe(24_100);
+  f.listen(24_100);
+  await flush();
+  expect(f.calls.turn.at(-1)!.transcript.at(-1)!.id).toBe('p4');
+  expect(f.sent).toHaveLength(2);
+  expect(f.due()).toBe(26_100);
+  f.listen(26_099);
+  expect(f.sent).toHaveLength(2);
+  f.listen(26_100);
+  expect(f.notes().at(-1)).toBe(TURN_NOTE);
+  expect(f.of('note').at(-1)).toMatchObject({ kind: 'turn', handover: true, quietMs: 4500 });
+  // The reading lands after the handover: its thread note doesn't reach Sam in the middle of the question.
+  f.at(26_500);
+  late.resolve(reading(f.calls.turn.at(-1)!, { focus: 't2', novel: .9 }));
+  await flush();
+  const decided = f.producer.records.filter(record => record.source === 'turn').at(-1)!;
+  expect(decided).toMatchObject({ outcome: 'read', passageId: 'p4' });
+  f.at(27_000);
+  const question = f.sam('Who');
+  f.producer.transcriptChanged(f.grow(question.id, 'Who used it first, the dispatchers or the crews?'), 'p4');
+  f.listen(30_000);
+  expect(f.sent).toHaveLength(3);
+  // Their next answer's handover carries it, with the turn note last.
+  f.hear(31_000, 0);
+  f.at(31_200);
+  f.say('trainee', 'The dispatchers did.');
+  f.hear(32_000, 400);
+  f.listen(34_100);
+  await flush();
+  expect(f.notes().at(-1)!.startsWith(NOTE_HEADERS.list)).toBe(true);
+  expect(f.notes().at(-1)!.endsWith(`\n\n${TURN_NOTE}`)).toBe(true);
+});
+
 test('their voice restarts the pause: no turn while they talk, after a hanging clause, or after a request to stop, and Sam’s question leaves the quiet to them', async () => {
-  const f = fixture({}, undefined, { held: true, listening: 'quiet' });
+  const f = fixture({}, undefined, { held: true, listening: true });
   const turns = () => f.notes().filter(text => text === TURN_NOTE).length;
   f.sam('What happened with the vendor?');
   f.hear(1000, 0);
   f.at(1200);
   const answer = f.say('trainee', 'We moved the launch to March and');
   f.hear(2000, 400);
-  expect(f.notes()).toEqual([HOLD_NOTES.quiet]);
+  expect(f.notes()).toEqual([HOLD_NOTE]);
   f.listen(10_000);
+  await flush();
   expect(turns()).toBe(0);
   expect(f.due()).toBeNull();
   // They go on; each new pause has its own hold, and its window counts from their latest sound.
@@ -723,15 +812,17 @@ test('their voice restarts the pause: no turn while they talk, after a hanging c
   f.producer.transcriptChanged(f.grow(answer.id, 'We moved the launch to March and the vendor agreed.'), 'p3');
   f.hear(12_000, 0);
   f.hear(12_400, 300);
-  expect(f.notes()).toEqual([HOLD_NOTES.quiet, HOLD_NOTES.quiet]);
+  expect(f.notes()).toEqual([HOLD_NOTE, HOLD_NOTE]);
   expect(f.due()).toBe(14_600);
   f.hear(14_000, 0);
   expect(f.due()).toBeNull();
   f.hear(14_800, 350);
   expect(f.due()).toBe(16_950);
   f.listen(16_949);
+  await flush();
   expect(turns()).toBe(0);
   f.listen(16_950);
+  await flush();
   expect(turns()).toBe(1);
 
   f.at(17_000);
@@ -741,80 +832,109 @@ test('their voice restarts the pause: no turn while they talk, after a hanging c
   f.say('trainee', 'Can we be done for today?');
   f.hear(19_000, 400);
   f.listen(30_000);
+  await flush();
   expect(turns()).toBe(1);
   // Sam's question with no reply from them yet: their silence is thinking time.
   f.at(31_000);
   f.sam('Of course. One last thing: what would you change?');
   f.listen(50_000);
-  expect(f.notes()).toEqual([HOLD_NOTES.quiet, HOLD_NOTES.quiet, HOLD_NOTES.quiet, TURN_NOTE, HOLD_NOTES.quiet]);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, HOLD_NOTE, HOLD_NOTE, TURN_NOTE, HOLD_NOTE]);
 });
 
-test('their voice after the turn note cancels it unless Sam’s audio has begun, and the next pause starts over', async () => {
-  const f = fixture({}, undefined, { held: true, listening: 'ack' });
+test('their voice after the turn note cancels it unless Sam has begun, and the next pause starts over', async () => {
+  const f = fixture({}, undefined, { held: true, listening: true });
   f.sam('How did the handoff go?');
   f.hear(1000, 0);
   f.at(1500);
   const answer = f.say('trainee', 'It went smoothly.');
   f.hear(2000, 400);
-  f.listen(2600);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack, TURN_NOTE]);
-  // Quiet from 1600 until they spoke at 2900, before Sam began.
-  f.hear(3000, 100);
+  f.listen(4100);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE]);
+  // Quiet from 1600 until they spoke at 4300, before Sam began.
+  f.hear(4400, 100);
   expect(f.notes().at(-1)).toBe(CANCEL_NOTE);
-  expect(f.of('note').at(-1)).toMatchObject({ kind: 'cancel', quietMs: 1300 });
-  f.at(3500);
+  expect(f.of('note').at(-1)).toMatchObject({ kind: 'cancel', quietMs: 2700 });
+  f.at(4500);
   f.producer.transcriptChanged(f.grow(answer.id, 'It went smoothly. The vendor had a checklist.'), 'p3');
-  f.hear(4000, 300);
-  expect(f.due()).toBe(4700);
-  f.listen(4700);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack, TURN_NOTE, CANCEL_NOTE, HOLD_NOTES.ack, TURN_NOTE]);
+  f.hear(5000, 300);
+  expect(f.due()).toBe(7200);
+  f.listen(7200);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE, CANCEL_NOTE, HOLD_NOTE, TURN_NOTE]);
   // Sam's audio has begun: a note can't stop it, and their voice over it may be that audio coming back.
-  f.hear(4800, 1100, 0);
-  f.hear(5000, 0, 0);
-  f.at(5100);
+  f.hear(7300, 2600, 0);
+  f.hear(7500, 0, 0);
+  f.at(7600);
   f.sam('What was on that checklist?');
   expect(f.sent).toHaveLength(5);
   expect(f.producer.summary()).toMatchObject({ notes: 0, listening: { holds: 2, handovers: 2, cancels: 1 } });
 });
 
-test('the microphone hearing Sam’s listening sound keeps the pause, and a pause that began over Sam’s question waits for their words', async () => {
-  const f = fixture({}, undefined, { held: true, listening: 'ack' });
+test('their voice after Sam’s first words is no cancel, though the browser has yet to report Sam’s audio', async () => {
+  const f = fixture({}, undefined, { held: true, listening: true });
+  f.sam('How did the handoff go?');
+  f.hear(1000, 0);
+  f.at(1500);
+  f.say('trainee', 'It went smoothly.');
+  f.hear(2000, 400);
+  f.listen(4100);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE]);
+  f.at(4300);
+  const reaction = f.sam('Oh, nice.');
+  // The microphone hears Sam's words come back before the browser reports Sam's audio.
+  f.hear(4500, 0, 5000);
+  f.at(4600);
+  f.producer.transcriptChanged(f.grow(reaction.id, 'Oh, nice. What was on that checklist?'), 'p4');
+  f.hear(5200, 500, 5000);
+  f.listen(9000);
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE]);
+  expect(f.producer.summary()).toMatchObject({ listening: { holds: 1, handovers: 1, cancels: 0 } });
+});
+
+test('the microphone hearing a sound from Sam keeps the pause, and a pause that began over Sam’s question waits for their words', async () => {
+  const f = fixture({}, undefined, { held: true, listening: true });
   f.sam('What did the crews think?');
   f.hear(1000, 0);
   f.at(1500);
   f.say('trainee', 'They liked the offline maps.');
   f.hear(2000, 400);
-  // Sam's "hmm" plays and the microphone picks it up.
+  // Sam makes a sound anyway and the microphone picks it up.
   f.at(2100);
   f.sam('Hmm.');
   f.hear(2200, 0, 0);
   f.hear(2900, 400, 450);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack]);
-  expect(f.due()).toBe(3500);
-  f.listen(3500);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack, TURN_NOTE]);
+  expect(f.notes()).toEqual([HOLD_NOTE]);
+  expect(f.due()).toBe(5000);
+  f.listen(5000);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE]);
 
-  f.at(4000);
+  f.at(5500);
   f.sam('Which maps did they use most?');
-  f.hear(4100, 0, 0);
-  f.hear(6000, 1000, 1000);
-  f.listen(9000);
+  f.hear(5600, 0, 0);
+  f.hear(8000, 1000, 1000);
+  f.listen(12_000);
+  await flush();
   expect(f.sent).toHaveLength(2);
   // Their voice with Sam quiet is theirs.
-  f.hear(9500, 0, 5000);
-  f.at(10_000);
+  f.hear(12_500, 0, 5000);
+  f.at(13_000);
   f.say('trainee', 'Mostly the depot maps.');
-  f.hear(10_500, 400, 6000);
-  f.listen(11_100);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack, TURN_NOTE, HOLD_NOTES.ack, TURN_NOTE]);
+  f.hear(13_500, 400, 6000);
+  f.listen(15_600);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, TURN_NOTE, HOLD_NOTE, TURN_NOTE]);
   expect(f.producer.summary()).toMatchObject({ listening: { cancels: 0 } });
 });
 
-test('with a listening mode, held notes wait for Sam’s substantive words and then for the participant’s microphone to go quiet', async () => {
+test('with the listening hold, held notes wait for Sam’s substantive words and then for the participant’s microphone to go quiet', async () => {
   const f = fixture({
     generateMap: async () => mapped(mapWith([thread('t1')], { participant: { vantage: 'Routing lead.', preferences: [] } })),
     evaluateTurn: async input => reading(input, { novel: .9 }),
-  }, undefined, { held: true, listening: 'quiet' });
+  }, undefined, { held: true, listening: true });
   f.sam('So what came next?');
   f.say('trainee', 'We shipped the routing layer in March.');
   await f.step(0);
@@ -839,13 +959,96 @@ test('with a listening mode, held notes wait for Sam’s substantive words and t
   f.listen(23_400);
   expect(f.sent).toHaveLength(0);
   f.listen(23_401);
-  expect(f.notes().map(text => text.split('\n')[0])).toEqual([NOTE_HEADERS.map, NOTE_HEADERS.list]);
-  expect(f.of('note').map(note => note.sentAt - epoch)).toEqual([23_401, 23_401]);
+  expect(f.sent).toHaveLength(1);
+  expect(f.of('note').map(note => [note.kind, note.sentAt - epoch])).toEqual([['list', 23_401], ['map', 23_401]]);
+  expect(f.notes()[0]!.startsWith(NOTE_HEADERS.list)).toBe(true);
   expect(f.producer.summary().notes).toBe(2);
 });
 
+test('a rejected handover is handed over again once, with the thread note picked again, unless Sam has spoken since', async () => {
+  const f = fixture({
+    generateMap: async () => mapped(mapWith([thread('t1')], { participant: { vantage: 'Routing lead.', preferences: [] } })),
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+  }, undefined, { held: true, listening: true });
+  f.sam('So what came next?');
+  f.say('trainee', 'We shipped the routing layer in March.');
+  await f.step(0);
+  await f.step(20_000);
+  f.hear(21_000, 0);
+  f.hear(21_400, 300);
+  f.listen(23_600);
+  expect(f.sent).toHaveLength(2);
+  const first = f.sent[1]!;
+  f.at(23_800);
+  f.producer.providerEvent(first.event_id as string, false);
+  expect(f.of('note').filter(note => note.delivery.eventId === first.event_id).map(note => note.outcome)).toEqual(['rejected', 'rejected', 'rejected']);
+  // The map note goes again after its spacing; the thread note picked again rides with the turn note.
+  expect(f.sent).toHaveLength(3);
+  const [list, , turn] = f.of('note').filter(note => note.delivery.eventId === first.event_id);
+  expect(f.sent[2]!.content).toBe([list!.text, turn!.text].join('\n\n'));
+  expect(f.of('note').slice(-2).map(note => [note.kind, note.handover, note.sentAt - epoch])).toEqual([['list', true, 23_800], ['turn', true, 23_800]]);
+  // Only once. The notes picked again wait for the next handover, not Sam's question.
+  f.at(24_000);
+  f.producer.providerEvent(f.sent[2]!.event_id as string, false);
+  f.at(25_000);
+  f.sam('Who used it first?');
+  expect(f.sent).toHaveLength(3);
+
+  // A rejection after Sam has begun isn't handed over again.
+  f.hear(26_000, 0);
+  f.at(26_200);
+  f.say('trainee', 'The dispatchers did.');
+  f.hear(27_000, 400);
+  f.listen(29_100);
+  await flush();
+  expect(f.sent).toHaveLength(5);
+  expect(f.notes().at(-1)!.startsWith(NOTE_HEADERS.list)).toBe(true);
+  expect(f.notes().at(-1)!.endsWith(`\n\n${TURN_NOTE}`)).toBe(true);
+  f.at(29_300);
+  f.sam('Oh, nice.');
+  f.producer.providerEvent(f.sent.at(-1)!.event_id as string, false);
+  f.listen(30_000);
+  expect(f.sent).toHaveLength(5);
+  expect(f.producer.summary()).toMatchObject({ listening: { handovers: 3 } });
+});
+
+test('a held offer to stop is dropped at a handover that couldn’t wait for the reading of their latest words', async () => {
+  const f = pacedFixture(true, true);
+  await f.step(0);
+  await f.step(20_000);
+  f.sam();
+  await f.turn(30_000);
+  await f.step(85_000);
+  await f.turn(90_000);
+  await f.step(150_000);
+  f.sam();
+  const before = f.sent.length;
+  // The reading of this answer decides an offer, held for Sam's turn.
+  await f.turn(600_000);
+  expect(f.sent).toHaveLength(before);
+  // They go on, and Jev is slow with what they added.
+  const slow = deferred<void>();
+  f.setRead(slow.promise);
+  f.hear(601_000, 0);
+  f.at(601_200);
+  f.say('trainee', 'And the crews were happy with it.');
+  f.hear(602_000, 400);
+  f.listen(604_100);
+  await flush();
+  expect(f.sent).toHaveLength(before + 1);
+  f.listen(606_100);
+  expect(f.sent).toHaveLength(before + 2);
+  expect(f.notes().at(-1)!.endsWith(TURN_NOTE)).toBe(true);
+  expect(f.notes().at(-1)).not.toContain('Pace:');
+  expect(offers(f)).toHaveLength(0);
+  // Its reading decides the offer again, for the next handover.
+  slow.resolve();
+  await flush();
+  expect(f.sent).toHaveLength(before + 2);
+});
+
 test('a dropped connection forgets the pause, and the resumed session starts its floor afresh', async () => {
-  const f = fixture({}, undefined, { held: true, listening: 'ack' });
+  const f = fixture({}, undefined, { held: true, listening: true });
   f.sam('How did testing go?');
   f.hear(1000, 0);
   f.at(1500);
@@ -857,21 +1060,23 @@ test('a dropped connection forgets the pause, and the resumed session starts its
   f.at(5000);
   f.producer.resume(Date.now());
   f.listen(9000);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack]);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE]);
   expect(f.due()).toBeNull();
   f.hear(10_000, 0);
   f.at(10_500);
   f.say('trainee', 'And the crews signed off.');
   f.hear(11_000, 400);
-  f.listen(11_600);
-  expect(f.notes()).toEqual([HOLD_NOTES.ack, HOLD_NOTES.ack, TURN_NOTE]);
+  f.listen(13_100);
+  await flush();
+  expect(f.notes()).toEqual([HOLD_NOTE, HOLD_NOTE, TURN_NOTE]);
 });
 
 test('a checkpoint from before the listening hold restores with no turn-taking counts, and turn-taking notes stay outside a spent note budget', async () => {
-  const a = fixture({}, undefined, { listening: 'quiet' });
+  const a = fixture({}, undefined, { listening: true });
   const { holds: _holds, handovers: _handovers, cancels: _cancels, ...old } = a.producer.checkpoint().counts;
   const checkpoint = { ...structuredClone(a.producer.checkpoint()), counts: { ...old, notes: PRODUCER_LIMITS.notes } };
-  const b = fixture({}, undefined, { held: true, listening: 'quiet' });
+  const b = fixture({}, undefined, { held: true, listening: true });
   b.producer.restore(checkpoint);
   b.producer.resume(Date.now());
   const before = b.sent.length;
@@ -881,7 +1086,8 @@ test('a checkpoint from before the listening hold restores with no turn-taking c
   b.say('trainee', 'I would start the vendor review sooner.');
   b.hear(2000, 400);
   b.listen(4100);
-  expect(b.notes().slice(before)).toEqual([HOLD_NOTES.quiet, TURN_NOTE]);
+  await flush();
+  expect(b.notes().slice(before)).toEqual([HOLD_NOTE, TURN_NOTE]);
   expect(b.producer.summary()).toMatchObject({ notes: PRODUCER_LIMITS.notes, listening: { mode: 'quiet', holds: 1, handovers: 1, cancels: 0 } });
   expect(b.producer.checkpoint().counts).toMatchObject({ holds: 1, handovers: 1, cancels: 0 });
 });
@@ -891,7 +1097,7 @@ test('a held note is dropped by a pause, the resume restates at once, and a held
   await f.step(0);
   await f.step(20_000);
   f.sam();
-  expect(f.sent).toHaveLength(2);
+  expect(f.sent).toHaveLength(1);
   await f.turn(30_000);
   await f.step(85_000);
   await f.turn(90_000);

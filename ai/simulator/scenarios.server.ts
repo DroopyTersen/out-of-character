@@ -1,5 +1,4 @@
 import { SIMULATOR_VERSION, type Catalog, type Client, type ClientStats, type ScenarioSummary, type TranscriptEntry } from '../../core/simulator/types';
-import type { ListeningMode } from '../../core/interview';
 
 export type Objective = ScenarioSummary['objectives'][number] & { criterion: string; hint: string };
 export type Scenario = Omit<ScenarioSummary, 'objectives'> & {
@@ -398,8 +397,8 @@ export function publicCatalog(): Catalog {
   };
 }
 
-/** `listening` is the interview's listening mode; other scenarios have none. */
-export function actorBrief(scenario: Scenario, client: CastMember, listening?: ListeningMode): string {
+/** `listening`: code times the interviewer's turn; other scenarios have no listening hold. */
+export function actorBrief(scenario: Scenario, client: CastMember, listening = false): string {
   if (scenario.id === interviewScenario.id) return interviewerBrief(client.id, undefined, listening);
   const openEnded = scenario.objectives.length === 0;
   return [

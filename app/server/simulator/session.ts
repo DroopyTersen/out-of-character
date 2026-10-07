@@ -252,8 +252,8 @@ export class SimulatorSession extends DurableObject<Env> {
       status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS, warning: null,
       revision: 0, transcript: [], evaluation: null, coaching: null, feedbackStatus: 'waiting',
       message: null, finalization: 'pending', usageSeconds: null,
-      // A tab loaded before the listening hold names no mode and reports no microphone quiet: it keeps the earlier turn-taking.
-      ...(input.scenarioId === INTERVIEW_SCENARIO_ID ? { interview: { evaluation: null, summary: null, ...(input.listening ? { listening: input.listening } : {}) } } : {}),
+      // A tab loaded before the listening hold reports no microphone quiet: only the silence watchdog times Sam's turn.
+      ...(input.scenarioId === INTERVIEW_SCENARIO_ID ? { interview: { evaluation: null, summary: null, listening: 'quiet' } } : {}),
     };
     this.createDirectors();
     await this.ctx.storage.put('lease', this.lease);
@@ -287,7 +287,8 @@ export class SimulatorSession extends DurableObject<Env> {
         pauses: () => this.pauseSpans(),
         talking: () => { const ready = new Set(settled()); return this.snapshot!.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); },
         heard: () => Math.max(this.lastAudio, this.lastSpeech),
-        listening: snapshot.interview.listening, transcript: () => this.snapshot!.transcript,
+        // Sessions started before the listening hold keep the earlier turn-taking; a short acknowledgment is no longer offered.
+        listening: !!snapshot.interview.listening, transcript: () => this.snapshot!.transcript,
       });
     } else if (getScenario(snapshot.scenarioId).objectives.length) this.contextual = new ContextualDirector({
       scenarioId: snapshot.scenarioId, clientId: snapshot.clientId,
@@ -299,7 +300,7 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private async openLive(input: { scenarioId: string; clientId: string; sdp: string }, offsetMs = 0, context?: string) {
-    const listening = this.snapshot?.interview?.listening;
+    const listening = !!this.snapshot?.interview?.listening;
     const created = await this.paid.createLive({ ...input, ...(context ? { context } : {}), ...(listening ? { listening } : {}) }, foundryConfig(this.env));
     const segment: Segment = { epoch: ++this.epoch, providerId: created.session.id, offsetMs, startedAt: Date.now(), endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null };
     this.segments.push(segment);
@@ -901,6 +902,8 @@ export class SimulatorSession extends DurableObject<Env> {
   /** The previous owner was lost. A started conversation is held for its browser to resume, as after a lost connection. */
   private async restore(checkpoint: Checkpoint) {
     this.snapshot = checkpoint.snapshot;
+    // A session started while a short acknowledgment could be chosen resumes with quiet listening.
+    if (this.snapshot.interview?.listening) this.snapshot.interview.listening = 'quiet';
     this.reachedLive = checkpoint.reachedLive;
     this.epoch = checkpoint.epoch;
     this.resumes = checkpoint.resumes;

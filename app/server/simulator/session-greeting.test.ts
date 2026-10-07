@@ -46,7 +46,7 @@ test('a greeting met with silence is sent again, then the voice session is repla
   expect(await poll(f)).toMatchObject({ status: 'paused', message: null, pause: { reason: 'provider' } });
   await reconnect(f);
   // Nothing was said, so the new session opens the conversation rather than resuming one.
-  expect(f.created[1]).toEqual({});
+  expect(f.created[1]).toEqual({ listening: true });
   expect(greetings(f)).toEqual(['opening-2']);
   expect(instructions(f)[0]!.content).toBe(opening!.content);
   f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-1', delta: 'Thanks for making time today.', start_ms: 400, end_ms: 2000 });
@@ -105,7 +105,7 @@ test('a restart before Sam spoke resumes with the opening, not a reconnect', asy
   const replacement = await fixture({ values: f.values, archive: f.archive, provider: 'replacement' });
   expect(await poll(replacement)).toMatchObject({ status: 'paused', pause: { reason: 'restart' } });
   await reconnect(replacement);
-  expect(replacement.created[0]).toEqual({});
+  expect(replacement.created[0]).toEqual({ listening: true });
   expect(greetings(replacement)).toEqual(['opening-2']);
   expect(instructions(replacement)[0]!.content).toBe(opening);
   await replacement.session.fetch(request('end'));

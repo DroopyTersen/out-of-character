@@ -1,9 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Volume2 } from 'lucide-react';
-import {
-  COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, listeningMode, listeningModes,
-  type InterviewBackground, type InterviewSession, type InterviewSummaryContent, type ListeningMode,
-} from '../../core/interview';
+import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import type { AudioLevels } from '../simulator/audio-levels';
 import { ConnectionPaused, ConnectionUnstable, formatTime, type ConversationPhase } from '../simulator/conversation';
@@ -31,8 +28,8 @@ export function samClient(voiceId: InterviewVoiceId): Client {
   };
 }
 
-export function InterviewSetup({ voiceId, onVoice, listening, onListening, onStart, enabled = true, error }: {
-  voiceId: InterviewVoiceId; onVoice: (id: InterviewVoiceId) => void; listening: ListeningMode; onListening: (id: ListeningMode) => void; onStart: () => void;
+export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, error }: {
+  voiceId: InterviewVoiceId; onVoice: (id: InterviewVoiceId) => void; onStart: () => void;
   enabled?: boolean; error?: string | null;
 }) {
   return <section className="interview-setup">
@@ -63,12 +60,6 @@ export function InterviewSetup({ voiceId, onVoice, listening, onListening, onSta
         <h2>Choose Sam’s voice</h2>
         <div className="interview-voices" role="group" aria-label="Choose Sam’s voice">
           {interviewVoices.map(voice => <button key={voice.id} type="button" aria-pressed={voiceId === voice.id} className={voiceId === voice.id ? 'selected' : ''} onClick={() => onVoice(voice.id)}><img src={portraits[voice.id]} alt="" /><strong>{voice.presentation} voice</strong><span className="interview-choice-mark" aria-hidden="true">{voiceId === voice.id && <Check size={17} />}</span></button>)}
-        </div>
-      </div>
-      <div className="interview-listening-choice sim-panel">
-        <h2 id="interview-listening-heading">How Sam listens <small>Test setting</small></h2>
-        <div className="interview-listening-modes" role="group" aria-labelledby="interview-listening-heading">
-          {listeningModes.map(mode => <button key={mode.id} type="button" aria-pressed={listening === mode.id} className={listening === mode.id ? 'selected' : ''} onClick={() => onListening(mode.id)}><strong>{mode.label}</strong><span>{mode.description}</span><span className="interview-choice-mark" aria-hidden="true">{listening === mode.id && <Check size={15} />}</span></button>)}
         </div>
       </div>
       <div className="interview-start">
@@ -165,7 +156,7 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
     {warning && <div className="sim-session-warning" role="status"><div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong><p>{warning.kind === 'idle' ? `The interview will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before the interview ends automatically.`}</p></div>{warning.kind === 'idle' && <button onClick={onContinue}>Continue interview</button>}</div>}
     <div className="interview-live-grid">
       <div className="interview-primary">
-        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p>{snapshot?.interview?.listening && <p className="interview-listening-mode">Listening: {listeningMode(snapshot.interview.listening).label}</p>}</div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
+        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
           <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
         </div>
         {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}

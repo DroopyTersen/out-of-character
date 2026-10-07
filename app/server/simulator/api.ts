@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { INTERVIEW_SCENARIO_ID, interviewVoices, listeningModes, type ListeningMode } from '../../../core/interview';
+import { INTERVIEW_SCENARIO_ID, interviewVoices } from '../../../core/interview';
 import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/scenarios.server';
 import { BodyError, boundedJson } from '../http';
 import { foundryConfigured } from '../../../ai/foundry.server';
@@ -21,9 +21,10 @@ export const startSchema = z.object({
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
   sdp: offer,
-  listening: z.enum(listeningModes.map(mode => mode.id) as [ListeningMode, ...ListeningMode[]]).optional(),
+  // Accept and discard the listening mode a tab opened while it could be chosen still sends; every interview listens quietly.
+  listening: z.enum(['quiet', 'ack']).optional(),
 }).strict().refine(input => (input.scenarioId === INTERVIEW_SCENARIO_ID) === interviewVoices.some(voice => voice.id === input.clientId), 'Choose an interviewer for an interview.')
-  .refine(input => !input.listening || input.scenarioId === INTERVIEW_SCENARIO_ID, 'Listening modes are for interviews.');
+  .transform(({ listening: _legacy, ...input }) => input);
 export const resumeSchema = z.object({ sdp: offer }).strict();
 export const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.TYPESAFE_API_KEY;
 export const simulatorJson = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });

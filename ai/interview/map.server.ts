@@ -12,7 +12,7 @@ import type { TranscriptEntry } from '../../core/simulator/types';
 import { interviewScenario } from './scenario.server';
 
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v10';
+export const MAP_PROMPT_VERSION = 'sol-map-v11';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -71,7 +71,7 @@ export const mapInstructions = [
     '- related: other threads that are the same story, such as a layoff and a feature cut that were both budget decisions.',
     '- topics: the one or two closeout topics its answer would explore, or none; not topics it merely mentions.',
     'When a thread is about a person or organization whose role or side is not yet known, its first unknown is who they are, such as unknown "who Morgan is: client, delivery team or vendor", guess "a client-side product owner". Revise it to the story once that is answered. This applies only to someone a thread is about, not to every name.',
-    'A good thread is anchored in something the participant said, and its answer would teach a future team something: a decision and who made it, a consequence, a tradeoff, friction on either side, a practice that worked, or a quiet win. Prefer gaps the participant can answer firsthand. While useful gaps remain, keep roughly 4-10 threads open: enough choice, not a backlog. Never invent threads to fill a count: once the participant has covered the ground, fewer open threads is right.',
+    'A good thread is anchored in something the participant said, and its answer would teach a future team something: a decision and who made it, a consequence, a tradeoff, friction on either side, a practice that worked, or a quiet win. Prefer gaps the participant can answer firsthand, and never write one about what happened while they were away or after they left, unless they have shown they know it secondhand. While useful gaps remain, keep roughly 4-10 threads open: enough choice, not a backlog. Never invent threads to fill a count: once the participant has covered the ground, fewer open threads is right.',
     'Two threads to keep in mind:',
     '- The team, by default. From your first call, keep one thread on the delivery team until three things are known: who was on it, how the work was split, and the participant\'s own part. Its unknown is the first of those still missing; revise it as each is answered, then close it done. It is a default, not a mandate: it competes like any other thread, so do not inflate it when the participant is on a richer story. When the participant names what a teammate did ("our designer ran the user interviews"), what that work made possible is a project-contributions thread.',
     '- A win. When the participant shows pride or says something went well ("the launch went really smoothly"), write a thread for what made it work, so the win yields a practice to repeat.',
@@ -79,7 +79,7 @@ export const mapInstructions = [
   [
     'Closing threads. Only you change a thread\'s status, and done and off need a reason. Use done when a thread is fully answered; reopen it if the transcript later shows more to the same gap. A different question is a new thread, not a reopened one. Use off when:',
     '- the participant declined it or deflected it twice;',
-    '- it makes no sense given their vantage, such as how the client received a tech lead who started after the participant went on leave, unless they have shown they know it secondhand;',
+    '- it makes no sense given their vantage, such as how the client received a tech lead who started after the participant went on leave, unless they have shown they know it secondhand. When they say they were away or had left ("no idea, I wasn\'t there"), close off every open thread about what happened then or how it turned out; never reword one toward the time before they left;',
     '- its premise is false because the participant contradicted what it assumes.',
     'Check every open thread against the vantage on every call. An off thread stays off unless the participant brings it back. Once Sam has asked about a thread, never leave it unchanged: when the participant\'s answer fills the unknown, close it done with the answer as the reason; when it answers only part, or answers for the team instead of themselves, revise the unknown to the part still missing; when it rejects the premise ("no, that wasn\'t the bottleneck"), close it off. A thread asked without getting anywhere needs a sharper unknown or guess, asking another way or about a neighboring fact; close it off only if the rewrite also goes nowhere. A call made because a thread stalled is your cue to rewrite it. Jev\'s thread signals, when present, are fallible hints; decide from the transcript. Drop a thread only to merge a duplicate ("merged into t7") or remove a mistake; otherwise close it so the record stays.',
   ].join('\n'),

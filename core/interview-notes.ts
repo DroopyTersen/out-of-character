@@ -36,18 +36,24 @@ const gap = (thread: MapThread) => `still unknown: ${sentence(thread.unknown)}${
  */
 const offerLine = (names: string[]) => `Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on${names.length ? ` with ${names.join(' or ')}` : ''}. Their call.`;
 
+/** The thread the conversation was on, now answered or closed. */
+export type Done = { id: string; answered: boolean };
+
 /**
  * Keep pulling on the current thread, or a thread worth tugging. The runner-up comes with its gap, so Sam has a next
- * question the moment the lead is answered, before a new note can arrive; one more is named by label.
+ * question the moment the lead is answered, before a new note can arrive; one more is named by label. `done` is the
+ * thread the conversation was on, if it's finished: the one closed thread a note names, so Sam stops pulling on it.
  */
-export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADERS, offer = false): string | null {
+export function listNote(map: ConversationMap, pick: Pick, headers = NOTE_HEADERS, offer = false, done: Done | null = null): string | null {
   const threads = new Map(map.threads.map(thread => [thread.id, thread]));
   const lead = pick.lead == null ? undefined : threads.get(pick.lead);
   if (!lead) return null;
   const [next, ...rest] = pick.nearby.flatMap(id => threads.get(id) ?? []);
+  const left = done == null ? undefined : threads.get(done.id);
   return [
     headers.list,
     ...(offer ? [offerLine([lead, ...(next ? [next] : [])].map(thread => oneLine(thread.label)))] : []),
+    ...(left ? [`(${oneLine(left.label)}) is ${done!.answered ? 'answered' : 'closed'}: move on from it.`] : []),
     `${pick.action === 'keep' ? 'Keep pulling' : 'Worth pulling next'} (${oneLine(lead.label)}): ${gap(lead)}`,
     ...(next ? [`If that’s answered, then (${oneLine(next.label)}): ${gap(next)}`] : []),
     ...(rest.length ? [`${pick.action === 'keep' ? 'Nearby' : 'Also open'}: ${rest.map(thread => oneLine(thread.label)).join(' · ')}`] : []),
@@ -79,9 +85,12 @@ export const TURN_NOTE = 'Turn note: they’ve finished and are waiting for you 
 /** Withdraws the previous note when Sol has removed all its facts, vantage and preferences. */
 export const emptyMapNote = (headers = NOTE_HEADERS) => `${headers.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;
 
-/** The thread note in force, so a later pick knows what Sam was last told; `named` are the other threads it lists. */
-export type ListState = { lead: string | null; key: string | null; sent: boolean; complaint: boolean; named: string[] };
-export const emptyListState = (): ListState => ({ lead: null, key: null, sent: false, complaint: false, named: [] });
+/**
+ * The thread note in force, so a later pick knows what Sam was last told; `named` are the other threads it lists. `on`
+ * is the thread the conversation was last on, and `told` the last word Sam had that it was finished.
+ */
+export type ListState = { lead: string | null; key: string | null; sent: boolean; complaint: boolean; named: string[]; on: string | null; told: string | null };
+export const emptyListState = (): ListState => ({ lead: null, key: null, sent: false, complaint: false, named: [], on: null, told: null });
 /** `offer` is whether `text` lets Sam offer to stop. */
 export type ListDecision = { pick: Pick; text: string | null; state: ListState; offer: boolean };
 const NO_LEAD = '"none"';
@@ -97,6 +106,9 @@ const OFFER = '+offer';
  * A note that names a thread the participant has since declined, or Sol has since closed, goes out again without it.
  * A turn in which the participant objected to the interview itself gets an acknowledge-and-adapt note instead, and
  * nothing leads again until their next turn. `offer` lets Sam offer to stop; granting or withdrawing it resends.
+ * When the thread the conversation is on is answered or closed and another leads, the note says so: once when Jev
+ * holds it down, and again, even with the same lead, at their first turn after Sol closes it that Jev can't place on
+ * another thread.
  * `state` is what to keep once `text` is sent, or right away when it's null.
  */
 export function nextListNote(
@@ -108,10 +120,15 @@ export function nextListNote(
   // Sam shouldn't be pointed at ground the participant has declined or already answered, even as an aside.
   const gone = (id: string) => map.threads.find(thread => thread.id === id)?.status !== 'open' || ranking.holds[id]?.state === 'declined';
   const stale = previous.named.some(gone);
-  const decide = (pick: Pick, key: string, text: string | null, offers = false): ListDecision => {
-    const send = key === previous.key && !(stale && text) ? null : text;
+  // Jev reads only open threads, so once Sol closes the one they were on, it stays the one until Jev places them elsewhere.
+  const on = ranking.current ?? previous.on ?? null;
+  const decide = (pick: Pick, key: string, text: string | null, offers = false, told = previous.told ?? null): ListDecision => {
+    const send = key === previous.key && (told === (previous.told ?? null) || !turn) && !(stale && text) ? null : text;
     const named = send != null ? pick.nearby : previous.named;
-    return { pick, text: send, offer: send != null && offers, state: { lead: pick.lead, key, sent: previous.sent || send != null, complaint, named } };
+    return {
+      pick, text: send, offer: send != null && offers,
+      state: { lead: pick.lead, key, sent: previous.sent || send != null, complaint, named, on, told: send != null ? told : previous.told ?? null },
+    };
   };
   if (complaint) {
     const open = fresh.ranked.slice(0, RANKING.nearby).map(item => item.id);
@@ -127,7 +144,18 @@ export function nextListNote(
   }
   const suffix = offer ? OFFER : '';
   if (pick.lead == null) return decide(pick, NO_LEAD + suffix, previous.sent || offer ? emptyListNote(headers, offer) : null, offer);
-  return decide(pick, leadKey(map, pick.lead) + suffix, listNote(map, pick, headers, offer), offer);
+  const finished = on == null || on === pick.lead ? null : finish(map, ranking, fresh, on);
+  const done = finished && { id: on!, answered: finished === 'answered' || finished === 'done' };
+  return decide(pick, leadKey(map, pick.lead) + suffix, listNote(map, pick, headers, offer, done), offer, finished ? JSON.stringify([on, finished]) : undefined);
+}
+
+/** Sol's closing status, or Jev's answered or declined reading while it holds the thread down until Sol rules. */
+function finish(map: ConversationMap, ranking: RankingState, pick: Pick, id: string) {
+  const thread = map.threads.find(item => item.id === id);
+  if (!thread) return null;
+  if (thread.status !== 'open') return thread.status;
+  const hold = ranking.holds[id]?.state;
+  return (hold === 'answered' || hold === 'declined') && !pick.ranked.some(item => item.id === id) ? hold : null;
 }
 
 /** The most connected participant facts, in map order, so the note stays short as the map grows. */

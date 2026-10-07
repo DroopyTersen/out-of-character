@@ -277,6 +277,31 @@ test('a refresh picks afresh only once Sol closes the lead, or before any lead, 
   expect(notes.sent).toHaveLength(2);
 });
 
+test('the thread they were on, once answered, is named so Sam moves on; Sol closing it repeats that at their next turn', () => {
+  const value = map();
+  const notes = sender();
+  let state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .8, t2: .5 } }));
+  expect(notes.run(value, state, { turn: true }).text).not.toContain('move on');
+  state = observeTurn(state, value, reading({ passageId: 'p6', focus: 't1', natural: { t1: .8, t2: .5 }, states: { t1: 'answered' } }), 'p6');
+  const answered = notes.run(value, state, { turn: true });
+  expect(answered.pick).toMatchObject({ action: 'tug', lead: 't2' });
+  expect(answered.text!.split('\n').slice(1, 3)).toEqual(['(Billing cut) is answered: move on from it.', 'Worth pulling next (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.']);
+  // Sol closes it: Jev can no longer place them on it, so it stays the thread they were on. The map alone sends nothing.
+  const closed = map({ threads: value.threads.map(item => item.id === 't1' ? { ...item, status: 'done' as const, reason: 'Covered.' } : item) });
+  state = observeMap(state, closed, at);
+  expect(notes.run(closed, state).text).toBeNull();
+  // Their next turn, on no open thread, hears it once more; later turns don't.
+  state = observeTurn(state, closed, reading({ passageId: 'p8', keys: keysOf(closed), natural: { t2: .5 } }), 'p8');
+  expect(notes.run(closed, state, { turn: true }).text).toBe(answered.text);
+  state = observeTurn(state, closed, reading({ passageId: 'p10', keys: keysOf(closed), natural: { t2: .5 } }), 'p10');
+  expect(notes.run(closed, state, { turn: true }).text).toBeNull();
+  // Once they're on the lead, the line goes, without a resend of its own.
+  state = observeTurn(state, closed, reading({ passageId: 'p12', keys: keysOf(closed), focus: 't2', natural: { t2: .8 } }), 'p12');
+  expect(notes.run(closed, state, { turn: true })).toMatchObject({ pick: { action: 'keep', lead: 't2' }, text: null });
+  expect(notes.list.on).toBe('t2');
+  expect(notes.sent).toHaveLength(3);
+});
+
 test('a complaint about the interview sets the lead aside until the participant’s next turn', () => {
   const value = map();
   const notes = sender();

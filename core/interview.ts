@@ -61,12 +61,7 @@ export type InterviewBackground = {
   facts: { text: string; url: string; title: string }[];
   retrievedAt: number;
 };
-/**
- * `listening` marks a session in which code times Sam's turn: Sam stays quiet through the participant's pauses and speaks
- * once a turn note hands over the floor. It is absent on sessions started before the listening hold, which ran without
- * it. Sessions started while a short acknowledgment could be chosen may say 'ack'; they resume with quiet listening.
- */
-export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[]; listening?: 'quiet' | 'ack' };
+export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[] };
 
 const BACKCHANNEL = /^(?:mm+(?:[- ]?hm*)?|hmm+|uh[- ]?huh|ah+|oh+|['’]?kay|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i;
 export const isBackchannel = (text: string) => BACKCHANNEL.test(text.trim());

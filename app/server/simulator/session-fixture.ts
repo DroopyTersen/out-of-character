@@ -33,8 +33,8 @@ export async function settle(f: { pending: Promise<unknown>[] }) {
 export const capability = `Bearer ${'a'.repeat(64)}`;
 export const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\no=fixture-offer\r\n' };
 export const request = (action: string, cap = capability, input = attempt) => new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: action === 'start' ? JSON.stringify(input) : action === 'poll' ? JSON.stringify({ active: false, audio: false, outputQuietMs: 60_000 }) : undefined });
-// The fake media endpoint has no Sam audio; quietMs is only a legacy client field.
-export const activityPoll = (active: boolean, audio = false, quietMs?: number | null) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio, outputQuietMs: 60_000, ...(quietMs === undefined ? {} : { quietMs }) }) });
+// The fake media endpoint has no Sam audio.
+export const activityPoll = (active: boolean, audio = false) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio, outputQuietMs: 60_000 }) });
 
 function archiveDatabase() {
   const sqlite = new Database(':memory:');
@@ -103,7 +103,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     if (!sockets.has(id)) sockets.set(id, new ProviderSocket());
     return sockets.get(id)!;
   };
-  const created: { context?: string; listening?: boolean }[] = [];
+  const created: { context?: string }[] = [];
   let ready = Promise.resolve();
   let alarm = 0;
   let creations = 0;
@@ -122,7 +122,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   } as Env, {
     createLive: async input => {
       const id = latest = ++creations === 1 ? provider : `${provider}-${creations}`;
-      created.push({ ...(input.context ? { context: input.context } : {}), ...(input.listening ? { listening: input.listening } : {}) });
+      created.push(input.context ? { context: input.context } : {});
       await pendingCreation;
       if (failCreation(creations)) throw new Error('Provider creation failed.');
       socketFor(id);

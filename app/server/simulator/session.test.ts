@@ -2,7 +2,7 @@ import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { emptySkills, SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS } from '../../../core/simulator/types';
 import { emptyMap, type ConversationMap } from '../../../core/interview-map';
-import { NOTE_HEADERS } from '../../../core/interview-notes';
+import { CANCEL_NOTE, HOLD_NOTE, NOTE_HEADERS, TURN_NOTE } from '../../../core/interview-notes';
 import { PRODUCER_VERSION, type ResearchRequest } from '../../../core/interview-producer';
 import type { producerServices } from './interview-producer';
 import { TRANSCRIPT_LIMIT } from '../../../core/simulator/state';
@@ -28,8 +28,12 @@ const mapped = (map: ConversationMap, research: ResearchRequest | null = null) =
   map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
   changes: { added: [...map.entities, ...map.threads].map(item => item.id), changed: [], dropped: [], kept: [] }, research, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 },
 });
+const listening = [HOLD_NOTE, TURN_NOTE, CANCEL_NOTE];
+/** Events carrying a thread or map note, alone or handed over with the turn note. */
 const noteEvents = (sent: Record<string, unknown>[], kind?: keyof typeof NOTE_HEADERS) =>
-  sent.filter(event => String(event.event_id).startsWith('note-') && (!kind || String(event.content).startsWith(NOTE_HEADERS[kind])));
+  sent.filter(event => String(event.event_id).startsWith('note-') && !listening.includes(String(event.content)) && (!kind || String(event.content).startsWith(NOTE_HEADERS[kind])));
+/** Turn-taking notes sent on their own. */
+const turnNotes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-') && listening.includes(String(event.content))).map(event => event.content);
 const nextTick = () => new Promise(resolve => setTimeout(resolve, 600));
 
 test('the producer reads settled participant turns, maps after its floor, and keeps its notes to Sam private', async () => {
@@ -55,24 +59,33 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     await waitFor(() => turns.length === 1);
     await nextTick();
     expect(maps).toHaveLength(0); // Jev's wake waits for Sol's floor.
+    // Read and quiet, the answer got its turn note before Sol had mapped anything.
+    expect(turnNotes(f.socket.sent)).toEqual([HOLD_NOTE, TURN_NOTE]);
     setSystemTime(epoch + 20_500);
     await waitFor(() => maps.length === 1);
     await settle(f);
-    expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held while the participant still has the floor.
     setSystemTime(epoch + 22_000);
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
+    await nextTick();
+    expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held for the next handover, not sent into Sam's question.
+    setSystemTime(epoch + 23_000);
+    f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Priya ran the data pipeline.', start_ms: 23_000, end_ms: 24_000 });
+    setSystemTime(epoch + 26_000);
     await waitFor(() => noteEvents(f.socket.sent).length === 1);
     expect(maps).toHaveLength(1);
     expect(maps[0]!.attemptId).toBe(interviewAttempt.id);
     expect(maps[0]!.passages.map(entry => entry.id)).toEqual(['p1']);
     expect(maps[0]!.tail.reasons).toHaveLength(1);
     expect(maps[0]!.tail.reasons[0]).toContain('(p1)');
-    // One event, the thread note first.
+    // One event with the turn: the thread note first, the map, then the turn note.
     const [handed] = noteEvents(f.socket.sent);
     const content = String(handed!.content);
     expect(handed).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
     expect(content.startsWith(NOTE_HEADERS.list)).toBe(true);
     expect(content).toMatch(/PRIVATE UNKNOWN[^]*PRIVATE VANTAGE/);
+    expect(content).toEndWith(TURN_NOTE);
+    expect(turnNotes(f.socket.sent)).toEqual([HOLD_NOTE, TURN_NOTE, HOLD_NOTE]);
+    f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did Priya hand over?', start_ms: 26_000, end_ms: 27_000 });
     // Notes are never instructions; Sam's silence after the participant spoke drew the greeting once more.
     expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening', 'opening-again']);
     f.socket.emit({ type: 'session.thinking.appended', client_event_id: handed!.event_id, start_ms: 2000, end_ms: 2400 });
@@ -86,16 +99,16 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     await (await f.session.fetch(request('report'))).text();
     await Promise.all(f.pending);
     const row = f.interviewRow()!;
-    const records = JSON.parse(row.interventions_json).filter((record: { source: string }) => record.source !== 'grade');
-    expect(records.map((record: { source: string }) => record.source)).toEqual(['turn', 'map', 'traits', 'note', 'note']);
+    const records = JSON.parse(row.interventions_json).filter((record: { source: string; kind?: string }) => record.source !== 'grade' && !['hold', 'turn', 'cancel'].includes(record.kind!));
+    expect(records.map((record: { source: string }) => record.source)).toEqual(['turn', 'map', 'traits', 'turn', 'note', 'note']);
     expect(records[0]).toMatchObject({ passageId: 'p1', outcome: 'read', reading: { novel: .9 } });
     expect(records[1]).toMatchObject({ outcome: 'applied', inputCount: 1, lastInputId: 'p1', changes: { added: ['e1', 't1'] } });
-    // Both notes were decided at Sol's map and held until Sam took the floor.
+    // Both notes were decided at Sol's map, after the first handover, and held past Sam's question for the next one.
     const delivery = { eventId: handed!.event_id, status: 'accepted', startMs: 2000, endMs: 2400 };
-    expect(records[3]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, nextSamTurnAfterId: 'p1', delivery });
-    expect(records[4]).toMatchObject({ kind: 'map', outcome: 'sent', sentAt: epoch + 22_000, decidedAt: epoch + 20_500, delivery });
+    expect(records[4]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, handover: true, nextSamTurnAfterId: 'p3', delivery });
+    expect(records[5]).toMatchObject({ kind: 'map', outcome: 'sent', sentAt: epoch + 26_000, decidedAt: epoch + 20_500, delivery });
     expect(JSON.parse(row.cues_json)).toEqual([]);
-    expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', maps: 1, applied: 1, turns: 1, notes: 2, research: 0 });
+    expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', maps: 1, applied: 1, turns: 2, notes: 2, research: 0 });
     expect(summarized).not.toContain('PRIVATE');
     expect(summarized).not.toContain('interventions');
     expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
@@ -103,7 +116,7 @@ test('the producer reads settled participant turns, maps after its floor, and ke
   } finally { await f.session.fetch(request('end')); }
 }, 10_000);
 
-test('long interview silence never creates an automatic turn instruction, including legacy polls', async () => {
+test('long interview silence never creates an automatic turn instruction', async () => {
   const f = await fixture();
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);
@@ -114,7 +127,7 @@ test('long interview silence never creates an automatic turn instruction, includ
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'That helped the next release.', start_ms: 1000, end_ms: 2000 });
     for (const elapsed of [15_000, 30_000, 45_000, 60_000]) {
       setSystemTime(epoch + elapsed);
-      await f.session.fetch(activityPoll(false, false, 60_000));
+      await f.session.fetch(activityPoll(false));
       await new Promise(resolve => setTimeout(resolve, 600));
     }
     expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening']);
@@ -197,8 +210,12 @@ test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam 
   await f.session.fetch(activityPoll(false, true));
   await waitFor(() => maps.length === 2);
   await settle(f);
-  expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held until Sam takes the floor.
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 41_000, end_ms: 42_000 });
+  await settle(f);
+  expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held past Sam's question for the next handover.
+  setSystemTime(epoch + 43_000);
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Priya ran the data pipeline.', start_ms: 43_000, end_ms: 44_000 });
+  setSystemTime(epoch + 46_000);
   await waitFor(() => noteEvents(f.socket.sent).length === 1);
   expect(maps[1]!.blocks.join('\n')).toContain('PUBLIC BACKGROUND FACT');
   const note = noteEvents(f.socket.sent, 'map')[0]!;
@@ -218,7 +235,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam 
   const records = JSON.parse(f.interviewRow()!.interventions_json);
   const research = records.find((item: any) => item.source === 'research');
   expect(research).toMatchObject({ outcome: 'found', facts: [fact], queries: ['PRIVATE ARCHIVE QUERY'], loggedAt: epoch + 41_000 });
-  expect(records.find((item: any) => item.source === 'note')).toMatchObject({
+  expect(records.find((item: any) => item.source === 'note' && item.kind === 'map')).toMatchObject({
     kind: 'map', outcome: receipt === 'accepted' ? 'sent' : 'rejected', delivery: { status: receipt }, researchIds: [research.id],
   });
   expect(f.row()).toBeNull();
@@ -473,7 +490,7 @@ test('a failed interview summary remains unavailable while the participant trans
   expect(f.row()).toBeNull();
 });
 
-test.each(['accepted', 'rejected'] as const)('a list note receipt %s is archived, and a rejected note goes out again at the next pick', async receipt => {
+test.each(['accepted', 'rejected'] as const)('a list note receipt %s is archived, and a rejected note goes out again with the retried handover', async receipt => {
   let turns = 0, maps = 0;
   const f = await fixture({ overrides: {
     evaluateTurn: async input => { turns++; return novelTurn(input); },
@@ -486,23 +503,34 @@ test.each(['accepted', 'rejected'] as const)('a list note receipt %s is archived
   setSystemTime(epoch + 20_500);
   await waitFor(() => maps === 1);
   await settle(f);
+  // Sol mapped after the first answer was handed over, so its notes wait for the next one.
+  setSystemTime(epoch + 22_000);
   f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
+  setSystemTime(epoch + 23_000);
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Our lead coordinated it.', start_ms: 23_000, end_ms: 24_000 });
+  setSystemTime(epoch + 26_000);
   await waitFor(() => noteEvents(f.socket.sent, 'list').length === 1);
   const first = noteEvents(f.socket.sent, 'list')[0]!;
   f.socket.emit(receipt === 'accepted'
     ? { type: 'session.thinking.appended', client_event_id: first.event_id, start_ms: 2000, end_ms: 2400 }
     : { type: 'error', error: { client_event_id: first.event_id } });
   expect((await (await f.session.fetch(request('poll'))).json() as Record<string, any>).message).toBeNull();
-  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Our lead coordinated it.', start_ms: 22_000, end_ms: 23_000 });
-  setSystemTime(epoch + 25_000);
-  await waitFor(() => turns === 2);
-  await settle(f);
-  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did the lead own?', start_ms: 25_000, end_ms: 26_000 });
+  f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did the lead own?', start_ms: 26_000, end_ms: 27_000 });
+  setSystemTime(epoch + 28_000);
+  f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The cutover schedule.', start_ms: 28_000, end_ms: 29_000 });
+  setSystemTime(epoch + 31_000);
+  await waitFor(() => turns === 3);
+  // Each answer was handed over, and the rejected handover once more.
+  await waitFor(() => f.socket.sent.filter(event => String(event.content).endsWith(TURN_NOTE)).length === (receipt === 'accepted' ? 3 : 4));
   await settle(f);
   const lists = noteEvents(f.socket.sent, 'list');
   expect(lists).toHaveLength(receipt === 'accepted' ? 1 : 2);
-  // The thread note goes out again; the map note sent with it waits for its spacing.
-  if (receipt === 'rejected') expect(String(first.content).startsWith(`${lists[1]!.content}\n\n${NOTE_HEADERS.map}`)).toBe(true);
+  // The thread note goes out again with the turn; the map note sent with it waits for its spacing.
+  if (receipt === 'rejected') {
+    const resent = String(lists[1]!.content);
+    expect(resent).toEndWith(`\n\n${TURN_NOTE}`);
+    expect(String(first.content).startsWith(`${resent.slice(0, -TURN_NOTE.length - 2)}\n\n${NOTE_HEADERS.map}`)).toBe(true);
+  }
   await f.session.fetch(request('end'));
   await Promise.all(f.pending);
   const notes = JSON.parse(f.interviewRow()!.interventions_json).filter((item: { source: string; kind?: string }) => item.source === 'note' && item.kind === 'list');

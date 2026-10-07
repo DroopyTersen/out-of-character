@@ -2,13 +2,12 @@ import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } fr
 import type { MapDefect, MapPace, MapUpdate } from './interview-map';
 import type { Band, Pick, ThreadState } from './interview-ranking';
 import type { DirectorUsage } from './simulator/director';
-import { SPEECH_QUIET_MS } from './simulator/types';
 
 /**
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v21';
+export const PRODUCER_VERSION = 'interview-producer-v22';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -28,19 +27,24 @@ export const PRODUCER_LIMITS = {
    */
   wakeAfter: 6000, wakes: 12,
   /**
-   * The listening hold: once the participant's microphone has been quiet for `holdAfter`, Sam gets a hold note; once
-   * both sides have been quiet for `listenWindow` after a complete answer, the turn is handed over. The handover waits
-   * up to `readWait` more for Jev's reading of that answer, so the thread note it picks goes out with the turn note.
-   * Hold and cancel notes are outside the note budget: a hold goes out at most once per pause, a cancel once per turn note.
+   * The listening hold, timed by the participant's transcript rather than their microphone, which background noise
+   * keeps loud. Their words reach the server about `transcriptLag` after they say them, so they are taken to have gone
+   * quiet that long before their last words arrived. Sam decides whether to answer as they stop, before the server
+   * knows they have, so the hold can't be timed to their pause: it goes once, at their first words, and Sam sometimes
+   * takes a finished answer's turn on its own. Otherwise the turn is handed over once they have been quiet for
+   * `listenWindow` after a complete answer and Sam, whose backchannel may fall in their pause, for `afterSam`: long
+   * enough to see whether they went on after it. The handover waits up to `readWait` more for Jev's reading of that
+   * answer, so the thread note it picks goes out with the turn note. Hold and cancel notes are outside the note budget:
+   * a hold goes once per participant turn, a cancel once per turn note.
    */
-  holdAfter: SPEECH_QUIET_MS, listenWindow: 2500, readWait: 2000, holds: 400, handovers: 200, cancels: 60,
+  transcriptLag: 1000, listenWindow: 2500, afterSam: 1500, readWait: 2000, holds: 200, handovers: 200, cancels: 60,
   /**
    * The voice service takes at most 500 tokens an event. A handover's notes go as one event when they fit in this many
    * characters; otherwise the map note goes first, on its own.
    */
   handoverChars: 1600,
-  /** A topic note waits until the participant's microphone has been quiet this long, so it never lands as they speak. */
-  releaseQuiet: 500,
+  /** A topic note waits until no words of the participant's have arrived for this long; while they speak, their words arrive up to about a second apart. */
+  releaseQuiet: 1200,
 };
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
@@ -175,13 +179,13 @@ export function fitRecords(records: ProducerLogRecord[], budget: number): Produc
 }
 
 export type LatencyStat = { count: number; p50: number; p90: number } | null;
-/** What the listening hold's timing sent; absent before v20. Sessions before v21 could run a short acknowledgment ('ack'). */
-export type ListeningSummary = { mode: 'quiet' | 'ack'; windowMs: number; holdAfterMs: number; readWaitMs?: number; holds: number; handovers: number; cancels: number; wakes: number };
+/** What the listening hold's timing sent. Summaries archived by v20 and v21 have the microphone's timing instead, and earlier ones none. */
+export type ListeningSummary = { windowMs: number; lagMs: number; afterSamMs: number; readWaitMs: number; holds: number; handovers: number; cancels: number; wakes: number };
 export type ProducerSummary = {
   model: string; effort: 'none' | 'low'; version: string; mapPrompt: string; rankingRubric: string;
   maps: number; applied: number; turns: number; notes: number; research: number;
   latency: { sol: LatencyStat; jevTurn: LatencyStat; traits: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat; turnToSam?: LatencyStat };
-  listening?: ListeningSummary;
+  listening: ListeningSummary;
 };
 
 export function latencyStat(values: number[]): LatencyStat {

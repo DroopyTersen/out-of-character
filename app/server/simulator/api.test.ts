@@ -46,38 +46,18 @@ test('poll forwards a validated activity report and rejects malformed reports be
   expect((await handleSimulator(f.request(path, { active: true, audio: false, padding: 'x'.repeat(500) }), f.env))!.status).toBe(413);
   expect(f.calls).toHaveLength(1);
 });
-test('poll forwards the participant microphone quiet with the output quiet, bounded like it', async () => {
+test('poll forwards Sam’s output quiet, bounded, and nothing about the participant’s microphone', async () => {
   const f = fixture();
   const path = `sessions/${id}/poll`;
-  const report = { active: true, audio: true, inputQuietMs: 1200, outputQuietMs: null, sequence: 9 };
+  const report = { active: true, audio: true, outputQuietMs: null, sequence: 9 };
   expect((await handleSimulator(f.request(path, report), f.env))!.status).toBe(200);
   expect(await f.calls[0]!.json() as typeof report).toEqual(report);
-  for (const inputQuietMs of [-1, 1.5, 60_001, 'soon']) expect((await handleSimulator(f.request(path, { active: false, audio: false, inputQuietMs }), f.env))!.status).toBe(400);
+  for (const outputQuietMs of [-1, 1.5, 60_001, 'soon']) expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs: null, extra: 1 }), f.env))!.status).toBe(400);
   // The largest report a browser sends stays inside the poll bound.
   const network = { ms: 600_000, received: 1_000_000, lost: 1_000_000, concealed: 0.123456789, jitterMs: 60_000, sentLost: 1_000_000, rttMs: 60_000 };
-  expect((await handleSimulator(f.request(path, { active: false, audio: false, inputQuietMs: 60_000, outputQuietMs: 60_000, sequence: Number.MAX_SAFE_INTEGER, network }), f.env))!.status).toBe(200);
+  expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs: 60_000, sequence: Number.MAX_SAFE_INTEGER, network }), f.env))!.status).toBe(200);
   expect(f.calls).toHaveLength(2);
-});
-test('an interview start from a tab that could still choose a listening mode is accepted and the choice discarded', async () => {
-  const f = fixture();
-  const interview = { ...f.start, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
-  for (const listening of ['quiet', 'ack']) {
-    expect((await handleSimulator(f.request('sessions', { ...interview, listening }), f.env))!.status).toBe(200);
-    expect(await f.calls.at(-1)!.json()).not.toHaveProperty('listening');
-  }
-  expect((await handleSimulator(f.request('sessions', { ...interview, listening: 'chatty' }), f.env))!.status).toBe(400);
-  expect(f.calls).toHaveLength(2);
-});
-test('legacy mutual quiet is validated and discarded for already-open tabs', async () => {
-  const f = fixture();
-  const path = `sessions/${id}/poll`;
-  for (const quietMs of [null, 0, 5000, 60_000]) {
-    expect((await handleSimulator(f.request(path, { active: false, audio: false, quietMs }), f.env))!.status).toBe(200);
-    const forwarded = await f.calls.at(-1)!.json() as Record<string, unknown>;
-    expect(forwarded).toEqual({ active: false, audio: false });
-  }
-  for (const quietMs of [-1, 0.5, 60_001, '5000']) expect((await handleSimulator(f.request(path, { active: false, audio: false, quietMs }), f.env))!.status).toBe(400);
-  expect(f.calls).toHaveLength(4);
 });
 test('interview starts only with its two voices and summary polling keeps the capability boundary', async () => {
   const f = fixture();

@@ -25,7 +25,7 @@ class FakePeer extends EventTarget {
   async getStats() { if (!FakePeer.stats) throw new Error('No stats.'); return FakePeer.stats(); }
 }
 class FakeAudioContext {
-  /** Whether the participant's microphone is picking up speech. */
+  /** Whether every meter, the microphone and Sam's playback, picks up sound. */
   static loud = false;
   state = 'running';
   sampleRate = 48_000;
@@ -290,16 +290,27 @@ test('polls carry media quality every few seconds, and a failing stats read neve
   await connection.end();
 });
 
-test('the microphone starting and stopping is reported at once with how long it has been quiet, and not at all while muted', async () => {
-  const { connection } = await connected();
-  const quiet = () => server.polls.map(poll => (poll as { inputQuietMs?: number | null }).inputQuietMs);
+test("Sam's playback starting and going quiet is reported at once with how long Sam has been quiet", async () => {
+  const { connection, peer } = await connected();
+  const quiet = () => server.polls.map(poll => (poll as { outputQuietMs?: number | null }).outputQuietMs);
   await advance(1000);
-  // Nothing heard yet: the server can't tell how long the participant has been quiet.
+  // No playback yet: the server can't tell whether Sam is audible.
   expect(new Set(quiet())).toEqual(new Set([null]));
+  peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
   let seen = server.polls.length;
+  await advance(500);
+  const settled = quiet().slice(seen);
+  expect(settled).toHaveLength(1);
+  expect(settled[0]).toBeGreaterThanOrEqual(300);
+  expect(settled[0]).toBeLessThan(400);
+  // The regular poll carries the growing quiet.
+  await advance(1000);
+  expect(quiet().at(-1)).toBeGreaterThan(settled[0]!);
+  seen = server.polls.length;
   FakeAudioContext.loud = true;
   await advance(100);
   expect(quiet().slice(seen)).toEqual([0]);
+  await advance(400);
   seen = server.polls.length;
   FakeAudioContext.loud = false;
   await advance(200);
@@ -309,13 +320,5 @@ test('the microphone starting and stopping is reported at once with how long it 
   expect(stopped).toHaveLength(1);
   expect(stopped[0]).toBeGreaterThanOrEqual(300);
   expect(stopped[0]).toBeLessThan(400);
-  // The regular poll carries the growing quiet.
-  await advance(1000);
-  expect(quiet().at(-1)).toBeGreaterThan(stopped[0]!);
-  connection.mute(true);
-  FakeAudioContext.loud = true;
-  seen = server.polls.length;
-  await advance(1100);
-  expect(new Set(quiet().slice(seen))).toEqual(new Set([null]));
   await connection.end();
 });

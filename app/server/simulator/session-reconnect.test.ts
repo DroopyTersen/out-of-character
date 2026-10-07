@@ -1,6 +1,7 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../../core/simulator/types';
 import { emptyMap, type ConversationMap } from '../../../core/interview-map';
+import { NOTE_HEADERS, TURN_NOTE } from '../../../core/interview-notes';
 import { activityPoll, attempt, capability, fixture, request, settle, waitFor } from './session-fixture';
 
 // Pause and resume across real session ownership; only the provider and paid judges are substituted.
@@ -257,21 +258,27 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
     evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     generateMap: async () => { maps++; return { map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
   } }, interviewAttempt);
-  const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => event.content);
+  const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => String(event.content));
   setSystemTime(epoch + 20_500);
   // Sam's opening is still playing, so the silence watchdog stays out of it.
   await f.session.fetch(activityPoll(true, true));
   await waitFor(() => maps === 1);
   await settle(f);
+  // Sol mapped after the answer was handed over, so both notes go with the next handover, in one event.
+  setSystemTime(epoch + 22_000);
   f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });
-  // Sam's words released both notes in one event; the new session gets the same notes, each in its own.
-  await waitFor(() => notes(f.socket.sent).length === 1);
-  const [delivered] = notes(f.socket.sent);
+  setSystemTime(epoch + 23_000);
+  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-2', delta: 'Another team, until last spring.', start_ms: 23_000, end_ms: 24_000 });
+  setSystemTime(epoch + 26_000);
+  await waitFor(() => notes(f.socket.sent).some(note => note.startsWith(NOTE_HEADERS.list)));
+  const delivered = notes(f.socket.sent).find(note => note.startsWith(NOTE_HEADERS.list))!;
+  expect(delivered).toEndWith(`\n\n${TURN_NOTE}`);
   await lose(f);
   await reconnect(f);
-  expect(notes(f.socket.sent).map(String).sort()).toEqual(String(delivered).split('\n\n').sort());
+  // The new session gets the same notes, each in its own event, and no turn note until there are new words.
+  expect(notes(f.socket.sent).sort()).toEqual(delivered.slice(0, -TURN_NOTE.length - 2).split('\n\n').sort());
   expect(f.socket.sent.map(event => String(event.event_id))).toContain('resume-2');
   await f.session.fetch(request('end'));
   await settle(f);
-  expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string }) => record.source === 'note')).toHaveLength(4);
+  expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string; kind: string }) => record.source === 'note' && ['list', 'map'].includes(record.kind))).toHaveLength(4);
 });

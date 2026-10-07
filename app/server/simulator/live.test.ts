@@ -21,18 +21,14 @@ test('WebRTC creation uses Foundry and the configured Live deployment with priva
   expect(result).toEqual({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
 });
 
-test('the listening hold reaches the provider session as Sam’s turn-taking brief', async () => {
-  const instructions: string[] = [];
-  for (const listening of [false, true]) {
-    await createLive({ scenarioId: 'project-closeout', clientId: 'sam-cedar', sdp: 'v=0', ...(listening ? { listening } : {}) }, fixtureFoundry, (async (_url, options) => {
-      instructions.push(JSON.parse(String(options?.body)).session.instructions);
-      return Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
-    }) as typeof fetch);
-  }
-  const [legacy, listening] = instructions;
-  expect(legacy).not.toContain('turn note');
-  expect(listening).toContain('say nothing yet: no sound and no word');
-  expect(listening).toContain('Speak only when a turn note says it is your turn.');
+test('an interview’s provider session gets Sam’s turn-note turn-taking', async () => {
+  let instructions = '';
+  await createLive({ scenarioId: 'project-closeout', clientId: 'sam-cedar', sdp: 'v=0' }, fixtureFoundry, (async (_url, options) => {
+    instructions = JSON.parse(String(options?.body)).session.instructions;
+    return Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
+  }) as typeof fetch);
+  expect(instructions).toContain('say nothing yet: no sound and no word');
+  expect(instructions).toContain('Speak only when a turn note says it is your turn.');
 });
 
 test('the control WebSocket attaches to Foundry with server-only authentication', async () => {

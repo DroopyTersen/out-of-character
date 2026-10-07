@@ -82,8 +82,8 @@ export function complaintNote(map: ConversationMap, open: string[], headers = NO
  */
 export const TURN_NOTE = 'Turn note: they’ve finished and are waiting for you to speak. It’s your turn now.';
 
-/** Once the participant pauses, Sam keeps listening silently. */
-export const HOLD_NOTE = 'Turn note: they’ve paused, but they may not be finished. Say nothing yet; keep listening.';
+/** At the participant's first words: Sam listens silently through their pauses. */
+export const HOLD_NOTE = 'Turn note: they’re answering, and they may pause before they finish. Say nothing in their pauses; keep listening until a turn note says it’s your turn.';
 /** The participant spoke again after a turn note, before Sam began the question. */
 export const CANCEL_NOTE = 'Turn note: they’ve started talking again. Stop and listen; your question can wait until they finish.';
 

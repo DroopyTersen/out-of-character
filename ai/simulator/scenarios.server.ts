@@ -397,9 +397,8 @@ export function publicCatalog(): Catalog {
   };
 }
 
-/** `listening`: code times the interviewer's turn; other scenarios have no listening hold. */
-export function actorBrief(scenario: Scenario, client: CastMember, listening = false): string {
-  if (scenario.id === interviewScenario.id) return interviewerBrief(client.id, undefined, listening);
+export function actorBrief(scenario: Scenario, client: CastMember): string {
+  if (scenario.id === interviewScenario.id) return interviewerBrief(client.id);
   const openEnded = scenario.objectives.length === 0;
   return [
     `You are ${client.name}, the ${scenario.clientRole}, in a realistic private consultancy role-play. The other speaker is the ${scenario.role}. Stay in this client role throughout.`,

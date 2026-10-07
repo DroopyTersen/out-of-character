@@ -69,9 +69,6 @@ export class LiveConnection {
   private activeSincePoll = false;
   private lastAudioAt = 0;
   private outputQuietSince: number | undefined;
-  /** When the participant's microphone was last loud, and whether the server has been told it went quiet since. */
-  private inputLoudAt: number | undefined;
-  private inputQuietSent = true;
   private outputQuietSent = true;
   private meterUpdatedAt = 0;
   private activitySequence = 0;
@@ -239,9 +236,9 @@ export class LiveConnection {
   private activity(active: boolean) {
     const now = Date.now();
     const fresh = now - this.meterUpdatedAt < 250;
+    // Sam audible is quiet for 0 ms; null only when the playback can't be measured.
     return { active, audio: now - this.lastAudioAt < 1500, sequence: ++this.activitySequence,
-      inputQuietMs: fresh && this.context?.state === 'running' && !this.muted && !this.autoMuted && this.inputLoudAt != null ? Math.min(60_000, now - this.inputLoudAt) : null,
-      outputQuietMs: fresh && this.canMeasureOutput() && this.outputQuietSince != null ? Math.min(60_000, now - this.outputQuietSince) : null };
+      outputQuietMs: fresh && this.canMeasureOutput() ? Math.min(60_000, now - (this.outputQuietSince ?? now)) : null };
   }
 
   /** Media quality since the last read, at most every few seconds. A slow or failed read is skipped, never waited on. */
@@ -274,26 +271,20 @@ export class LiveConnection {
       const outputAudible = output.level > .03 && !this.audio.paused;
       const speaking = running && inputEnabled && input.level > .08;
       const heard = speaking || (running && outputAudible);
-      const previousLoud = this.inputLoudAt;
       this.meterUpdatedAt = now;
       this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
       if (heard) {
         this.keepActive();
         this.lastAudioAt = now;
       }
-      if (speaking) this.inputLoudAt = now;
-      // The server times Sam's turn from these, so each change is reported at once: the participant starting to speak
-      // after a pause, either side going quiet, and Sam starting to speak, which also closes the cue opening.
-      const inputStarted = speaking && (previousLoud == null || now - previousLoud >= SPEECH_QUIET_MS);
-      const inputStopped = !this.inputQuietSent && this.inputLoudAt != null && now - this.inputLoudAt >= SPEECH_QUIET_MS;
+      // The server times Sam's turn from the participant's transcript and Sam's audio, so Sam starting to speak, which
+      // also closes the cue opening, and going quiet are reported at once.
       const outputStarted = previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null;
       const outputStopped = !this.outputQuietSent && this.outputQuietSince != null && now - this.outputQuietSince >= SPEECH_QUIET_MS;
-      if (speaking) this.inputQuietSent = false;
-      if (inputStopped) this.inputQuietSent = true;
       if (this.outputQuietSince == null) this.outputQuietSent = false;
       if (outputStopped) this.outputQuietSent = true;
       // An older periodic report is ignored on the server.
-      if ((inputStarted || inputStopped || outputStarted || outputStopped) && !this.ending) {
+      if ((outputStarted || outputStopped) && !this.ending) {
         void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
       }
       this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
@@ -500,8 +491,8 @@ export class LiveConnection {
     this.stream = undefined;
     this.pc = undefined;
     this.inputMeter = this.outputMeter = undefined;
-    this.outputQuietSince = this.inputLoudAt = undefined;
-    this.inputQuietSent = this.outputQuietSent = true;
+    this.outputQuietSince = undefined;
+    this.outputQuietSent = true;
     this.callbacks.levels(silentLevels);
   }
 

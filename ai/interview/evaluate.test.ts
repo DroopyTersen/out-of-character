@@ -72,23 +72,15 @@ describe('project closeout interview contracts', () => {
     expect(brief).not.toMatch(/wrapping up is premature|ground is still unexplored|ask whether anything important was missed/i);
   });
 
-  test('the listening hold changes only how Sam pauses and takes the turn: Sam stays silent and waits for the turn note', () => {
-    const id = interviewers[0]!.id;
-    const legacy = interviewerBrief(id);
-    const pause = 'Never fill their pause: no “mm”, “right”, or “yeah”';
-    const next = 'without waiting six seconds: a brief reaction, then one question.';
-    expect(legacy).toContain(pause);
-    expect(legacy).toContain(next);
-    expect(legacy).not.toContain('turn note');
-    const brief = interviewerBrief(id, undefined, true);
-    const changed = brief.split('\n\n').filter((paragraph, index) => paragraph !== legacy.split('\n\n')[index]);
-    expect(changed.map(paragraph => paragraph.slice(0, 12))).toEqual(['Turn-taking:', 'When the tur']);
-    expect(brief).not.toContain(next);
-    expect(brief).toContain(pause);
-    expect(brief).toContain('say nothing yet: no sound and no word');
-    expect(brief).toContain('Speak only when a turn note says it is your turn.');
-    expect(brief).toContain('When the turn note comes, the next move is yours');
-    expect(interviewerBrief(id, 'session.instructions.append', true)).toContain('Speak only when a turn note says it is your turn.');
+  test('Sam stays silent through the participant’s pauses and takes the turn when a turn note gives it', () => {
+    for (const channel of [undefined, 'session.instructions.append'] as const) {
+      const brief = interviewerBrief(interviewers[0]!.id, channel);
+      expect(brief).toContain('Never fill their pause: no “mm”, “right”, or “yeah”');
+      expect(brief).toContain('say nothing yet: no sound and no word');
+      expect(brief).toContain('Speak only when a turn note says it is your turn.');
+      expect(brief).toContain('When the turn note comes, the next move is yours: a brief reaction, then one question.');
+      expect(brief).not.toContain('without waiting six seconds');
+    }
   });
 
   test('on appended instructions the brief calls notes suggestions; otherwise the briefs match', () => {

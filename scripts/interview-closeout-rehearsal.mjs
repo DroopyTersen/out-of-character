@@ -11,8 +11,8 @@ import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from 
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
-// speech synthesis, is interviewed by the live Sam with the real producer: notes held for Sam's words, the participant's
-// talking, audio heard, and the silence watchdog. Early on they answer fully; from --wind minutes they tire and say so;
+// speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the
+// participant's transcript and Sam's playback, with the silence watchdog. Early on they answer fully; from --wind minutes they tire and say so;
 // they turn down Sam's first offer to stop, and ask to finish at Sam's second offer or at --stop minutes.
 // A participant left waiting says "Hello? Are you still there?" after 15 s, as a real one did.
 // Measures: when Sam offers to stop and how, how Sam ends, silences after finished answers and what broke them, and
@@ -95,7 +95,7 @@ const passageUpdatedAt = new Map();
 const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
 const prefix = () => { const ready = new Set(settled()); return settledPrefix(report.transcript, entry => ready.has(entry)); };
 const received = [];
-let current = null, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, samCursor = 0, audibleUntil = 0, lastAudibleInput = 0;
+let current = null, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, samCursor = 0, audibleUntil = 0;
 let samSince = '', generating = false, closing = false, offersSeen = 0, coverage = [], grading = null, pacing, deadline;
 const inputMs = () => Date.now() - inputStartedAt;
 const startedAt = Date.now();
@@ -104,10 +104,14 @@ const producer = new InterviewProducer({
   attemptId: `rh-${crypto.randomUUID()}`, startedAt, foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices,
   settled: prefix, coverage: () => coverage, send,
   talking: () => !!current || (() => { const ready = new Set(settled()); return report.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); })(),
-  // As the browser reports: the participant's microphone or Sam's playback.
-  heard: () => Math.max(lastAudibleInput, Math.min(Date.now(), audibleUntil)),
+  transcript: () => report.transcript,
 });
-const producerTimer = setInterval(() => producer.tick(), 500);
+// As the browser reports it: how long Sam's playback has been quiet, on the playback clock.
+const producerTimer = setInterval(() => {
+  const now = Date.now();
+  producer.hear(now, { outputQuietMs: audibleUntil ? Math.min(60_000, Math.max(0, now - audibleUntil)) : null });
+  producer.tick(now);
+}, 100);
 const close = () => { if (closing) return; closing = true; clearTimeout(pacing); clearInterval(producerTimer); producer.close(); send({ type: 'session.close' }); };
 
 function play(text, kind) {
@@ -191,7 +195,6 @@ await new Promise(resolve => {
       audio = current.subarray(offset, Math.min(offset + FRAME, current.length)); offset += audio.length;
       if (offset >= current.length) { current = null; inputEnded = Date.now(); report.gaps.push({ afterMs: inputEnded - inputStartedAt, line: report.lines.at(-1)?.kind ?? null, gapMs: null }); grade(); }
     }
-    if (audible(audio)) lastAudibleInput = Date.now();
     send({ type: 'session.input_audio.append', audio: Buffer.concat([audio, Buffer.alloc(FRAME - audio.length)]).toString('base64') });
     inputBytes += FRAME;
     decide(Date.now());

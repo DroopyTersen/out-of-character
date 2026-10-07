@@ -38,29 +38,30 @@ type Options = {
   pauses?: () => PauseSpan[];
   /** Whether the participant is speaking or their latest words are still settling; a turn's new pick waits until they stop. */
   talking?: () => boolean;
-  /** When either side was last heard, transcribed or not; without it Sam is never told the turn is theirs. */
-  heard?: () => number;
-  /** Sends each note as soon as it's decided rather than at Sam's next words: for tests of what is sent, not when. */
+  /** Sends each note as soon as it's decided rather than holding it for the handover or Sam's next words: for tests of what is sent, not when. */
   immediate?: boolean;
-  /** Code times Sam's turn through the participant's pauses. Without it, only the silence watchdog does. */
-  listening?: boolean;
   /** The whole transcript, settling or not: the listening window closes on the participant's latest words. */
   transcript?: () => TranscriptEntry[];
 };
 type Counts = { maps: number; applied: number; turns: number; traits: number; notes: number; research: number; holds: number; handovers: number; cancels: number };
 /** Hold, handover and cancel counts are absent on checkpoints saved before the listening hold. */
 type SavedCounts = Omit<Counts, 'holds' | 'handovers' | 'cancels'> & Partial<Counts>;
-/** What the browser last heard, in server time: when the participant's microphone and Sam's audio were last loud, and whether each still is. */
-type Hearing = { inputAt: number | null; inputActive: boolean; outputAt: number | null; outputActive: boolean };
-const unheard = (): Hearing => ({ inputAt: null, inputActive: false, outputAt: null, outputActive: false });
 /**
- * The participant's floor, from when their microphone was last loud. `owed`: Sam has said nothing substantive since.
- * `clear`: it began while Sam was inaudible, so it isn't Sam's own audio heard back. `held`: this pause has its hold
- * note. `handedAt`: when it got its turn note. `retried`: a handover the voice service rejected was sent again.
- * `mark` is where Sam's latest passage stood then; `sam` is Sam's words since, by passage.
+ * What the server last heard, in server time: when the participant's latest words were transcribed, and when the
+ * browser last heard Sam's audio and whether it still does. Their microphone isn't used: background noise keeps it loud.
  */
-type Floor = { owed: boolean; clear: boolean; held: boolean; handedAt: number | null; retried: boolean; mark: { id: string; length: number } | null; sam: Map<string, string> };
-const idleFloor = (): Floor => ({ owed: false, clear: false, held: false, handedAt: null, retried: false, mark: null, sam: new Map() });
+type Hearing = { inputAt: number | null; outputAt: number | null; outputActive: boolean };
+const unheard = (): Hearing => ({ inputAt: null, outputAt: null, outputActive: false });
+/** Letters and digits: a passage's words grow by these, not by punctuation or line breaks. */
+const voiced = (text: string) => text.replace(/[^\p{L}\p{N}]+/gu, '').length;
+/**
+ * The participant's floor, from their first words after Sam's. `owed`: Sam has said nothing substantive since.
+ * `heldAt`: when it last got a hold, cancel or turn note. `handedAt`: when it got its turn note. `retried`: a handover
+ * the voice service rejected was sent again. `mark` is where Sam's latest passage stood then; `sam` is Sam's words
+ * since, by passage.
+ */
+type Floor = { owed: boolean; heldAt: number | null; handedAt: number | null; retried: boolean; mark: { id: string; length: number } | null; sam: Map<string, string> };
+const idleFloor = (): Floor => ({ owed: false, heldAt: null, handedAt: null, retried: false, mark: null, sam: new Map() });
 type NoteMarks = { wake?: true; handover?: true; quietMs?: number };
 type PendingEvent = { event: MapLogEvent; researchId: string };
 type NotePart = [kind: NoteRecord['kind'], note: HeldNote];
@@ -158,7 +159,9 @@ export class InterviewProducer {
   /** Sam's latest passage as last transcribed, and when Sam's transcript last changed. */
   private latestSam: { id: string; length: number } | null = null;
   private lastSam = 0;
-  /** Sam said something substantive after the held notes were decided; they go out once the participant's microphone is quiet. */
+  /** How many letters and digits each participant passage has had transcribed. */
+  private heardWords = new Map<string, number>();
+  /** Sam said something substantive after the held notes were decided; they go out once the participant's words stop arriving. */
   private releaseDue = false;
   private closed = false;
   /** Notes restated for a new provider session are outside the note budget. */
@@ -219,8 +222,11 @@ export class InterviewProducer {
    * participant turn.
    */
   private unstall(now: number) {
-    if (!this.options.heard || this.restating || !this.samTurns.size || this.woken.size >= LIMITS.wakes || this.options.talking?.()) return;
-    if (now - Math.max(this.lastChange, this.options.heard()) < LIMITS.wakeAfter) return;
+    if (this.restating || !this.samTurns.size || this.woken.size >= LIMITS.wakes || this.options.talking?.()) return;
+    // What was heard is the transcript and Sam's audio: noise in the participant's room doesn't hold it off.
+    if (now - Math.max(this.lastChange, this.quietSince(now)) < LIMITS.wakeAfter) return;
+    // A handover that waited for Jev's reading gives Sam as long to begin as one on time does.
+    if (this.floor.handedAt != null && now - this.floor.handedAt < LIMITS.wakeAfter - LIMITS.listenWindow) return;
     const settled = this.options.settled();
     const index = settled.findLastIndex(entry => entry.speaker === 'trainee' && !!spokenWords(entry.text));
     const last = settled[index];
@@ -241,7 +247,7 @@ export class InterviewProducer {
    */
   private handOver(now: number, marks: NoteMarks) {
     // A pause with its turn note gets no hold note after it.
-    if (this.floor.owed) Object.assign(this.floor, { handedAt: now, held: true });
+    if (this.floor.owed) Object.assign(this.floor, { handedAt: now, heldAt: now });
     this.deliver(now, marks, this.fixed(TURN_NOTE, now), this.unread());
   }
 
@@ -249,47 +255,41 @@ export class InterviewProducer {
 
   // ---- The listening hold ----
 
-  /**
-   * The browser's latest report of how long each side has been quiet; null when it can't tell. The participant's
-   * microphone turning loud again, after a pause or after Sam's words, starts a new pause: its clock restarts, and if
-   * a turn note went out that Sam hasn't acted on, a cancel note follows.
-   */
-  hear(now: number, { inputQuietMs, outputQuietMs }: { inputQuietMs?: number | null; outputQuietMs?: number | null }) {
+  /** The browser's latest report of how long Sam's audio has been quiet; null when it can't tell. */
+  hear(now: number, { outputQuietMs }: { outputQuietMs?: number | null }) {
     if (!this.alive) return;
-    const previous = this.hearing;
     if (outputQuietMs !== undefined) {
-      this.hearing = { ...this.hearing, outputActive: outputQuietMs != null && outputQuietMs < SPEECH_QUIET_MS, outputAt: outputQuietMs == null ? previous.outputAt : now - outputQuietMs };
-    }
-    if (inputQuietMs !== undefined) {
-      const active = inputQuietMs != null && inputQuietMs < SPEECH_QUIET_MS;
-      const at = inputQuietMs == null ? previous.inputAt : now - inputQuietMs;
-      this.hearing = { ...this.hearing, inputActive: active, inputAt: at };
-      // A repeated report of the same quiet moves only by the network's jitter; new speech moves it by more than a pause.
-      if ((active && !previous.inputActive) || (at != null && (previous.inputAt == null || at - previous.inputAt > SPEECH_QUIET_MS))) {
-        // Sam was audible when the microphone was last loud, even if both have gone quiet since the last report.
-        const { outputAt, outputActive } = this.hearing;
-        const overSam = outputActive || (at != null && outputAt != null && outputAt >= at - SPEECH_QUIET_MS);
-        this.heardInput(now, Math.max(0, (at ?? now) - this.quietSince(now, previous)), overSam);
-      }
+      this.hearing = { ...this.hearing, outputActive: outputQuietMs != null && outputQuietMs < SPEECH_QUIET_MS, outputAt: outputQuietMs == null ? this.hearing.outputAt : now - outputQuietMs };
     }
     this.listen(now);
   }
 
-  /** `pausedMs`: how long both sides had been quiet when the participant spoke again. */
-  private heardInput(now: number, pausedMs: number, overSam: boolean) {
-    // Sam had the turn note but hasn't begun the question: it waits. Once Sam's words are under way, the microphone
-    // may be hearing them come back, and a note can't stop audio already playing.
+  /**
+   * New words of the participant's were transcribed. Their first words after Sam's start a new floor; words after a
+   * turn note start one too, with a cancel note first if Sam hasn't begun the question, so it waits. Sam's own audio
+   * heard back isn't transcribed as theirs.
+   */
+  private participantSaid(entry: TranscriptEntry, now: number) {
+    const length = voiced(entry.text);
+    if (length <= (this.heardWords.get(entry.id) ?? 0)) return;
+    this.heardWords.set(entry.id, length);
+    const quietSince = this.quietSince(now);
+    this.hearing = { ...this.hearing, inputAt: now };
     const { handedAt, owed } = this.floor;
-    if (handedAt != null && owed && this.lastSam < handedAt && !overSam && this.counts.cancels < LIMITS.cancels) {
+    if (owed && handedAt == null) return;
+    const cancel = handedAt != null && owed && !this.samSince(handedAt) && this.counts.cancels < LIMITS.cancels;
+    if (cancel) {
       this.counts.cancels++;
-      this.send([['cancel', this.fixed(CANCEL_NOTE, now)]], now, { quietMs: pausedMs });
+      this.send([['cancel', this.fixed(CANCEL_NOTE, now)]], now, { quietMs: Math.max(0, now - LIMITS.transcriptLag - quietSince) });
     }
-    // Heard over Sam's few words, it may be them coming back: the pause keeps its notes.
-    if (overSam && owed) return;
-    this.floor = { ...idleFloor(), owed: true, clear: !overSam, mark: this.latestSam && { ...this.latestSam } };
+    // The cancel note tells Sam to listen, so it stands for the floor's hold note.
+    this.floor = { ...idleFloor(), owed: true, heldAt: cancel ? now : null, mark: this.latestSam && { ...this.latestSam } };
   }
 
-  /** Sam's words since the participant's microphone was last loud; any substantive ones take the turn. */
+  /** Sam's words or audio came at or after this moment: a turn note sent then has been acted on, and a note can't stop it. */
+  private samSince(at: number) { return Math.max(this.lastSam, this.hearing.outputAt ?? 0) >= at; }
+
+  /** Sam's words since the participant's floor began; any substantive ones take the turn. */
   private samSaid(entry: TranscriptEntry, now: number) {
     this.lastSam = now;
     this.latestSam = { id: entry.id, length: entry.text.length };
@@ -300,11 +300,20 @@ export class InterviewProducer {
     if (said.trim() && !yieldsTurn(said)) floor.owed = false;
   }
 
-  /** The last sound from either side as the server knows it; the participant's own transcript lags their voice, so it doesn't count. */
-  private quietSince(now: number, hearing = this.hearing) {
-    const { inputAt, inputActive, outputAt, outputActive } = hearing;
-    return inputActive || outputActive ? now : Math.max(inputAt ?? 0, outputAt ?? 0, this.lastSam);
+  /** When the participant last spoke as the server knows it: their latest words were said about `transcriptLag` before they arrived. */
+  private saidAt() { const { inputAt } = this.hearing; return inputAt == null ? 0 : inputAt - LIMITS.transcriptLag; }
+
+  /** When Sam was last heard: Sam's audio or words, and now while Sam's audio plays. */
+  private samHeardAt(now: number) {
+    const { outputAt, outputActive } = this.hearing;
+    return outputActive ? now : Math.max(outputAt ?? 0, this.lastSam);
   }
+
+  /** The last sound from either side as the server knows it. */
+  private quietSince(now: number) { return Math.max(this.saidAt(), this.samHeardAt(now)); }
+
+  /** When the turn may be handed over: the participant quiet for `listenWindow`, and Sam, whose backchannel may come in their pause, for `afterSam`. */
+  private handoverAt(now: number) { return Math.max(this.saidAt() + LIMITS.listenWindow, this.samHeardAt(now) + LIMITS.afterSam); }
 
   /** The participant's latest passage, while Sam has said nothing substantive since: their answer, still in progress or finished. */
   private answer(): TranscriptEntry | null {
@@ -315,41 +324,48 @@ export class InterviewProducer {
   }
 
   /**
-   * Once the participant's microphone goes quiet, Sam gets the hold note; once both sides have been quiet for the
-   * window after a complete answer, the turn is handed over, as soon as Jev has read the answer or `readWait` later.
-   * Not after a hanging clause, a request for time or a request to stop, and once per pause. A held note Sam's words
-   * released waits for their microphone to go quiet. The session also calls it when `floorDue` comes.
+   * At the participant's first words, while Sam is quiet, Sam gets the hold note. Once the participant has been quiet
+   * for the window after a complete answer, and Sam for `afterSam`, the turn is handed over, as soon as Jev has read
+   * the answer or `readWait` later. Not after a hanging clause, a request for time or a request to stop. A held note
+   * Sam's words released waits for the participant's words to stop arriving. The session also calls it when
+   * `floorDue` comes.
    */
   listen(now = Date.now()) {
     if (!this.alive || this.restating) return;
-    const { inputAt, inputActive, outputActive } = this.hearing;
-    if (this.releaseDue && !inputActive && (inputAt == null || now - inputAt > LIMITS.releaseQuiet)) this.deliver(now);
+    const { inputAt, outputActive } = this.hearing;
+    // A held offer goes only if their words since are read: what they said may outdate it.
+    if (this.releaseDue && (inputAt == null || now - inputAt > LIMITS.releaseQuiet)) this.deliver(now, {}, undefined, this.unread());
     const floor = this.floor;
-    if (!this.options.listening || !floor.owed || inputActive || outputActive || inputAt == null) return;
-    // A pause that began over Sam's audio counts once the participant's words are transcribed.
-    if (!floor.held && now - inputAt >= LIMITS.holdAfter && ![...floor.sam.values()].join('').trim() && this.counts.holds < LIMITS.holds && (floor.clear || this.answer())) {
-      floor.held = true;
+    if (!floor.owed || outputActive || inputAt == null || floor.handedAt != null || this.handOverDue(now)) return;
+    if (floor.heldAt == null && this.counts.holds < LIMITS.holds) {
+      floor.heldAt = now;
       this.counts.holds++;
-      this.send([['hold', this.fixed(HOLD_NOTE, now)]], now, { quietMs: now - this.quietSince(now) });
+      this.send([['hold', this.fixed(HOLD_NOTE, now)]], now);
     }
-    const quietMs = now - this.quietSince(now);
-    if (floor.handedAt != null || quietMs < LIMITS.listenWindow || this.counts.handovers >= LIMITS.handovers) return;
+  }
+
+  /** Hands the turn over if it's due; returns whether it did. */
+  private handOverDue(now: number): boolean {
+    const at = this.handoverAt(now);
+    if (now < at || this.counts.handovers >= LIMITS.handovers) return false;
     const last = this.answer();
-    if (!last || !finishesTurn(last.text) || asksToEnd(last.text)) return;
+    if (!last || !finishesTurn(last.text) || asksToEnd(last.text)) return false;
     this.pickHeld(now);
-    if (quietMs < LIMITS.listenWindow + LIMITS.readWait && this.unread()) { this.readTurn(now); return; }
+    if (now < at + LIMITS.readWait && this.unread()) { this.readTurn(now); return false; }
     this.counts.handovers++;
-    this.handOver(now, { handover: true, quietMs });
+    this.handOver(now, { handover: true, quietMs: now - this.saidAt() });
+    return true;
   }
 
   /** When the listening hold next needs a look, if it waits on the clock alone; the session sets a timer for it. */
   floorDue(now = Date.now()): number | null {
-    const { inputAt, inputActive, outputActive } = this.hearing;
-    if (!this.alive || inputAt == null || inputActive) return null;
+    const { inputAt, outputActive } = this.hearing;
+    if (!this.alive || inputAt == null) return null;
     const due = this.releaseDue ? [inputAt + LIMITS.releaseQuiet + 1] : [];
-    if (this.options.listening && this.floor.owed && !outputActive) {
-      if (!this.floor.held) due.push(inputAt + LIMITS.holdAfter);
-      if (this.floor.handedAt == null) due.push(this.quietSince(now) + LIMITS.listenWindow, this.quietSince(now) + LIMITS.listenWindow + LIMITS.readWait);
+    const { owed, handedAt } = this.floor;
+    if (owed && !outputActive && handedAt == null) {
+      const at = this.handoverAt(now);
+      due.push(at, at + LIMITS.readWait);
     }
     // Anything already due waits on words, not the clock: the next transcript change or tick looks again.
     const next = due.filter(at => at > now);
@@ -761,18 +777,18 @@ export class InterviewProducer {
   // ---- Session events ----
 
   /**
-   * Sam's substantive words release the held notes. With the listening hold, a reaction of a few words doesn't; they
-   * wait for the participant's microphone to go quiet, and notes decided after a handover wait for the next one rather
-   * than reach Sam in the middle of the question it's asking. Also marks the next substantive Sam passage at or after
-   * a sent note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
+   * Sam's substantive words release the held notes, though a reaction of a few words doesn't. They wait for the
+   * participant's words to stop arriving, and notes decided after a handover wait for the next one rather than reach
+   * Sam in the middle of the question it's asking. Also marks the next substantive Sam passage at or after a sent
+   * note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
    */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
     if (!this.alive) return;
     this.lastChange = now;
     if (entry.speaker === 'client' && entry.text.trim()) this.samSaid(entry, now);
+    if (entry.speaker === 'trainee') this.participantSaid(entry, now);
     if (entry.speaker !== 'client' || !entry.text.trim() || isBackchannel(entry.text)) { this.listen(now); return; }
-    if (!this.options.listening) this.deliver(now);
-    else if (!yieldsTurn(entry.text)) this.releaseDue = this.held.size > 0 && this.floor.handedAt == null;
+    if (!yieldsTurn(entry.text)) this.releaseDue = this.held.size > 0 && this.floor.handedAt == null;
     this.listen(now);
     if (this.samTurns.has(entry.id)) return;
     this.samTurns.add(entry.id);
@@ -803,7 +819,7 @@ export class InterviewProducer {
     }
     const handover = records.find(record => record.kind === 'turn');
     const floor = this.floor;
-    if (handover && floor.handedAt === handover.sentAt && floor.owed && !floor.retried && this.lastSam < floor.handedAt) Object.assign(floor, { handedAt: null, retried: true });
+    if (handover && floor.handedAt === handover.sentAt && floor.owed && !floor.retried && !this.samSince(floor.handedAt)) Object.assign(floor, { handedAt: null, retried: true });
     if (records.some(record => record.kind === 'list')) this.pick(now);
     this.listen(now);
   }
@@ -817,10 +833,10 @@ export class InterviewProducer {
     return {
       model: this.options.foundry.agentModel, effort: MAP_EFFORT, version: PRODUCER_VERSION, mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
       maps, applied, turns, notes, research, latency: producerLatency(this.records),
-      ...(this.options.listening ? { listening: {
-        mode: 'quiet', windowMs: LIMITS.listenWindow, holdAfterMs: LIMITS.holdAfter, readWaitMs: LIMITS.readWait,
+      listening: {
+        windowMs: LIMITS.listenWindow, lagMs: LIMITS.transcriptLag, afterSamMs: LIMITS.afterSam, readWaitMs: LIMITS.readWait,
         holds: this.counts.holds, handovers: this.counts.handovers, cancels: this.counts.cancels, wakes: this.woken.size,
-      } } : {}),
+      },
     };
   }
 

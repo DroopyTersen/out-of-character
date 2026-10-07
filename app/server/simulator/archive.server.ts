@@ -53,7 +53,7 @@ export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, con
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 12);
   };
-  const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client, !!snapshot.interview?.listening)), digest(openingInstruction(scenario, client))]);
+  const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
   return {
     model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, voice: client.voice, rubricVersion: snapshot.interview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,

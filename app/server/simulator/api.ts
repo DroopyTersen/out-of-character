@@ -6,14 +6,12 @@ import { foundryConfigured } from '../../../ai/foundry.server';
 
 const uuid = z.string().uuid();
 const quietDuration = z.number().int().min(0).max(60_000).nullable().optional();
-// Accept and discard legacy mutual quiet from tabs opened before producer v8.
 const packets = z.number().int().min(0).max(1_000_000);
 const delay = z.number().int().min(0).max(60_000).nullable();
 const network = z.object({ ms: z.number().int().min(0).max(600_000), received: packets, lost: packets, concealed: z.number().min(0).max(1).nullable(), jitterMs: delay, sentLost: packets.nullable(), rttMs: delay }).strict();
-export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), quietMs: quietDuration, inputQuietMs: quietDuration, outputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), outputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   // Diagnostics only: a report this server cannot read is dropped, never a failed poll.
-  network: network.optional().catch(undefined) }).strict()
-  .transform(({ quietMs: _legacy, ...activity }) => activity);
+  network: network.optional().catch(undefined) }).strict();
 // Foundry does not filter frontend events; deny data channels so actor context stays private.
 const offer = z.string().min(20).max(60_000).startsWith('v=0').refine(sdp => !/^m=(?!audio )/m.test(sdp), 'Only audio media is allowed.');
 export const startSchema = z.object({
@@ -21,10 +19,7 @@ export const startSchema = z.object({
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
   sdp: offer,
-  // Accept and discard the listening mode a tab opened while it could be chosen still sends; every interview listens quietly.
-  listening: z.enum(['quiet', 'ack']).optional(),
-}).strict().refine(input => (input.scenarioId === INTERVIEW_SCENARIO_ID) === interviewVoices.some(voice => voice.id === input.clientId), 'Choose an interviewer for an interview.')
-  .transform(({ listening: _legacy, ...input }) => input);
+}).strict().refine(input => (input.scenarioId === INTERVIEW_SCENARIO_ID) === interviewVoices.some(voice => voice.id === input.clientId), 'Choose an interviewer for an interview.');
 export const resumeSchema = z.object({ sdp: offer }).strict();
 export const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.TYPESAFE_API_KEY;
 export const simulatorJson = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });

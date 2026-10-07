@@ -33,6 +33,17 @@
 .interview-voices strong { font: clamp(16px, 1.6vw, 20px) Silkscreen, monospace; }
 .interview-choice-mark { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #577c90; border-radius: 50%; }
 .selected .interview-choice-mark { background: #44efcd; border-color: #44efcd; color: #082b30; }
+.interview-listening-choice { padding: 22px 28px 24px; margin-top: 16px; }
+.interview-listening-choice h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 21px; margin: 0; }
+.interview-listening-choice h2 small { color: #8fb3c6; font: 11px 'Chakra Petch', sans-serif; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+.interview-listening-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.interview-listening-modes button { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 13px 40px 14px 14px; border: 1px solid #35627a; border-radius: 5px; color: #eaf4fc; background: #0b2838; text-align: left; }
+.interview-listening-modes button:hover { border-color: #8ad9d0; }
+.interview-listening-modes button.selected { border-color: #44efcd; background: #103937; box-shadow: inset 0 0 0 1px #44efcd; }
+.interview-listening-modes strong { font-size: 15px; }
+.interview-listening-modes span:not(.interview-choice-mark) { color: #a8c7d5; font-size: 13px; line-height: 1.45; }
+.interview-listening-modes .interview-choice-mark { width: 20px; height: 20px; }
+.interview-sam-heading .interview-listening-mode { color: #7fc9bd; font-size: 12px; margin-top: 4px; }
 .interview-start { text-align: center; padding-top: 24px; }
 .interview-start .arcade-button { width: 100%; display: flex; justify-content: center; }
 .interview-start > p:not(.sim-notice) { margin: 14px auto 0; color: #a8c7d5; font-size: 13px; line-height: 1.6; max-width: 390px; }
@@ -171,6 +182,7 @@
   .interview-voice-choice { padding: 22px; }
   .interview-voices button { padding: 12px 10px; }
   .interview-voices img { height: 110px; }
+  .interview-listening-choice { padding: 18px 22px 20px; }
   .interview-start { padding-top: 20px; }
   .interview-live-grid { grid-template-columns: 1fr; }
   .interview-observations { grid-template-columns: 1fr; }
@@ -198,6 +210,10 @@
   .interview-voices button { padding: 11px 5px 12px; }
   .interview-voices img { height: 92px; }
   .interview-voices strong { font-size: 16px; }
+  .interview-listening-choice { padding: 16px 18px 18px; margin-top: 12px; }
+  .interview-listening-choice h2 { font-size: 18px; }
+  .interview-listening-modes { grid-template-columns: 1fr; gap: 8px; margin-top: 12px; }
+  .interview-listening-modes button { padding: 11px 38px 12px 12px; }
   .interview-session-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 0; position: sticky; top: 0; z-index: 5; background: #061e2a; }
   .interview-session-bar > div { grid-column: 1 / -1; }
   .interview-session-bar h1 { font-size: 22px; }
@@ -206,7 +222,8 @@
   .interview-live-grid { padding-top: 16px; }
   .interview-sam-stage { padding: 16px 14px 12px; }
   .interview-sam-heading h2 { font-size: 24px; }
-  .interview-sam-heading p { display: none; }
+  .interview-sam-heading p:not(.interview-listening-mode) { display: none; }
+  .interview-sam-heading .interview-listening-mode { margin-top: 0; }
   .interview-sam-stage .sim-voice-display { display: grid; grid-template-columns: 84px minmax(0, 1fr); margin-top: 0; }
   .interview-sam-stage .sim-portrait { height: 110px; }
   .interview-caption { display: none; }

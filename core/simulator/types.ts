@@ -10,6 +10,11 @@ export const SESSION_PAUSE_HOLD_MS = 15 * 60_000;
 export const SESSION_MAX_RESUMES = 5;
 /** Paused time extends the live limit, up to this much wall clock. */
 export const SESSION_WALL_LIMIT_MS = 90 * 60_000;
+/**
+ * A side whose audio has been below the speech level this long has stopped: the browser reports the change at once,
+ * and the server counts the side as still speaking until a report says otherwise.
+ */
+export const SPEECH_QUIET_MS = 300;
 /** client: the client walked out; the session ends once its closing line finishes. */
 export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity' | 'client'; endsAt: number };
 /** The evaluator's walk-out judgment that ended (or is ending) the meeting. */

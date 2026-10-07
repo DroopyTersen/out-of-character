@@ -103,7 +103,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     if (!sockets.has(id)) sockets.set(id, new ProviderSocket());
     return sockets.get(id)!;
   };
-  const created: { context?: string }[] = [];
+  const created: { context?: string; listening?: string }[] = [];
   let ready = Promise.resolve();
   let alarm = 0;
   let creations = 0;
@@ -122,7 +122,7 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   } as Env, {
     createLive: async input => {
       const id = latest = ++creations === 1 ? provider : `${provider}-${creations}`;
-      created.push(input.context ? { context: input.context } : {});
+      created.push({ ...(input.context ? { context: input.context } : {}), ...(input.listening ? { listening: input.listening } : {}) });
       await pendingCreation;
       if (failCreation(creations)) throw new Error('Provider creation failed.');
       socketFor(id);

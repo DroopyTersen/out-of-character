@@ -1,3 +1,4 @@
+import type { ListeningMode } from './interview';
 import type { ConversationMap, MapEntity, MapThread } from './interview-map';
 import { pickThreads, RANKING, threadKey, type Pick, type RankingState } from './interview-ranking';
 
@@ -81,6 +82,14 @@ export function complaintNote(map: ConversationMap, open: string[], headers = NO
  * names no thread, so the nudge can't point Sam anywhere the notes don't.
  */
 export const TURN_NOTE = 'Turn note: they’ve finished and are waiting for you to speak. It’s your turn now.';
+
+/** Once the participant pauses, Sam keeps listening: silently, or after one short listening sound. */
+export const HOLD_NOTES: Record<ListeningMode, string> = {
+  quiet: 'Turn note: they’ve paused, but they may not be finished. Say nothing yet; keep listening.',
+  ack: 'Turn note: they’ve paused, but they may not be finished. Make one short, quiet sound to show you’re listening, like “hmm” or “uh-huh”, then say nothing more; keep listening.',
+};
+/** The participant spoke again after a turn note, before Sam began the question. */
+export const CANCEL_NOTE = 'Turn note: they’ve started talking again. Stop and listen; your question can wait until they finish.';
 
 /** Withdraws the previous note when Sol has removed all its facts, vantage and preferences. */
 export const emptyMapNote = (headers = NOTE_HEADERS) => `${headers.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;

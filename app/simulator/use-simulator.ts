@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { listeningModes, type ListeningMode } from '../../core/interview';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { LiveConnection, stableLink, type Attempt, type Link } from './live-connection';
 import { silentLevels } from './audio-levels';
 import type { ReportActions } from './use-report';
 
 export type SimulatorPhase = 'selection' | 'connecting' | 'live' | 'paused' | 'ending' | 'debrief';
-export type AttemptChoice = { scenarioId: string; clientId: string };
+/** `listening` is an interview's listening mode. */
+export type AttemptChoice = { scenarioId: string; clientId: string; listening?: ListeningMode };
 /** `left` marks an attempt its page held on the way out; a duplicated tab copies the storage without it. */
 type SavedAttempt = Attempt & AttemptChoice & { left?: boolean };
 
@@ -28,7 +30,7 @@ const savedAttempts = {
     try {
       const value = JSON.parse(sessionStorage.getItem(this.key(kind)) || 'null') as Partial<SavedAttempt> | null;
       return value && /^[a-f0-9-]{36}$/.test(value.id ?? '') && /^[a-f0-9]{64}$/.test(value.capability ?? '') && typeof value.scenarioId === 'string' && typeof value.clientId === 'string'
-        ? value as SavedAttempt : null;
+        && (value.listening === undefined || listeningModes.some(mode => mode.id === value.listening)) ? value as SavedAttempt : null;
     } catch { return null; }
   },
   write(kind: string, attempt: SavedAttempt) { try { sessionStorage.setItem(this.key(kind), JSON.stringify(attempt)); } catch { /* A reload then ends the attempt. */ } },
@@ -65,7 +67,7 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
     const rejoin = () => {
       const saved = savedAttempts.claim(kind);
       if (!saved) return;
-      reattached.current?.({ scenarioId: saved.scenarioId, clientId: saved.clientId });
+      reattached.current?.({ scenarioId: saved.scenarioId, clientId: saved.clientId, ...(saved.listening ? { listening: saved.listening } : {}) });
       begin(saved, saved);
     };
     // A page restored from the back-forward cache has already detached its connection.
@@ -119,7 +121,7 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
     }, saved);
     connection.current = live;
     reportActions.current.prepare(live.reportTarget);
-    void (saved ? live.reattach() : live.start(choice.scenarioId, choice.clientId));
+    void (saved ? live.reattach() : live.start(choice.scenarioId, choice.clientId, choice.listening));
   }
 
   async function end() {
@@ -142,7 +144,7 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
   const held = link.state === 'paused' || link.state === 'resuming';
   const shown: SimulatorPhase = held && phase === 'live' ? 'paused' : phase;
   return { phase: shown, snapshot, error, muted, levels, link, end, reset, toggleMute,
-    start: (scenarioId: string, clientId: string) => begin({ scenarioId, clientId }),
+    start: (scenarioId: string, clientId: string, listening?: ListeningMode) => begin({ scenarioId, clientId, ...(listening ? { listening } : {}) }),
     resume: () => { void connection.current?.resume(); },
     keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };
 }

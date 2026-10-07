@@ -1,4 +1,5 @@
-import type { SessionSnapshot } from '../../core/simulator/types';
+import type { ListeningMode } from '../../core/interview';
+import { SPEECH_QUIET_MS, type SessionSnapshot } from '../../core/simulator/types';
 import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../../core/simulator/network';
 import { readAudio, silentLevels, type AudioLevels } from './audio-levels';
 
@@ -69,6 +70,10 @@ export class LiveConnection {
   private activeSincePoll = false;
   private lastAudioAt = 0;
   private outputQuietSince: number | undefined;
+  /** When the participant's microphone was last loud, and whether the server has been told it went quiet since. */
+  private inputLoudAt: number | undefined;
+  private inputQuietSent = true;
+  private outputQuietSent = true;
   private meterUpdatedAt = 0;
   private activitySequence = 0;
   /** The current media connection's last stats read; reports carry the change since. */
@@ -102,11 +107,12 @@ export class LiveConnection {
     return result;
   }
 
-  async start(scenarioId: string, clientId: string) {
+  /** `listening` is an interview's listening mode. */
+  async start(scenarioId: string, clientId: string, listening?: ListeningMode) {
     try {
       const connected = await this.connect(async sdp => {
         this.requested = true;
-        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp }) as { sdp: string; snapshot: SessionSnapshot };
+        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp, ...(listening ? { listening } : {}) }) as { sdp: string; snapshot: SessionSnapshot };
         if (this.ending) return null;
         this.callbacks.snapshot(created.snapshot);
         return created.sdp;
@@ -236,6 +242,7 @@ export class LiveConnection {
     const now = Date.now();
     const fresh = now - this.meterUpdatedAt < 250;
     return { active, audio: now - this.lastAudioAt < 1500, sequence: ++this.activitySequence,
+      inputQuietMs: fresh && this.context?.state === 'running' && !this.muted && !this.autoMuted && this.inputLoudAt != null ? Math.min(60_000, now - this.inputLoudAt) : null,
       outputQuietMs: fresh && this.canMeasureOutput() && this.outputQuietSince != null ? Math.min(60_000, now - this.outputQuietSince) : null };
   }
 
@@ -267,15 +274,28 @@ export class LiveConnection {
       const running = this.context?.state === 'running';
       const inputEnabled = !this.muted && !this.autoMuted;
       const outputAudible = output.level > .03 && !this.audio.paused;
-      const heard = running && ((inputEnabled && input.level > .08) || outputAudible);
+      const speaking = running && inputEnabled && input.level > .08;
+      const heard = speaking || (running && outputAudible);
+      const previousLoud = this.inputLoudAt;
       this.meterUpdatedAt = now;
       this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
       if (heard) {
         this.keepActive();
         this.lastAudioAt = now;
       }
-      // Sam starting to speak closes the cue opening. Ignore any older periodic report on the server.
-      if (previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null && !this.ending) {
+      if (speaking) this.inputLoudAt = now;
+      // The server times Sam's turn from these, so each change is reported at once: the participant starting to speak
+      // after a pause, either side going quiet, and Sam starting to speak, which also closes the cue opening.
+      const inputStarted = speaking && (previousLoud == null || now - previousLoud >= SPEECH_QUIET_MS);
+      const inputStopped = !this.inputQuietSent && this.inputLoudAt != null && now - this.inputLoudAt >= SPEECH_QUIET_MS;
+      const outputStarted = previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null;
+      const outputStopped = !this.outputQuietSent && this.outputQuietSince != null && now - this.outputQuietSince >= SPEECH_QUIET_MS;
+      if (speaking) this.inputQuietSent = false;
+      if (inputStopped) this.inputQuietSent = true;
+      if (this.outputQuietSince == null) this.outputQuietSent = false;
+      if (outputStopped) this.outputQuietSent = true;
+      // An older periodic report is ignored on the server.
+      if ((inputStarted || inputStopped || outputStarted || outputStopped) && !this.ending) {
         void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
       }
       this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
@@ -482,7 +502,8 @@ export class LiveConnection {
     this.stream = undefined;
     this.pc = undefined;
     this.inputMeter = this.outputMeter = undefined;
-    this.outputQuietSince = undefined;
+    this.outputQuietSince = this.inputLoudAt = undefined;
+    this.inputQuietSent = this.outputQuietSent = true;
     this.callbacks.levels(silentLevels);
   }
 

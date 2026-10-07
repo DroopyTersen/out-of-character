@@ -61,7 +61,19 @@ export type InterviewBackground = {
   facts: { text: string; url: string; title: string }[];
   retrievedAt: number;
 };
-export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[] };
+/**
+ * How Sam listens while the participant pauses, chosen per test interview. Code times the turn: after a complete answer,
+ * Sam speaks once both sides have been quiet for the window.
+ */
+export const listeningModes = [
+  { id: 'quiet', label: 'Quiet listening', description: 'Sam stays silent through pauses and asks after 2.5 seconds of quiet.', windowMs: 2500 },
+  { id: 'ack', label: 'Brief acknowledgment', description: 'Sam makes one short listening sound, then asks after 1 second of quiet.', windowMs: 1000 },
+] as const;
+export type ListeningMode = typeof listeningModes[number]['id'];
+export const DEFAULT_LISTENING: ListeningMode = 'quiet';
+export const listeningMode = (id: ListeningMode) => listeningModes.find(mode => mode.id === id)!;
+/** `listening` is absent on sessions started before the mode could be chosen; they ran without the listening hold. */
+export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[]; listening?: ListeningMode };
 
 const BACKCHANNEL = /^(?:mm+(?:[- ]?hm*)?|hmm+|uh[- ]?huh|ah+|oh+|['’]?kay|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i;
 export const isBackchannel = (text: string) => BACKCHANNEL.test(text.trim());

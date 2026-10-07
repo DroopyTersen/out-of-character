@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { foundryUrl, type FoundryConfig } from '../../../ai/foundry.server';
 import { actorBrief, getClient, getScenario } from '../../../ai/simulator/scenarios.server';
+import type { ListeningMode } from '../../../core/interview';
 
 export const LIVE_MODEL = 'gpt-live-1';
 export const NO_EXTERNAL_TASK = 'No external task is available or necessary in this conversation. Continue in your assigned role using the information you actually have. Make no claims about work being done outside this conversation.';
@@ -13,19 +14,19 @@ export const transcriptEvent = z.object({
 }).refine(event => event.end_ms >= event.start_ms);
 
 /** A resumed session appends the rebuilt conversation after the unchanged actor brief. */
-export function liveConfiguration(scenarioId: string, clientId: string, context?: string) {
+export function liveConfiguration(scenarioId: string, clientId: string, context?: string, listening?: ListeningMode) {
   const client = getClient(clientId);
   return {
-    model: LIVE_MODEL, instructions: [actorBrief(getScenario(scenarioId), client), context].filter(Boolean).join('\n\n'),
+    model: LIVE_MODEL, instructions: [actorBrief(getScenario(scenarioId), client, listening), context].filter(Boolean).join('\n\n'),
     store: false,
     audio: { output: { voice: client.voice } },
   };
 }
 
-export async function createLive(input: { scenarioId: string; clientId: string; sdp: string; context?: string }, foundry: FoundryConfig, request: typeof fetch = fetch) {
+export async function createLive(input: { scenarioId: string; clientId: string; sdp: string; context?: string; listening?: ListeningMode }, foundry: FoundryConfig, request: typeof fetch = fetch) {
   const response = await request(foundryUrl(foundry, '/live/sessions'), {
     method: 'POST', headers: { 'api-key': foundry.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session: { ...liveConfiguration(input.scenarioId, input.clientId, input.context), model: foundry.liveModel }, transport: { type: 'webrtc', sdp: input.sdp } }),
+    body: JSON.stringify({ session: { ...liveConfiguration(input.scenarioId, input.clientId, input.context, input.listening), model: foundry.liveModel }, transport: { type: 'webrtc', sdp: input.sdp } }),
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`Live creation failed (${response.status}).`);

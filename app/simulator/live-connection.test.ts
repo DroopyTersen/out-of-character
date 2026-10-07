@@ -25,10 +25,12 @@ class FakePeer extends EventTarget {
   async getStats() { if (!FakePeer.stats) throw new Error('No stats.'); return FakePeer.stats(); }
 }
 class FakeAudioContext {
+  /** Whether the participant's microphone is picking up speech. */
+  static loud = false;
   state = 'running';
   sampleRate = 48_000;
   createAnalyser() {
-    return { fftSize: 1024, frequencyBinCount: 512, context: this, getByteTimeDomainData: (samples: Uint8Array) => samples.fill(128), getByteFrequencyData: (samples: Uint8Array) => samples.fill(0) };
+    return { fftSize: 1024, frequencyBinCount: 512, context: this, getByteTimeDomainData: (samples: Uint8Array) => samples.fill(FakeAudioContext.loud ? 140 : 128), getByteFrequencyData: (samples: Uint8Array) => samples.fill(0) };
   }
   createMediaStreamSource() { return { connect() {} }; }
   async resume() {}
@@ -91,6 +93,7 @@ beforeEach(() => {
   browser.onLine = true;
   FakePeer.all = [];
   FakePeer.stats = undefined;
+  FakeAudioContext.loud = false;
 });
 afterEach(() => { jest.useRealTimers(); });
 
@@ -284,5 +287,35 @@ test('polls carry media quality every few seconds, and a failing stats read neve
   const before = server.polls.length;
   await advance(6000);
   expect(server.polls.length).toBeGreaterThan(before + 3);
+  await connection.end();
+});
+
+test('the microphone starting and stopping is reported at once with how long it has been quiet, and not at all while muted', async () => {
+  const { connection } = await connected();
+  const quiet = () => server.polls.map(poll => (poll as { inputQuietMs?: number | null }).inputQuietMs);
+  await advance(1000);
+  // Nothing heard yet: the server can't tell how long the participant has been quiet.
+  expect(new Set(quiet())).toEqual(new Set([null]));
+  let seen = server.polls.length;
+  FakeAudioContext.loud = true;
+  await advance(100);
+  expect(quiet().slice(seen)).toEqual([0]);
+  seen = server.polls.length;
+  FakeAudioContext.loud = false;
+  await advance(200);
+  expect(quiet().slice(seen)).toEqual([]);
+  await advance(300);
+  const stopped = quiet().slice(seen);
+  expect(stopped).toHaveLength(1);
+  expect(stopped[0]).toBeGreaterThanOrEqual(300);
+  expect(stopped[0]).toBeLessThan(400);
+  // The regular poll carries the growing quiet.
+  await advance(1000);
+  expect(quiet().at(-1)).toBeGreaterThan(stopped[0]!);
+  connection.mute(true);
+  FakeAudioContext.loud = true;
+  seen = server.polls.length;
+  await advance(1100);
+  expect(new Set(quiet().slice(seen))).toEqual(new Set([null]));
   await connection.end();
 });

@@ -1,13 +1,14 @@
-import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } from './interview';
+import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading, ListeningMode } from './interview';
 import type { MapDefect, MapPace, MapUpdate } from './interview-map';
 import type { Band, Pick, ThreadState } from './interview-ranking';
 import type { DirectorUsage } from './simulator/director';
+import { SPEECH_QUIET_MS } from './simulator/types';
 
 /**
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v19';
+export const PRODUCER_VERSION = 'interview-producer-v20';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -26,6 +27,14 @@ export const PRODUCER_LIMITS = {
    * from both sides, Sam gets a turn note, once per participant turn and at most `wakes` times a session.
    */
   wakeAfter: 6000, wakes: 12,
+  /**
+   * The listening hold: once the participant's microphone has been quiet for `holdAfter`, Sam gets a hold note; once
+   * both sides have been quiet for the mode's window after a complete answer, a turn note. Hold and cancel notes are
+   * outside the note budget: a hold goes out at most once per pause, a cancel once per turn note.
+   */
+  holdAfter: SPEECH_QUIET_MS, holds: 400, handovers: 200, cancels: 60,
+  /** A topic note waits until the participant's microphone has been quiet this long, so it never lands as they speak. */
+  releaseQuiet: 500,
 };
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
@@ -70,16 +79,22 @@ export type TraitRecord = {
 };
 /**
  * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
- * research facts cite. A turn note tells Sam, gone quiet after the participant finished, that the turn is theirs.
+ * research facts cite. A turn note tells Sam the turn is theirs: after the listening window, or after Sam went quiet
+ * past it. A hold note asks Sam to keep listening through a pause; a cancel note withdraws a turn note the participant
+ * talked past.
  */
 export type NoteRecord = {
-  source: 'note'; id: string; kind: 'list' | 'map' | 'turn'; text: string; mapId: string | null; turnId?: string; sentAt: number;
+  source: 'note'; id: string; kind: 'list' | 'map' | 'turn' | 'hold' | 'cancel'; text: string; mapId: string | null; turnId?: string; sentAt: number;
   /** When the note was decided, if it waited for Sam's next words; absent when it went out at once. */
   decidedAt?: number;
   /** The note let Sam offer the participant the choice to stop. */
   offer?: true;
   /** Sent, or released early, because Sam had gone quiet after the participant finished. */
   wake?: true;
+  /** Sent, or released, when the listening window closed after the participant's complete answer. */
+  handover?: true;
+  /** For hold and turn notes, how long both sides had been quiet, as the server last heard it; for a cancel, how long that quiet lasted before the participant spoke again. */
+  quietMs?: number;
   outcome: 'sent' | 'error' | 'rejected'; delivery: NoteDelivery; researchIds?: string[];
   nextSamTurnAt?: number; nextSamTurnAfterId?: string | null;
 };
@@ -153,10 +168,13 @@ export function fitRecords(records: ProducerLogRecord[], budget: number): Produc
 }
 
 export type LatencyStat = { count: number; p50: number; p90: number } | null;
+/** The listening mode the session ran with and what its timing sent; absent before v20. */
+export type ListeningSummary = { mode: ListeningMode; windowMs: number; holdAfterMs: number; holds: number; handovers: number; cancels: number; wakes: number };
 export type ProducerSummary = {
   model: string; effort: 'none' | 'low'; version: string; mapPrompt: string; rankingRubric: string;
   maps: number; applied: number; turns: number; notes: number; research: number;
   latency: { sol: LatencyStat; jevTurn: LatencyStat; traits: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat; turnToSam?: LatencyStat };
+  listening?: ListeningSummary;
 };
 
 export function latencyStat(values: number[]): LatencyStat {
@@ -174,7 +192,7 @@ export function producerLatency(records: ProducerLogRecord[]): ProducerSummary['
     jevTurn: latencyStat(spans(of('turn').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
     traits: latencyStat(spans(of('traits').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
     lookup: latencyStat(spans(of('research').map(item => [item.requestedAt, item.lookupAt]))),
-    noteToSam: latencyStat(spans(of('note').filter(item => item.kind !== 'turn').map(item => [item.sentAt, item.nextSamTurnAt]))),
+    noteToSam: latencyStat(spans(of('note').filter(item => item.kind === 'list' || item.kind === 'map').map(item => [item.sentAt, item.nextSamTurnAt]))),
     turnToSam: latencyStat(spans(of('note').filter(item => item.kind === 'turn').map(item => [item.sentAt, item.nextSamTurnAt]))),
   };
 }

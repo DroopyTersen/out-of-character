@@ -66,6 +66,8 @@ export class SimulatorSession extends DurableObject<Env> {
   private snapshot: SessionSnapshot | undefined;
   private socket: WebSocket | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
+  /** The listening hold's next deadline, timed to the moment rather than to the tick. */
+  private floorTimer: ReturnType<typeof setTimeout> | undefined;
   private closing: Promise<void> | undefined;
   private orphaning: Promise<void> | undefined;
   private connecting: Promise<{ sdp: string }> | undefined;
@@ -160,6 +162,10 @@ export class SimulatorSession extends DurableObject<Env> {
         if (activity.sequence != null) this.activitySequence = activity.sequence;
         if (activity.active || activity.audio) this.lastActivity = Date.now();
         if (activity.audio) this.lastAudio = Date.now();
+        if (this.snapshot.status === 'live' && this.producer) {
+          this.producer.hear(Date.now(), activity);
+          this.scheduleFloor();
+        }
         const segment = this.segment;
         if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: Date.now(), ...activity.network });
       }
@@ -246,7 +252,8 @@ export class SimulatorSession extends DurableObject<Env> {
       status: 'connecting', startedAt: Date.now(), limitSeconds: SESSION_LIMIT_SECONDS, warning: null,
       revision: 0, transcript: [], evaluation: null, coaching: null, feedbackStatus: 'waiting',
       message: null, finalization: 'pending', usageSeconds: null,
-      ...(input.scenarioId === INTERVIEW_SCENARIO_ID ? { interview: { evaluation: null, summary: null } } : {}),
+      // A tab loaded before the listening hold names no mode and reports no microphone quiet: it keeps the earlier turn-taking.
+      ...(input.scenarioId === INTERVIEW_SCENARIO_ID ? { interview: { evaluation: null, summary: null, ...(input.listening ? { listening: input.listening } : {}) } } : {}),
     };
     this.createDirectors();
     await this.ctx.storage.put('lease', this.lease);
@@ -280,6 +287,7 @@ export class SimulatorSession extends DurableObject<Env> {
         pauses: () => this.pauseSpans(),
         talking: () => { const ready = new Set(settled()); return this.snapshot!.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); },
         heard: () => Math.max(this.lastAudio, this.lastSpeech),
+        listening: snapshot.interview.listening, transcript: () => this.snapshot!.transcript,
       });
     } else if (getScenario(snapshot.scenarioId).objectives.length) this.contextual = new ContextualDirector({
       scenarioId: snapshot.scenarioId, clientId: snapshot.clientId,
@@ -291,7 +299,8 @@ export class SimulatorSession extends DurableObject<Env> {
   }
 
   private async openLive(input: { scenarioId: string; clientId: string; sdp: string }, offsetMs = 0, context?: string) {
-    const created = await this.paid.createLive({ ...input, ...(context ? { context } : {}) }, foundryConfig(this.env));
+    const listening = this.snapshot?.interview?.listening;
+    const created = await this.paid.createLive({ ...input, ...(context ? { context } : {}), ...(listening ? { listening } : {}) }, foundryConfig(this.env));
     const segment: Segment = { epoch: ++this.epoch, providerId: created.session.id, offsetMs, startedAt: Date.now(), endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null };
     this.segments.push(segment);
     await this.persistLease();
@@ -373,6 +382,7 @@ export class SimulatorSession extends DurableObject<Env> {
       snapshot.transcript = next;
       snapshot.revision++;
       this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null);
+      this.scheduleFloor();
       if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries * .9 || transcriptCharacters(snapshot.transcript) >= TRANSCRIPT_LIMIT.characters * .9) this.capacityDeadline ??= Date.now() + 30_000;
       return;
     }
@@ -405,6 +415,20 @@ export class SimulatorSession extends DurableObject<Env> {
     }
   }
 
+  /** Sets one timer for the listening hold's next deadline while the conversation is live. */
+  private scheduleFloor() {
+    clearTimeout(this.floorTimer);
+    this.floorTimer = undefined;
+    const due = this.snapshot?.status === 'live' ? this.producer?.floorDue(Date.now()) : null;
+    if (due == null) return;
+    this.floorTimer = setTimeout(() => {
+      this.floorTimer = undefined;
+      if (this.snapshot?.status !== 'live') return;
+      this.producer?.listen(Date.now());
+      this.scheduleFloor();
+    }, Math.max(0, due - Date.now()));
+  }
+
   private tick() {
     const snapshot = this.snapshot;
     if (!snapshot || snapshot.status !== 'live') return;
@@ -417,6 +441,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.unanswered(now);
     if (!getScenario(snapshot.scenarioId).objectives.length) return;
     this.producer?.tick(now);
+    this.scheduleFloor();
     this.watchEnding(now);
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
@@ -563,6 +588,8 @@ export class SimulatorSession extends DurableObject<Env> {
     this.hold(reason, Date.now());
     clearInterval(this.timer);
     this.timer = undefined;
+    clearTimeout(this.floorTimer);
+    this.floorTimer = undefined;
     this.gradeAbort.abort();
     this.producer?.pause();
     this.contextual?.pause();
@@ -817,6 +844,7 @@ export class SimulatorSession extends DurableObject<Env> {
     this.contextual?.close();
     this.producer?.close();
     clearInterval(this.timer);
+    clearTimeout(this.floorTimer);
     this.gradeAbort.abort();
     try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
     await this.pausing;

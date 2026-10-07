@@ -21,6 +21,21 @@ test('WebRTC creation uses Foundry and the configured Live deployment with priva
   expect(result).toEqual({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
 });
 
+test('an interview listening mode reaches the provider session as Sam’s turn-taking brief', async () => {
+  const instructions: Record<string, string> = {};
+  for (const listening of [undefined, 'quiet', 'ack'] as const) {
+    await createLive({ scenarioId: 'project-closeout', clientId: 'sam-cedar', sdp: 'v=0', ...(listening ? { listening } : {}) }, fixtureFoundry, (async (_url, options) => {
+      instructions[listening ?? 'legacy'] = JSON.parse(String(options?.body)).session.instructions;
+      return Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
+    }) as typeof fetch);
+  }
+  expect(instructions.legacy).not.toContain('turn note');
+  expect(instructions.quiet).toContain('say nothing yet: no sound and no word');
+  expect(instructions.ack).toContain('First, one short, quiet sound that shows you heard them');
+  expect(instructions.quiet).toContain('Speak only when a turn note says it is your turn.');
+  expect(instructions.ack).toContain('Ask your next question only when a turn note says it is your turn');
+});
+
 test('the control WebSocket attaches to Foundry with server-only authentication', async () => {
   let accepted = false;
   const socket = { accept: () => { accepted = true; } };

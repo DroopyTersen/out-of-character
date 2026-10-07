@@ -1,0 +1,1282 @@
+<title>Interview Engine Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f4f6f8; --fg:#161b22; --muted:#5d6774; --line:#d5dbe3; --card:#ffffff; --code-bg:#e9edf2;
+  --engine:#0e7c6e; --engine-soft:rgba(14,124,110,.09);
+  --host:#a85f0a;   --host-soft:rgba(168,95,10,.10);
+  --cf:#cf5a12;     --cf-soft:rgba(207,90,18,.10);
+  --host:#2353c4;  --host-soft:rgba(35,83,196,.10);
+  --bad:#b4231a;    --band:rgba(22,27,34,.035);
+  --sam:#087f6c; --sol:#1d68a6; --jev:#9a5d05; --luna:#6a45c2; --participant:#c03a56;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0f1319; --fg:#e4e8ee; --muted:#98a3b1; --line:#2a3240; --card:#161c25; --code-bg:#1b222c;
+    --engine:#3fcdb6; --engine-soft:rgba(63,205,182,.12);
+    --host:#f0a548;   --host-soft:rgba(240,165,72,.12);
+    --cf:#f58c4c;     --cf-soft:rgba(245,140,76,.12);
+    --host:#80a6ff;  --host-soft:rgba(128,166,255,.12);
+    --bad:#ff7b6c;    --band:rgba(228,232,238,.045);
+    --sam:#44efcd; --sol:#5cbcf0; --jev:#f2c14e; --luna:#b8a0ff; --participant:#ff7f93;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0f1319; --fg:#e4e8ee; --muted:#98a3b1; --line:#2a3240; --card:#161c25; --code-bg:#1b222c;
+  --engine:#3fcdb6; --engine-soft:rgba(63,205,182,.12);
+  --host:#f0a548;   --host-soft:rgba(240,165,72,.12);
+  --cf:#f58c4c;     --cf-soft:rgba(245,140,76,.12);
+  --host:#80a6ff;  --host-soft:rgba(128,166,255,.12);
+  --bad:#ff7b6c;    --band:rgba(228,232,238,.045);
+  --sam:#44efcd; --sol:#5cbcf0; --jev:#f2c14e; --luna:#b8a0ff; --participant:#ff7f93;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.5; }
+main { max-width:1040px; margin:0 auto; padding:0 16px 80px; }
+header.hero { padding:40px 0 16px; border-bottom:1px solid var(--line); }
+header.hero h1 { font-size:clamp(28px,4.5vw,40px); line-height:1.1; margin:0 0 10px; font-weight:600; letter-spacing:-.01em; }
+header.hero p.lede { margin:0 0 18px; color:var(--muted); max-width:62ch; }
+.chips { display:flex; flex-wrap:wrap; gap:8px; }
+.chip { font-size:13px; padding:4px 10px; border:1px solid var(--line); border-radius:999px; background:var(--card); }
+.chip b { font-weight:600; }
+nav.toc { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); margin:0 -16px; padding:0 16px; }
+nav.toc ol { display:flex; gap:4px; list-style:none; margin:0; padding:8px 0; overflow-x:auto; scrollbar-width:none; }
+nav.toc ol::-webkit-scrollbar { display:none; }
+nav.toc a { white-space:nowrap; font-size:13px; color:var(--muted); text-decoration:none; padding:4px 8px; border-radius:4px; }
+nav.toc a:hover { color:var(--fg); background:var(--code-bg); }
+.legend { display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:var(--muted); margin:14px 0 0; }
+.legend span::before { content:""; display:inline-block; width:12px; height:12px; border-radius:2px; margin-right:6px; vertical-align:-1px; border:1.5px solid; }
+.legend .l-engine::before { border-color:var(--engine); background:var(--engine-soft); }
+.legend .l-host::before { border-color:var(--host); background:var(--host-soft); }
+.legend .l-cf::before { border-color:var(--cf); background:var(--cf-soft); }
+.legend .l-host::before { border-color:var(--host); background:var(--host-soft); }
+section { padding:40px 0 8px; border-bottom:1px solid var(--line); }
+section:last-of-type { border-bottom:0; }
+h2 { font-size:24px; margin:0 0 6px; font-weight:600; letter-spacing:-.01em; }
+h2 .num { color:var(--muted); font-weight:500; margin-right:10px; font-variant-numeric:tabular-nums; }
+h3 { font-size:17px; margin:30px 0 8px; font-weight:600; }
+p { margin:0 0 12px; max-width:72ch; }
+p.sub { color:var(--muted); margin-bottom:18px; }
+ul, ol { margin:0 0 12px; padding-left:22px; }
+li { margin:3px 0; }
+li::marker { color:var(--muted); }
+code { font-family:var(--mono); font-size:.86em; background:var(--code-bg); padding:1px 5px; border-radius:3px; }
+pre { font-family:var(--mono); font-size:12.5px; line-height:1.55; background:var(--code-bg); padding:14px 16px; border-radius:6px; overflow-x:auto; margin:0 0 14px; }
+pre code { background:none; padding:0; font-size:inherit; }
+pre .pub { color:var(--engine); font-weight:500; }
+pre .cmt { color:var(--muted); }
+pre .k { color:var(--host); }
+details { border:1px solid var(--line); border-radius:6px; background:var(--card); margin:0 0 10px; }
+details summary { cursor:pointer; padding:10px 14px; font-weight:500; font-size:14px; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+details summary::-webkit-details-marker { display:none; }
+details summary::after { content:"+"; color:var(--muted); font-family:var(--mono); }
+details[open] summary::after { content:"–"; }
+details summary small { color:var(--muted); font-weight:400; margin-left:10px; }
+details > pre, details > div { margin:0; border-top:1px solid var(--line); border-radius:0 0 6px 6px; }
+details > div { padding:12px 14px; }
+figure { margin:18px 0 22px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+figure svg { display:block; max-width:100%; height:auto; color:var(--fg); font-family:var(--sans); }
+figure svg.wide { min-width:720px; width:100%; }
+figure svg.xwide { min-width:860px; width:100%; }
+figcaption { font-size:13px; color:var(--muted); margin-top:8px; max-width:80ch; }
+svg .n { fill:var(--card); stroke:currentColor; stroke-width:1.2; }
+svg .n-host { fill:var(--host-soft); stroke:var(--host); }
+svg .n-engine { fill:var(--engine-soft); stroke:var(--engine); }
+svg .n-engine-solid { fill:var(--card); stroke:var(--engine); stroke-width:1.7; }
+svg .n-cf { fill:var(--cf-soft); stroke:var(--cf); }
+svg .n-host { fill:var(--host-soft); stroke:var(--host); }
+svg .dash { stroke-dasharray:6 4; }
+svg text { fill:currentColor; font-size:12px; }
+svg .b { font-weight:600; }
+svg .ts { font-size:10.5px; fill:var(--muted); }
+svg .mono { font-family:var(--mono); font-size:11px; }
+svg .cap { font-size:10px; letter-spacing:.08em; text-transform:uppercase; fill:var(--muted); }
+svg .ar { stroke:currentColor; stroke-width:1.3; fill:none; }
+svg .ar-dash { stroke-dasharray:5 4; }
+svg .ar-bad { stroke:var(--bad); stroke-dasharray:5 4; }
+svg .ll { stroke:var(--line); stroke-width:1; stroke-dasharray:3 5; }
+svg .band { fill:var(--band); }
+svg .halo { fill:var(--bg); }
+svg .guide { stroke:var(--line); stroke-dasharray:3 4; }
+svg .f-engine { fill:var(--engine); } svg .f-host { fill:var(--host); } svg .f-cf { fill:var(--cf); } svg .f-host { fill:var(--host); } svg .f-bad { fill:var(--bad); }
+svg .s-cf { stroke:var(--cf); } svg .s-host { stroke:var(--host); } svg .s-bad { stroke:var(--bad); }
+svg .dot { fill:currentColor; }
+.grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); margin:0 0 14px; }
+.grid.two { grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+.card { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:14px 16px; }
+.card h4 { margin:0 0 6px; font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.card p, .card ul { font-size:13.5px; margin:0 0 6px; }
+.card ul { padding-left:18px; }
+.card .kv { font-size:13px; color:var(--muted); }
+.card .kv b { color:var(--fg); font-weight:500; }
+.tag { font-size:11px; font-weight:500; letter-spacing:.04em; text-transform:uppercase; padding:1px 7px; border-radius:3px; border:1px solid; }
+.tag.engine { color:var(--engine); border-color:var(--engine); background:var(--engine-soft); }
+.tag.host { color:var(--host); border-color:var(--host); background:var(--host-soft); }
+.tag.cf { color:var(--cf); border-color:var(--cf); background:var(--cf-soft); }
+.tag.host { color:var(--host); border-color:var(--host); background:var(--host-soft); }
+.tag.app { color:var(--muted); border-color:var(--line); }
+.tag.yes { color:var(--engine); border-color:var(--engine); }
+.table { overflow-x:auto; margin:0 0 16px; border:1px solid var(--line); border-radius:6px; background:var(--card); }
+table { border-collapse:collapse; width:100%; font-size:13.5px; }
+th, td { text-align:left; vertical-align:top; padding:9px 12px; border-bottom:1px solid var(--line); }
+th { font-weight:600; font-size:12.5px; color:var(--muted); background:var(--band); white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td code { white-space:nowrap; }
+td.c-cf { border-left:3px solid var(--cf); } td.c-host { border-left:3px solid var(--host); } td.c-gen { border-left:3px solid var(--engine); }
+.rule { border-left:3px solid var(--engine); background:var(--engine-soft); padding:10px 14px; border-radius:0 6px 6px 0; margin:14px 0 18px; font-size:14px; max-width:80ch; }
+.rule b { font-weight:600; }
+.steps { counter-reset:s; list-style:none; padding:0; margin:0 0 16px; }
+.steps li { counter-increment:s; display:grid; grid-template-columns:34px 1fr; gap:10px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:14px; }
+.steps li::before { content:counter(s); font-family:var(--mono); color:var(--muted); font-size:13px; padding-top:2px; }
+.steps li:last-child { border-bottom:0; }
+.decision { display:grid; grid-template-columns:34px 1fr; gap:10px; }
+.decision .n { font-family:var(--mono); color:var(--muted); font-size:13px; padding-top:3px; }
+.decision .rec { font-size:12.5px; color:var(--engine); font-weight:500; margin-top:4px; }
+.tree { font-family:var(--mono); font-size:12.5px; line-height:1.6; background:var(--code-bg); padding:14px 16px; border-radius:6px; overflow-x:auto; margin:0 0 10px; white-space:pre; }
+svg .pill { fill:var(--card); stroke:var(--line); stroke-width:1; }
+.tree .d { color:var(--muted); }
+.tree .pub { color:var(--engine); font-weight:500; }
+.tree .c { color:var(--muted); }
+.small { font-size:13px; color:var(--muted); }
+/* Borrowed from conversation-map.html: model colours, cast cards, analogy, short version */
+.c-sam { --c:var(--sam); } .c-sol { --c:var(--sol); } .c-jev { --c:var(--jev); } .c-luna { --c:var(--luna); } .c-participant { --c:var(--participant); }
+.legend .l-m::before { border-color:var(--c); background:color-mix(in srgb,var(--c) 18%,var(--card)); }
+.tldr { margin:18px 0 0; border:1px solid var(--line); background:var(--card); border-radius:8px; padding:16px 18px; }
+.tldr .eyebrow, .analogy .eyebrow, .cast-intro .eyebrow { display:block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin-bottom:8px; }
+.tldr ol { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+.tldr li { display:grid; grid-template-columns:28px minmax(0,1fr); gap:8px; font-size:14px; max-width:none; }
+.tldr li b { font-family:var(--mono); font-size:12px; color:var(--engine); padding-top:2px; }
+.analogy { background:var(--band); border-radius:8px; padding:14px 18px; margin:14px 0 0; font-size:14px; }
+.analogy p { max-width:none; margin:0 0 8px; } .analogy p:last-child { margin:0; }
+.analogy .seam { color:var(--host); font-weight:500; }
+.principles { list-style:none; padding:0; margin:14px 0 0; display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+.principles li { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:10px 12px; font-size:13px; margin:0; }
+.principles li b { display:block; font-size:14px; font-weight:600; margin-bottom:3px; }
+.cast { display:grid; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); margin:0 0 14px; }
+@media (max-width:640px) { .cast { grid-template-columns:minmax(0,1fr); } }
+.who { background:var(--card); border:1px solid var(--line); border-top:3px solid var(--c); border-radius:6px; padding:12px 14px; display:grid; gap:8px; align-content:start; }
+.who-head { display:flex; align-items:center; gap:10px; }
+.glyph { width:34px; height:34px; display:grid; place-items:center; border-radius:6px; background:color-mix(in srgb,var(--c) 18%,var(--card)); border:1.5px solid var(--c); color:var(--c); font-family:var(--mono); font-weight:600; font-size:13px; flex:none; }
+.who h4 { margin:0; font-size:15px; font-weight:600; }
+.who .kind { font-size:12px; color:var(--muted); line-height:1.3; }
+.who p { margin:0; font-size:13px; }
+.who dl { margin:0; display:grid; grid-template-columns:7.5em minmax(0,1fr); gap:4px 10px; font-size:12.5px; line-height:1.4; }
+.who dt { color:var(--muted); font-weight:600; } .who dd { margin:0; }
+.who dd code { white-space:normal; overflow-wrap:anywhere; }
+svg .mp { fill:color-mix(in srgb,var(--c) 18%,var(--card)); stroke:var(--c); stroke-width:1; }
+svg .mpt { font-size:10px; font-weight:600; fill:var(--c); }
+svg .mbox { fill:color-mix(in srgb,var(--c) 12%,var(--card)); stroke:var(--c); stroke-width:1.4; }
+@media (max-width:640px) { header.hero { padding-top:28px; } section { padding-top:30px; } }
+</style>
+
+<main>
+<header class="hero">
+  <h1>Interview engine: API design</h1>
+  <p class="lede">The Debrief, extracted from Out of Character into a folder the host application can copy. This page is about the seams: what each layer owns, what crosses between them, and how two very different hosts run the same code.</p>
+  <div class="chips">
+    <span class="chip"><b>2</b> independent phases</span>
+    <span class="chip"><b>3</b> seams the host implements</span>
+    <span class="chip"><b>4</b> providers the host configures</span>
+    <span class="chip"><b>5</b> essential guarantees</span>
+    <span class="chip"><b>13</b> decisions to review</span>
+    <span class="chip">Status: design for review, 2026-10-06</span>
+  </div>
+  <div class="tldr">
+    <span class="eyebrow">The short version</span>
+    <ol>
+      <li><b>01</b><span>Today the Debrief is one app. Sam talks to the participant; Sol, Jev and Luna think backstage; Cloudflare keeps the session alive across drops. <a href="https://outofcharacter.droopy.dev/conversation-map.html">The Conversation Map</a> explains how that interviewer thinks. The host application needs the same interviewer inside the host app's Azure app.</span></li>
+      <li><b>02</b><span>So the interviewer becomes an <strong>engine</strong>: one folder, copied as-is. The <strong>Interview phase</strong> runs the live interview and produces a transcript. The <strong>Narrative phase</strong> distils that transcript, shaped by a template, into prose. They share types and nothing else.</span></li>
+      <li><b>03</b><span>The host owns the building. It implements three <strong>seams</strong> the interview cannot do without (keep a checkpoint, let model work outlive a request, keep the record) and it <strong>configures the providers</strong>: which Foundry resource, which deployments, which Langfuse project. The engine receives ready clients and never sees a key.</span></li>
+      <li><b>04</b><span>Both hosts run identical engine code. Cloudflare keeps the richer wake and restore behaviour its runtime gives for free; the host app gets every essential guarantee with a Postgres row and a poll.</span></li>
+    </ol>
+  </div>
+
+  <div class="analogy">
+    <span class="eyebrow">Analogy · the same crew, a new building</span>
+    <p>The conversation map page describes a news studio: <span class="c-sam" style="color:var(--c);font-weight:600">Sam</span> the anchor, <span class="c-sol" style="color:var(--c);font-weight:600">Sol</span> the producer with the notepad, <span class="c-luna" style="color:var(--c);font-weight:600">Luna</span> the research assistant, <span class="c-jev" style="color:var(--c);font-weight:600">Jev</span> the producer's instincts. The engine is that crew with its playbook, packed to travel.</p>
+    <p>The building they move into supplies the rest. A desk where the notepad survives a power cut (<span class="seam">SessionStore</span>). Permission to keep working after the segment has aired (<span class="seam">Background</span>). The tape library (<span class="seam">Archive</span>). And the phone lines to each person on the crew (<span class="seam">Providers</span>). Which phone company and which numbers is the building's business, never the crew's.</p>
+  </div>
+
+  <ul class="principles">
+    <li><b>The host configures, the engine uses</b>Deployments, keys and telemetry sinks are chosen once by the host and injected as clients. The engine calls them the same way everywhere.</li>
+    <li><b>Two phases, nothing shared but types</b>The Interview phase never imports the Narrative phase, or the reverse. The host app can ship the narrative route without a TypeSafe key.</li>
+    <li><b>A seam is a purpose, not a platform feature</b>Each seam exists because the interview needs it: a checkpoint to resume from, model work that outlives a poll, a record to write the narrative from.</li>
+    <li><b>Same crew, any building</b>Identical behaviour on Cloudflare and the host app, richer only where the runtime gives it for free.</li>
+  </ul>
+
+  <div class="legend">
+    <span class="l-engine">engine (identical on every host)</span>
+    <span class="l-host">host implements or configures</span>
+    <span class="l-cf">Cloudflare today</span>
+    <span class="l-host">The host app / Azure</span>
+    <span class="l-m c-sam">Sam</span><span class="l-m c-sol">Sol</span><span class="l-m c-jev">Jev</span><span class="l-m c-luna">Luna</span>
+  </div>
+</header>
+
+<nav class="toc"><ol>
+  <li><a href="#shape">1 Shape</a></li>
+  <li><a href="#layers">2 Layers</a></li>
+  <li><a href="#folder">3 Folder</a></li>
+  <li><a href="#runtime">4 Runtime</a></li>
+  <li><a href="#seams">5 Seams</a></li>
+  <li><a href="#contracts">6 Contracts</a></li>
+  <li><a href="#cross">7 Cross-cutting</a></li>
+  <li><a href="#phases">8 Two phases</a></li>
+  <li><a href="#persistence">9 Persistence</a></li>
+  <li><a href="#ownership">10 Ownership</a></li>
+  <li><a href="#hosts">11 Hosts</a></li>
+  <li><a href="#threeways">12 Three ways</a></li>
+  <li><a href="#e2e">13 End to end</a></li>
+  <li><a href="#hyp">14 Hypotheses</a></li>
+  <li><a href="#decisions">15 Decisions</a></li>
+</ol></nav>
+
+<!-- ============================================================ 1 SHAPE -->
+<section id="shape">
+  <h2><span class="num">1</span>The shape</h2>
+  <p class="sub">One folder, two phases, three seams, four providers. The host configures; the engine uses.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 900 558" role="img" aria-label="The browser sends commands to the Interview phase through the host and receives snapshots. The Interview phase defines three seams the host implements: SessionStore, Background, Archive. Both phases use four providers the host configures and injects: voice (GPT-Live on Foundry), language (Foundry models), judge (TypeSafe Jev) and telemetry. Audio flows directly between the browser and the voice provider.">
+      <defs><marker id="mA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+
+      <!-- host -->
+      <rect class="n n-host dash" x="200" y="20" width="680" height="518" rx="4"/>
+      <text class="cap f-host" x="216" y="44">Host</text>
+      <text class="ts" x="256" y="44">Cloudflare worker  |  host app</text>
+      <text class="ts" x="216" y="60">identity · routes · rate limits · three seams · provider configuration · narrative composition · UI</text>
+
+      <!-- engine -->
+      <rect class="n n-engine" x="220" y="76" width="640" height="250" rx="4"/>
+      <text class="b f-engine" x="232" y="98">interview-engine/</text>
+      <text class="ts" x="372" y="98">one folder, copied as-is · uses providers, never configures them</text>
+
+      <!-- interview -->
+      <rect class="n n-engine-solid" x="240" y="116" width="300" height="90" rx="3"/>
+      <text class="b" x="252" y="138">Interview phase</text>
+      <text class="ts" x="362" y="138">phase 1</text>
+      <text x="252" y="160">spoken interview → <tspan class="mono">Passage[]</tspan></text>
+      <text class="ts" x="252" y="180">session · voice (Sam) · conversation (Sol, Jev, Luna)</text>
+      <text class="ts" x="252" y="196">needs: three seams · voice · language · judge</text>
+
+      <!-- narrative -->
+      <rect class="n n-engine-solid" x="560" y="116" width="280" height="90" rx="3"/>
+      <text class="b" x="572" y="138">Narrative phase</text>
+      <text class="ts" x="680" y="138">phase 2</text>
+      <text x="572" y="160">transcript + template → Markdown</text>
+      <text class="ts" x="572" y="180">no session · no storage · no wake</text>
+      <text class="ts" x="572" y="196">needs: language only</text>
+
+      <!-- seams -->
+      <line class="ar" x1="288" y1="206" x2="288" y2="236" marker-end="url(#mA)"/>
+      <line class="ar" x1="390" y1="206" x2="390" y2="236" marker-end="url(#mA)"/>
+      <line class="ar" x1="492" y1="206" x2="492" y2="236" marker-end="url(#mA)"/>
+      <rect class="n n-host" x="240" y="236" width="96" height="60" rx="3"/>
+      <text class="b" style="font-size:11px" x="288" y="256" text-anchor="middle">SessionStore</text>
+      <text class="ts" x="288" y="272" text-anchor="middle">resume after</text>
+      <text class="ts" x="288" y="286" text-anchor="middle">a dropped call</text>
+      <rect class="n n-host" x="342" y="236" width="96" height="60" rx="3"/>
+      <text class="b" style="font-size:11px" x="390" y="256" text-anchor="middle">Background</text>
+      <text class="ts" x="390" y="272" text-anchor="middle">Jev + Sol finish</text>
+      <text class="ts" x="390" y="286" text-anchor="middle">after the poll</text>
+      <rect class="n n-host" x="444" y="236" width="96" height="60" rx="3"/>
+      <text class="b" style="font-size:11px" x="492" y="256" text-anchor="middle">Archive</text>
+      <text class="ts" x="492" y="272" text-anchor="middle">what was said,</text>
+      <text class="ts" x="492" y="286" text-anchor="middle">for the narrative</text>
+      <rect class="n dash" x="580" y="236" width="240" height="60" rx="3" style="stroke:var(--line);fill:none"/>
+      <text class="ts" x="700" y="258" text-anchor="middle">no seams</text>
+      <text class="ts" x="700" y="274" text-anchor="middle">the Narrative phase runs inside one request:</text>
+      <text class="ts" x="700" y="288" text-anchor="middle">transcript in, document out</text>
+      <text class="ts" x="240" y="316">seams: the engine defines them, the host implements them</text>
+      <text class="ts" x="840" y="316" text-anchor="end">both phases receive one Providers object</text>
+
+      <!-- providers -->
+      <line class="ar" x1="294" y1="326" x2="294" y2="366" marker-end="url(#mA)"/>
+      <line class="ar" x1="458" y1="326" x2="458" y2="366" marker-end="url(#mA)"/>
+      <line class="ar" x1="622" y1="326" x2="622" y2="366" marker-end="url(#mA)"/>
+      <line class="ar ar-dash" x1="786" y1="326" x2="786" y2="366" marker-end="url(#mA)"/>
+      <text class="ts" x="302" y="350">uses</text>
+
+      <rect class="n n-host" x="220" y="366" width="148" height="104" rx="3"/>
+      <text class="b" x="294" y="388" text-anchor="middle">voice</text>
+      <text class="ts" x="294" y="406" text-anchor="middle">GPT-Live on Foundry</text>
+      <g class="c-sam"><rect class="mp" x="276" y="416" width="36" height="15" rx="7.5"/><text class="mpt" x="294" y="427" text-anchor="middle">Sam</text></g>
+      <text class="ts" x="294" y="448" text-anchor="middle">create · attach · close</text>
+      <text class="ts" x="294" y="462" text-anchor="middle">WebRTC + control socket</text>
+
+      <rect class="n n-host" x="384" y="366" width="148" height="104" rx="3"/>
+      <text class="b" x="458" y="388" text-anchor="middle">language</text>
+      <text class="ts" x="458" y="406" text-anchor="middle">agent + fast deployments</text>
+      <g class="c-sol"><rect class="mp" x="421" y="416" width="32" height="15" rx="7.5"/><text class="mpt" x="437" y="427" text-anchor="middle">Sol</text></g>
+      <g class="c-luna"><rect class="mp" x="457" y="416" width="38" height="15" rx="7.5"/><text class="mpt" x="476" y="427" text-anchor="middle">Luna</text></g>
+      <text class="ts" x="458" y="448" text-anchor="middle">and the narrative writer</text>
+      <text class="ts" x="458" y="462" text-anchor="middle">AI SDK LanguageModel</text>
+
+      <rect class="n n-host" x="548" y="366" width="148" height="104" rx="3"/>
+      <text class="b" x="622" y="388" text-anchor="middle">judge</text>
+      <text class="ts" x="622" y="406" text-anchor="middle">TypeSafe deployment</text>
+      <g class="c-jev"><rect class="mp" x="606" y="416" width="32" height="15" rx="7.5"/><text class="mpt" x="622" y="427" text-anchor="middle">Jev</text></g>
+      <text class="ts" x="622" y="448" text-anchor="middle">readings + final grade</text>
+      <text class="ts" x="622" y="462" text-anchor="middle">AI SDK EvaluationModel</text>
+
+      <rect class="n n-host dash" x="712" y="366" width="148" height="104" rx="3"/>
+      <text class="b" x="786" y="388" text-anchor="middle">telemetry</text>
+      <text class="ts" x="786" y="406" text-anchor="middle">Langfuse · App Insights</text>
+      <text class="ts" x="786" y="427" text-anchor="middle">optional</text>
+      <text class="ts" x="786" y="448" text-anchor="middle">traces · timings · failures</text>
+      <text class="ts" x="786" y="462" text-anchor="middle">transcripts for review</text>
+
+      <text class="cap" x="220" y="498">Providers</text>
+      <text class="ts" x="296" y="498">configured by the host: which Foundry resource, which deployments, which Langfuse project</text>
+      <text class="ts" x="220" y="514">injected once as ready clients · used identically on Cloudflare and the host app</text>
+
+      <!-- browser -->
+      <rect class="n" x="20" y="116" width="140" height="90" rx="3"/>
+      <text class="b" x="90" y="140" text-anchor="middle">Browser</text>
+      <text class="ts" x="90" y="160" text-anchor="middle">host UI (React)</text>
+      <text class="ts" x="90" y="176" text-anchor="middle">client/ LiveConnection</text>
+      <text class="ts" x="90" y="192" text-anchor="middle">mic · WebRTC · snapshots</text>
+
+      <!-- browser <-> interview -->
+      <line class="ar" x1="160" y1="146" x2="240" y2="146" marker-end="url(#mA)"/>
+      <line class="ar" x1="240" y1="180" x2="160" y2="180" marker-end="url(#mA)"/>
+      <rect class="pill" x="170" y="150" width="60" height="16" rx="8"/>
+      <text class="ts" x="200" y="161.5" text-anchor="middle">commands</text>
+      <rect class="pill" x="170" y="184" width="60" height="16" rx="8"/>
+      <text class="ts" x="200" y="195.5" text-anchor="middle">snapshots</text>
+
+      <!-- audio -->
+      <polyline class="ar" points="86,206 86,406 220,406"/>
+      <polyline class="ar" points="94,206 94,412 220,412"/>
+      <text class="ts" x="104" y="300">WebRTC audio</text>
+      <text class="ts" x="104" y="314">browser ↔ provider,</text>
+      <text class="ts" x="104" y="328">never the server</text>
+    </svg>
+    </div>
+    <figcaption>Commands carry a capability token and reach the Interview phase through the host's routes. The three amber seams are the only interfaces a host writes. The four providers are built by the host from its own configuration and handed in; the voice deployment is one of them, not a special case. Narrative phase touches only the language provider, so it never needs a TypeSafe key.</figcaption>
+  </figure>
+
+  <div class="table"><table>
+    <thead><tr><th>Seam</th><th>Why the interview needs it</th><th>Cloudflare</th><th>The host app</th></tr></thead>
+    <tbody>
+      <tr><td><code>SessionStore</code></td><td>A tunnel, a deploy or a crash cuts the call mid-sentence. The checkpoint is what the resume picks up from, so Sam continues the conversation instead of restarting it. The wake hint says when a paused attempt should be given up on.</td><td class="c-cf">Durable Object storage; <code>wake</code> = <code>setAlarm</code></td><td class="c-host">one Postgres row with a <code>segment</code> guard; <code>wake</code> = no-op</td></tr>
+      <tr><td><code>Background</code></td><td>Jev's reading, Sol's map update and the archive write take seconds. The poll that triggered them has already answered. This keeps that work alive so the browser never waits on a model and the platform never kills it with the request.</td><td class="c-cf"><code>ctx.waitUntil</code></td><td class="c-host"><code>Set&lt;Promise&gt;</code> the drain waits on</td></tr>
+      <tr><td><code>Archive</code></td><td>The record of what was said: transcript, map, producer log. The narrative is written from it after the session is gone, and people read it. Written partially every 30 s so a crash still leaves most of the interview.</td><td class="c-cf">D1 <code>interview_attempts</code></td><td class="c-host">same Postgres table, <code>archive</code> column</td></tr>
+      <tr><td><code>Providers</code></td><td>Sam, Sol, Luna and Jev are model deployments. The host decides which Foundry resource, which deployments, which TypeSafe key and which Langfuse project. The engine receives ready clients and talks to them identically.</td><td class="c-cf"><code>foundryProviders(foundryConfig(env), { fetch, socket })</code>, Wrangler secrets</td><td class="c-host">same factory, the host app's own Foundry instance, Key Vault secrets, Langfuse telemetry</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Who travels with the engine</h3>
+  <p class="sub">The four models from <a href="https://outofcharacter.droopy.dev/conversation-map.html">the conversation map</a>, seen from the host's side: which provider each one speaks through, and where its craft lives in the folder.</p>
+  <div class="cast">
+    <article class="who c-sam">
+      <div class="who-head"><span class="glyph" aria-hidden="true">Sa</span><div><h4>Sam</h4><div class="kind">Realtime voice model · the anchor</div></div></div>
+      <p>Talks to the participant. Audio goes browser ↔ Foundry; the server only ever sees events and sends instructions.</p>
+      <dl><dt>Speaks through</dt><dd><code>providers.voice</code> (GPT-Live deployment)</dd><dt>Lives in</dt><dd><code>interview/voice</code></dd><dt>Carries</dt><dd>interview techniques, turn-taking, the earpiece protocol, the finish offer</dd></dl>
+    </article>
+    <article class="who c-sol">
+      <div class="who-head"><span class="glyph" aria-hidden="true">So</span><div><h4>Sol</h4><div class="kind">Reasoning model · the producer</div></div></div>
+      <p>Keeps the conversation map and suggests threads. Slow, so it never sits in the request path.</p>
+      <dl><dt>Speaks through</dt><dd><code>providers.language.agent</code></dd><dt>Lives in</dt><dd><code>interview/conversation</code></dd><dt>Watch</dt><dd>today it posts to <code>/responses</code> directly for prompt caching (hypothesis, section 14)</dd></dl>
+    </article>
+    <article class="who c-jev">
+      <div class="who-head"><span class="glyph" aria-hidden="true">Je</span><div><h4>Jev</h4><div class="kind">Judge model · the producer's instincts</div></div></div>
+      <p>Reads every answer, ranks the threads, and at the end gives the coverage grade. The only TypeSafe user.</p>
+      <dl><dt>Speaks through</dt><dd><code>providers.judge</code></dd><dt>Lives in</dt><dd><code>interview/conversation</code></dd><dt>Why it matters here</dt><dd>because the final grade is Jev's, Narrative phase needs no judge and the host app's narrative route needs no TypeSafe key</dd></dl>
+    </article>
+    <article class="who c-luna">
+      <div class="who-head"><span class="glyph" aria-hidden="true">Lu</span><div><h4>Luna</h4><div class="kind">Research model · the assistant</div></div></div>
+      <p>Looks up the companies and products the participant names, at most three times an interview.</p>
+      <dl><dt>Speaks through</dt><dd><code>providers.language.fast</code></dd><dt>Lives in</dt><dd><code>interview/conversation</code></dd><dt>Optional</dt><dd>guarantee O3: a host may leave research off</dd></dl>
+    </article>
+  </div>
+  <p class="small">The narrative itself is written by the same agent deployment Sol uses, from <code>narrative/</code>, after the session is gone. It has no persona and no seams.</p>
+</section>
+
+<!-- ============================================================ 2 LAYERS -->
+<section id="layers">
+  <h2><span class="num">2</span>Layers and what each owns</h2>
+  <div class="grid">
+    <div class="card"><h4>Spec <span class="tag app">consuming app</span></h4>
+      <p class="kv"><b>Owns</b> what this interview should cover: the topics, what counts as covered, who the participant is, Sam's framing and voices, time limits, the narrative template.</p>
+      <p class="kv"><b>Leaves</b> how to interview. Follow-ups, pacing, when to let a thread go, how to grade a reply: that is the engine's craft, the same for every subject.</p>
+      <p class="kv"><b>Why</b> a second interview (a kickoff, a retrospective) becomes a data file, not a fork.</p></div>
+    <div class="card"><h4>Shared contracts <span class="tag engine">shared/</span></h4>
+      <p class="kv"><b>Owns</b> the vocabulary: <code>Passage</code>, <code>InterviewSnapshot</code>, protocol, spec types.</p>
+      <p class="kv"><b>Leaves</b> all I/O.</p>
+      <p class="kv"><b>Why</b> one snapshot definition stops browser and server drifting.</p></div>
+    <div class="card"><h4>Browser voice link <span class="tag engine">client/</span></h4>
+      <p class="kv"><b>Owns</b> media and connection health: mic, WebRTC, levels, poll or socket, pause holds, heartbeat, rejoin.</p>
+      <p class="kv"><b>Leaves</b> rendering, URLs, identity.</p>
+      <p class="kv"><b>Why</b> none of it is about this repo's UI; the host app needs it unchanged.</p></div>
+    <div class="card"><h4>Server session <span class="tag engine">interview/session</span></h4>
+      <p class="kv"><b>Owns</b> time, the transcript, checkpoints, archive cadence, when to call the runtime.</p>
+      <p class="kv"><b>Leaves</b> how storage and archives are implemented; who may start.</p>
+      <p class="kv"><b>Why</b> the hard part of a reliable voice interview, identical on every host.</p></div>
+    <div class="card"><h4>Conversation runtime <span class="tag engine">private</span></h4>
+      <p class="kv"><b>Owns</b> interview quality: Sol's map, Jev's readings, Luna's research, ranking, notes.</p>
+      <p class="kv"><b>Leaves</b> voice transport, persistence, lifecycle.</p>
+      <p class="kv"><b>Why</b> a host needs an interview to happen, not to drive Sol.</p></div>
+    <div class="card"><h4>Narrative phase <span class="tag engine">narrative/</span></h4>
+      <p class="kv"><b>Owns</b> the writing and the run-once-retry-once rule.</p>
+      <p class="kv"><b>Leaves</b> persistence and display.</p>
+      <p class="kv"><b>Why</b> The host application has transcripts from elsewhere; a document must not need a session.</p></div>
+    <div class="card"><h4>Host <span class="tag host">platform</span></h4>
+      <p class="kv"><b>Owns</b> routes, identity, rate limits, the three seams, provider configuration, narrative composition, UI.</p>
+      <p class="kv"><b>Leaves</b> everything above.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ 3 FOLDER -->
+<section id="folder">
+  <h2><span class="num">3</span>Folder and dependency rule</h2>
+  <p class="sub">The host app's file conventions from day one, so the move is a copy: no barrel <code>index.ts</code>, server-only files end in <code>.server.ts</code>, camelCase names, prompts in <code>*.prompt.ts</code>. Public entry points are highlighted.</p>
+
+<div class="tree">interview-engine/
+  README.md  CONTEXT.md  adr/
+
+  <span class="d">shared/</span>                          <span class="c">types + zod, no I/O; imported by browser and server</span>
+    <span class="pub">spec.ts</span>  <span class="pub">transcript.ts</span>  <span class="pub">snapshot.ts</span>  <span class="pub">protocol.ts</span>
+
+  <span class="d">client/</span>                          <span class="c">browser only; no React</span>
+    <span class="pub">liveConnection.ts</span>  <span class="pub">audioLevels.ts</span>  <span class="pub">narrativeStream.ts</span>  <span class="pub">react.ts</span> <span class="c">(optional hooks)</span>
+
+  <span class="d">narrative/</span>                       <span class="c">PHASE 2: transcript + template → narrative · language provider only</span>
+    <span class="pub">narrative.server.ts</span>              <span class="c">writeNarrative, NarrativeRunner</span>
+    write.server.ts  narrativeRun.server.ts  narrative.prompt.ts
+
+  <span class="d">interview/</span>                      <span class="c">PHASE 1: live interview → transcript</span>
+    <span class="pub">interview.server.ts</span>             <span class="c">SessionActor, FencedError, protocol handler</span>
+    <span class="pub">seams.server.ts</span>                  <span class="c">SessionStore, Background, Archive</span>
+    <span class="pub">adapters/memory.server.ts</span>        <span class="c">in-memory seams for tests and the reference host</span>
+    session/   voice/   conversation/   *.prompt.ts   <span class="c">private · conversation/ includes Jev's readings and the final grade</span>
+
+  <span class="d">providers/</span>                       <span class="c">how the engine talks to models · the host configures, the engine uses</span>
+    <span class="pub">providers.server.ts</span>              <span class="c">Providers type · foundryProviders(config, platform) factory</span>
+    gptLive.server.ts  structured.server.ts  judge.server.ts  diagnostics.server.ts</div>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 740 400" role="img" aria-label="Dependency graph: host server imports interview and narrative; host UI imports client; interview imports seams, providers and shared; narrative imports only providers and shared; client imports shared; narrative never imports interview or seams; client and server never import each other.">
+      <defs>
+        <marker id="mB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="mBx" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M2,2 L8,8 M8,2 L2,8" class="s-bad" stroke-width="1.6"/></marker>
+      </defs>
+      <rect class="n n-host" x="20" y="30" width="330" height="50" rx="3"/>
+      <text class="b" x="32" y="51">host server</text>
+      <text class="ts" x="32" y="68">routes · identity · adapters · narrative composition</text>
+      <rect class="n n-host" x="560" y="30" width="150" height="50" rx="3"/>
+      <text class="b" x="572" y="51">host UI</text>
+      <text class="ts" x="572" y="68">React screens</text>
+
+      <rect class="n n-engine-solid" x="20" y="140" width="150" height="50" rx="3"/>
+      <text class="b" x="32" y="161">interview/</text>
+      <text class="ts" x="32" y="178">session · voice · conversation</text>
+      <rect class="n n-engine-solid" x="200" y="140" width="150" height="50" rx="3"/>
+      <text class="b" x="212" y="161">narrative/</text>
+      <text class="ts" x="212" y="178">write · run</text>
+      <rect class="n n-engine-solid" x="560" y="140" width="150" height="50" rx="3"/>
+      <text class="b" x="572" y="161">client/</text>
+      <text class="ts" x="572" y="178">LiveConnection · narrativeStream</text>
+
+      <rect class="n n-host dash" x="50" y="250" width="120" height="44" rx="3"/>
+      <text class="b" style="font-size:11px" x="110" y="269" text-anchor="middle">seams.server.ts</text>
+      <text class="ts" x="110" y="284" text-anchor="middle">host implements</text>
+      <rect class="n n-engine" x="200" y="250" width="120" height="44" rx="3"/>
+      <text class="b" style="font-size:11px" x="260" y="269" text-anchor="middle">providers/</text>
+      <text class="ts" x="260" y="284" text-anchor="middle">type + factory</text>
+      <path class="ar ar-dash" d="M330,80 L330,230 L320,230" marker-end="url(#mB)"/>
+      <text class="ts" x="336" y="230">host builds Providers</text>
+      <rect class="n n-engine" x="20" y="330" width="690" height="44" rx="3"/>
+      <text class="b" x="32" y="349">shared/</text>
+      <text class="ts" x="32" y="365">spec · transcript · snapshot · protocol  (types and zod only)</text>
+
+      <line class="ar" x1="95" y1="80" x2="95" y2="140" marker-end="url(#mB)"/>
+      <line class="ar" x1="275" y1="80" x2="275" y2="140" marker-end="url(#mB)"/>
+      <line class="ar" x1="635" y1="80" x2="635" y2="140" marker-end="url(#mB)"/>
+      <line class="ar" x1="110" y1="190" x2="110" y2="250" marker-end="url(#mB)"/>
+      <line class="ar" x1="150" y1="190" x2="230" y2="250" marker-end="url(#mB)"/>
+      <line class="ar" x1="260" y1="190" x2="260" y2="250" marker-end="url(#mB)"/>
+      <line class="ar" x1="30" y1="190" x2="30" y2="330" marker-end="url(#mB)"/>
+      <line class="ar" x1="340" y1="190" x2="340" y2="330" marker-end="url(#mB)"/>
+      <line class="ar" x1="635" y1="190" x2="635" y2="330" marker-end="url(#mB)"/>
+
+      <line class="ar ar-bad" x1="215" y1="190" x2="172" y2="248" marker-end="url(#mBx)"/>
+      <text class="ts f-bad" x="196" y="232" text-anchor="end">never</text>
+      <line class="ar ar-bad" x1="560" y1="165" x2="358" y2="165" marker-end="url(#mBx)"/>
+      <text class="ts f-bad" x="455" y="158" text-anchor="middle">never, either direction</text>
+    </svg>
+    </div>
+    <figcaption>Arrows mean imports. The two phases do not import each other. The Narrative phase imports only providers and shared, so it can never reach storage or a session. The host imports the providers factory to build the object it hands in. The red edges are enforced by a boundary check that fails the build, not by convention. In the host app the folder lands as <code>app/debrief/engine/</code>.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ 4 RUNTIME -->
+<section id="runtime">
+  <h2><span class="num">4</span>Runtime flow</h2>
+  <p class="sub">One attempt from the first SDP offer to the streamed narrative. The actor's mailbox applies every message one at a time.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="xwide" viewBox="0 0 940 830" role="img" aria-label="Sequence diagram across browser, host routes, session actor, conversation runtime, GPT-Live and Foundry: start and SDP exchange, the live loop of transcript deltas and private notes, pause and resume, end, then the host composing the narrative without the session.">
+      <defs><marker id="mC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+
+      <!-- bands -->
+      <rect class="band" x="4" y="66" width="932" height="142" rx="3"/>
+      <text class="cap" x="12" y="80">start</text>
+      <rect class="band" x="4" y="216" width="932" height="236" rx="3"/>
+      <text class="cap" x="12" y="230">live loop</text>
+      <rect class="band" x="4" y="460" width="932" height="146" rx="3"/>
+      <text class="cap" x="12" y="474">pause / resume</text>
+      <rect class="band" x="4" y="614" width="932" height="94" rx="3"/>
+      <text class="cap" x="12" y="628">end</text>
+      <rect class="band" x="4" y="716" width="932" height="104" rx="3"/>
+      <text class="cap" x="12" y="730">narrative · host composes, session not involved</text>
+
+      <!-- lifelines -->
+      <line class="ll" x1="70" y1="56" x2="70" y2="820"/>
+      <line class="ll" x1="230" y1="56" x2="230" y2="820"/>
+      <line class="ll" x1="390" y1="56" x2="390" y2="820"/>
+      <line class="ll" x1="550" y1="56" x2="550" y2="820"/>
+      <line class="ll" x1="710" y1="56" x2="710" y2="820"/>
+      <line class="ll" x1="870" y1="56" x2="870" y2="820"/>
+
+      <!-- lane heads -->
+      <rect class="n" x="0" y="20" width="140" height="34" rx="3"/><text class="b" x="70" y="42" text-anchor="middle">Browser</text>
+      <rect class="n n-host" x="160" y="20" width="140" height="34" rx="3"/><text class="b" x="230" y="42" text-anchor="middle">Host routes</text>
+      <rect class="n n-engine-solid" x="320" y="20" width="140" height="34" rx="3"/><text class="b" x="390" y="42" text-anchor="middle">SessionActor</text>
+      <rect class="n n-engine-solid" x="480" y="20" width="140" height="34" rx="3"/><text class="b" x="550" y="42" text-anchor="middle">Conversation</text>
+      <rect class="n" x="640" y="20" width="140" height="34" rx="3"/><text class="b" x="710" y="42" text-anchor="middle">GPT-Live</text>
+      <rect class="n" x="800" y="20" width="140" height="34" rx="3"/><text class="b" x="870" y="42" text-anchor="middle">Foundry · TypeSafe</text>
+
+      <!-- START -->
+      <line class="ar" x1="70" y1="90" x2="230" y2="90" marker-end="url(#mC)"/>
+      <text class="ts" x="150" y="84" text-anchor="middle">start {id, voiceId, sdp} · Bearer capability</text>
+      <line class="ar" x1="230" y1="116" x2="390" y2="116" marker-end="url(#mC)"/>
+      <text class="ts" x="310" y="110" text-anchor="middle">identity + rate limit ok → handle(start)</text>
+      <line class="ar" x1="390" y1="142" x2="710" y2="142" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="136" text-anchor="middle">create voice session · attach control socket · hash capability into checkpoint</text>
+      <line class="ar" x1="390" y1="168" x2="70" y2="168" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="162" text-anchor="middle">sdp answer + snapshot</text>
+      <line class="ar" x1="70" y1="192" x2="710" y2="192"/>
+      <line class="ar" x1="70" y1="196" x2="710" y2="196"/>
+      <text class="ts" x="390" y="186" text-anchor="middle">WebRTC audio flows directly between browser and provider</text>
+
+      <!-- LIVE -->
+      <line class="ar" x1="70" y1="240" x2="390" y2="240" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="234" text-anchor="middle">ready</text>
+      <line class="ar" x1="390" y1="266" x2="710" y2="266" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="260" text-anchor="middle">opening instruction</text>
+      <line class="ar" x1="710" y1="292" x2="390" y2="292" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="286" text-anchor="middle">transcript deltas → passages settle after 1.2 s quiet</text>
+      <line class="ar" x1="390" y1="318" x2="550" y2="318" marker-end="url(#mC)"/>
+      <text class="ts" x="470" y="312" text-anchor="middle">settled passages</text>
+      <line class="ar" x1="550" y1="344" x2="870" y2="344" marker-end="url(#mC)"/>
+      <text class="ts" x="710" y="338" text-anchor="middle">Jev turn (TypeSafe) · Sol map (Foundry) · Luna research</text>
+      <line class="ar" x1="550" y1="370" x2="390" y2="370" marker-end="url(#mC)"/>
+      <text class="ts" x="470" y="364" text-anchor="middle">ranked threads → private note</text>
+      <line class="ar" x1="390" y1="396" x2="710" y2="396" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="390" text-anchor="middle">thinking.append(note) · Sam never sees the topics</text>
+      <line class="ar" x1="70" y1="422" x2="390" y2="422" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="416" text-anchor="middle">poll every 1 s with activity  |  The host app: pushed over the socket</text>
+      <line class="ar" x1="390" y1="446" x2="70" y2="446" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="440" text-anchor="middle">snapshot: transcript · coverage · readings · background</text>
+
+      <!-- PAUSE -->
+      <line class="ar" x1="70" y1="484" x2="390" y2="484" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="478" text-anchor="middle">pause  (15 s WebRTC disconnected, or 10 s failed polls)</text>
+      <path class="ar" d="M390,500 h44 v12 h-44" marker-end="url(#mC)"/>
+      <text class="ts" x="442" y="510">save checkpoint, durable  ·  wake(hold) hint</text>
+      <line class="ar" x1="390" y1="536" x2="710" y2="536" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="530" text-anchor="middle">close voice session</text>
+      <line class="ar" x1="70" y1="562" x2="390" y2="562" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="556" text-anchor="middle">resume {sdp}  (automatic within 60 s, then the user)</text>
+      <line class="ar" x1="390" y1="588" x2="710" y2="588" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="582" text-anchor="middle">new voice session + rebuilt "conversation so far"</text>
+
+      <!-- END -->
+      <line class="ar" x1="70" y1="640" x2="390" y2="640" marker-end="url(#mC)"/>
+      <text class="ts" x="230" y="634" text-anchor="middle">end  (sent with keepalive)</text>
+      <line class="ar" x1="390" y1="666" x2="710" y2="666" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="660" text-anchor="middle">close</text>
+      <path class="ar" d="M390,682 h44 v12 h-44" marker-end="url(#mC)"/>
+      <text class="ts" x="442" y="692">final coverage grade (Jev) · Archive.write(final) · clear store after 5 min</text>
+
+      <!-- REPORT -->
+      <line class="ar" x1="70" y1="744" x2="230" y2="744" marker-end="url(#mC)"/>
+      <text class="ts" x="150" y="738" text-anchor="middle">narrative</text>
+      <line class="ar" x1="230" y1="770" x2="870" y2="770" marker-end="url(#mC)"/>
+      <text class="ts" x="550" y="764" text-anchor="middle">NarrativeRunner → writeNarrative(transcript from archive row, template, enrichment?)</text>
+      <line class="ar" x1="870" y1="796" x2="70" y2="796" marker-end="url(#mC)"/>
+      <text class="ts" x="470" y="790" text-anchor="middle">Markdown stream · host stores the document on its own record</text>
+    </svg>
+    </div>
+    <figcaption>Audio never touches the server. The engine only sees text: transcript deltas in, instructions and private notes out. The narrative runs after the session is gone, from the archived transcript.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ 5 SEAMS -->
+<section id="seams">
+  <h2><span class="num">5</span>What crosses each seam</h2>
+  <p class="sub">Plain data in, plain data or a promise out. The host never receives an engine object it has to drive.</p>
+  <div class="table"><table>
+    <thead><tr><th>In</th><th>Seam</th><th>Out</th></tr></thead>
+    <tbody>
+      <tr><td><code>InterviewSpec</code>, <code>InterviewContext</code>, <code>Providers</code>, <code>Seams</code></td><td><code>SessionActor.restore</code></td><td>one actor per owned attempt</td></tr>
+      <tr><td>SDP offer, voiceId, capability</td><td><code>handle(start | resume)</code></td><td>SDP answer, <code>InterviewSnapshot</code></td></tr>
+      <tr><td>Activity {active, audio, network}</td><td><code>handle(poll)</code></td><td><code>InterviewSnapshot</code>: transcript, coverage, readings, background, warning, pause</td></tr>
+      <tr><td>checkpoint patch, wake hint</td><td><code>SessionStore</code></td><td><code>FencedError</code> if superseded; <code>actor.wake()</code> where the host has timers</td></tr>
+      <tr><td>a promise</td><td><code>Background</code></td><td>nothing; it just outlives the request</td></tr>
+      <tr><td><code>InterviewArchiveRow</code></td><td><code>Archive</code></td><td>nothing; best effort</td></tr>
+      <tr><td>Foundry resource + deployments, TypeSafe key, platform fetch/socket, telemetry</td><td><code>foundryProviders</code> (host side)</td><td><code>Providers</code>: voice, language, judge, telemetry, ready to call</td></tr>
+      <tr><td><code>Passage[]</code>, <code>NarrativeTemplate</code>, enrichment?</td><td><code>writeNarrative</code></td><td><code>{ stream: ReadableStream&lt;string&gt;, result: Promise&lt;Narrative&gt; }</code></td></tr>
+      <tr><td>NarrativeRun factory, AbortSignal</td><td><code>NarrativeRunner.attach</code></td><td><code>Response</code> (stream or stored text), <code>NarrativeState</code></td></tr>
+    </tbody>
+  </table></div>
+
+<pre><code><span class="cmt">// interview/seams.server.ts</span>
+<span class="k">export type</span> SessionStore = {                       <span class="cmt">// bound by the host to one attempt (the host app: and one segment)</span>
+  load(): Promise&lt;{ checkpoint?: Checkpoint }&gt;;
+  save(patch: { checkpoint?: Checkpoint | null }): Promise&lt;void&gt;;   <span class="cmt">// durable before return; throws FencedError if superseded</span>
+  wake(at: number | null): Promise&lt;void&gt;;                            <span class="cmt">// a hint; a host without timers ignores it</span>
+  clear(): Promise&lt;void&gt;;
+};
+<span class="k">export type</span> Background    = { track(work: Promise&lt;unknown&gt;): void };                      <span class="cmt">// grading, map updates, archive writes finish after the poll answered</span>
+<span class="k">export type</span> Archive       = { write(row: InterviewArchiveRow): Promise&lt;void&gt; };          <span class="cmt">// upsert by row.id</span>
+<span class="k">export type</span> Seams = { store: SessionStore; background: Background; archive: Archive };
+
+<span class="cmt">// providers/providers.server.ts — the host configures, the engine uses</span>
+<span class="k">export type</span> Providers = {
+  voice: VoiceProvider;                                     <span class="cmt">// Sam: GPT-Live deployment on Foundry</span>
+  language: { agent: LanguageModel; fast: LanguageModel };  <span class="cmt">// Sol, Luna, the narrative (AI SDK models)</span>
+  judge: EvaluationModel;                                   <span class="cmt">// Jev: readings during, final grade at the end</span>
+  telemetry?: TelemetrySettings;                            <span class="cmt">// AI SDK experimental_telemetry → Langfuse, App Insights</span>
+  log?: (event: EngineEvent) =&gt; void;                       <span class="cmt">// transcripts, timings, provider failures</span>
+};
+<span class="k">export type</span> VoiceProvider = {
+  create(input: { sdp: string; voice: string; instructions: string }): Promise&lt;{ id: string; sdp: string }&gt;;
+  attach(id: string): Promise&lt;WebSocketLike&gt;;              <span class="cmt">// the control socket; events in, instructions out</span>
+  close(id: string): Promise&lt;void&gt;;
+};
+<span class="cmt">// Factory the host may use. Platform differences (fetch upgrade vs Bun WebSocket) are arguments, not seams.</span>
+<span class="k">export function</span> foundryProviders(config: FoundryConfig, platform: { fetch?: typeof fetch; socket?: SocketOpener; telemetry?: TelemetrySettings }): Providers;</code></pre>
+  <p class="small">Gone since the first draft: <code>Alarm</code> (folded into <code>SessionStore.wake</code>), <code>Clock</code> (replay fakes time without a seam), <code>ControlSocket</code> (it was the voice provider's transport, so it lives inside the voice provider), and <code>session.summary()</code> (the narrative is the host's to compose, section 8). The engine no longer receives API keys or resource names; it receives clients.</p>
+</section>
+
+<!-- ============================================================ 6 CONTRACTS -->
+<section id="contracts">
+  <h2><span class="num">6</span>Public contracts</h2>
+  <p class="sub">Illustrative, not exhaustive. Public surface: <code>shared/*</code>, <code>client/*</code>, <code>narrative/narrative.server.ts</code>, <code>interview/interview.server.ts</code>, <code>interview/seams.server.ts</code>, <code>interview/adapters/memory.server.ts</code>. Everything else carries no compatibility promise.</p>
+
+  <details open><summary>SessionActor <small>interview/interview.server.ts</small></summary>
+<pre><code><span class="k">export class</span> SessionActor {                       <span class="cmt">// one per owned attempt; every entry point is enqueued</span>
+  <span class="k">static</span> restore(spec, context, providers, seams): Promise&lt;SessionActor&gt;;
+  handle(command: Command): Promise&lt;Reply&gt;;       <span class="cmt">// start · ready · poll · pause · resume · end; capability checked here</span>
+  wake(): Promise&lt;void&gt;;                          <span class="cmt">// hosts with durable timers call it; others never do</span>
+  close(reason: 'connection' | 'drain' | 'fenced'): Promise&lt;void&gt;;
+  <span class="cmt">//   connection: browser link closed → pause('browser'): close voice, checkpoint, keep resumable</span>
+  <span class="cmt">//   drain:      process stopping → same, then tell the browser to resume elsewhere</span>
+  <span class="cmt">//   fenced:     a write was rejected → close voice socket, stop tick, discard pending, write nothing</span>
+  idle(): boolean;  snapshot(): InterviewSnapshot;  transcript(): Passage[];
+}
+<span class="k">export class</span> FencedError <span class="k">extends</span> Error {}</code></pre>
+  </details>
+
+  <details><summary>InterviewSpec and InterviewContext <small>shared/spec.ts</small></summary>
+<pre><code><span class="k">export type</span> InterviewSpec = {
+  id: string; version: string; purpose: string;
+  participant: { role: string; setting: string };
+  interviewer: { name; persona; voices: { id; voice; behavior }[]; opening; orientation: string[]; boundaries: string[]; vocabulary: Record&lt;string,string&gt; };
+  topics: TopicGroup[];                             <span class="cmt">// { id, label, objectives: { id, label, criterion, hint }[] }</span>
+  defaultThreads: { id: string; label: string; rule: string }[];
+  branches?: RoleBranch[];                          <span class="cmt">// hypothesis, section 14</span>
+  research?: { enabled: boolean };
+  limits?: { durationSeconds; idleWarningMs; pauseHoldMs; maxResumes };
+  narrative: NarrativeTemplate;                          <span class="cmt">// { title, audience, sections: {heading, purpose, required}[], rules }</span>
+};
+<span class="k">export type</span> InterviewContext = {
+  sessionId: string;
+  subject?: { id: string; label?: string };        <span class="cmt">// host's user or record id, archive attribution only</span>
+  known?: { kind: EntityKind; name: string; note?: string }[];   <span class="cmt">// seed entities for Sol</span>
+  locale?: string;
+};</code></pre>
+  </details>
+
+  <details><summary>Passage and InterviewSnapshot <small>shared/transcript.ts · shared/snapshot.ts</small></summary>
+<pre><code><span class="k">export type</span> Passage = { id: string; speaker: 'participant' | 'interviewer'; text: string; startMs: number; endMs: number };
+
+<span class="k">export type</span> InterviewSnapshot = {
+  id; specId; voiceId;
+  status: 'connecting' | 'live' | 'paused' | 'ending' | 'ended' | 'interrupted';
+  startedAt; limitSeconds; usageSeconds: number | null;
+  warning: { kind: 'idle' | 'limit' | 'capacity'; endsAt } | null;
+  pause: { reason: 'browser' | 'provider' | 'restart'; pausedAt; resumeBy; resumes; maxResumes } | null;
+  transcript: Passage[];
+  coverage: { objectiveId; level: 'not-yet' | 'touched' | 'explored' | 'set-aside'; evidence: Evidence | null }[];
+  readings: Record&lt;string, { value: number | null; evidence: Evidence | null }&gt;;
+  background: { facts: { text; url; title }[]; status: 'none' | 'pending' | 'delivered' | 'skipped' };
+  message: string | null; revision: number;         <span class="cmt">// narrative status no longer lives here (section 8)</span>
+};</code></pre>
+  </details>
+
+  <details><summary>Protocol <small>shared/protocol.ts</small></summary>
+<pre><code><span class="k">export type</span> ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end' | 'narrative';
+<span class="k">export const</span> startBody    = z.object({ id: uuid, voiceId: z.string(), sdp: audioOnlyOffer });
+<span class="k">export const</span> resumeBody   = z.object({ sdp: audioOnlyOffer });
+<span class="k">export const</span> activityBody = z.object({ active, audio, outputQuietMs, sequence, network: networkSample.optional() });
+<span class="cmt">// responses: start/resume → { sdp, snapshot }; ready/poll/pause/end → snapshot; narrative → text/plain stream</span>
+<span class="cmt">// Same messages over two transports: HTTP poll (Cloudflare) or one WebSocket (the host app). Bearer capability on every command.</span></code></pre>
+  </details>
+
+  <details><summary>Browser <small>client/liveConnection.ts · client/narrativeStream.ts</small></summary>
+<pre><code><span class="k">export type</span> ProtocolTransport = { request(action, body?, options?: { timeoutMs?; keepalive? }): Promise&lt;unknown&gt; };
+<span class="k">export function</span> pollTransport(baseUrl): ProtocolTransport;      <span class="cmt">// Cloudflare, as today</span>
+<span class="k">export function</span> socketTransport(url): ProtocolTransport;        <span class="cmt">// the host app: snapshots pushed on change</span>
+
+<span class="k">export class</span> LiveConnection {
+  <span class="k">constructor</span>(transport: ProtocolTransport, callbacks: Callbacks, attempt?: Attempt);   <span class="cmt">// Attempt = { id, capability } rejoins after reload</span>
+  start(voiceId): Promise&lt;void&gt;;  resume(): Promise&lt;void&gt;;  pause(): Promise&lt;void&gt;;  end(): Promise&lt;void&gt;;
+  setMuted(muted: boolean): void;  dispose(): void;
+}
+<span class="k">export function</span> readSummary(transport, onText: (markdown) =&gt; void, signal?): Promise&lt;SummaryState&gt;;</code></pre>
+  </details>
+
+  <details><summary>Narrative phase <small>narrative/narrative.server.ts</small></summary>
+<pre><code><span class="k">export function</span> writeNarrative(input: NarrativeInput, providers: Pick&lt;Providers, 'language' | 'telemetry'&gt;, signal?: AbortSignal): NarrativeRun;
+<span class="cmt">// The final coverage grade is Jev's last reading and lives in interview/conversation. Narrative phase needs no judge and no TypeSafe key.</span>
+
+<span class="k">export type</span> NarrativeInput = { transcript: Passage[]; template: NarrativeTemplate; enrichment?: { map?; coverage?; background?; known? } };
+<span class="k">export type</span> NarrativeRun   = { stream: ReadableStream&lt;string&gt;; result: Promise&lt;Narrative&gt; };
+<span class="k">export type</span> Narrative =
+  | { document: { text: string }; failure: null; usage: Usage }
+  | { document: null; failure: 'provider' | 'invalid' | 'cancelled' | 'timeout'; usage: Usage | null };
+
+<span class="cmt">// Host-side helper: one bounded run plus one explicit retry, re-attachable stream for a reloaded page.</span>
+<span class="k">export class</span> NarrativeRunner { <span class="k">constructor</span>(start: (signal) =&gt; NarrativeRun, deadlineMs?); attach(signal): Response; state(): NarrativeState; }</code></pre>
+  </details>
+
+  <details><summary>Archive row <small>interview/seams.server.ts</small></summary>
+<pre><code><span class="k">export type</span> InterviewArchiveRow = {
+  id; specId; specVersion; subject: InterviewContext['subject'];
+  state: 'partial' | 'final'; capturedAt: number;
+  transcript: Passage[]; snapshot: InterviewSnapshot; map: ConversationMap | null;
+  producerLog: ProducerLogRecord[];                <span class="cmt">// Sol/Jev/Luna calls with timings; trimmed to the adapter's byte budget</span>
+  provenance: { producer; map; rubric; ranking };  <span class="cmt">// prompt versions</span>
+};</code></pre>
+  </details>
+</section>
+
+<!-- ============================================================ 7 CROSS-CUTTING -->
+<section id="cross">
+  <h2><span class="num">7</span>Cross-cutting contracts</h2>
+  <div class="grid">
+    <div class="card"><h4>Auth: two layers</h4><ul>
+      <li><b>Host</b> owns identity: who the user is, who may start, rate limits, the <code>subject</code>.</li>
+      <li><b>Engine</b> owns the capability: 64-hex token minted by the browser, hashed in the checkpoint, checked in the actor.</li>
+      <li>Engine never sees cookies. Works on a host with weak or no login.</li></ul></div>
+    <div class="card"><h4>One writer</h4><ul>
+      <li>At most one process writes an attempt at a time; the host supplies it.</li>
+      <li>Cloudflare: the runtime. The host app: the browser's socket plus a segment guard.</li>
+      <li>A superseded writer fails its write, closes its voice session, stops.</li></ul></div>
+    <div class="card"><h4>Cancellation</h4><ul>
+      <li>Every provider call takes an <code>AbortSignal</code> and a timeout.</li>
+      <li><code>end()</code> aborts grading and producer work; sent with keepalive from a closing tab.</li>
+      <li>Narrative: cancelling the request does not cancel the run; it stays re-attachable.</li></ul></div>
+    <div class="card"><h4>Reconnection</h4><ul>
+      <li>Pause after 15 s WebRTC disconnected or 10 s failed polls; heartbeat every 5 s.</li>
+      <li>Hold 15 min, up to 5 resumes (each is a new paid voice session).</li>
+      <li>Auto-resume within 60 s, then the user chooses. Host does nothing.</li></ul></div>
+    <div class="card"><h4>Errors: three kinds</h4><ul>
+      <li><b>Protocol</b>: typed errors → 400 / 401 / 404 / 410 / 429 / 503 by a default mapping.</li>
+      <li><b>Model</b>: never reach the browser; map stays, coverage goes stale, logged with diagnostics.</li>
+      <li><b>Narrative</b>: state, not exceptions. <code>failure</code> + retry while <code>starts &lt; 2</code>.</li></ul></div>
+    <div class="card"><h4>Privacy</h4><ul>
+      <li>Leaves the box: audio and text to GPT-Live; settled text to Foundry and TypeSafe with <code>store: false</code>; only <code>{kind, name, clue}</code> to search.</li>
+      <li>Brief and private notes never reach the browser; a bundle check enforces it.</li>
+      <li>Capability never logged. Archive carries only the host's <code>subject</code>. This repo stays synthetic.</li></ul></div>
+  </div>
+</section>
+
+<!-- ============================================================ 8 TWO COMPONENTS -->
+<section id="phases">
+  <h2><span class="num">8</span>Two independent phases</h2>
+  <div class="table"><table>
+    <thead><tr><th></th><th>Interview phase</th><th>Narrative phase</th></tr></thead>
+    <tbody>
+      <tr><td>Job</td><td>run a spoken interview</td><td>write a document from a transcript</td></tr>
+      <tr><td>Input</td><td><code>InterviewSpec</code> + <code>InterviewContext</code> + a browser with a mic</td><td><code>Passage[]</code> + <code>NarrativeTemplate</code></td></tr>
+      <tr><td>Output</td><td>transcript, snapshot history, conversation map</td><td>streamed Markdown + a settled result</td></tr>
+      <tr><td>Optional</td><td><code>known</code> facts to seed the map</td><td>map, coverage, research facts, known facts</td></tr>
+      <tr><td>Needs from host</td><td>three seams, identity, routes; voice, language and judge providers</td><td>the language provider only</td></tr>
+      <tr><td>Time</td><td>minutes to an hour, stateful, resumable</td><td>under two minutes, stateless, one call</td></tr>
+      <tr><td>Alone?</td><td>yes: a transcript is a complete output</td><td>yes: any transcript, including imports</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Where <code>session.summary()</code> goes</h3>
+  <p>Today one method does five things. Only the first is generic; the other four are glue between the session's storage and the document, and they are exactly what the host application does differently.</p>
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 900 260" role="img" aria-label="Narrative composition: the host's narrative route reads a transcript from the archive row, an import or a live session, wraps writeNarrative in a NarrativeRunner, streams Markdown to the browser and stores the document on its own record.">
+      <defs><marker id="mD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <rect class="n n-host" x="20" y="70" width="190" height="110" rx="3"/>
+      <text class="b" x="32" y="92">transcript sources</text>
+      <text class="ts" x="32" y="112">archive row (from the Interview phase)</text>
+      <text class="ts" x="32" y="130">imported Passage[] (Teams, recording)</text>
+      <text class="ts" x="32" y="148">live session, if still in memory</text>
+      <text class="ts" x="32" y="166">+ optional map, coverage, facts</text>
+
+      <rect class="n n-host" x="250" y="90" width="170" height="70" rx="3"/>
+      <text class="b" x="335" y="112" text-anchor="middle">host narrative route</text>
+      <text class="ts" x="335" y="130" text-anchor="middle">POST narrative · ~30 lines</text>
+      <text class="ts" x="335" y="146" text-anchor="middle">stores result on its own record</text>
+
+      <rect class="n n-engine-solid" x="460" y="90" width="180" height="70" rx="3"/>
+      <text class="b" x="550" y="112" text-anchor="middle">NarrativeRunner</text>
+      <text class="ts" x="550" y="130" text-anchor="middle">1 run + 1 retry · 2 min deadline</text>
+      <text class="ts" x="550" y="146" text-anchor="middle">re-attach for a reloaded page</text>
+
+      <rect class="n n-engine-solid" x="680" y="90" width="200" height="70" rx="3"/>
+      <text class="b" x="780" y="112" text-anchor="middle">writeNarrative</text>
+      <text class="ts" x="780" y="130" text-anchor="middle">(transcript, template, enrichment?)</text>
+      <text class="ts" x="780" y="146" text-anchor="middle">→ { stream, result }</text>
+
+      <rect class="n" x="680" y="200" width="200" height="40" rx="3"/>
+      <text x="780" y="225" text-anchor="middle">Foundry, streamed</text>
+      <rect class="n" x="250" y="200" width="170" height="40" rx="3"/>
+      <text x="335" y="225" text-anchor="middle">browser narrativeStream.ts</text>
+
+      <line class="ar" x1="210" y1="125" x2="250" y2="125" marker-end="url(#mD)"/>
+      <line class="ar" x1="420" y1="125" x2="460" y2="125" marker-end="url(#mD)"/>
+      <text class="ts" x="440" y="118" text-anchor="middle">start</text>
+      <line class="ar" x1="640" y1="125" x2="680" y2="125" marker-end="url(#mD)"/>
+      <line class="ar" x1="780" y1="160" x2="780" y2="200" marker-end="url(#mD)"/>
+      <line class="ar" x1="335" y1="160" x2="335" y2="200" marker-end="url(#mD)"/>
+      <text class="ts" x="343" y="184">Markdown stream, or stored text after reload</text>
+    </svg>
+    </div>
+    <figcaption>Narrative status leaves the snapshot. The browser asks the host's narrative route, which is where a reloaded page would ask anyway. Nothing to the right of the route knows whether a live session ever existed.</figcaption>
+  </figure>
+  <details><summary>The host app host sketch <small>app/debrief/narrativeHost.server.ts</small></summary>
+<pre><code><span class="k">const</span> row = <span class="k">await</span> db.query.interviews.findFirst({ where: eq(interviews.id, id) });
+<span class="k">const</span> runner = runners.get(id) ?? <span class="k">new</span> NarrativeRunner(signal =&gt;
+  writeNarrative({ transcript: row.transcript, template: closeoutSpec.narrative, enrichment: { map: row.map } }, providers, signal));
+runner.result.then(r =&gt; db.update(interviews).set({ narrative: r.document?.text ?? null, narrativeFailure: r.failure, narrativeAt: now() }));
+<span class="k">return</span> runner.attach(request.signal);</code></pre>
+  </details>
+</section>
+
+<!-- ============================================================ 9 PERSISTENCE -->
+<section id="persistence">
+  <h2><span class="num">9</span>Persistence and wakes</h2>
+  <p class="sub">Two stores that look alike and are not, and the one timer the engine would like but does not require.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 820 250" role="img" aria-label="The SessionActor saves a checkpoint to the SessionStore on every change and loads it once on restore; it writes archive rows best effort, and the engine never reads the archive.">
+      <defs><marker id="mE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <rect class="n n-host" x="20" y="100" width="230" height="70" rx="3"/>
+      <text class="b" x="32" y="122">SessionStore → checkpoint</text>
+      <text class="ts" x="32" y="140">snapshot + producer state</text>
+      <text class="ts" x="32" y="156">capability hash · provider session id</text>
+      <rect class="n n-engine-solid" x="310" y="100" width="200" height="70" rx="3"/>
+      <text class="b" x="410" y="122" text-anchor="middle">SessionActor</text>
+      <text class="ts" x="410" y="140" text-anchor="middle">the only writer of both</text>
+      <text class="ts" x="410" y="156" text-anchor="middle">reads only the checkpoint</text>
+      <rect class="n n-host" x="570" y="100" width="230" height="70" rx="3"/>
+      <text class="b" x="582" y="122">Archive → one wide row</text>
+      <text class="ts" x="582" y="140">transcript · snapshot · map</text>
+      <text class="ts" x="582" y="156">producer log · provenance</text>
+
+      <line class="ar" x1="310" y1="120" x2="250" y2="120" marker-end="url(#mE)"/>
+      <text class="ts" x="280" y="113" text-anchor="middle">save</text>
+      <line class="ar ar-dash" x1="250" y1="150" x2="310" y2="150" marker-end="url(#mE)"/>
+      <text class="ts" x="280" y="166" text-anchor="middle">load, once</text>
+      <line class="ar" x1="510" y1="135" x2="570" y2="135" marker-end="url(#mE)"/>
+      <text class="ts" x="540" y="128" text-anchor="middle">write</text>
+
+      <text class="ts" x="20" y="196">written on every state change and each 30 s</text>
+      <text class="ts" x="20" y="212">durable before return · FencedError if superseded</text>
+      <text class="ts" x="20" y="228">cleared 5 min after the attempt ends</text>
+      <text class="ts" x="570" y="196">partial each 30 s, final at end · best effort</text>
+      <text class="ts" x="570" y="212">read by humans, replays, the narrative route</text>
+      <text class="ts" x="570" y="228">never read by the engine · retention is host policy</text>
+      <text class="cap" x="20" y="60">recovery</text>
+      <text class="cap" x="570" y="60">record</text>
+      <text class="ts" x="20" y="80">lets a replacement process pick up where this one died</text>
+      <text class="ts" x="570" y="80">keeps what happened, for people and later tooling</text>
+    </svg>
+    </div>
+    <figcaption>Two interfaces survive the deletion test: the durability contract differs, the archive is optional, and the engine never reads it. On the host app both land in one Postgres table. Cloudflare keeps them apart only because Durable Object storage and D1 are different products.</figcaption>
+  </figure>
+
+  <h3>What the alarm does today, and the host app's lazy equivalent</h3>
+  <p>The interview itself runs on an in-process 500 ms tick. The Cloudflare alarm is a 30 s backstop that also survives the process. It has six jobs, none of which is "run the interview".</p>
+  <div class="table"><table>
+    <thead><tr><th>Alarm job on Cloudflare</th><th>On the host app, with no durable timer</th></tr></thead>
+    <tbody>
+      <tr><td>Close orphaned paid voice sessions after a restart</td><td class="c-host">browser closes its peer first; next owner closes the recorded provider id on <code>restore</code>; provider's own limit bounds the rest</td></tr>
+      <tr><td>End a paused attempt whose browser never returns (15 min hold)</td><td class="c-host">hold checked on <code>restore</code> and <code>resume</code>; finalized the moment anyone touches it; costs nothing meanwhile</td></tr>
+      <tr><td>Finalize an interrupted attempt near its limit</td><td class="c-host">same: next touch finalizes and takes Jev's final grade</td></tr>
+      <tr><td>Enforce idle and limit rules when polling stopped</td><td class="c-host">the tick still runs while a process holds the attempt</td></tr>
+      <tr><td>Checkpoint + partial archive every 30 s</td><td class="c-host">same tick; only time there is anything new to write</td></tr>
+      <tr><td>Garbage-collect storage 5 min after closure</td><td class="c-host">host policy; a <code>tasks/</code> script or nothing, ended rows are the archive</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 860 230" role="img" aria-label="Timeline comparing Cloudflare and the host app after a pause: Cloudflare's alarm fires at the hold deadline and finalizes; the host app does nothing at the deadline and runs the same job when the attempt is next touched.">
+      <defs><marker id="mF" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <line class="guide" x1="140" y1="50" x2="140" y2="190"/>
+      <line class="guide" x1="420" y1="50" x2="420" y2="190"/>
+      <line class="guide" x1="700" y1="50" x2="700" y2="190"/>
+      <line class="ar" x1="60" y1="190" x2="830" y2="190" marker-end="url(#mF)"/>
+      <text class="ts" x="140" y="212" text-anchor="middle">pause · browser gone</text>
+      <text class="ts" x="420" y="212" text-anchor="middle">hold deadline, 15 min</text>
+      <text class="ts" x="700" y="212" text-anchor="middle">next touch: Resume button or the host application list</text>
+
+      <text class="b f-cf" x="20" y="74">Cloudflare</text>
+      <line class="ar ar-dash s-cf" x1="140" y1="70" x2="420" y2="70"/>
+      <circle class="f-cf" cx="140" cy="70" r="4"/>
+      <circle class="f-cf" cx="420" cy="70" r="5"/>
+      <text class="ts" x="150" y="60">store.wake(hold) → setAlarm</text>
+      <text class="ts" x="432" y="60">alarm() → actor.wake(): hold expired → finalize, final archive row, GC later</text>
+
+      <text class="b f-host" x="20" y="134">The host app</text>
+      <circle class="f-host" cx="140" cy="130" r="4"/>
+      <line class="guide s-host" x1="140" y1="130" x2="700" y2="130"/>
+      <circle class="n n-host" cx="420" cy="130" r="5"/>
+      <circle class="f-host" cx="700" cy="130" r="5"/>
+      <text class="ts" x="150" y="120">store.wake(hold) → no-op</text>
+      <text class="ts" x="432" y="120">nothing fires · one row, no process, no voice session</text>
+      <text class="ts" x="712" y="150">restore() runs the same hold check → finalize</text>
+    </svg>
+    </div>
+    <figcaption>Same job, same code. Only the moment it runs differs. The engine carries one requirement to make this correct: every wake job is idempotent and also runs on <code>restore</code> and on the first command after it.</figcaption>
+  </figure>
+  <div class="rule"><b>Rule.</b> The alarm on Cloudflare is an optimization that makes tidy-up prompt. The host app's lack of one is a documented difference in promptness, not in correctness. No queue, cron or background worker is added to the host app.</div>
+</section>
+
+<!-- ============================================================ 10 OWNERSHIP -->
+<section id="ownership">
+  <h2><span class="num">10</span>Who runs the session</h2>
+  <p class="sub">The previous revision answered this with a lease runtime that recreated Durable Objects over Postgres. This one keeps what the runtime gives and gives the host app the smallest mechanism that is still sound.</p>
+
+  <div class="grid two">
+    <div class="card"><h4>Capability <span class="tag engine">engine</span></h4>
+      <p><i>This browser may drive this attempt.</i> Minted by the browser at <code>start</code>, hashed in the checkpoint, checked inside the actor on every command.</p></div>
+    <div class="card"><h4>Ownership <span class="tag host">host</span></h4>
+      <p><i>This process may write this attempt right now.</i> The browser never sees it. The engine meets it only as a <code>FencedError</code> from <code>save</code>.</p></div>
+  </div>
+
+  <h3>Essential, on every host</h3>
+  <div class="table"><table>
+    <thead><tr><th></th><th>Guarantee</th><th>What breaks without it</th></tr></thead>
+    <tbody>
+      <tr><td><b>E1</b></td><td><b>One writer.</b> A superseded writer's write fails, and on that failure it stops driving the voice provider.</td><td>forked transcript, two billed voice sessions</td></tr>
+      <tr><td><b>E2</b></td><td><b>Serialized inside the writer.</b> Commands, provider messages, the tick, a wake and background completions go through one mailbox.</td><td>a <code>pause</code> racing a <code>resume</code> at an <code>await</code></td></tr>
+      <tr><td><b>E3</b></td><td><b>Successor safety.</b> Events from a superseded voice session never act on its successor.</td><td>a late <code>session.closed</code> pausing the new session</td></tr>
+      <tr><td><b>E4</b></td><td><b>Durable before acknowledged.</b> <code>save</code> returns only once durable; a resume starts from the last acknowledged transcript.</td><td>recovery becomes reconstruction</td></tr>
+      <tr><td><b>E5</b></td><td><b>Capability check in the actor.</b></td><td>a guessed id drives someone else's interview</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Optional: availability and recovery</h3>
+  <div class="table"><table>
+    <thead><tr><th></th><th>Behaviour</th><th>Cloudflare</th><th>The host app</th></tr></thead>
+    <tbody>
+      <tr><td><b>O1</b></td><td>Continuity across process death without the browser doing anything</td><td class="c-cf">yes: the object restores and waits, paused</td><td class="c-host">no: the client reconnects, automatically once</td></tr>
+      <tr><td><b>O2</b></td><td>Timers with no browser and no process</td><td class="c-cf">yes: durable alarm</td><td class="c-host">no: each job runs on the next touch</td></tr>
+      <tr><td><b>O3</b></td><td>Re-attaching the same voice session after a move</td><td class="c-cf">no</td><td class="c-host">no</td></tr>
+    </tbody>
+  </table></div>
+  <div class="rule"><b>No shared host type.</b> What hosts have in common is a sentence: <i>construct one actor per attempt you own, feed it commands, call <code>wake</code> if you have timers, call <code>close</code> when the connection or the process ends.</i> How a host decides it owns an attempt is its own business, and the two real hosts decide very differently.</div>
+</section>
+
+<!-- ============================================================ 11 HOSTS -->
+<section id="hosts">
+  <h2><span class="num">11</span>Two hosts, one actor</h2>
+  <p class="sub">Cloudflare keeps what the runtime gives. The host app scopes ownership to the browser's WebSocket and guards every write with one integer.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="xwide" viewBox="0 0 940 540" role="img" aria-label="Side by side: on Cloudflare the browser polls a route that forwards to a Durable Object wrapping the SessionActor, with storage and alarm; on the host app the browser holds a WebSocket to a process that owns the actor for the life of the socket, with a Postgres row guarded by a segment number. The actor is the same code.">
+      <defs><marker id="mG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <rect class="n" x="370" y="16" width="200" height="48" rx="3"/>
+      <text class="b" x="470" y="36" text-anchor="middle">Browser</text>
+      <text class="ts" x="470" y="53" text-anchor="middle">LiveConnection · capability on every command</text>
+      <line class="ar" x1="420" y1="64" x2="236" y2="108" marker-end="url(#mG)"/>
+      <text class="ts" x="300" y="78" text-anchor="end">pollTransport · HTTP, 1 s</text>
+      <line class="ar" x1="520" y1="64" x2="704" y2="108" marker-end="url(#mG)"/>
+      <text class="ts" x="640" y="78">socketTransport · pushed</text>
+
+      <!-- Cloudflare column -->
+      <text class="b f-cf" x="60" y="100">Cloudflare</text>
+      <rect class="n n-host" x="60" y="110" width="350" height="52" rx="3"/>
+      <text class="b" x="72" y="130">api.ts route</text>
+      <text class="ts" x="72" y="148">same-origin · rate limit · env.INTERVIEW.idFromName(id).fetch</text>
+      <line class="ar" x1="235" y1="162" x2="235" y2="186" marker-end="url(#mG)"/>
+      <rect class="n n-cf" x="60" y="186" width="350" height="72" rx="3"/>
+      <text class="b" x="72" y="206">InterviewObject · Durable Object, ~100 lines</text>
+      <text class="ts" x="72" y="224">runtime: one object per id, events delivered one at a time</text>
+      <text class="ts" x="72" y="240">constructor restores · fetch routes · alarm() → actor.wake()</text>
+      <line class="ar" x1="235" y1="258" x2="235" y2="282" marker-end="url(#mG)"/>
+      <rect class="n n-engine-solid" x="60" y="282" width="350" height="150" rx="3"/>
+      <text class="b f-engine" x="72" y="302">SessionActor + mailbox</text>
+      <text class="ts" x="260" y="302">identical code</text>
+      <text class="ts" x="72" y="324">voice control socket, attached by id · 500 ms tick</text>
+      <text class="ts" x="72" y="342">SessionStore → ctx.storage · wake → setAlarm</text>
+      <text class="ts" x="72" y="360">Background → ctx.waitUntil</text>
+      <text class="ts" x="72" y="378">one writer: given by the runtime</text>
+      <text class="ts" x="72" y="396">FencedError unreachable; the path still exists</text>
+      <text class="ts" x="72" y="414">waits out a pause silently; alarm finalizes, retries closes, GCs</text>
+      <line class="ar" x1="235" y1="432" x2="235" y2="456" marker-end="url(#mG)"/>
+      <rect class="n n-cf" x="60" y="456" width="350" height="56" rx="3"/>
+      <text class="b" x="72" y="476">DO storage: checkpoint + alarm</text>
+      <text class="ts" x="72" y="494">D1 interview_attempts: archive rows</text>
+
+      <!-- the host app column -->
+      <text class="b f-host" x="530" y="100">The host app</text>
+      <rect class="n n-host" x="530" y="110" width="350" height="52" rx="3"/>
+      <text class="b" x="542" y="130">upgradeWebSocket route · requireAuth on upgrade</text>
+      <text class="ts" x="542" y="148">Map&lt;socket, actor&gt; for the life of the socket</text>
+      <line class="ar" x1="705" y1="162" x2="705" y2="186" marker-end="url(#mG)"/>
+      <rect class="n n-host" x="530" y="186" width="350" height="72" rx="3"/>
+      <text class="b" x="542" y="206">the connection is the owner</text>
+      <text class="ts" x="542" y="224">socket close → actor.close('connection') → pause, voice closed</text>
+      <text class="ts" x="542" y="240">SIGTERM → actor.close('drain') → pause, tell browser "resume now"</text>
+      <line class="ar" x1="705" y1="258" x2="705" y2="282" marker-end="url(#mG)"/>
+      <rect class="n n-engine-solid" x="530" y="282" width="350" height="150" rx="3"/>
+      <text class="b f-engine" x="542" y="302">SessionActor + mailbox</text>
+      <text class="ts" x="730" y="302">identical code</text>
+      <text class="ts" x="542" y="324">voice control socket, attached by id · 500 ms tick</text>
+      <text class="ts" x="542" y="342">SessionStore → UPDATE … WHERE segment = mine</text>
+      <text class="ts" x="542" y="360">0 rows → FencedError → close('fenced'): voice closed, write nothing</text>
+      <text class="ts" x="542" y="378">wake → no-op; wake jobs run on the next touch</text>
+      <text class="ts" x="542" y="396">Background → Set&lt;Promise&gt;</text>
+      <text class="ts" x="542" y="414">one writer: the connection + the segment guard</text>
+      <line class="ar" x1="705" y1="432" x2="705" y2="456" marker-end="url(#mG)"/>
+      <rect class="n n-host" x="530" y="456" width="350" height="56" rx="3"/>
+      <text class="b" x="542" y="476">Postgres debrief.interview_attempts · one row per attempt</text>
+      <text class="ts" x="542" y="494">status · segment · checkpoint · archive · document · timestamps</text>
+    </svg>
+    </div>
+    <figcaption>Same actor, same checkpoint, same wake jobs. What differs is who guarantees one writer and whether anything fires without a browser. A deploy or crash on Cloudflare is silent; on the host app the browser reconnects out loud, once, automatically.</figcaption>
+  </figure>
+
+  <h3>The segment guard: the host app's whole ownership mechanism</h3>
+  <figure>
+    <div class="scroll">
+    <svg class="xwide" viewBox="0 0 900 300" role="img" aria-label="Timeline: process A starts the attempt at segment 1 and checkpoints; during a deploy the browser resumes on process B, which bumps the row to segment 2 and closes the old provider id; B checkpoints at segment 2; A's late write with segment 1 matches zero rows, raises FencedError, and A closes its voice session and stops.">
+      <defs>
+        <marker id="mH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="mHx" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M2,2 L8,8 M8,2 L2,8" class="s-bad" stroke-width="1.8"/></marker>
+      </defs>
+      <line class="guide" x1="500" y1="44" x2="500" y2="270"/>
+      <text class="ts" x="500" y="36" text-anchor="middle">deploy overlap: A gets SIGTERM, browser socket closes, client resumes on B</text>
+
+      <text class="b" x="20" y="74">process A</text>
+      <text class="ts" x="20" y="90">old container</text>
+      <line class="ar" x1="200" y1="70" x2="760" y2="70"/>
+      <text class="ts" x="560" y="62">A still alive: drain cut short</text>
+
+      <text class="b" x="20" y="164">row</text>
+      <text class="ts" x="20" y="180">interview_attempts</text>
+      <rect class="n n-cf" x="200" y="150" width="300" height="24" rx="2"/>
+      <text class="mono" x="350" y="167" text-anchor="middle">segment = 1</text>
+      <rect class="n n-host" x="500" y="150" width="380" height="24" rx="2"/>
+      <text class="mono" x="690" y="167" text-anchor="middle">segment = 2</text>
+
+      <text class="b" x="20" y="254">process B</text>
+      <text class="ts" x="20" y="270">new container</text>
+      <line class="ar" x1="500" y1="250" x2="880" y2="250"/>
+
+      <circle class="dot" cx="240" cy="70" r="3.5"/>
+      <line class="ar" x1="240" y1="76" x2="240" y2="148" marker-end="url(#mH)"/>
+      <text class="ts" x="247" y="114">start → segment := 1</text>
+      <circle class="dot" cx="370" cy="70" r="3.5"/>
+      <line class="ar" x1="370" y1="76" x2="370" y2="148" marker-end="url(#mH)"/>
+      <text class="ts" x="377" y="114">save WHERE segment = 1 ✓</text>
+
+      <circle class="dot" cx="500" cy="250" r="3.5"/>
+      <line class="ar" x1="500" y1="244" x2="500" y2="176" marker-end="url(#mH)"/>
+      <text class="ts" x="507" y="214">resume → segment := segment + 1 → 2</text>
+      <text class="ts" x="507" y="228">close old provider id once, open new voice session</text>
+      <circle class="dot" cx="640" cy="250" r="3.5"/>
+      <line class="ar" x1="640" y1="244" x2="640" y2="176" marker-end="url(#mH)"/>
+      <text class="ts" x="647" y="214">save WHERE segment = 2 ✓</text>
+
+      <circle class="f-bad" cx="760" cy="70" r="3.5"/>
+      <line class="ar ar-bad" x1="760" y1="76" x2="760" y2="146" marker-end="url(#mHx)"/>
+      <text class="ts" x="767" y="106">save WHERE segment = 1</text>
+      <text class="ts f-bad" x="767" y="120">0 rows → FencedError</text>
+      <text class="ts f-bad" x="767" y="134">A closes voice, stops</text>
+    </svg>
+    </div>
+    <figcaption>Two autocommit statements, no TTL, no renewal, no sweep, no forwarding. Nothing moved between processes; the browser moved. On Cloudflare the same adapter ignores <code>segment</code> because the runtime already guarantees one writer.</figcaption>
+  </figure>
+
+  <details><summary>The host app table and the two statements <small>app/debrief/debrief.db.schema.ts</small></summary>
+<pre><code><span class="k">export const</span> interviewAttempts = debrief.table("interview_attempts", {
+  id: text().primaryKey(),
+  userId: text("user_id").references(() =&gt; usersTable.id).notNull(),
+  specId: text("spec_id").notNull(),
+  status: text().$type&lt;'live' | 'paused' | 'ended'&gt;().notNull(),
+  segment: integer().default(0).notNull(),                     <span class="cmt">// bumped by start and resume; every write is conditional on it</span>
+  checkpoint: jsonbColumn("checkpoint").$type&lt;Checkpoint&gt;(),   <span class="cmt">// capability hash and provider session id live inside</span>
+  archive: jsonbColumn("archive").$type&lt;InterviewArchiveRow&gt;(),<span class="cmt">// 'partial' while live, 'final' at the end</span>
+  document: text(),                                            <span class="cmt">// the narrative, written by the host's narrative route</span>
+  startedAt, updatedAt, endedAt: timestamp(...)
+});
+
+<span class="cmt">-- start (after INSERT … ON CONFLICT DO NOTHING) and resume: take the next segment</span>
+UPDATE debrief.interview_attempts SET segment = segment + 1, status = 'live', updated_at = now()
+ WHERE id = $id RETURNING segment, checkpoint;
+
+<span class="cmt">-- every later write by that actor: 0 rows → FencedError</span>
+UPDATE debrief.interview_attempts SET checkpoint = $cp, archive = coalesce($archive, archive), status = $status, updated_at = now()
+ WHERE id = $id AND segment = $segment;</code></pre>
+  </details>
+
+  <h3>Walkthroughs</h3>
+  <div class="grid">
+    <div class="card"><h4>Start</h4><ul>
+      <li>Browser mints id + capability, opens the socket (auth on upgrade), sends <code>start</code>.</li>
+      <li>Route inserts the row, takes segment 1, restores an actor with an empty checkpoint.</li>
+      <li>Actor creates the voice session, hashes the capability, saves with segment 1.</li></ul></div>
+    <div class="card"><h4>Deploy overlap</h4><ul>
+      <li>Old process drains: close voice, checkpoint, close socket with "resume now".</li>
+      <li>Browser lands on the new container, <code>resume</code> → segment 2.</li>
+      <li>A straggler's write matches zero rows, raises <code>FencedError</code>, dies.</li></ul></div>
+    <div class="card"><h4>Frozen process</h4><ul>
+      <li>Socket pings fail; client closes its peer, resumes elsewhere → segment 2.</li>
+      <li>Old provider id closed once by the new owner.</li>
+      <li>Old process wakes, writes, fenced. Participant saw "reconnecting" for ~10 s.</li></ul></div>
+    <div class="card"><h4>Crash, no drain</h4><ul>
+      <li>Kernel resets the socket; client resumes within seconds from the last checkpoint.</li>
+      <li>Tab closed instead: row stays <code>live</code> with stale <code>updated_at</code> until touched.</li>
+      <li>Resume button or the host application list runs the hold check and finalizes.</li></ul></div>
+  </div>
+
+  <h3>Acceptance criteria</h3>
+  <p class="small">The host app: two Bun processes sharing one PGlite or Postgres with a scripted provider. Cloudflare: <code>wrangler dev</code>.</p>
+  <ol class="steps">
+    <li><b>One writer.</b> Resume on B while A is alive: A's next write raises <code>FencedError</code>, A closes its voice session, the row's checkpoint is B's.</li>
+    <li><b>Serialized.</b> Two resumes and twenty polls sent concurrently are applied one at a time; the invariant checker sees no overlap.</li>
+    <li><b>Connection scoping.</b> Closing the socket pauses, closes voice and checkpoints within two seconds; resumable on any instance.</li>
+    <li><b>Drain.</b> SIGTERM with three live attempts leaves three paused rows, three closed voice sessions, three "resume now" messages.</li>
+    <li><b>Lazy wake jobs.</b> With <code>wake</code> a no-op, a resume after the hold is refused and finalized; a stale <code>live</code> restore closes the recorded provider id exactly once.</li>
+    <li><b>Transcript integrity.</b> After a crash and resume: every passage settled before the last checkpoint, in order, nothing from the superseded segment after it.</li>
+    <li><b>Capability.</b> Valid token over a new socket resumes; missing or wrong is refused before any state changes.</li>
+    <li><b>Cloudflare.</b> Criteria 2, 6 and 7 pass unchanged; the alarm paths keep their existing tests.</li>
+  </ol>
+
+  <h3>Engine versus host</h3>
+  <div class="table"><table>
+    <thead><tr><th>Belongs to the engine</th><th>Belongs to the host</th></tr></thead>
+    <tbody>
+      <tr><td class="c-gen"><code>SessionActor</code>, its mailbox, the state machine</td><td>identity: who may start, which <code>subject</code> and spec</td></tr>
+      <tr><td class="c-gen">what a checkpoint holds, when it is written, capability hash, provider id</td><td>where the row lives and how one writer is guaranteed</td></tr>
+      <tr><td class="c-gen">wake jobs, each idempotent and also run on touch</td><td>whether wakes fire at all</td></tr>
+      <tr><td class="c-gen">provider close by id, segment binding, behaviour on <code>FencedError</code></td><td>process lifecycle: drain, stop grace, health checks</td></tr>
+      <tr><td class="c-gen">both browser transports and the reconnect-once rule</td><td>which transport is mounted, on which route</td></tr>
+      <tr><td class="c-gen">the archive row shape</td><td>archive storage, narrative composition, rate limits, secrets, GC</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small"><b>Gone from the previous revision:</b> the <code>LeaseStore</code> port and leased runtime; epochs, TTLs, renewals, self-fencing; forwarding by affinity cookie; the 409 transfer protocol; the <code>SKIP LOCKED</code> sweep and four lease columns; the shared <code>SessionHost</code> type. <b>What remains for the host app:</b> one table, one <code>segment</code> column, two conditional updates, a SIGTERM drain, one WebSocket route, a second client transport, one optional App Service setting.</p>
+</section>
+
+<!-- ============================================================ 12 THREE WAYS -->
+<section id="threeways">
+  <h2><span class="num">12</span>Each layer three ways</h2>
+  <p class="sub">"Existing" means already in the host app. "New" means this design adds it.</p>
+  <div class="table"><table>
+    <thead><tr><th>Layer</th><th>General</th><th>Cloudflare, this repo</th><th>The host app</th></tr></thead>
+    <tbody>
+      <tr><td>Spec</td><td class="c-gen">declarative data, a file in the consuming app</td><td class="c-cf"><code>interviews/project-closeout/spec.ts</code></td><td class="c-host">new <code>app/debrief/specs/projectCloseout.spec.ts</code></td></tr>
+      <tr><td>Shared + client</td><td class="c-gen">agreed types; a browser class owning media</td><td class="c-cf">imported by <code>app/interview/</code> screens, <code>pollTransport</code></td><td class="c-host">same files, <code>socketTransport</code>; https from App Service; same-origin check reads the restored <code>x-forwarded-proto</code> URL</td></tr>
+      <tr><td>Server session</td><td class="c-gen">one <code>SessionActor</code> per owned attempt, mailbox, <code>restore()</code> first</td><td class="c-cf">thin Durable Object: restore under <code>blockConcurrencyWhile</code>, <code>fetch</code> routes, <code>alarm()</code> wakes</td><td class="c-host">new <code>interviewSocket.server.ts</code>: actor per socket, <code>close('connection')</code> on close, segment guard</td></tr>
+      <tr><td>Conversation + voice</td><td class="c-gen">producer loop, Jev's readings and final grade, GPT-Live session; all private</td><td class="c-cf">unchanged, moved</td><td class="c-host">unchanged</td></tr>
+      <tr><td>SessionStore</td><td class="c-gen">load / save / wake / clear; durable save; <code>FencedError</code></td><td class="c-cf"><code>ctx.storage</code> + <code>setAlarm</code></td><td class="c-host">one table in <code>pgSchema("debrief")</code>; <code>UPDATE … WHERE segment</code>; <code>wake</code> no-op; PGlite locally</td></tr>
+      <tr><td>Background</td><td class="c-gen">outlive the request</td><td class="c-cf"><code>ctx.waitUntil</code></td><td class="c-host"><code>Set&lt;Promise&gt;</code>, ten lines</td></tr>
+      <tr><td>Archive</td><td class="c-gen">upsert one wide row, best effort</td><td class="c-cf">D1, 2 MB budget</td><td class="c-host">same table, <code>archive</code> jsonb; read-only role <code>DATABASE_URL_RO</code> for analysis</td></tr>
+      <tr><td>Providers</td><td class="c-gen">host builds <code>Providers</code> (voice, language, judge, telemetry) from its own config; engine calls them identically</td><td class="c-cf"><code>foundryProviders(foundryConfig(env), { socket: fetchUpgrade })</code>; Wrangler secrets</td><td class="c-host">same factory with the host app's Foundry instance and deployments, Bun <code>WebSocket</code>, Langfuse telemetry; new <code>AZURE_OPENAI_LIVE_MODEL</code> and <code>TYPESAFE_API_KEY</code> via Key Vault</td></tr>
+      <tr><td>Host identity</td><td class="c-gen">who may start, the <code>subject</code>, rate limits, ownership</td><td class="c-cf"><code>api.ts</code>, <code>RATE_SIMULATOR</code>, runtime ownership</td><td class="c-host"><code>requireAuth</code> + <code>_session</code> cookie; per-user hourly count; connection + segment ownership</td></tr>
+      <tr><td>Narrative phase</td><td class="c-gen">stateless, under two minutes, streamed</td><td class="c-cf"><code>routes.ts</code> with <code>NarrativeRunner</code> and a D1 write</td><td class="c-host"><code>narrativeHost.server.ts</code> in the request; document on the host application's own row</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>What the host app adds</h3>
+  <div class="table"><table>
+    <thead><tr><th>Kind</th><th>Items</th></tr></thead>
+    <tbody>
+      <tr><td>Existing, reused</td><td>App Service (B2, always on), Postgres flexible server, Key Vault, App Insights + Langfuse, Entra auth, Drizzle + migrations, Bun + Hono, CI/CD</td></tr>
+      <tr><td>New, code only</td><td><code>app/debrief/engine/</code>, one schema table, attempt store adapter with the segment guard, WebSocket route and socket-to-actor map, SIGTERM drain, narrative route, one migration</td></tr>
+      <tr><td>New, config</td><td><code>AZURE_OPENAI_LIVE_MODEL</code>, <code>TYPESAFE_API_KEY</code> secret + reference, Zod entries; optionally <code>WEBSITES_CONTAINER_STOP_TIME_LIMIT = 30</code></td></tr>
+      <tr><td>New, outside Bicep</td><td>a GPT-Live realtime deployment on the existing Foundry account</td></tr>
+      <tr><td>Not added</td><td>queues, Functions, Container Apps Jobs, Redis, a second database, sticky routing, a lease runtime</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 13 END TO END -->
+<section id="e2e">
+  <h2><span class="num">13</span>End to end</h2>
+  <ol class="steps">
+    <li>Participant picks a voice. <code>LiveConnection</code> mints id and capability, opens the mic, sends <code>start</code> with an audio-only SDP.</li>
+    <li>Host checks identity and rate limits, routes to the attempt. The actor hashes the capability, creates the GPT-Live session from the spec's brief, attaches the control socket, returns the SDP answer. Audio flows browser to provider directly.</li>
+    <li><code>ready</code>. Sam speaks. Deltas arrive on the control socket, merge into passages, settle after 1.2 s of quiet.</li>
+    <li>Jev reads each settled participant turn. Sol updates the map on its own cadence (20 s to 1 min). Luna looks up a named organisation. Code ranks open threads and sends Sam a private note. Sam never sees the topics.</li>
+    <li>Browser renders coverage, readings and transcript from the snapshot: polled on Cloudflare, pushed on the host app. Partial archive rows land on a timer.</li>
+    <li>Train enters a tunnel. 15 s later the browser pauses. The actor closes the voice session, checkpoints, calls <code>wake(hold)</code>: an alarm on Cloudflare, nothing on the host app. Browser heartbeats every 5 s.</li>
+    <li>Signal returns. <code>resume</code> with a new SDP; the actor opens a new voice session with the rebuilt "conversation so far" and bumps the resume count.</li>
+    <li>At ten minutes Sol's pace verdict allows a finish offer. Participant is done; Sam wraps up; <code>ending</code> → <code>ended</code>. Final grade, final archive row.</li>
+    <li>Browser sends <code>narrative</code> to the host's route. Host reads transcript and map from the archive row, streams <code>writeNarrative</code> through a <code>NarrativeRunner</code>, stores the document on its own record. A reloaded page re-attaches or gets the stored text. The session was not involved.</li>
+  </ol>
+</section>
+
+<!-- ============================================================ 14 HYPOTHESES -->
+<section id="hyp">
+  <h2><span class="num">14</span>Hypotheses and things that could be simpler</h2>
+  <ul>
+    <li><b><code>RoleBranch</code> is unproven.</b> Probe whether Sol can declare a branch with a citation before fixing the type. Ship the spec without <code>branches</code> first.</li>
+    <li><b>Resolved: the wake belongs to <code>SessionStore</code>.</b> It is per-attempt state next to the checkpoint wherever a host has it at all. <code>Clock</code> dropped. The wake has since become a hint the host app ignores.</li>
+    <li><b>Does GPT-Live end a session when its WebRTC transport drops?</b> Unverified. If yes, orphans after a the host app crash cost nothing; if not, a small <code>tasks/</code> sweep closes them by id. Deferred to the host app acceptance; not a blocker for the Out of Character refactor.</li>
+    <li><b>The host app could keep HTTP polling</b> with App Service client affinity and the segment guard catching every miss. Correct but noisy; the socket makes ownership follow the connection by construction. Fallback if the second transport proves costly.</li>
+    <li><b>The host app's hold expiry is lazy.</b> An abandoned attempt sits until touched. Nothing is billed meanwhile; a <code>tasks/</code> script tidies rows if that matters.</li>
+    <li><b><code>ProtocolTransport</code> could be <code>{ baseUrl, fetch }</code>.</b> It is a function so the host app can add headers and tests can stub it.</li>
+    <li><b>An event emitter on the session</b> (<code>onChange</code>, <code>onEnded</code>) would suit push hosts. Not added; nothing needs it yet.</li>
+    <li><b><code>InterviewContext.known</code></b> maps onto Sol's seed source cheaply; no caller provides it yet, but the host application almost certainly knows the project and role up front.</li>
+    <li><b>Sol's request today bypasses the AI SDK.</b> <code>requestSol</code> posts to Foundry's <code>/responses</code> directly for prompt caching. Injecting a <code>LanguageModel</code> means moving that call onto the SDK with <code>providerOptions</code>, or giving the language provider a raw <code>responses()</code> escape hatch. Verify Sol's cache hit rate survives before choosing.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 15 DECISIONS -->
+<section id="decisions">
+  <h2><span class="num">15</span>Decisions to review</h2>
+  <div class="grid two">
+    <div class="card decision"><span class="n">01</span><div><b>Session lifecycle lives in the engine</b>; the Durable Object becomes a thin adapter. Alternative: ship pieces and let each host own the lifecycle.<div class="rec">Recommend: in the engine. Hardest code, host-independent.</div></div></div>
+    <div class="card decision"><span class="n">02</span><div><b>Browser voice link ships with the engine</b>, both transports, React hooks optional. Alternative: document the protocol, the host app writes its own.<div class="rec">Recommend: ship it.</div></div></div>
+    <div class="card decision"><span class="n">03</span><div><b>Authorization is split</b>: host owns identity and the right to start; engine owns the per-session capability.<div class="rec">Recommend: keep both. Login does not replace the capability.</div></div></div>
+    <div class="card decision"><span class="n">04</span><div><b>Archive row shape is defined by the engine</b>; the host only stores it.<div class="rec">Recommend: yes. The privacy story depends on knowing exactly what persists.</div></div></div>
+    <div class="card decision"><span class="n">05</span><div><b>The Narrative phase stands alone</b> with no session, storage, wake or judge; it needs the language provider only. The final grade moves to Interview phase, so the two phases share nothing but <code>shared/</code> and <code>providers/</code>.<div class="rec">Recommend: yes. Transcript + template is the guaranteed path, and the host app's narrative route needs no TypeSafe key.</div></div></div>
+    <div class="card decision"><span class="n">06</span><div><b>Role branching waits for a probe</b> before the spec type is final.<div class="rec">Recommend: build without <code>branches</code>, probe, then add.</div></div></div>
+    <div class="card decision"><span class="n">07</span><div><b>The host app has no durable wake.</b> Wake jobs are idempotent and also run on the next touch.<div class="rec">Recommend: yes. No queue, Functions app or sweep.</div></div></div>
+    <div class="card decision"><span class="n">08</span><div><b>SessionStore and Archive stay two interfaces</b> over one Postgres database on the host app.<div class="rec">Recommend: yes. Different durability, optionality and readers; cost is one Drizzle table.</div></div></div>
+    <div class="card decision"><span class="n">09</span><div><b>Engine adopts the host app's file conventions now</b>: <code>.server.ts</code>, camelCase, no <code>index.ts</code>, <code>*.prompt.ts</code>.<div class="rec">Recommend: yes, so the move is a copy.</div></div></div>
+    <div class="card decision"><span class="n">10</span><div><b>Essential and optional are separated.</b> E1 to E5 on every host; O1 to O3 differ by documented policy, no capability flags.<div class="rec">Recommend: yes.</div></div></div>
+    <div class="card decision"><span class="n">11</span><div><b>The host app scopes ownership to the WebSocket and guards writes with a segment</b>, instead of a lease runtime. A deploy or crash ends the connection; the browser reconnects once, automatically.<div class="rec">Recommend: yes. Two SQL statements is the whole mechanism.</div></div></div>
+    <div class="card decision"><span class="n">12</span><div><b>Cloudflare keeps its richer behaviour</b> (alarm, silent restore, orphan retries, GC) because the runtime gives it; the host app does not emulate it.<div class="rec">Recommend: yes. The engine's only concession: every wake job also runs on touch.</div></div></div>
+    <div class="card decision"><span class="n">13</span><div><b>Providers are configured by the host and injected as clients.</b> The engine receives <code>voice</code>, <code>language</code>, <code>judge</code> and <code>telemetry</code>, never a resource name or API key. The voice deployment is a provider like the others; <code>ControlSocket</code> disappears into it.<div class="rec">Recommend: yes. The host app points at its own Foundry instance and Langfuse project without the engine knowing.</div></div></div>
+  </div>
+  <p class="small">Companions: <code>interview-engine-refactor-plan.md</code> (file-level phases, commits, gates) and <code>interview-engine-extraction-plan.md</code> (current layout). The host app was inspected read-only; nothing there was modified.</p>
+</section>
+</main>

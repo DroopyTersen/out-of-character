@@ -1,0 +1,580 @@
+<title>Closeout Topic Merge</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a working document. Context up top, then a two-pane explorer (template questions | topic cards) under a sticky role-lens bar. */
+:root {
+  --bg:#f3f5f7; --fg:#161b22; --muted:#5b6572; --faint:#8a94a1; --line:#d5dbe3; --card:#ffffff; --code-bg:#e8ecf1;
+  --hit:#161b22;
+  --r-ba:#6a45c2; --r-data:#2e7d32; --r-app:#2353c4; --r-pm:#a35a06; --r-qa:#c03a56; --r-none:#5b6572;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --bar-h:58px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0f1319; --fg:#e4e8ee; --muted:#9aa5b3; --faint:#6c7685; --line:#2a3240; --card:#161c25; --code-bg:#1c232d;
+    --hit:#e4e8ee;
+    --r-ba:#b8a0ff; --r-data:#7fd38a; --r-app:#80a6ff; --r-pm:#f0a548; --r-qa:#ff8a9c; --r-none:#9aa5b3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0f1319; --fg:#e4e8ee; --muted:#9aa5b3; --faint:#6c7685; --line:#2a3240; --card:#161c25; --code-bg:#1c232d;
+  --hit:#e4e8ee;
+  --r-ba:#b8a0ff; --r-data:#7fd38a; --r-app:#80a6ff; --r-pm:#f0a548; --r-qa:#ff8a9c; --r-none:#9aa5b3;
+  color-scheme: dark;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.5; }
+main { max-width:1200px; margin:0 auto; padding-inline:16px; padding-block:0 80px; }
+code, .mono { font-family:var(--mono); font-size:.88em; }
+p code, li code { background:var(--code-bg); padding:1px 5px; border-radius:4px; }
+h1, h2, h3 { text-wrap:balance; }
+a { color:inherit; }
+button { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+
+header.hero { padding-block:40px 20px; border-bottom:1px solid var(--line); }
+header.hero h1 { font-size:clamp(28px,4.5vw,40px); line-height:1.1; margin:0 0 10px; font-weight:600; letter-spacing:-.01em; }
+header.hero p.lede { margin:0 0 18px; color:var(--muted); max-width:66ch; }
+.stats { display:flex; flex-wrap:wrap; gap:8px; }
+.stat { font-size:13px; padding:4px 10px; border:1px solid var(--line); border-radius:999px; background:var(--card); font-variant-numeric:tabular-nums; }
+.stat b { font-weight:600; }
+
+section.block { padding-block:36px 8px; border-bottom:1px solid var(--line); }
+section.block:last-of-type { border-bottom:0; }
+h2 { font-size:22px; margin:0 0 6px; font-weight:600; letter-spacing:-.01em; }
+.sub { color:var(--muted); margin:0 0 20px; max-width:70ch; }
+.eyebrow { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 8px; }
+
+/* Engine fit */
+.fit { display:grid; gap:24px; grid-template-columns:minmax(0,1fr); }
+@media (min-width:900px) { .fit { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
+.fit ul { margin:0; padding-left:18px; display:grid; gap:8px; }
+.fit li { max-width:62ch; }
+.fit .ref { color:var(--faint); font-size:13px; }
+pre.type { margin:0; background:var(--code-bg); border-radius:8px; padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:12.5px; line-height:1.6; }
+pre.type .c { color:var(--muted); }
+pre.type .add { font-weight:500; }
+.sees { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin-top:24px; }
+.sees > div { border:1px solid var(--line); border-radius:8px; padding:12px 14px; background:var(--card); }
+.sees .who { font-family:var(--mono); font-size:12px; font-weight:500; margin:0 0 4px; }
+.sees p { margin:0; font-size:14px; color:var(--muted); }
+
+/* Explorer */
+.bar { position:sticky; top:env(safe-area-inset-top,0px); z-index:10; background:var(--bg); border-bottom:1px solid var(--line); margin-inline:-16px; padding:10px 16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
+.lenses { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; max-width:100%; }
+.lenses::-webkit-scrollbar { display:none; }
+.lens { white-space:nowrap; font-size:13px; padding:5px 11px; border-radius:999px; border:1px solid var(--line); background:var(--card); cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+.lens .dot { width:8px; height:8px; border-radius:50%; background:var(--rc); }
+.lens[aria-pressed="true"] { border-color:var(--rc); box-shadow:inset 0 0 0 1px var(--rc); font-weight:500; }
+.bar-label { font-size:12px; color:var(--muted); white-space:nowrap; }
+.selinfo { font-size:13px; color:var(--muted); display:flex; gap:10px; align-items:center; min-width:0; flex:1 1 260px; }
+.selinfo span { min-width:0; }
+.clear { font-size:12px; border:1px solid var(--line); background:transparent; border-radius:6px; padding:2px 8px; cursor:pointer; white-space:nowrap; }
+.lensinfo { margin:14px 0 0; font-size:14px; color:var(--muted); border-left:3px solid var(--rc); padding:2px 0 2px 12px; max-width:90ch; }
+.lensinfo b { color:var(--fg); font-weight:500; }
+.howto { font-size:14px; color:var(--muted); margin:14px 0 0; }
+
+.explorer { display:grid; gap:28px; grid-template-columns:minmax(0,1fr); margin-top:18px; }
+.qcol { order:2; }
+.tcol { order:1; }
+@media (min-width:980px) {
+  .explorer { grid-template-columns:minmax(0,5fr) minmax(0,7fr); }
+  .qcol { order:1; position:sticky; top:calc(env(safe-area-inset-top,0px) + var(--bar-h) + 12px); max-height:calc(100vh - var(--bar-h) - 24px); overflow-y:auto; padding-right:6px; }
+  .tcol { order:2; }
+}
+.colhead { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 10px; }
+
+.qgroup { margin:0 0 18px; }
+.qgroup h3 { font-size:13px; font-weight:600; margin:0 0 6px; display:flex; align-items:center; gap:8px; }
+.qgroup h3 .dot { width:8px; height:8px; border-radius:50%; background:var(--rc); }
+.qgroup.lens-on h3 { color:var(--rc); }
+.q { display:grid; grid-template-columns:44px minmax(0,1fr); gap:2px 8px; width:100%; text-align:left; background:transparent; border:1px solid transparent; border-radius:6px; padding:7px 8px; cursor:pointer; }
+.q:hover { background:var(--card); border-color:var(--line); }
+.qgroup.lens-on .q { background:color-mix(in srgb, var(--rc) 7%, transparent); }
+.qtag { font-family:var(--mono); font-size:12px; font-weight:500; color:var(--rc); padding-top:1px; }
+.qtext { font-size:13.5px; line-height:1.45; }
+.qto { grid-column:2; display:flex; flex-wrap:wrap; gap:4px; margin-top:3px; }
+.qnote { grid-column:2; font-size:12px; color:var(--muted); margin-top:2px; }
+.to { font-size:11.5px; padding:1px 7px; border-radius:4px; background:var(--code-bg); color:var(--fg); }
+.to::before { content:"→ "; color:var(--faint); }
+.to.report { background:transparent; border:1px dashed var(--faint); color:var(--muted); }
+
+.tgroup { margin:0 0 26px; }
+.tgroup > h3 { font-size:16px; font-weight:600; margin:0 0 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.cards { display:grid; gap:10px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px 12px; display:grid; gap:8px; scroll-margin-top:calc(var(--bar-h) + 16px); }
+.card.inactive { border-style:dashed; background:transparent; }
+.card-head { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; background:none; border:0; padding:0; text-align:left; cursor:pointer; width:100%; }
+.card-head .name { font-weight:600; font-size:15px; }
+.card-head .id { font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-left:auto; }
+.pill { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:600; padding:1px 7px; border-radius:999px; white-space:nowrap; }
+.pill.new { background:var(--fg); color:var(--bg); }
+.pill.kept { border:1px solid var(--line); color:var(--muted); }
+.pill.role { border:1px dashed var(--muted); color:var(--muted); }
+.lbl { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+details.crit summary { cursor:pointer; list-style:none; }
+details.crit summary::-webkit-details-marker { display:none; }
+details.crit summary::before { content:"▸ "; color:var(--faint); }
+details.crit[open] summary::before { content:"▾ "; }
+details.crit p { margin:4px 0 0; font-size:13.5px; color:var(--fg); max-width:72ch; }
+.angles { margin:2px 0 0; padding:0; list-style:none; display:grid; gap:4px; }
+.angles li { font-size:13.5px; padding-left:12px; position:relative; }
+.angles li::before { content:""; position:absolute; left:2px; top:.62em; width:4px; height:4px; border-radius:50%; background:var(--faint); }
+.angles li.br { border-left:3px solid var(--rc); padding-left:10px; margin-left:0; }
+.angles li.br::before { display:none; }
+.angles li.br .tag { font-family:var(--mono); font-size:11px; color:var(--rc); margin-right:6px; font-weight:500; }
+.none { font-size:13px; color:var(--faint); margin:0; }
+.row { display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; }
+.chip { font-size:11.5px; font-family:var(--mono); padding:1px 7px; border-radius:4px; border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--rc, var(--fg)); }
+.chip:hover { border-color:var(--rc, var(--fg)); }
+.inactive-note { font-size:13px; color:var(--muted); margin:0; }
+
+.dim { opacity:.32; }
+.card.hit { border-color:var(--hit); box-shadow:0 0 0 1px var(--hit); }
+.q.hit { background:var(--card); border-color:var(--hit); }
+@media (prefers-reduced-motion: no-preference) {
+  .card, .q { transition:opacity .15s ease, border-color .15s ease; }
+}
+
+/* Role unknown */
+.cases { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+.case { border:1px solid var(--line); border-radius:8px; padding:14px 16px; background:var(--card); }
+.case h3 { font-size:15px; margin:0 0 6px; font-weight:600; }
+.case p { margin:0; font-size:14px; color:var(--muted); }
+.note { font-size:14px; color:var(--muted); margin:16px 0 0; max-width:80ch; }
+
+/* Left out + open questions */
+.list { display:grid; gap:14px; margin:0; padding:0; list-style:none; max-width:80ch; }
+.list li { display:grid; gap:2px; }
+.list b { font-weight:600; }
+.list span { color:var(--muted); font-size:14.5px; }
+ol.open { margin:0; padding-left:22px; display:grid; gap:14px; max-width:82ch; }
+ol.open li::marker { font-family:var(--mono); font-size:13px; color:var(--muted); }
+ol.open b { font-weight:600; }
+ol.open p { margin:2px 0 0; color:var(--muted); font-size:14.5px; }
+.rec { color:var(--fg) !important; }
+</style>
+
+<main>
+  <header class="hero">
+    <p class="eyebrow">Conversation map · topics to address</p>
+    <h1>Merging the Lessons Learned questions into Sol’s closeout topics</h1>
+    <p class="lede">The Lessons Learned template asks 35 scripted questions: 11 for everyone, plus five role-specific sets. This page shows where each one lands as a topic Sol works from: a criterion Jev grades against, and angles Sol can turn into its own threads. Sam never sees any of it.</p>
+    <div class="stats">
+      <span class="stat"><b>35</b> template questions</span>
+      <span class="stat"><b>20</b> base objectives (14 kept, 6 new)</span>
+      <span class="stat"><b>1</b> role-only objective</span>
+      <span class="stat"><b>5</b> role lenses</span>
+      <span class="stat"><b>2</b> items left out</span>
+    </div>
+  </header>
+
+  <section class="block" id="fit">
+    <h2>Where this plugs into the engine spec</h2>
+    <p class="sub">Option C is already where the engine is headed. The API design moves topics into <code>InterviewSpec</code>. This proposal adds angles to each objective and reshapes role branches around them.</p>
+    <div class="fit">
+      <div>
+        <p class="eyebrow">Already in the design</p>
+        <ul>
+          <li>Topics are spec data: <code>InterviewSpec.topics</code>, with a criterion per objective. <span class="ref">API design §5.1</span></li>
+          <li>Sol’s topic enum is built per spec with <code>mapTopicIds(spec)</code>, and Jev’s coverage questions come from each criterion. <span class="ref">Refactor plan</span></li>
+          <li>Role branches exist as a hypothesis: <code>RoleBranch { when, add, remove }</code>, and Sol declares <code>activeBranches</code> with a citation. They’re held back until a probe. <span class="ref">Extraction plan §3.2, API design decision 6</span></li>
+          <li><code>InterviewContext.known</code> already lets the host seed facts such as the role when it has them. <span class="ref">API design §5.1, §11</span></li>
+        </ul>
+        <p class="eyebrow" style="margin-top:22px">What this proposal changes</p>
+        <ul>
+          <li><b>Angles replace <code>hint</code>.</b> Today <code>hint</code> is a generic “If it fits naturally, explore …” left over from the practice scenario. Angles are concrete unknowns Sol can turn into gap threads.</li>
+          <li><b>Branches mostly add angles.</b> The five role lists keep circling the same few themes, so a branch sharpens shared objectives. Only one objective here exists for specific roles alone.</li>
+          <li><b>Branches never remove objectives.</b> Vantage and set-aside already cover what a participant can’t speak to, so <code>remove</code> goes.</li>
+        </ul>
+      </div>
+      <div style="min-width:0">
+        <p class="eyebrow">Spec types, proposed</p>
+<pre class="type">type Objective = {
+  id: string; label: string;
+  criterion: string;        <span class="c">// Jev grades coverage against this</span>
+  <span class="add">angles: string[];</span>         <span class="c">// new: Sol only, phrased as unknowns; replaces hint</span>
+};
+
+type RoleBranch = {
+  id: string; label: string;
+  when: string;             <span class="c">// prose Sol judges from vantage, with a citation</span>
+  <span class="add">angles: Partial&lt;Record&lt;ObjectiveId, string[]&gt;&gt;;</span>  <span class="c">// new</span>
+  add?: Objective[];        <span class="c">// rare: role-only objectives</span>
+};                          <span class="c">// remove?: dropped</span>
+
+<span class="c">// Sol's output keeps the design's field:</span>
+activeBranches: string[];   <span class="c">// each with a seed or passage citation</span></pre>
+      </div>
+    </div>
+    <div class="sees">
+      <div><p class="who">Sol</p><p>Criteria, angles, each branch’s <code>when</code>, and the active branches’ angles. Writes gap threads from them.</p></div>
+      <div><p class="who">Jev</p><p>Criteria only, for the objectives in the active set. Angles never reach grading.</p></div>
+      <div><p class="who">Sam</p><p>Nothing. Sam hears ranked threads, never topics, angles or lenses.</p></div>
+    </div>
+  </section>
+
+  <section class="block" id="explorer">
+    <h2>Question-to-topic map</h2>
+    <p class="sub">Pick a question to see where it lands, or a topic to see what feeds it. Switch the role lens to see how a branch sharpens Sol’s angles.</p>
+    <div class="bar" id="bar">
+      <span class="bar-label">Role lens</span>
+      <div class="lenses" id="lenses" role="group" aria-label="Role lens"></div>
+      <div class="selinfo" id="selinfo" aria-live="polite"></div>
+    </div>
+    <p class="lensinfo" id="lensinfo"></p>
+    <div class="explorer">
+      <div class="qcol" id="qcol"></div>
+      <div class="tcol" id="tcol"></div>
+    </div>
+  </section>
+
+  <section class="block" id="unknown">
+    <h2>When the role isn’t known</h2>
+    <p class="sub">Nothing assumes a role. The base set is a complete interview on its own, and a lens only sharpens it.</p>
+    <div class="cases">
+      <div class="case"><h3>The host knows the role</h3><p>The host application passes it in <code>InterviewContext.known</code>. It becomes a seed fact, and Sol can turn the lens on in its first map call, citing the seed.</p></div>
+      <div class="case"><h3>Nobody knows yet</h3><p>The interview runs on the 20 base objectives. Sol turns a lens on once the participant says what they did, citing that passage. Until then, nothing role-specific steers the map.</p></div>
+      <div class="case"><h3>More than one role</h3><p>A PM who also wrote stories gets both lenses. Their angles merge, and the role-only objective joins coverage if either lens adds it.</p></div>
+    </div>
+    <p class="note">Turning a lens on follows the same participant-fact rules <code>applyMapUpdate</code> already enforces for vantage. That keeps Sol from guessing a role from the project type.</p>
+  </section>
+
+  <section class="block" id="left-out">
+    <h2>Left out on purpose</h2>
+    <ul class="list">
+      <li><b>Q9, “Which of these findings should become part of our standard delivery…”</b><span>This is a judgment across many interviews. It belongs in the summary template, for example a “practices worth standardizing” section, or in a cross-interview report. It isn’t a topic Sol steers toward.</span></li>
+      <li><b>The 0–5 rating in Q3</b><span>Dropped as a number. “How the client would judge the result, and why” survives as an angle on Success &amp; how it landed.</span></li>
+      <li><b>Kickoff-checklist phrasing</b><span>The role questions ask whether something was in place at kickoff, often with the answer built in (“or still in people’s heads”). Their substance became criteria that ask what happened as a result, plus angles phrased as unknowns, never as ready questions.</span></li>
+    </ul>
+  </section>
+
+  <section class="block" id="open">
+    <h2>Open questions for us</h2>
+    <ol class="open">
+      <li><b>Is 20 too many for 30 minutes?</b><p>Each objective adds a coverage question and its evidence picks to every Jev evaluation. More gaps also compete for Sol’s two gap threads per call. Cut candidates: Why the client needed it, since the opener often covers it, or folding Shared starting picture into Deliverables &amp; scope.</p></li>
+      <li><b>Own group, or spread out?</b><p>“How the work was set up” keeps the kickoff theme visible as one lens. Its three objectives could instead sit in the existing groups (alignment under delivered, quality and technical fit under team).</p></li>
+      <li><b>Angles-first branches, or the design doc’s <code>add: TopicGroup[]</code>?</b><p class="rec">I recommend angles-first. Adding topic groups per role would duplicate shared themes (non-functional requirements show up under both App and QA) and churn the active coverage set mid-interview.</p></li>
+      <li><b>Which roles?</b><p>The template has five: BA, Data engineer, App engineer, PM and QA. The extraction plan named four: developer, infrastructure, PM and BA. Infrastructure has no template questions yet.</p></li>
+      <li><b>What can land now?</b><p>The six new base objectives and their angles are a data change on <code>interview-quality</code>: <code>core/interview.ts</code>, the criteria in <code>scenario.server.ts</code>, and angles rendered into <code>mapSeed</code>, which is cached and cheap. Branches wait for the spec refactor and the probe.</p></li>
+      <li><b>Can a lens turn off?</b><p>If an early answer suggests PM and the participant later says they were the BA, does the PM lens drop, or do both stay on?</p></li>
+    </ol>
+  </section>
+</main>
+
+<script>
+const GROUPS = [
+  { id: 'delivered', label: 'What you delivered' },
+  { id: 'client', label: 'Working with the client' },
+  { id: 'team', label: 'How the team worked' },
+  { id: 'setup', label: 'How the work was set up', isNew: true },
+];
+
+const OBJECTIVES = [
+  { id: 'project-purpose', group: 'delivered', label: 'Why the client needed it', status: 'new',
+    criterion: 'The participant describes the problem or need that led the client to start the project, as they understood it. Naming the product alone is insufficient.',
+    angles: ['the problem the client was trying to solve', 'what made the client start the project when they did'] },
+  { id: 'project-delivery', group: 'delivered', label: 'Deliverables & scope', status: 'kept',
+    criterion: 'The participant identifies what the project actually built or delivered, its scope, changes, or current state. Merely mentioning a demo or release does not identify a deliverable.',
+    angles: ['how the delivered scope differed from the SOW, and how changes were spotted'] },
+  { id: 'project-outcome', group: 'delivered', label: 'Success & how it landed', status: 'new',
+    criterion: 'The participant describes how the client judged success, or how the result landed with the client, and why. A bare “it went well” is insufficient.',
+    angles: ['how the client measured success, formally or informally', 'how the client would judge the result, and why', 'whether the delivery team and the client meant the same thing by success'] },
+  { id: 'project-role', group: 'delivered', label: 'Your role', status: 'kept',
+    criterion: 'The participant describes their own responsibility or actual work on the project. Collective “we” activity without their individual role is insufficient.',
+    angles: [] },
+  { id: 'project-contributions', group: 'delivered', label: 'Who contributed what', status: 'kept',
+    criterion: 'The participant describes what another member of their delivery team actually contributed, with appropriate attribution. Client stakeholders testing the product or providing feedback are client participation, not delivery-team contributions. A named contact or person with an unknown role is insufficient.',
+    angles: [] },
+  { id: 'project-reflection', group: 'delivered', label: 'Standouts & growth', status: 'kept',
+    criterion: 'The participant explicitly reflects on a standout contribution, their growth or performance, or what they would do differently. Merely saying the product challenge was hard is insufficient.',
+    angles: [] },
+
+  { id: 'client-access', group: 'client', label: 'Onboarding & access', status: 'kept',
+    criterion: 'The participant describes actual onboarding, access, permissions, environments, equipment, or time to become productive with the client. Client staff being unfamiliar with software development is not onboarding or access.',
+    angles: ['whether the team worked with the real systems, data and documents or with descriptions of them', 'how long usable environments took to arrive'] },
+  { id: 'client-decisions', group: 'client', label: 'Decisions & stakeholders', status: 'kept',
+    criterion: 'The participant describes who on the client side made, influenced, approved, or delegated a project decision, or how client stakeholders engaged in decisions. Decisions the delivery team kept for itself do not show client decision-making; a client that explicitly left decisions to the delivery team does.',
+    angles: ['whether the right SMEs and decision-makers were named and available'] },
+  { id: 'client-pace', group: 'client', label: 'Pace & approvals', status: 'kept',
+    criterion: 'The participant describes the actual pace of client reviews, approvals, availability, or waiting, with a concrete effect or pattern. How fast the delivery team itself produced a build is not client pace.',
+    angles: [] },
+  { id: 'client-coordination', group: 'client', label: 'Teams, vendors & silos', status: 'kept',
+    criterion: 'The participant describes actual coordination across client teams, divisions, vendors, or silos.',
+    angles: ['who owned each upstream and downstream system the work touched'] },
+  { id: 'client-friction', group: 'client', label: 'Friction & advice for next time', status: 'kept',
+    criterion: 'The participant describes a difficult interaction or collaboration pattern with the client, or grounded advice for a future team working with that client. A product-design challenge alone is insufficient.',
+    angles: ['advice for a teammate starting a new project with this client', 'client culture and values that shaped the work'] },
+  { id: 'client-needs', group: 'client', label: 'Needs beyond the scope', status: 'new',
+    criterion: 'The participant names a client need beyond the delivered scope, something the client said or something the participant noticed, with enough detail to follow up. A guess with no basis in the project is insufficient.',
+    angles: ['something the client asked for that was out of scope', 'a gap the participant noticed that the client never named'] },
+
+  { id: 'process-worked', group: 'team', label: 'What worked well', status: 'kept',
+    criterion: 'The participant names an internal team practice that worked and why it helped or should be repeated.',
+    angles: ['a practice the next team on this kind of project should copy'] },
+  { id: 'process-improve', group: 'team', label: 'What could work better', status: 'kept',
+    criterion: 'The participant identifies an internal team practice, decision, or gap the team could improve, with a consequence or suggestion.',
+    angles: ['what the next team on this kind of project should do differently'] },
+  { id: 'process-communication', group: 'team', label: 'Communication & handoffs', status: 'kept',
+    criterion: 'The participant describes how information or handoffs flowed within the delivery team and their effect. A client demo alone is insufficient.',
+    angles: [] },
+  { id: 'process-tools', group: 'team', label: 'Tools & process', status: 'kept',
+    criterion: 'The participant describes a tool, meeting, documentation practice, or process the delivery team used to do its work and its practical effect. A product feature or client workflow is not an internal team tool.',
+    angles: ['which ceremonies ran, and the client’s part in each'] },
+  { id: 'process-resourcing', group: 'team', label: 'Support, staffing & time', status: 'kept',
+    criterion: 'The participant describes how the delivery team’s staffing, skills, timeline, or organizational support affected its work. The absence of a role does not by itself show a staffing problem; the participant must describe its effect.',
+    angles: ['whether the participant’s own role had enough time for what was expected', 'skill gaps on the team and how they showed up'] },
+  { id: 'process-risks', group: 'team', label: 'Risks, issues & assumptions', status: 'new',
+    criterion: 'The participant describes how a specific risk, issue, assumption or dependency was raised, tracked or handled by the delivery team or the client, and whether that happened in time. Saying risks existed is insufficient.',
+    angles: ['a risk that surfaced late, and who saw it first', 'whether the client acted on raised issues in time'] },
+
+  { id: 'setup-alignment', group: 'setup', label: 'Shared starting picture', status: 'new',
+    criterion: 'The participant describes whether the delivery team and the client started with a shared understanding of scope, requirements, plan or governance, and what followed from it. A kickoff meeting merely happening is insufficient.',
+    angles: ['whether kickoff ended with agreed scope or a list of things still to discover', 'whether the plan and change-control triggers were written down or assumed'] },
+  { id: 'setup-quality', group: 'setup', label: 'What “done” meant', status: 'new',
+    criterion: 'The participant describes how quality and “done” were defined and checked (acceptance criteria, non-functional requirements, test strategy, UAT, quality gates or defect triage) and the effect of that definition or its absence.',
+    angles: ['who signed off, and against what', 'whether acceptance criteria were agreed before building'] },
+  { id: 'setup-technical', group: 'setup', label: 'Technical fit with the client', status: 'role',
+    criterion: 'The participant describes how the architecture, platform or data handling fit or clashed with the client’s own standards, systems, skills or governance rules, and the effect.',
+    angles: [] },
+];
+
+const BRANCHES = {
+  ba: { label: 'Business analyst', tag: 'BA',
+    when: 'The participant gathered or managed requirements, ran elicitation, or owned the backlog or acceptance criteria.',
+    angles: {
+      'setup-alignment': ['whether requirements were confirmed at kickoff or still to be discovered'],
+      'client-decisions': ['whether SMEs had the time elicitation needed'],
+      'client-access': ['current-state processes and documents: available to analyze or only described'],
+      'setup-quality': ['how stories and acceptance criteria were agreed and prioritized with the client'],
+      'process-risks': ['where assumptions and open questions were logged, and who owned them'],
+    } },
+  data: { label: 'Data engineer', tag: 'DATA', add: ['setup-technical'],
+    when: 'The participant built data pipelines, data platforms, warehouses or lakes, or analytics.',
+    angles: {
+      'client-access': ['source data volume and quality compared with how it was described', 'who owned each data source'],
+      'setup-technical': ['privacy, PII masking, residency and lineage requirements', 'batch or streaming, warehouse or lake, against the client’s estate and skills'],
+      'setup-alignment': ['whether downstream consumers and reports were confirmed or assumed'],
+    } },
+  app: { label: 'App engineer', tag: 'APP', add: ['setup-technical'],
+    when: 'The participant did hands-on application development: code, architecture, integrations or deployment.',
+    angles: {
+      'setup-technical': ['whether the stack matched the client’s engineering standards or ours was assumed', 'API contracts with upstream and downstream systems, and who owned each'],
+      'process-tools': ['repos, CI/CD and branching: agreed up front or negotiated along the way'],
+      'client-access': ['dev, test and prod environments: available or still being negotiated'],
+      'setup-quality': ['whether non-functional requirements were defined well enough to test', 'the definition of done and quality gates the client signed up to'],
+    } },
+  pm: { label: 'Project manager', tag: 'PM',
+    when: 'The participant managed the plan, budget, staffing, governance or the client relationship.',
+    angles: {
+      'setup-alignment': ['governance, cadence and change-control triggers: written down or assumed', 'whether the delivery team and the client saw the same plan and milestones'],
+      'client-decisions': ['decision rights and the escalation path in practice'],
+      'process-tools': ['ceremonies and the client’s commitment to each'],
+      'process-risks': ['whether the RAID log was live, with owners and dates'],
+      'process-resourcing': ['staffing, onboarding and role clarity'],
+    } },
+  qa: { label: 'QA', tag: 'QA',
+    when: 'The participant tested the product or owned quality: test strategy, UAT or defects.',
+    angles: {
+      'setup-quality': ['a test strategy set at kickoff, or testing left as a later phase', 'UAT: who tested, against what, and who signed off', 'defect severity, ownership and turnaround agreed with the client', 'performance, security and accessibility defined well enough to test'],
+      'client-access': ['test environments, test data and access, and who controlled them'],
+    } },
+};
+
+const QUESTIONS = [
+  { id: 'Q1', role: 'common', to: ['project-purpose'], text: 'Can you, in your own words, describe the reason the client needed this project, or what problem they were trying to solve?' },
+  { id: 'Q2', role: 'common', to: ['project-outcome'], text: 'How was the client measuring success on this project?' },
+  { id: 'Q3', role: 'common', to: ['project-outcome'], text: 'On a success scale of 0 - 5, with 5 being successful (and meeting their success criteria) and 0 being unsuccessful, how do you think the client would rate this project? Why?', note: 'The number is dropped. The “why” survives as an angle.' },
+  { id: 'Q4', role: 'common', to: ['process-resourcing'], text: 'Did you feel that your role was scoped the right amount of time to adequately complete the work expected of you?' },
+  { id: 'Q5', role: 'common', to: ['process-resourcing'], text: 'Did your project team have all of the necessary skillsets needed to deliver the project at a high level of quality? Please explain any gaps you saw.' },
+  { id: 'Q6', role: 'common', to: ['project-delivery'], text: 'How would you describe the difference between the scope noted in the Statement of Work and the scope that was actually delivered? Explaining how and why scope changes were identified would be helpful.' },
+  { id: 'Q7', role: 'common', to: ['client-friction'], text: 'One of your teammates is starting a new project for the client you just worked with: what advice would you give them based on your experience working with the client and what you learned? You might comment on organizational culture and values, etc.' },
+  { id: 'Q8', role: 'common', to: ['process-worked', 'process-improve'], text: 'Did you learn anything working through this type of project that should be shared with the next project team who delivers this type of project?' },
+  { id: 'Q9', role: 'common', to: ['report'], text: 'Which of these findings should become part of our standard delivery for this type of project?', note: 'A cross-interview judgment, so it goes to reporting.' },
+  { id: 'Q10', role: 'common', to: ['client-needs'], text: 'Did you learn of any other client needs during this project that the delivery team may be able to help them with? This may be something the client said, but it might also be something the client didn’t say that you noticed. If yes, elaborate.' },
+  { id: 'Q11', role: 'common', to: ['process-risks'], text: 'Do you feel that project risks and issues were identified, documented, and addressed by the delivery team in a timely manner? Did the client address risks/issues in a timely manner?' },
+
+  { id: 'BA1', role: 'ba', to: ['setup-alignment'], text: 'Did we leave kickoff with a confirmed, shared understanding of scope and the high-level requirements — or a list of things still to be discovered?' },
+  { id: 'BA2', role: 'ba', to: ['client-decisions'], text: 'Are the right SMEs and business decision-makers identified, available, and committed to the time elicitation will need?' },
+  { id: 'BA3', role: 'ba', to: ['client-access'], text: 'Do we have access to the current-state process, documentation, and systems we need to analyze — or are we working from description?' },
+  { id: 'BA4', role: 'ba', to: ['setup-quality'], text: 'Is the approach to capturing and prioritizing requirements — backlog, stories, acceptance criteria — agreed with the client and the team?' },
+  { id: 'BA5', role: 'ba', to: ['process-risks'], text: 'Are assumptions, constraints, and open questions logged and owned, rather than living in conversation?' },
+
+  { id: 'DATA1', role: 'data', to: ['client-access'], text: 'Did we confirm access to the actual source data — systems, volumes, quality, and the people who own it — or are we relying on how the data was described?' },
+  { id: 'DATA2', role: 'data', to: ['setup-technical'], text: 'Are data governance, privacy, residency, and security requirements — PII handling, masking, lineage — defined and agreed?' },
+  { id: 'DATA3', role: 'data', to: ['setup-technical'], text: 'Is the target platform and processing approach (batch vs. streaming, warehouse vs. lake) aligned with the client’s existing estate and skills?' },
+  { id: 'DATA4', role: 'data', to: ['setup-alignment'], text: 'Are the downstream consumers and use cases confirmed, so we’re building to real demand rather than assumed reports?' },
+
+  { id: 'APP1', role: 'app', to: ['setup-technical'], text: 'Did we confirm the target architecture and tech stack against the client’s own engineering standards — or assume our preferred stack would be accepted?' },
+  { id: 'APP2', role: 'app', to: ['client-access', 'process-tools'], text: 'Are the dev environment, repos, CI/CD pipelines, branching strategy, and dev/test/prod environments agreed and available — or still being negotiated?' },
+  { id: 'APP3', role: 'app', to: ['setup-quality'], text: 'Are non-functional requirements — performance, scalability, availability, security, compliance — defined and testable, or just implied?' },
+  { id: 'APP4', role: 'app', to: ['setup-technical', 'client-coordination'], text: 'Did we clarify integration points and API contracts with upstream and downstream systems, and identify who owns each?' },
+  { id: 'APP5', role: 'app', to: ['setup-quality'], text: 'Is there a shared definition of done and a quality gate — code review, test coverage, security scanning — the client has signed up to?' },
+
+  { id: 'PM1', role: 'pm', to: ['setup-alignment', 'client-decisions'], text: 'Did we leave kickoff with governance, cadence, decision rights, escalation path, and change-control triggers agreed and written down — or assumed?' },
+  { id: 'PM2', role: 'pm', to: ['process-tools'], text: 'Are the ceremonies and ways of working agreed with the client, including their role and commitment in each?' },
+  { id: 'PM3', role: 'pm', to: ['process-risks'], text: 'Was there a RAID log live — risks, assumptions, issues, dependencies owned with dates and priority — or still in people’s heads?' },
+  { id: 'PM4', role: 'pm', to: ['process-resourcing'], text: 'Was the team fully staffed, onboarded, and clear on roles and allocations?' },
+  { id: 'PM5', role: 'pm', to: ['setup-alignment', 'project-outcome'], text: 'Did the delivery team and the client share the same view of the plan, milestones, and what success looked like for the project?' },
+
+  { id: 'QA1', role: 'qa', to: ['setup-quality'], text: 'Did we agree a test strategy and quality gates at kickoff, or is testing being treated as a phase we’ll define later?' },
+  { id: 'QA2', role: 'qa', to: ['setup-quality'], text: 'Are acceptance criteria and the UAT approach — who tests, against what, and who signs off — agreed with the client?' },
+  { id: 'QA3', role: 'qa', to: ['client-access'], text: 'Are test environments, test data, and the access we need available, or on a path we don’t control?' },
+  { id: 'QA4', role: 'qa', to: ['setup-quality'], text: 'Are non-functional requirements — performance, security, accessibility — defined well enough to actually test against?' },
+  { id: 'QA5', role: 'qa', to: ['setup-quality'], text: 'Is the defect-management and triage process — severity, ownership, turnaround — agreed across us and the client?' },
+];
+
+const OBJ = new Map(OBJECTIVES.map(o => [o.id, o]));
+const ROLE_COLOR = { common: 'var(--r-none)', none: 'var(--r-none)', ba: 'var(--r-ba)', data: 'var(--r-data)', ma: 'var(--r-app)', pm: 'var(--r-pm)', qa: 'var(--r-qa)' };
+const state = { lens: 'none', sel: null };
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = id => document.getElementById(id);
+const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const targetLabel = id => id === 'report' ? 'Report template' : OBJ.get(id).label;
+const addedBy = id => Object.entries(BRANCHES).filter(([, b]) => (b.add || []).includes(id)).map(([k]) => k);
+
+function renderLenses() {
+  const items = [['none', 'Role not known'], ...Object.entries(BRANCHES).map(([k, b]) => [k, b.label])];
+  $('lenses').innerHTML = items.map(([k, label]) =>
+    `<button class="lens" type="button" id="lens-${k}" data-lens="${k}" aria-pressed="${state.lens === k}" style="--rc:${ROLE_COLOR[k]}"><span class="dot"></span>${esc(label)}</button>`).join('');
+  const info = $('lensinfo');
+  info.style.setProperty('--rc', ROLE_COLOR[state.lens]);
+  if (state.lens === 'none') {
+    info.innerHTML = '<b>Base set only.</b> The interview runs on the 20 base objectives. Role angles are listed on each card but not yet active, and Technical fit stays out of coverage.';
+  } else {
+    const b = BRANCHES[state.lens];
+    const n = Object.keys(b.angles).length;
+    const adds = (b.add || []).map(id => OBJ.get(id).label);
+    info.innerHTML = `<b>${esc(b.label)} lens.</b> Sol turns it on when: “${esc(b.when)}” It adds angles to ${n} objective${n === 1 ? '' : 's'}${adds.length ? ` and brings <b>${esc(adds.join(', '))}</b> into coverage` : ' and adds no objectives'}.`;
+  }
+}
+
+function renderQuestions() {
+  const groups = [['common', 'Common questions'], ...Object.entries(BRANCHES).map(([k, b]) => [k, b.label])];
+  $('qcol').innerHTML = '<p class="colhead">Template questions</p>' + groups.map(([k, label]) => {
+    const qs = QUESTIONS.filter(q => q.role === k);
+    return `<div class="qgroup${state.lens === k ? ' lens-on' : ''}" style="--rc:${ROLE_COLOR[k]}">
+      <h3>${k === 'common' ? '' : '<span class="dot"></span>'}${esc(label)} <span class="mono" style="color:var(--faint);font-weight:400">${qs.length}</span></h3>
+      ${qs.map(q => `<button class="q" type="button" id="q-${q.id}" data-q="${q.id}">
+        <span class="qtag">${q.id}</span><span class="qtext">${esc(q.text)}</span>
+        <span class="qto">${q.to.map(t => `<span class="to${t === 'report' ? ' report' : ''}">${esc(targetLabel(t))}</span>`).join('')}</span>
+        ${q.note ? `<span class="qnote">${esc(q.note)}</span>` : ''}
+      </button>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function card(o) {
+  const lens = state.lens === 'none' ? null : BRANCHES[state.lens];
+  const adders = addedBy(o.id);
+  const active = o.status !== 'role' || (lens && (lens.add || []).includes(o.id));
+  const pill = { new: '<span class="pill new">New</span>', kept: '<span class="pill kept">Kept</span>', role: '<span class="pill role">Role-only</span>' }[o.status];
+  const lensAngles = lens ? (lens.angles[o.id] || []) : [];
+  const others = Object.entries(BRANCHES).filter(([k, b]) => b.angles[o.id] && k !== state.lens);
+  const fedBy = QUESTIONS.filter(q => q.to.includes(o.id));
+  const angleItems = [
+    ...o.angles.map(a => `<li>${esc(a)}</li>`),
+    ...lensAngles.map(a => `<li class="br" style="--rc:${ROLE_COLOR[state.lens]}"><span class="tag">${lens.tag}</span>${esc(a)}</li>`),
+  ];
+  return `<article class="card${active ? '' : ' inactive'}" id="t-${o.id}" data-t="${o.id}">
+    <button class="card-head" type="button" data-t="${o.id}">${pill}<span class="name">${esc(o.label)}</span><span class="id">${o.id}</span></button>
+    ${active ? '' : `<p class="inactive-note">Joins coverage only under the ${adders.map(k => BRANCHES[k].label).join(' or ')} lens.</p>`}
+    <details class="crit"${o.status === 'kept' ? '' : ' open'}><summary class="lbl">What explored means · Jev</summary><p>${esc(o.criterion)}</p></details>
+    <div><span class="lbl">Angles · Sol</span>
+      ${angleItems.length ? `<ul class="angles">${angleItems.join('')}</ul>` : `<p class="none">${o.status === 'role' ? 'All of its angles come from a role lens.' : 'None from the template.'}</p>`}
+    </div>
+    ${others.length ? `<div class="row"><span class="lbl">Role angles</span>${others.map(([k, b]) => `<button class="chip" type="button" data-lens="${k}" style="--rc:${ROLE_COLOR[k]}" title="Switch to the ${esc(b.label)} lens">${b.tag} +${b.angles[o.id].length}</button>`).join('')}</div>` : ''}
+    <div class="row"><span class="lbl">Fed by</span>${fedBy.length ? fedBy.map(q => `<button class="chip" type="button" data-q="${q.id}" style="--rc:${ROLE_COLOR[q.role]}">${q.id}</button>`).join('') : '<span class="none">Nothing in the template</span>'}</div>
+  </article>`;
+}
+
+function renderTopics() {
+  $('tcol').innerHTML = '<p class="colhead">Topics to address</p>' + GROUPS.map(g =>
+    `<section class="tgroup"><h3>${esc(g.label)}${g.isNew ? ' <span class="pill new">New group</span>' : ''}</h3>
+      <div class="cards">${OBJECTIVES.filter(o => o.group === g.id).map(card).join('')}</div></section>`).join('');
+}
+
+function applySelection(scroll) {
+  const cards = [...document.querySelectorAll('.card')];
+  const rows = [...document.querySelectorAll('.q')];
+  cards.forEach(c => c.classList.remove('hit', 'dim'));
+  rows.forEach(r => r.classList.remove('hit', 'dim'));
+  const info = $('selinfo');
+  const sel = state.sel;
+  if (!sel) { info.innerHTML = ''; measureBar(); return; }
+  let hitCards = [], hitRows = [], text = '';
+  if (sel.type === 'q') {
+    const q = QUESTIONS.find(x => x.id === sel.id);
+    hitCards = q.to.filter(t => t !== 'report');
+    hitRows = [q.id];
+    text = q.to[0] === 'report'
+      ? `<b>${q.id}</b> goes to the report template, not a topic.`
+      : `<b>${q.id}</b> feeds ${q.to.map(t => esc(targetLabel(t))).join(' and ')}.`;
+  } else {
+    const o = OBJ.get(sel.id);
+    const fed = QUESTIONS.filter(q => q.to.includes(o.id));
+    hitCards = [o.id];
+    hitRows = fed.map(q => q.id);
+    text = fed.length ? `<b>${esc(o.label)}</b> is fed by ${fed.map(q => q.id).join(', ')}.` : `<b>${esc(o.label)}</b> has no template question behind it.`;
+  }
+  cards.forEach(c => c.classList.add(hitCards.includes(c.dataset.t) ? 'hit' : 'dim'));
+  rows.forEach(r => r.classList.add(hitRows.includes(r.dataset.q) ? 'hit' : 'dim'));
+  info.innerHTML = `<span>${text}</span><button class="clear" type="button" id="clear-sel">Clear</button>`;
+  measureBar();
+  if (scroll) {
+    const behavior = reduced() ? 'auto' : 'smooth';
+    const target = sel.type === 'q' ? $('t-' + hitCards[0]) : $('q-' + hitRows[0]);
+    if (target) target.scrollIntoView({ block: 'nearest', behavior });
+  }
+}
+
+function render() {
+  renderLenses();
+  renderQuestions();
+  renderTopics();
+  applySelection(false);
+  measureBar();
+}
+
+function select(type, id) {
+  state.sel = state.sel && state.sel.type === type && state.sel.id === id ? null : { type, id };
+  applySelection(true);
+}
+
+function setLens(k) {
+  state.lens = k;
+  try { localStorage.setItem('closeout-topic-lens', k); } catch (e) {}
+  render();
+}
+
+function measureBar() {
+  const h = $('bar').offsetHeight;
+  if (h) document.documentElement.style.setProperty('--bar-h', h + 'px');
+}
+
+document.addEventListener('click', e => {
+  const lens = e.target.closest('[data-lens]');
+  if (lens) { setLens(lens.dataset.lens); return; }
+  if (e.target.closest('#clear-sel')) { state.sel = null; applySelection(false); return; }
+  const q = e.target.closest('[data-q]');
+  if (q) { select('q', q.dataset.q); return; }
+  const head = e.target.closest('.card-head');
+  if (head) { select('t', head.dataset.t); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && state.sel) { state.sel = null; applySelection(false); }
+});
+window.addEventListener('resize', measureBar);
+
+try {
+  const saved = localStorage.getItem('closeout-topic-lens');
+  if (saved && (saved === 'none' || BRANCHES[saved])) state.lens = saved;
+} catch (e) {}
+render();
+</script>

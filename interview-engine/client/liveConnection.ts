@@ -1,15 +1,10 @@
 import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../shared/network';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
+import { SPEECH_QUIET_MS } from '../shared/timing';
 import { readAudio, silentLevels, type AudioLevels } from './audioLevels';
 import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolAction, type ProtocolTransport } from './transport';
 
 export type { Attempt } from './transport';
-/**
- * Sam's playback below the speech level this long has stopped. The same value as `SPEECH_QUIET_MS` in
- * core/simulator/types.ts, which the server's producer reads.
- */
-// TODO(phase4): share one constant with the server once the session timing moves into the engine.
-const SPEECH_QUIET_MS = 300;
 /** The part of the host's snapshot the connection reads: an InterviewSnapshot, or the practice simulator's snapshot. */
 export type ConnectionSnapshot = {
   id: string;

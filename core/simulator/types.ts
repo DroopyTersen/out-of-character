@@ -2,20 +2,9 @@ import type { FeedbackStatus, SessionPause, SessionStatus } from '../../intervie
 import type { InterviewSession } from '../interview';
 
 export const SIMULATOR_VERSION = 'simulator-v1';
-export const SESSION_LIMIT_SECONDS = 3600;
-export const SESSION_IDLE_WARNING_MS = 3 * 60_000;
-export const SESSION_IDLE_TIMEOUT_MS = 5 * 60_000;
-/** How long a dropped attempt is held for resume before it ends with what was captured. */
-export const SESSION_PAUSE_HOLD_MS = 15 * 60_000;
-/** Each resume creates a paid voice session; bound a flapping network. */
-export const SESSION_MAX_RESUMES = 5;
-/** Paused time extends the live limit, up to this much wall clock. */
-export const SESSION_WALL_LIMIT_MS = 90 * 60_000;
-/**
- * Sam's playback below the speech level this long has stopped: the browser reports the change at once, and the server
- * counts Sam as still speaking until a report says otherwise.
- */
-export const SPEECH_QUIET_MS = 300;
+export {
+  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, SPEECH_QUIET_MS,
+} from '../../interview-engine/shared/timing';
 /** client: the client walked out; the session ends once its closing line finishes. */
 export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity' | 'client'; endsAt: number };
 /** The evaluator's walk-out judgment that ended (or is ending) the meeting. */

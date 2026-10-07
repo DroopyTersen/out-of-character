@@ -12,7 +12,7 @@ import {
 } from '../../../core/interview';
 import { emptyMap, type ConversationMap, type MapChanges, type MapPace } from '../../../core/interview-map';
 import {
-  CANCEL_NOTE, emptyListState, emptyMapNote, HOLD_NOTE, LIVE_NOTE_CHANNEL, mapNote, mapNoteKey, mapNoteResearch, nextListNote, NOTE_HEADERS, noteHeaders, TURN_NOTE,
+  CANCEL_NOTE, emptyListState, emptyMapNote, HOLD_NOTE, LIVE_NOTE_CHANNEL, mapNote, mapNoteKey, mapNoteResearch, nextListNote, noteHeaders, TURN_NOTE,
   type ListState, type NoteChannel,
 } from '../../../core/interview-notes';
 import {
@@ -20,7 +20,7 @@ import {
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TraitRecord, type TurnRecord,
 } from '../../../core/interview-producer';
 import {
-  emptyRanking, observeMap, observeTurn, pickThreads, RANKING, threadKey, threadsNeedingTraits, withTraits, type Pick, type RankingState, type TurnReading,
+  emptyRanking, observeMap, observeTurn, RANKING, threadKey, threadsNeedingTraits, withTraits, type Pick, type RankingState, type TurnReading,
 } from '../../../core/interview-ranking';
 import type { DirectorUsage } from '../../../core/simulator/director';
 import { activeElapsed, type PauseSpan } from '../../../core/simulator/state';
@@ -954,6 +954,3 @@ const preferencesLine = (key: string | null) => key?.split('\n').find(line => li
 function compactPick(pick: Pick): NonNullable<TurnRecord['pick']> {
   return { ...pick, ranked: pick.ranked.map(item => [item.id, round(item.score), item.band]) };
 }
-
-/** Exposed for the delivery probe, which sends the same notes outside a session. */
-export const NOTE_KINDS = Object.keys(NOTE_HEADERS) as NoteRecord['kind'][];

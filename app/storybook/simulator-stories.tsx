@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLoaderData } from 'react-router';
-import { emptySkills, type Catalog } from '../../core/simulator/types';
+import type { Catalog } from '../../core/simulator/types';
 import { happyHourFixture, recordedAttempt, simulatorFixtures } from './simulator-recordings';
 import { SimulatorSelection } from '../simulator/selection';
 import { SimulatorConversation, SimulatorTranscript } from '../simulator/conversation';

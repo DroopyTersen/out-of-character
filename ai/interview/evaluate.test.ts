@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Experimental_EvaluationQuestion } from 'ai';
-import { interviewReadings, interviewTopics, INTERVIEW_SCENARIO_ID, coverageConfidence, mergeCoverage, type CoverageLevel, type InterviewObjectiveReading } from '../../core/interview';
+import { interviewTopics, INTERVIEW_SCENARIO_ID, coverageConfidence, mergeCoverage, type CoverageLevel, type InterviewObjectiveReading } from '../../core/interview';
 import { interviewFixtures } from './fixtures';
 import recordings from './recordings.json';
 import { readInterviewAnswers, type InterviewAnswers } from './evaluate.server';

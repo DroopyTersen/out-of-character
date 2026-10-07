@@ -1,3 +1,4 @@
+// Stays until Sol moves into the engine: it recognises this app's DirectorOutputError, which the engine's copy in providers/diagnostics.server.ts cannot.
 import type { CallFailure } from '../../core/interview-producer';
 import { DirectorOutputError } from '../simulator/sol.server';
 

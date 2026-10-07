@@ -2,6 +2,7 @@ import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewTopics, interviewVoic
 import { LIVE_NOTE_CHANNEL, type NoteChannel } from '../../core/interview-notes';
 import type { Client, ClientStats } from '../../core/simulator/types';
 import type { Scenario } from '../simulator/scenarios.server';
+import { topicCriteria } from '../../interviews/project-closeout/rubric.prompt';
 
 const personality = 'Warm, curious, and perceptive, like a friend listening over a drink. You have a journalist’s ear for the telling detail, but you are not conducting an interrogation. React to what the person actually says before asking one useful question. Let humor and warmth arise naturally; do not perform a therapist or a corporate facilitator.';
 
@@ -13,24 +14,6 @@ export const interviewers: (Client & { voice: string; behavior: string; stats: C
   image,
   voice, behavior: personality, stats,
 }));
-
-type TopicId = (typeof interviewTopics)[number]['objectives'][number]['id'];
-const topicCriteria = {
-  'client-access': 'The participant describes actual onboarding, access, permissions, environments, equipment, or time to become productive with the client. Client staff being unfamiliar with software development is not onboarding or access.',
-  'client-decisions': 'The participant describes who on the client side made, influenced, approved, or delegated a project decision, or how client stakeholders engaged in decisions. Decisions the delivery team kept for itself do not show client decision-making; a client that explicitly left decisions to the delivery team does. A client employee explaining their day-to-day workflow is insufficient by itself.',
-  'client-pace': 'The participant describes the actual pace of client reviews, approvals, availability, or waiting, with a concrete effect or pattern. How fast the delivery team itself produced a prototype or build is not client pace, and early client unease alone does not show approval delays or a review cadence.',
-  'client-coordination': 'The participant describes actual coordination across client teams, divisions, vendors, or silos.',
-  'client-friction': 'The participant describes a difficult interaction or collaboration pattern with the client, or grounded advice for a future team working with that client. A product-design challenge alone is insufficient.',
-  'process-worked': 'The participant names an internal team practice that worked and why it helped or should be repeated.',
-  'process-improve': 'The participant identifies an internal team practice, decision, or gap the team could improve, with a consequence or suggestion. Naming a missing role or practice without the participant’s own consequence or suggestion is insufficient, as is changing the product or client workflow alone.',
-  'process-communication': 'The participant describes how information or handoffs flowed within the delivery team and their effect. An explicitly attributed account can establish this, but a vague report of awkwardness without a practice or effect cannot. A client demo alone is insufficient.',
-  'process-tools': 'The participant describes a tool, meeting, documentation practice, or process the delivery team used to do its work and its practical effect. A product feature or client workflow is not an internal team tool.',
-  'process-resourcing': 'The participant describes how the delivery team’s staffing, skills, timeline, or organizational support affected its work. A client’s lack of technical skills or cloud infrastructure belongs to client-access, not delivery-team resourcing. The absence of a role, such as a business analyst, does not by itself show a staffing problem; the participant must describe its effect. A wait for initial client access belongs to client-access alone.',
-  'project-delivery': 'The participant identifies what the project actually built or delivered, its scope, changes, or current state. Merely mentioning a demo or release does not identify a deliverable.',
-  'project-role': 'The participant describes their own responsibility or actual work on the project. Collective “we” activity without their individual role is insufficient.',
-  'project-contributions': 'The participant describes what another member of their delivery team actually contributed, with appropriate attribution. Client stakeholders testing the product or providing feedback are client participation, not delivery-team contributions. A named contact or person with an unknown role is insufficient.',
-  'project-reflection': 'The participant explicitly reflects on a standout contribution, their growth or performance, or what they would do differently. Merely saying the product challenge was hard is insufficient.',
-} satisfies Record<TopicId, string>;
 
 export const interviewScenario: Scenario = {
   id: INTERVIEW_SCENARIO_ID, title: 'Project closeout interview', category: 'Interview',

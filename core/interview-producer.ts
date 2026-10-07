@@ -2,6 +2,7 @@ import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading } fr
 import type { MapDefect, MapPace, MapUpdate } from './interview-map';
 import type { Band, Pick, ThreadState } from './interview-ranking';
 import type { DirectorUsage } from './simulator/director';
+import type { CallFailure } from '../interview-engine/providers/diagnostics.server';
 
 /**
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
@@ -52,7 +53,7 @@ export type ResearchKind = typeof RESEARCH_KINDS[number];
 export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null; passageIds: string[] };
 export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number; startMs?: number; endMs?: number };
 /** Safe provider metadata only; never response bodies, request headers or exception messages. */
-export type CallFailure = { name: string; status?: number; requestId?: string; detail?: string };
+export type { CallFailure };
 
 /** One Sol call. The applied updates replay to the map, so the map itself isn't stored; an applied record without one was shed to fit the archive row. */
 export type MapRecord = {

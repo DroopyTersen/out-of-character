@@ -1,10 +1,16 @@
 import { z } from 'zod';
 
-/** One thing the interview hopes to cover, judged by Jev's coverage reading. */
-export type Objective = { id: string; label: string };
+/**
+ * One thing the interview hopes to cover, judged by Jev's coverage reading. The judging text is server-only:
+ * `criterion` says what covering it takes, `creditRule` narrows whose words count, and `explored` replaces the
+ * default meaning of explored. A spec the browser imports leaves them out.
+ */
+export type Objective = { id: string; label: string; criterion?: string; creditRule?: string; explored?: string };
 export type TopicGroup = { id: string; label: string; objectives: readonly Objective[] };
+/** How Jev scores one reading: the question it answers and one criterion for each point of its 0–4 scale. Server-only. */
+export type ReadingRubric = { task: string; criteria: readonly string[] };
 /** One reading of the participant on Jev's scale (for example specificity). */
-export type Reading = { id: string; label: string; description: string };
+export type Reading = { id: string; label: string; description: string; rubric?: ReadingRubric };
 /** `voice` is the voice provider's voice name; `image` is the host's portrait for it. */
 export type Voice = { id: string; voice: string; label: string; presentation: string; image: string };
 /** How the Narrative phase writes its document: a system prompt and the structured output it must return. */
@@ -34,10 +40,10 @@ const specSchema = z.object({
     voices: z.array(z.object({ id, voice: text, label: text, presentation: text, image: text })).min(1)
       .refine(voices => unique(voices.map(voice => voice.id)), 'Voice ids must be unique.'),
   }),
-  topics: z.array(z.object({ id, label: text, objectives: z.array(z.object({ id, label: text })).min(1) })).min(1)
+  topics: z.array(z.object({ id, label: text, objectives: z.array(z.object({ id, label: text, criterion: text.optional(), creditRule: text.optional(), explored: text.optional() })).min(1) })).min(1)
     .refine(topics => unique(topics.map(topic => topic.id)), 'Topic ids must be unique.')
     .refine(topics => unique(topics.flatMap(topic => topic.objectives.map(objective => objective.id))), 'Objective ids must be unique.'),
-  readings: z.array(z.object({ id, label: text, description: text }))
+  readings: z.array(z.object({ id, label: text, description: text, rubric: z.object({ task: text, criteria: z.array(text).length(5) }).optional() }))
     .refine(readings => unique(readings.map(reading => reading.id)), 'Reading ids must be unique.'),
   limits: z.object({
     durationSeconds: z.number().int().positive(),

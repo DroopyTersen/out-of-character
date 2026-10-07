@@ -1,6 +1,5 @@
 import { DirectorOutputError } from './structured.server';
 
-// TODO(phase3): the shape of CallFailure in core/interview-producer.ts; the producer reads this one once it moves.
 /** What a failed model call leaves in the log: names, status and support IDs only, never request or response content. */
 export type CallFailure = { name: string; status?: number; requestId?: string; detail?: string };
 

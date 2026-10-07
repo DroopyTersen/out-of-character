@@ -1,6 +1,6 @@
 import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
 
-// TODO(phase3): ai/judging.ts still owns the simulator's copy of this version; the interview reads this one once it moves.
+/** The one Jev version: the interview and the practice simulator both judge with it. */
 export const JEV_MODEL = 'jev-1.13.0';
 
 /** Jev on TypeSafe. The key is read when a call is made, so a host without one can build providers it never judges with. */

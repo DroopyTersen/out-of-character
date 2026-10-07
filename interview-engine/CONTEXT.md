@@ -16,6 +16,20 @@
 
 **Narrative phase**: writing a document from a transcript and a `NarrativeTemplate`. Needs only a language model. Lives in `narrative/`.
 
+**Server-only spec fields**: the parts of an `InterviewSpec` the browser never sees: each objective's `criterion` (and optional `creditRule` and `explored`), each reading's `rubric`, and the interviewer's `role`, `persona`, `orientation`, `boundaries` and `opening`. A spec's public file stays label-only; its `*.prompt.ts` files hold this text.
+
+**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/conversation/rubric.prompt.ts`).
+
+**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `interview/voice/brief.server.ts`).
+
+**Brief**: Sam's instructions for one voice: the spec's persona, orientation and boundaries around the engine's own turn-taking, technique and note-handling guidance.
+
+**Note channel**: how Sol's notes reach Sam during the conversation. The live session appends them to Sam's thinking; the delivery probe compares appending them to the instructions. The brief names the channel so its wording matches.
+
+**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
+
+**Narrative run**: one attempt at writing the narrative: the text as it streams and a `Narrative` result that settles once. `writeNarrative` starts one from a `NarrativeInput` (the template and the passages).
+
 ## The cast
 
 - **Sam**: the interviewer the participant hears, a realtime voice model.

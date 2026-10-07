@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { emptyInterviewReadings, interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummary, type InterviewSummaryContent } from '../../core/interview';
+import { emptyInterviewReadings, interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummaryContent } from '../../core/interview';
 import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
 import { illustrativeLevels } from './simulator-voice-story';
 import { streamedReportView } from '../simulator/use-report';
@@ -71,7 +71,7 @@ This shows the reported sequence; it does not establish that real integration wa
 
 The interview did not establish how the client later decided to proceed.`;
 
-function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, summary: InterviewSummary | null, count = transcript.length): InterviewSnapshot {
+function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, count = transcript.length): InterviewSnapshot {
   const entries = transcript.slice(0, count);
   const evidenceByObjective: Record<string, TranscriptEntry> = {
     'project-delivery': transcript[1]!,
@@ -101,11 +101,11 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, summary: In
     model: 'workshop-fixture', durationMs: 0,
   };
   return {
-    id: 'anonymous-workshop-interview', scenarioId: 'project-closeout', clientId: 'sam-cedar', status,
-    startedAt: Date.now() - 50_000, limitSeconds: 3600, warning: null,
-    revision: entries.length, transcript: entries, evaluation: null, coaching: null, feedbackStatus: feedback, message: null,
+    id: 'anonymous-workshop-interview', specId: 'project-closeout', voiceId: 'sam-cedar', status,
+    startedAt: Date.now() - 50_000, limitSeconds: 3600, warning: null, pause: null,
+    revision: entries.length, transcript: entries, feedbackStatus: feedback, message: null, background: [],
     finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 50 : null,
-    interview: { evaluation: feedback === 'waiting' || feedback === 'unavailable' ? null : evaluation, summary },
+    evaluation: feedback === 'waiting' || feedback === 'unavailable' ? null : evaluation,
   };
 }
 
@@ -133,7 +133,7 @@ export function InterviewLiveStory() {
   const [feedback, setFeedback] = useState<FeedbackStatus>('current');
   const [count, setCount] = useState(6);
   const [notice, setNotice] = useState('');
-  const live = fixture('live', feedback, null, count);
+  const live = fixture('live', feedback, count);
   const snapshot: InterviewSnapshot = phase === 'paused'
     ? { ...live, status: callState === 'resuming' ? 'connecting' : 'paused', pause: { reason: callState === 'restarted' ? 'restart' : 'provider', pausedAt: shownAt - 42_000, resumeBy: shownAt + 13 * 60_000, resumes: callState === 'exhausted' ? 5 : 1, maxResumes: 5 } }
     : live;
@@ -172,10 +172,10 @@ function InterviewResearchStory({ delivered }: { delivered: boolean }) {
   const [muted, setMuted] = useState(false);
   const [notice, setNotice] = useState('');
   const snapshot: InterviewSnapshot = {
-    ...fixture('live', 'waiting', null, 0),
+    ...fixture('live', 'waiting', 0),
     revision: researchTranscript.length,
     transcript: researchTranscript,
-    interview: { evaluation: null, summary: null, ...(delivered ? { background: researchBackground } : {}) },
+    background: delivered ? researchBackground : [],
   };
   return <>
     <div className="workshop-controls"><span>Synthetic transcript · {delivered ? 'manually authored public background delivered; no model or search call' : 'lookup skipped; no public background delivered'}</span>{notice && <span role="status">{notice}</span>}</div>
@@ -207,5 +207,5 @@ export function InterviewSummaryStory() {
       : { status: 'running', starts: 1, report: null, failure: null };
   const draft = status === 'writing' ? { text: summaryText.slice(0, length) } : undefined;
   const report = streamedReportView({ state, draft }, !!draft?.text);
-  return <><div className="workshop-controls"><label>Summary<select value={status} onChange={event => { setPlaying(false); setStatus(event.target.value as typeof status); setLength(240); }}><option value="ready">Ready</option><option value="pending">Preparing</option><option value="writing">Writing</option><option value="unavailable">Unavailable</option></select></label><button onClick={replay}>Replay stream</button><label>Transcript<select value={transcriptCount} onChange={event => setTranscriptCount(Number(event.target.value))}><option value="0">Empty</option><option value="8">Available</option></select></label>{notice && <span role="status">{notice}</span>}</div><InterviewSummaryScreen snapshot={fixture('ended', 'current', null, transcriptCount)} report={report} onRetrySummary={replay} onCheckSummary={() => setNotice('Debugger example: no live request.')} onReset={() => setNotice('Workshop preview: no live interview was started.')} /></>;
+  return <><div className="workshop-controls"><label>Summary<select value={status} onChange={event => { setPlaying(false); setStatus(event.target.value as typeof status); setLength(240); }}><option value="ready">Ready</option><option value="pending">Preparing</option><option value="writing">Writing</option><option value="unavailable">Unavailable</option></select></label><button onClick={replay}>Replay stream</button><label>Transcript<select value={transcriptCount} onChange={event => setTranscriptCount(Number(event.target.value))}><option value="0">Empty</option><option value="8">Available</option></select></label>{notice && <span role="status">{notice}</span>}</div><InterviewSummaryScreen snapshot={fixture('ended', 'current', transcriptCount)} report={report} onRetrySummary={replay} onCheckSummary={() => setNotice('Debugger example: no live request.')} onReset={() => setNotice('Workshop preview: no live interview was started.')} /></>;
 }

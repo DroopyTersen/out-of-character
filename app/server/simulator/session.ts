@@ -18,7 +18,7 @@ import { writeInterviewArchive } from '../interview/archive.server';
 import { ContextualDirector, directorServices, type DirectorCheckpoint } from './contextual-director';
 import { InterviewProducer, producerServices, type ProducerCheckpoint } from './interview-producer';
 import { gradeObjectives, type GradeRecord } from '../../../core/interview-producer';
-import { NETWORK_SAMPLES, type NetworkRecord } from '../../../core/simulator/network';
+import { NETWORK_SAMPLES, type NetworkRecord } from '../../../interview-engine/shared/network';
 import { generateReport, REPORT_PROVENANCE } from '../../../ai/simulator/report.server';
 import { idleReport, type CoachingReport, type ReportState } from '../../../core/simulator/report';
 import { SessionReport, within, type ReportArchive } from './report';

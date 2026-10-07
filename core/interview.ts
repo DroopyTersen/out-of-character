@@ -1,4 +1,6 @@
-import type { ObjectiveReading, SkillReading } from './simulator/types';
+import type * as engine from '../interview-engine/shared/snapshot';
+import type { CoverageLevel, InterviewBackground } from '../interview-engine/shared/snapshot';
+import type { Speaker } from './simulator/types';
 import { z } from 'zod';
 
 export const INTERVIEW_SCENARIO_ID = 'project-closeout';
@@ -38,29 +40,13 @@ export const interviewTopics = [
   ] },
 ] as const;
 
-/** How far a topic has been covered. Set aside means the participant declined it, cannot speak to it, or says it does not apply. */
-export const COVERAGE_LEVELS = ['not-yet', 'touched', 'explored', 'set-aside'] as const;
-export type CoverageLevel = typeof COVERAGE_LEVELS[number];
+export { COVERAGE_LEVELS, type CoverageLevel, type InterviewBackground } from '../interview-engine/shared/snapshot';
 /** `probability` is P(explored); `achieved` means explored. */
-export type InterviewObjectiveReading = ObjectiveReading & { level: CoverageLevel; levels: Record<CoverageLevel, number> | null };
-
-export type InterviewEvaluation = {
-  revision: number;
-  readings: Record<InterviewReadingId, SkillReading>;
-  objectives: InterviewObjectiveReading[];
-  model: string;
-  durationMs: number;
-};
+export type InterviewObjectiveReading = engine.InterviewObjectiveReading<Speaker>;
+export type InterviewEvaluation = engine.InterviewEvaluation<InterviewReadingId, Speaker>;
 export type InterviewSummary = { status: 'pending' | 'ready' | 'unavailable'; text: string | null };
 export const interviewSummarySchema = z.strictObject({ text: z.string().trim().min(1) });
 export type InterviewSummaryContent = z.infer<typeof interviewSummarySchema>;
-/** Public references only; preparation and producer directions remain private. */
-export type InterviewBackground = {
-  id: string;
-  target: { kind: 'organization' | 'product' | 'term'; name: string };
-  facts: { text: string; url: string; title: string }[];
-  retrievedAt: number;
-};
 export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[] };
 
 const BACKCHANNEL = /^(?:mm+(?:[- ]?hm*)?|hmm+|uh[- ]?huh|ah+|oh+|['’]?kay|yeah|yep|yes|no|right|okay|ok|sure)[.!?]*$/i;

@@ -37,7 +37,7 @@ function useNow(running: boolean) {
 
 /** A started conversation whose connection was lost: the server holds its transcript until it is resumed, ended, or the hold expires. */
 export function ConnectionPaused({ snapshot, link, noun, endLabel, onResume, onEnd }: {
-  snapshot: SessionSnapshot | null; link: Link; noun: 'interview' | 'practice'; endLabel: string; onResume: () => void; onEnd: () => void;
+  snapshot: Pick<SessionSnapshot, 'pause' | 'status'> | null; link: Link; noun: 'interview' | 'practice'; endLabel: string; onResume: () => void; onEnd: () => void;
 }) {
   const pause = snapshot?.pause;
   const resuming = link.state === 'resuming' || snapshot?.status === 'connecting';

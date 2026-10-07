@@ -17,6 +17,6 @@
     "paths": { "~/*": ["./app/*"], "@/*": ["./app/*"] },
     "types": ["vite/client", "bun-types"]
   },
-  "include": ["app/**/*", "core/**/*", "ai/**/*", ".react-router/types/**/*", "worker-configuration.d.ts", "vite.config.ts"],
+  "include": ["app/**/*", "core/**/*", "ai/**/*", "interview-engine/**/*", "interviews/**/*", ".react-router/types/**/*", "worker-configuration.d.ts", "vite.config.ts"],
   "exclude": ["node_modules", "build"]
 }

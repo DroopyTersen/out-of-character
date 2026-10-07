@@ -1,14 +1,16 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Volume2 } from 'lucide-react';
-import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
-import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
+import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewEvaluation, type InterviewReadingId, type InterviewSummaryContent } from '../../core/interview';
+import type { Client, FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
+import type { InterviewSnapshot as EngineSnapshot } from '../../interview-engine/shared/snapshot';
 import type { AudioLevels } from '../simulator/audio-levels';
 import { ConnectionPaused, ConnectionUnstable, formatTime, type ConversationPhase } from '../simulator/conversation';
 import { stableLink, type Link } from '../simulator/live-connection';
 import { VoiceDisplay } from '../simulator/voice-display';
 import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 
-export type InterviewSnapshot = SessionSnapshot;
+/** The engine's snapshot, over today's transcript entries until the runtime is renamed. */
+export type InterviewSnapshot = EngineSnapshot<TranscriptEntry, InterviewReadingId>;
 export type InterviewVoiceId = typeof interviewVoices[number]['id'];
 
 const SummaryMarkdown = lazy(() => import('./summary-markdown.client'));
@@ -77,18 +79,18 @@ function InterviewTranscript({ entries }: { entries: TranscriptEntry[] }) {
   return <div className="sim-transcript interview-transcript">{entries.length ? entries.map(entry => <article key={entry.id} data-speaker={entry.speaker}><header><strong>{entry.speaker === 'trainee' ? 'You' : INTERVIEWER_NAME}</strong><time>{formatTime(entry.startMs / 1000)}</time></header><p>{entry.text}</p></article>) : <p className="sim-muted">The conversation will appear here.</p>}</div>;
 }
 
-function InterviewReadings({ interview, status }: { interview: InterviewSession | undefined; status: FeedbackStatus }) {
+function InterviewReadings({ evaluation, status }: { evaluation: InterviewEvaluation | null | undefined; status: FeedbackStatus }) {
   const labels = {
     engagement: ['Limited response', 'Some response', 'Following along', 'Building the thread', 'Developing the story'],
     openness: ['Little shared', 'Brief perspective', 'Some perspective', 'Tradeoffs shared', 'Nuanced account'],
     specificity: ['General', 'Broad detail', 'Some specifics', 'Concrete', 'Rich detail'],
   };
-  const readingStatus = status === 'current' ? 'Live observations' : status === 'delayed' || (status === 'unavailable' && interview?.evaluation) ? 'Latest observations' : status === 'unavailable' ? 'Observations unavailable' : 'Listening for details';
+  const readingStatus = status === 'current' ? 'Live observations' : status === 'delayed' || (status === 'unavailable' && evaluation) ? 'Latest observations' : status === 'unavailable' ? 'Observations unavailable' : 'Listening for details';
   return <section className="interview-readings sim-panel">
     <header><h2>Conversation readings</h2><span className="interview-feedback-state" data-status={status}>{readingStatus}</span></header>
     <p>These reflect what you have shared so far. A concise answer can say a lot.</p>
     <div className="interview-reading-list">{interviewReadings.map(item => {
-      const reading = interview?.evaluation?.readings[item.id];
+      const reading = evaluation?.readings[item.id];
       const value = reading?.value;
       const observation = value == null ? 'Not yet observed' : labels[item.id][Math.round(Math.max(0, Math.min(4, value)))];
       return <div className="interview-reading" key={item.id}>
@@ -96,8 +98,8 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
         <small>{item.description}</small>
       </div>;
     })}</div>
-    {interviewReadings.some(item => interview?.evaluation?.readings[item.id].evidence) && <details className="interview-reading-evidence"><summary>From your words</summary>{interviewReadings.map(item => {
-      const evidence = interview?.evaluation?.readings[item.id].evidence;
+    {interviewReadings.some(item => evaluation?.readings[item.id].evidence) && <details className="interview-reading-evidence"><summary>From your words</summary>{interviewReadings.map(item => {
+      const evidence = evaluation?.readings[item.id].evidence;
       return evidence && <div key={item.id}><strong>{item.label}</strong><blockquote>“{evidence.text}”</blockquote></div>;
     })}</details>}
   </section>;
@@ -105,8 +107,8 @@ function InterviewReadings({ interview, status }: { interview: InterviewSession 
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
-function InterviewTopics({ interview }: { interview: InterviewSession | undefined }) {
-  const readings = new Map(interview?.evaluation?.objectives.filter(item => item.evidence).map(item => [item.id, item]) ?? []);
+function InterviewTopics({ evaluation }: { evaluation: InterviewEvaluation | null | undefined }) {
+  const readings = new Map(evaluation?.objectives.filter(item => item.evidence).map(item => [item.id, item]) ?? []);
   return <section className="interview-topics sim-panel"><header><h2>Your project story</h2><p>These are suggestions. We’ll let the conversation flow naturally.</p>
     <ul className="interview-topic-legend" aria-label="Topic marks">{(['touched', 'explored', 'set-aside'] as const).map(level => <li key={level} data-level={level}><span className="interview-topic-mark" aria-hidden="true">{level === 'explored' ? <Check size={11} /> : level === 'set-aside' ? <Minus size={11} /> : null}</span>{COVERAGE_LEVEL_LABELS[level]}</li>)}<li className="interview-topic-legend-note">% = how sure the reading is</li></ul></header>
     <div className="interview-topic-groups">{interviewTopics.map(topic => <div className="interview-topic" key={topic.id}><h3>{topic.label}</h3><ul>{topic.objectives.map(objective => {
@@ -160,9 +162,9 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
           <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
         </div>
         {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}
-        <InterviewBackgroundLive notes={snapshot?.interview?.background} />
+        <InterviewBackgroundLive notes={snapshot?.background} />
       </div>
-      <div className="interview-observations"><InterviewReadings interview={snapshot?.interview} status={phase === 'ending' && snapshot?.interview?.evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} /><InterviewTopics interview={snapshot?.interview} /></div>
+      <div className="interview-observations"><InterviewReadings evaluation={snapshot?.evaluation} status={phase === 'ending' && snapshot?.evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} /><InterviewTopics evaluation={snapshot?.evaluation} /></div>
     </div>
   </section>;
 }
@@ -199,7 +201,7 @@ export function InterviewSummaryScreen({ snapshot, report, onRetrySummary, onChe
       {report.stage === 'status-error' && <button className="quiet-button" onClick={onCheckSummary}>Check summary</button>}
       {report.canRetry && <button className="quiet-button" onClick={onRetrySummary}><RotateCcw size={17} /> Retry summary</button>}
     </article>
-    {!!snapshot?.interview?.background?.length && <details className="interview-summary-background sim-debrief-transcript"><summary>Background Sam received <ChevronDown size={18} aria-hidden="true" /></summary><p className="interview-background-context">Current public background; your account establishes what happened on the project.</p><InterviewBackgroundFacts notes={snapshot.interview.background} /></details>}
+    {!!snapshot?.background.length && <details className="interview-summary-background sim-debrief-transcript"><summary>Background Sam received <ChevronDown size={18} aria-hidden="true" /></summary><p className="interview-background-context">Current public background; your account establishes what happened on the project.</p><InterviewBackgroundFacts notes={snapshot.background} /></details>}
     <details className="interview-summary-transcript sim-debrief-transcript"><summary>Read the transcript <ChevronDown size={18} aria-hidden="true" /></summary><InterviewTranscript entries={snapshot?.transcript ?? []} /></details>
     <button className="arcade-button interview-new" onClick={onReset}>New interview</button>
   </section>;

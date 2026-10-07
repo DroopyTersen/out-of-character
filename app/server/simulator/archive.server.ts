@@ -5,7 +5,7 @@ import { SIMULATOR_VERSION, type ClientEnding, type SessionPause, type SessionSn
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../core/interview-producer';
-import type { NetworkRecord } from '../../../core/simulator/network';
+import type { NetworkRecord } from '../../../interview-engine/shared/network';
 import type { ReportArchive, ReportAttempt } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {

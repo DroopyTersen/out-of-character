@@ -105,9 +105,10 @@ try {
     try {
       await page.goto(`${base}/simulator`, { waitUntil: 'networkidle' });
       await page.evaluate(async interview => {
-        const { LiveConnection } = await import('/app/simulator/live-connection.ts');
+        const { LiveConnection } = await import('/interview-engine/client/liveConnection.ts');
+        const { pollTransport } = await import('/interview-engine/client/transport.ts');
         const audit = window.__connectionAudit;
-        audit.connection = new LiveConnection({ snapshot: value => audit.snapshots.push(value), levels: () => {}, error: (message, fatal) => audit.errors.push({ message, fatal }) });
+        audit.connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => audit.snapshots.push(value), levels: () => {}, error: (message, fatal) => audit.errors.push({ message, fatal }) });
         void audit.connection.start(interview ? 'project-closeout' : 'sharepoint', interview ? 'sam-cedar' : 'morgan');
       }, interview);
       await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'live'), null, { timeout: 20_000 });

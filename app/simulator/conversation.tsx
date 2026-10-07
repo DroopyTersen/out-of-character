@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, FileText, Lightbulb, Mic, MicOff, RotateCcw, Volume2, WifiOff, X } from 'lucide-react';
-import type { AudioLevels } from './audio-levels';
-import { stableLink, type Link } from './live-connection';
+import type { AudioLevels } from '../../interview-engine/client/audioLevels';
+import { stableLink, type Link } from '../../interview-engine/client/liveConnection';
 import { VoiceDisplay } from './voice-display';
 import type { Client, ScenarioSummary, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
 import { SimulatorHint, SimulatorHintToast, SimulatorObjectives, SimulatorSkills } from './feedback';

@@ -25,7 +25,7 @@ try {
       if (width === 1440 && reducedMotion === 'no-preference') {
         // Exercise the production reader with real browser audio, without speakers or a microphone.
         audio = await page.evaluate(async () => {
-          const { readAudio } = await import('/app/simulator/audio-levels.ts');
+          const { readAudio } = await import('/interview-engine/client/audioLevels.ts');
           const context = new AudioContext();
           const oscillator = context.createOscillator();
           const gain = context.createGain();

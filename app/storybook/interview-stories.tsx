@@ -7,7 +7,7 @@ import { streamedReportView } from '../simulator/use-report';
 import type { ReportState } from '../../core/simulator/report';
 import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewSnapshot, type InterviewVoiceId } from '../interview/screens';
 import type { ConversationPhase } from '../simulator/conversation';
-import { stableLink, type Link } from '../simulator/live-connection';
+import { stableLink, type Link } from '../../interview-engine/client/liveConnection';
 import '../simulator/simulator.css';
 import '../interview/interview.css';
 

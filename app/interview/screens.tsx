@@ -2,9 +2,9 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Volume2 } from 'lucide-react';
 import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewSession, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus, SessionSnapshot, TranscriptEntry } from '../../core/simulator/types';
-import type { AudioLevels } from '../simulator/audio-levels';
+import type { AudioLevels } from '../../interview-engine/client/audioLevels';
 import { ConnectionPaused, ConnectionUnstable, formatTime, type ConversationPhase } from '../simulator/conversation';
-import { stableLink, type Link } from '../simulator/live-connection';
+import { stableLink, type Link } from '../../interview-engine/client/liveConnection';
 import { VoiceDisplay } from '../simulator/voice-display';
 import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 

@@ -3,7 +3,7 @@ import { useLoaderData } from 'react-router';
 import { useReducedMotion } from 'motion/react';
 import type { Catalog } from '../../core/simulator/types';
 import { VoiceDisplay } from '../simulator/voice-display';
-import { SPECTRUM_BANDS, type AudioLevels } from '../simulator/audio-levels';
+import { SPECTRUM_BANDS, type AudioLevels } from '../../interview-engine/client/audioLevels';
 
 export const voiceStates = ['client', 'trainee', 'overlap', 'listening', 'muted', 'connecting', 'ending'] as const;
 export type VoiceState = typeof voiceStates[number];

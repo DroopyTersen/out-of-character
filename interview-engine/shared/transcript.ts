@@ -6,7 +6,7 @@ export type Evidence<S extends string = Speaker> = { entryId: string; speaker: S
 
 /** Evaluator input bound. A live session stops accepting speech beyond it so final grading stays valid. */
 export const TRANSCRIPT_LIMIT = { entries: 800, characters: 80_000 };
-export const transcriptCharacters = (passages: Passage[]) => passages.reduce((sum, passage) => sum + passage.text.length, 0);
+export const transcriptCharacters = (passages: readonly Pick<Passage, 'text'>[]) => passages.reduce((sum, passage) => sum + passage.text.length, 0);
 
 export function findEvidence(passages: Passage[], id: string): Evidence | null {
   const passage = passages.find(item => item.id === id);

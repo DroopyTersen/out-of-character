@@ -17,11 +17,15 @@ export type Voice = { id: string; voice: string; label: string; presentation: st
 export type NarrativeTemplate<T = unknown> = { id: string; version: string; system: string; schema: z.ZodType<T> };
 export type InterviewLimits = { durationSeconds: number; idleWarningMs: number; idleTimeoutMs: number; pauseHoldMs: number; maxResumes: number };
 
-/** What one kind of interview is about. The interviewer's brief still lives with the host until the lifecycle moves. */
+/** What one kind of interview is about. */
 export type InterviewSpec = {
   id: string;
   version: string;
-  interviewer: { name: string; voices: readonly Voice[] };
+  /**
+   * The voice model's side of the interview. The brief text is server-only: `role` completes “You are <name>, …”,
+   * `persona` is the manner, `orientation` and `boundaries` are the spec's ground rules, and `opening` is the first line.
+   */
+  interviewer: { name: string; voices: readonly Voice[]; role?: string; persona?: string; opening?: string; orientation?: readonly string[]; boundaries?: readonly string[] };
   topics: readonly TopicGroup[];
   readings: readonly Reading[];
   limits?: InterviewLimits;
@@ -39,6 +43,11 @@ const specSchema = z.object({
     name: text,
     voices: z.array(z.object({ id, voice: text, label: text, presentation: text, image: text })).min(1)
       .refine(voices => unique(voices.map(voice => voice.id)), 'Voice ids must be unique.'),
+    role: text.optional(),
+    persona: text.optional(),
+    opening: text.optional(),
+    orientation: z.array(text).optional(),
+    boundaries: z.array(text).optional(),
   }),
   topics: z.array(z.object({ id, label: text, objectives: z.array(z.object({ id, label: text, criterion: text.optional(), creditRule: text.optional(), explored: text.optional() })).min(1) })).min(1)
     .refine(topics => unique(topics.map(topic => topic.id)), 'Topic ids must be unique.')

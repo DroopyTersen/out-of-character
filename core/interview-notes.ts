@@ -1,5 +1,6 @@
 import type { ConversationMap, MapEntity, MapThread } from './interview-map';
 import { pickThreads, RANKING, threadKey, type Pick, type RankingState } from './interview-ranking';
+import { LIVE_NOTE_CHANNEL, type NoteChannel } from '../interview-engine/interview/voice/channel';
 
 /**
  * Sam's two notes. Sol writes every content word; code only fills these fixed templates, so no topic label or
@@ -10,11 +11,7 @@ export const NOTE_HEADERS = {
   map: 'Map note. Supersedes earlier map notes.',
 };
 export type NoteHeaders = typeof NOTE_HEADERS;
-/** The live session uses thinking; the delivery probe compares it with appended instructions. */
-export const NOTE_CHANNELS = ['session.thinking.append', 'session.instructions.append'] as const;
-export type NoteChannel = typeof NOTE_CHANNELS[number];
-/** The channel the live session sends notes on. The brief and the producer both default to it, so their wording agrees. */
-export const LIVE_NOTE_CHANNEL: NoteChannel = 'session.thinking.append';
+export { LIVE_NOTE_CHANNEL, NOTE_CHANNELS, type NoteChannel } from '../interview-engine/interview/voice/channel';
 /** Appended instructions read as orders, as the old cues did, so on that channel every note says it is only a suggestion. */
 const INSTRUCTION_NOTE_HEADERS: NoteHeaders = {
   list: 'Thread note, a suggestion only. Supersedes earlier thread notes.',

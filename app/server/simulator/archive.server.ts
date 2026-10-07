@@ -1,7 +1,7 @@
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
 import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
-import { SIMULATOR_VERSION, type ClientEnding, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
+import { SIMULATOR_VERSION, type ClientEnding, type PublicSnapshot, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../core/interview-producer';
@@ -47,7 +47,7 @@ export type ArchiveWrite = {
   interventions: InterventionRecord[];
 };
 
-export async function archiveProvenance(env: Env, snapshot: SessionSnapshot, contextualDirector: DirectorSummary | ProducerSummary | null): Promise<ArchiveProvenance> {
+export async function archiveProvenance(env: Env, snapshot: PublicSnapshot, contextualDirector: DirectorSummary | ProducerSummary | null): Promise<ArchiveProvenance> {
   const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
   const digest = async (text: string) => {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));

@@ -105,7 +105,6 @@ export type SessionSnapshot = {
   revision: number;
   transcript: TranscriptEntry[];
   evaluation: TraineeEvaluation | null;
-  interview?: InterviewSession;
   coaching: LiveHint | null;
   feedbackStatus: FeedbackStatus;
   message: string | null;
@@ -115,6 +114,12 @@ export type SessionSnapshot = {
   pause?: SessionPause | null;
   clientEnded?: ClientEnding | null;
 };
+
+/**
+ * What the browser receives: the session's snapshot, plus the interview's readings, summary status and background
+ * for an interview. The session keeps the interview state beside its snapshot and composes this on the way out.
+ */
+export type PublicSnapshot = SessionSnapshot & { interview?: InterviewSession };
 
 export function emptySkills(): Record<SkillId, SkillReading> {
   return Object.fromEntries(skills.map(skill => [skill.id, { value: null, distribution: null, evidence: null }])) as Record<SkillId, SkillReading>;

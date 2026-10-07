@@ -1,12 +1,11 @@
-import type { InterviewSession } from '../../core/interview';
-import type { SessionSnapshot } from '../../core/simulator/types';
+import type { PublicSnapshot } from '../../core/simulator/types';
 import type { InterviewSnapshot } from './screens';
 
 /**
- * The session still carries the interview inside the practice simulator's snapshot; the screens render the engine's
+ * The session still sends the interview inside the practice simulator's snapshot; the screens render the engine's
  * flat shape. The interview has no client walk-out, so that warning never reaches them.
  */
-export function toInterviewSnapshot(snapshot: SessionSnapshot & { interview?: InterviewSession }): InterviewSnapshot {
+export function toInterviewSnapshot(snapshot: PublicSnapshot): InterviewSnapshot {
   const { kind, endsAt } = snapshot.warning ?? {};
   const warning = kind && kind !== 'client' && endsAt != null ? { kind, endsAt } : null;
   return {

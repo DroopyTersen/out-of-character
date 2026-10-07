@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { asksToEnd, finishesTurn, yieldsTurn } from './interview';
+import { asksToEnd, finishesTurn, yieldsTurn } from './turns';
 
 test('finishesTurn is false for thinking sounds, hanging clauses and requests for time', () => {
   for (const text of ['Hmm.', 'Um', '[sniff]', 'tongue click', '', 'We moved the rollout and', 'The vendor, which', 'It was kind of',

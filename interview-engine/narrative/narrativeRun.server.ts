@@ -1,4 +1,7 @@
 import { createTextStreamResponse } from 'ai';
+import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
+
+export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
 
 // The shell of the narrative runner: SessionReport's lifecycle (app/server/simulator/report.ts) over a NarrativeRun.
 // The simulator keeps SessionReport; the interview's narrative route adopts this one in Phase 4.
@@ -6,20 +9,6 @@ import { createTextStreamResponse } from 'ai';
 export const NARRATIVE_MAX_STARTS = 2;
 export const NARRATIVE_DEADLINE_MS = 120_000;
 
-export type NarrativeFailure = 'provider' | 'invalid' | 'cancelled' | 'timeout';
-/** What one narrative call reported. The shape of the simulator's `ReportUsage`. */
-export type NarrativeUsage = { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; cachedTokens: number | null };
-export type Narrative =
-  | { document: { text: string }; failure: null; usage: NarrativeUsage }
-  | { document: null; failure: NarrativeFailure; usage: NarrativeUsage | null };
-/** One writing attempt: text as it is written, and how it ended. `result` settles once, after or alongside the stream. */
-export type NarrativeRun = { stream: ReadableStream<string>; result: Promise<Narrative> };
-
-export type NarrativeState = { starts: number } & (
-  | { status: 'idle' | 'running'; document: null; failure: null }
-  | { status: 'completed'; document: { text: string }; failure: null }
-  | { status: 'failed'; document: null; failure: NarrativeFailure }
-);
 export type NarrativeAttempt = { startedAt: number; endedAt: number; failure: NarrativeFailure | null; usage: NarrativeUsage | null };
 export type SettledNarrative = { document: { text: string } | null; attempts: NarrativeAttempt[] };
 

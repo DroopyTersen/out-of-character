@@ -4,7 +4,7 @@ import type { Route } from './+types/interview';
 import { INTERVIEW_SCENARIO_ID, interviewVoices, interviewSummarySchema } from '../../core/interview';
 import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewVoiceId } from '../interview/screens';
 import { toInterviewSnapshot } from '../interview/snapshot';
-import { useSimulator } from '../simulator/use-simulator';
+import { INTERVIEW_SESSIONS, useSimulator } from '../simulator/use-simulator';
 import { useStreamedReport } from '../simulator/use-report';
 import { liveAvailable } from '../server/simulator/api';
 import { GameHeader } from '../ui/game-header';
@@ -22,7 +22,7 @@ export default function Interview() {
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>(interviewVoices[0].id);
   const [now, setNow] = useState(Date.now());
   const report = useStreamedReport(interviewSummarySchema, draft => !!draft?.text);
-  const session = useSimulator(report, { kind: 'interview', onReattach: ({ clientId }) => {
+  const session = useSimulator(report, { kind: 'interview', sessions: INTERVIEW_SESSIONS, onReattach: ({ clientId }) => {
     const voice = interviewVoices.find(item => item.id === clientId);
     if (voice) setVoiceId(voice.id);
   } });

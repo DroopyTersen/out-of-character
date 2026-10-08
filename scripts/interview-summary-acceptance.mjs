@@ -46,7 +46,7 @@ try {
           interview: { evaluation: null, summary: { status: 'pending', text: null } },
         };
         window.fetch = async (url, options = {}) => {
-          if (!String(url).includes('/api/simulator/sessions')) return originalFetch(url, options);
+          if (!String(url).includes('/api/interview/sessions')) return originalFetch(url, options);
           const action = String(url).split('/').at(-1);
           if (action === 'sessions') {
             const request = JSON.parse(options.body);

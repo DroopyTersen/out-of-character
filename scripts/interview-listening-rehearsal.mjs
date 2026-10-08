@@ -176,7 +176,7 @@ const seen = new Map(), growth = new Map();
 page.on('pageerror', error => report.errors.push(`Page error: ${error.message}`));
 page.on('request', request => {
   const path = new URL(request.url()).pathname;
-  if (path === '/api/simulator/sessions' && request.method() === 'POST') report.sessionId = request.postDataJSON()?.id ?? null;
+  if (path === '/api/interview/sessions' && request.method() === 'POST') report.sessionId = request.postDataJSON()?.id ?? null;
 });
 page.on('response', async response => {
   const path = new URL(response.url()).pathname;

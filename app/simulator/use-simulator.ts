@@ -7,12 +7,16 @@ import type { ReportActions } from './use-report';
 
 export type SimulatorPhase = 'selection' | 'connecting' | 'live' | 'paused' | 'ending' | 'debrief';
 export type AttemptChoice = { scenarioId: string; clientId: string };
-/** `left` marks an attempt its page held on the way out; a duplicated tab copies the storage without it. */
-type SavedAttempt = Attempt & AttemptChoice & { left?: boolean };
+/**
+ * `left` marks an attempt its page held on the way out; a duplicated tab copies the storage without it. `route` is the
+ * session routes the attempt started on; a claim saved before it was recorded started on the practice simulator's.
+ */
+type SavedAttempt = Attempt & AttemptChoice & { left?: boolean; route?: SessionRoutes };
 
-/** Both the practice and interview pages run their attempts through the simulator's session routes. */
-const SESSIONS = '/api/simulator/sessions';
-const transport = pollTransport(SESSIONS);
+/** The practice simulator's session routes; the interview page runs its attempts through the interview's. */
+export const SIMULATOR_SESSIONS = '/api/simulator/sessions';
+export const INTERVIEW_SESSIONS = '/api/interview/sessions';
+type SessionRoutes = typeof SIMULATOR_SESSIONS | typeof INTERVIEW_SESSIONS;
 
 /** A started attempt survives a reload of its tab: the page rejoins it paused. */
 const savedAttempts = {
@@ -33,6 +37,7 @@ const savedAttempts = {
     try {
       const value = JSON.parse(sessionStorage.getItem(this.key(kind)) || 'null') as Partial<SavedAttempt> | null;
       return value && /^[a-f0-9-]{36}$/.test(value.id ?? '') && /^[a-f0-9]{64}$/.test(value.capability ?? '') && typeof value.scenarioId === 'string' && typeof value.clientId === 'string'
+        && (value.route === undefined || value.route === SIMULATOR_SESSIONS || value.route === INTERVIEW_SESSIONS)
         ? value as SavedAttempt : null;
     } catch { return null; }
   },
@@ -40,8 +45,11 @@ const savedAttempts = {
   clear(kind: string) { try { sessionStorage.removeItem(this.key(kind)); } catch { /* Nothing was saved. */ } },
 };
 
-/** `kind` separates the practice and interview pages' saved attempts; `onReattach` restores a reloaded page's choice. */
-export function useSimulator(report: ReportActions, { kind, onReattach }: { kind: 'practice' | 'interview'; onReattach?: (choice: AttemptChoice) => void }) {
+/**
+ * `kind` separates the practice and interview pages' saved attempts; `sessions` is where new attempts start;
+ * `onReattach` restores a reloaded page's choice.
+ */
+export function useSimulator(report: ReportActions, { kind, sessions = SIMULATOR_SESSIONS, onReattach }: { kind: 'practice' | 'interview'; sessions?: SessionRoutes; onReattach?: (choice: AttemptChoice) => void }) {
   const [phase, setPhase] = useState<SimulatorPhase>('selection');
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,13 +97,15 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
     setError(null); setSnapshot(null); setMuted(false); setLevels(silentLevels); setLink(stableLink); setPhase(saved ? 'paused' : 'connecting');
     const active = () => generation.current === attempt;
     const beginReport = () => reportActions.current.begin(live.attempt.id);
-    const live = new LiveConnection<SessionSnapshot>(transport, {
+    // A rejoined attempt stays on the routes it started on.
+    const route = saved ? saved.route ?? SIMULATOR_SESSIONS : sessions;
+    const live = new LiveConnection<SessionSnapshot>(pollTransport(route), {
       snapshot: value => {
         if (!active()) return;
         // A rejoined attempt had already started.
         if (!reachedLive && (value.status === 'live' || saved)) {
           reachedLive = true;
-          if (!saved) savedAttempts.write(kind, { ...live.attempt, ...choice });
+          if (!saved) savedAttempts.write(kind, { ...live.attempt, ...choice, route });
         }
         setSnapshot(value);
         const status = value.status;
@@ -123,7 +133,7 @@ export function useSimulator(report: ReportActions, { kind, onReattach }: { kind
       },
     }, saved);
     connection.current = live;
-    reportActions.current.prepare(pollTarget(SESSIONS, live.attempt));
+    reportActions.current.prepare(pollTarget(route, live.attempt));
     void (saved ? live.reattach() : live.start(choice.scenarioId, choice.clientId));
   }
 

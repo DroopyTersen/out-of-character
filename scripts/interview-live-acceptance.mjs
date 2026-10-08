@@ -80,13 +80,13 @@ let firstClientAt = 0;
 let ownedSession;
 page.on('pageerror', error => report.errors.push(`Page error: ${error.message}`));
 page.on('request', request => {
-  if (!new URL(request.url()).pathname.startsWith('/api/simulator/sessions')) return;
+  if (!new URL(request.url()).pathname.startsWith('/api/interview/sessions')) return;
   const action = new URL(request.url()).pathname.split('/').at(-1);
   report.requests.push({ action, ...(action === 'poll' ? { activity: request.postDataJSON() } : {}) });
   if (action === 'sessions') ownedSession = { id: request.postDataJSON()?.id, capability: request.headers().authorization };
 });
 page.on('response', async response => {
-  if (!/^\/api\/simulator\/sessions(?:\/|$)/.test(new URL(response.url()).pathname)) return;
+  if (!/^\/api\/interview\/sessions(?:\/|$)/.test(new URL(response.url()).pathname)) return;
   const action = new URL(response.url()).pathname.split('/').at(-1);
   const request = report.requests.findLast(item => item.action === action && item.status == null);
   if (request) request.status = response.status();
@@ -186,7 +186,7 @@ finally {
       let ended = await waitUntil(() => snapshots.some(item => item.status === 'ended' || item.status === 'interrupted'), 30_000);
       if (!ended) report.errors.push('The page did not confirm End within 30 seconds.');
       if (!ended && ownedSession.capability) {
-        const response = await fetch(`${base}/api/simulator/sessions/${ownedSession.id}/end`, { method: 'POST', headers: { Origin: base, Authorization: ownedSession.capability } });
+        const response = await fetch(`${base}/api/interview/sessions/${ownedSession.id}/end`, { method: 'POST', headers: { Origin: base, Authorization: ownedSession.capability } });
         const snapshot = await response.json();
         if (snapshot?.status) snapshots.push({ source: 'manual-end', status: snapshot.status, finalization: snapshot.finalization, transcript: snapshot.transcript?.map(({ speaker, text, startMs, endMs }) => ({ speaker, text, startMs, endMs })) || [], summary: snapshot.interview?.summary || null, reportState: snapshot.report?.status || null, reportText: snapshot.report?.status === 'completed' ? snapshot.report.report.text : null });
         ended = snapshot?.status === 'ended' || snapshot?.status === 'interrupted';

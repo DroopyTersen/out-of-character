@@ -42,7 +42,7 @@ The interview engine (`interview-engine/`) does not depend on Cloudflare. `scrip
 bun --env-file=.dev.vars scripts/interview-host.ts
 ```
 
-It reads the same Foundry and `TYPESAFE_API_KEY` values as the Worker (Bun also loads `.env`) and listens on `http://127.0.0.1:8788`; set `PORT` or `HOST` to change that. Attempts live only in the process: wakes are timers, background work runs inline, and archive rows are kept in memory. Set `INTERVIEW_ARCHIVE_DIR` to also write each attempt's latest row there as JSON. Requests need the same `Origin` and `Authorization: Bearer <64 hex>` capability headers as the Worker's routes. The host serves no pages; the interview screens still use `/api/simulator/sessions` until the browser moves to the new routes.
+It reads the same Foundry and `TYPESAFE_API_KEY` values as the Worker (Bun also loads `.env`) and listens on `http://127.0.0.1:8788`; set `PORT` or `HOST` to change that. Attempts live only in the process: wakes are timers, background work runs inline, and archive rows are kept in memory. Set `INTERVIEW_ARCHIVE_DIR` to also write each attempt's latest row there as JSON. Requests need the same `Origin` and `Authorization: Bearer <64 hex>` capability headers as the Worker's routes. The host serves no pages; on the Worker, the interview screens use these `/api/interview/sessions` routes.
 
 ## The Simulator
 

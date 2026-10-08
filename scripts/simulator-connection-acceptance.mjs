@@ -67,6 +67,8 @@ try {
     let id;
     let automaticFinish = false, automaticEnding = false, automaticEnded = false;
     const interview = mode.startsWith('interview-');
+    // The interview modes run against the interview's session routes; the rest against the practice simulator's.
+    const sessions = interview ? '/api/interview/sessions' : '/api/simulator/sessions';
     const snapshot = (id, status) => ({ ...baseSnapshot(id, status), ...(interview ? { scenarioId: 'project-closeout', clientId: 'sam-cedar', interview: { evaluation: null, summary: status === 'ended' ? { status: 'pending', text: null } : null } } : {}) });
     const capabilities = new Set();
     const activityPolls = [];
@@ -74,7 +76,7 @@ try {
     let endRequests = 0;
     let endSeen;
     const endRequest = new Promise(resolve => { endSeen = resolve; });
-    await page.route('**/api/simulator/sessions**', async route => {
+    await page.route(`**${sessions}**`, async route => {
       const url = new URL(route.request().url());
       const action = url.pathname.split('/').at(-1);
       capabilities.add(route.request().headers().authorization);
@@ -104,13 +106,13 @@ try {
 
     try {
       await page.goto(`${base}/simulator`, { waitUntil: 'networkidle' });
-      await page.evaluate(async interview => {
+      await page.evaluate(async ({ interview, sessions }) => {
         const { LiveConnection } = await import('/interview-engine/client/liveConnection.ts');
         const { pollTransport } = await import('/interview-engine/client/transport.ts');
         const audit = window.__connectionAudit;
-        audit.connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => audit.snapshots.push(value), levels: () => {}, error: (message, fatal) => audit.errors.push({ message, fatal }) });
+        audit.connection = new LiveConnection(pollTransport(sessions), { snapshot: value => audit.snapshots.push(value), levels: () => {}, error: (message, fatal) => audit.errors.push({ message, fatal }) });
         void audit.connection.start(interview ? 'project-closeout' : 'sharepoint', interview ? 'sam-cedar' : 'morgan');
-      }, interview);
+      }, { interview, sessions });
       await page.waitForFunction(() => window.__connectionAudit.snapshots.some(item => item.status === 'live'), null, { timeout: 20_000 });
       if (interview) {
         if (mode === 'interview-auto') automaticEnded = true;

@@ -64,9 +64,9 @@ const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done =
 // Only the paid calls are substituted; timing, the log, ranking, validation, budgets and delivery are real. Notes go
 // out as soon as they're decided unless `held`, which waits for Sam's turn as the live session does. Unless `turns`,
 // the browser reports Sam audible throughout, which keeps hold and turn notes out of tests of the other notes.
-function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructions.append', { held = false, turns = false }: { held?: boolean; turns?: boolean } = {}) {
+function fixture(overrides: Partial<Services> = {}, channel?: 'session.instructions.append', { held = false, turns = false, empty = false }: { held?: boolean; turns?: boolean; empty?: boolean } = {}) {
   setSystemTime(epoch);
-  let transcript: TranscriptEntry[] = [
+  let transcript: TranscriptEntry[] = empty ? [] : [
     { id: 'p1', speaker: 'client', text: 'What did the team build?', startMs: 0, endMs: 1000 },
     { id: 'p2', speaker: 'trainee', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
@@ -150,6 +150,29 @@ test('Sol calls on the minute only when participant text is unlogged, and a wake
   expect(f.of('map').map(item => [item.outcome, item.startedAt - epoch, item.lastInputId])).toEqual([['applied', 60_000, 'p4'], ['applied', 125_000, 'p5']]);
   // An empty map gives Sam nothing to read.
   expect(f.sent).toHaveLength(0);
+});
+
+test('Sol’s first pass runs before anything is said, from the seed alone, and its notes wait for the participant’s first words', async () => {
+  const map = mapWith([thread('t1', { label: 'Field crews', unknown: 'how crews used the routing layer offline', guess: 'paper maps as a backup' })]);
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: .9 }), generateMap: async () => mapped(map) }, undefined, { held: true, turns: true, empty: true });
+  f.producer.prepare(epoch);
+  await f.producer.settle();
+  expect(f.calls.map).toHaveLength(1);
+  expect(f.calls.map[0]).toMatchObject({ blocks: [], passages: [], tail: { reasons: ['the interview is about to start; nothing has been said yet'], lastPassageId: null } });
+  expect(f.of('map')[0]).toMatchObject({ outcome: 'applied', startedAt: epoch, inputCount: 0, lastInputId: null });
+  // Once only, and the next call keeps the floor from this one.
+  f.producer.prepare(epoch + 1000);
+  await f.step(15_000);
+  expect(f.calls.map).toHaveLength(1);
+  // Nothing reaches Sam until the participant speaks; then the thread note goes with the hold note.
+  expect(f.sent).toHaveLength(0);
+  f.sam('What did the crews think?');
+  f.hear(1000, 0);
+  f.at(1200);
+  f.say('trainee', 'They liked the offline maps.');
+  f.hear(1300, 300);
+  expect(f.notes().at(-1)!.startsWith(`${NOTE_HEADERS.list}\nWorth pulling next (Field crews): still unknown: how crews used the routing layer offline.`)).toBe(true);
+  expect(f.notes().at(-1)!.endsWith(`\n\n${HOLD_NOTE}`)).toBe(true);
 });
 
 test('a novel turn wakes Sol at its floor, and wakes during a call merge into one follow-up', async () => {
@@ -358,7 +381,7 @@ test('an applied map sends the map note, reads traits for its new threads, and s
     model: 'gpt-6.1-sol', effort: 'low', version: PRODUCER_VERSION, mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
     maps: 1, applied: 1, turns: 2, notes: 2, research: 0,
     latency: { sol: { count: 1, p50: 0, p90: 0 }, jevTurn: { count: 2, p50: 0, p90: 0 }, traits: { count: 1, p50: 0, p90: 0 }, lookup: null, noteToSam: null, turnToSam: null },
-    listening: { windowMs: 2500, lagMs: 1000, afterSamMs: 1500, readWaitMs: 2000, holds: 0, handovers: 0, cancels: 0, wakes: 0 },
+    listening: { windowMs: 2500, lagMs: 1000, afterSamMs: 1500, readWaitMs: 500, holds: 0, handovers: 0, cancels: 0, wakes: 0 },
   });
 });
 
@@ -512,7 +535,7 @@ test('a complaint about the interview sets the lead aside for one turn, and a re
 
 const OFFER_LINE = /^Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on with Thread t1 or Thread t2\. Their call\.$/m;
 /** Sol allows an offer to stop on every map; a turn that says "new" adds what the map lacks. */
-test('replaying attempt 4793a814: a reading that lands while Sam is asking on its own waits for the participant’s next words, and doesn’t call the thread Sam is pulling on answered', async () => {
+test('replaying attempt 4793a814: a reading that lands while Sam is asking on its own waits for the participant’s next words', async () => {
   // Sam asked who was on the delivery team, the participant named one colleague, and Sam took the turn itself to ask
   // how the two split the work. Jev’s reading of the name landed while that question was still being transcribed:
   // the team thread answered, the access thread next. Before, Sam’s growing question released the note into the
@@ -564,8 +587,8 @@ test('replaying attempt 4793a814: a reading that lands while Sam is asking on it
   f.producer.transcriptChanged(f.grow(question.id, 'And how’d you two split the work? I’m guessing the trick was getting access to their documents. Was it a neat export, or scattered files?'), 'p6');
   f.hear(70_000, 0);
   expect(f.sent).toHaveLength(sent);
-  // Their first words in answer, once Sam’s audio stops, carry the note with the hold note. It names the next thread
-  // without calling the team thread answered: Sam has just asked about it, and their answer gets its own reading.
+  // Their first words in answer, once Sam’s audio stops, carry the note with the hold note: the team thread read as
+  // answered, and the next one to pull.
   f.at(71_000);
   f.say('trainee', 'Honestly, the access was the hard part.');
   f.hear(71_000, 0);
@@ -575,15 +598,14 @@ test('replaying attempt 4793a814: a reading that lands while Sam is asking on it
   const note = f.notes().at(-1)!;
   expect(note.startsWith(NOTE_HEADERS.list)).toBe(true);
   expect(note).toContain('Worth pulling next (Access to the client’s documents)');
-  expect(note).not.toContain('is answered');
+  expect(note).toContain('(The delivery team) is answered');
   expect(note.endsWith(`\n\n${HOLD_NOTE}`)).toBe(true);
   expect(f.of('note').at(-2)).toMatchObject({ kind: 'list', decidedAt: epoch + 52_300, sentAt: epoch + 71_400, turnId: f.of('turn').at(-1)!.id });
-  // The reading of their answer says the team thread is answered, and the handover carries that with the turn note.
+  // The reading of their answer agrees the team thread is answered: nothing new to say, so the handover is the turn note alone.
   await f.step();
   f.listen(72_500);
   await flush();
-  expect(f.notes().at(-1)).toContain('(The delivery team) is answered: move on from it.');
-  expect(f.notes().at(-1)!.endsWith(`\n\n${TURN_NOTE}`)).toBe(true);
+  expect(f.notes().at(-1)).toBe(TURN_NOTE);
 });
 
 function pacedFixture(held = false, turns = false) {
@@ -775,7 +797,7 @@ test('no turn note after a hanging clause, a request for time or to stop, or Sam
   expect(turns()).toBe(1);
 });
 
-test('no turn note after Sam’s prompt without a question mark, but one after Sam’s short reaction', async () => {
+test('a turn note wakes Sam after a prompt without a question mark, as after a short reaction', async () => {
   const f = fixture({}, undefined, { held: true, turns: true });
   const turns = () => f.sent.filter(event => event.content === TURN_NOTE).length;
   f.sam('Tell me more?');
@@ -784,13 +806,13 @@ test('no turn note after Sam’s prompt without a question mark, but one after S
   f.at(2000);
   f.sam('That shared example payload sounds like it saved you. Walk me through how you set it up.');
   await f.step(20_000);
-  expect(turns()).toBe(0);
+  expect(turns()).toBe(1);
   f.at(21_000);
   f.say('trainee', 'We each tested one example before coding.');
   f.at(22_000);
   f.sam('That’s great.');
   await f.step(24_500);
-  expect(turns()).toBe(1);
+  expect(turns()).toBe(2);
 });
 
 test('the listening hold: their first words get the hold note, and a complete answer the turn once they are quiet for the window, counting their words as said a second before they arrived, and Jev has read it', async () => {
@@ -825,7 +847,7 @@ test('the listening hold: their first words get the hold note, and a complete an
   f.sam('Which maps did they use most?');
   f.listen(40_000);
   expect(f.sent).toHaveLength(2);
-  expect(f.producer.summary()).toMatchObject({ notes: 0, listening: { windowMs: 2500, lagMs: 1000, afterSamMs: 1500, readWaitMs: 2000, holds: 1, handovers: 1, cancels: 0, wakes: 0 } });
+  expect(f.producer.summary()).toMatchObject({ notes: 0, listening: { windowMs: 2500, lagMs: 1000, afterSamMs: 1500, readWaitMs: 500, holds: 1, handovers: 1, cancels: 0, wakes: 0 } });
 });
 
 test('the handover carries the held notes in one event, thread note first and turn note last, and splits off the map note only when the whole is too long', async () => {
@@ -883,12 +905,12 @@ test('the handover waits for Jev’s reading at most the read wait, and a thread
   await flush();
   expect(f.calls.turn.at(-1)!.transcript.at(-1)!.id).toBe('p4');
   expect(f.sent).toHaveLength(1);
-  expect(f.due()).toBe(24_700);
-  f.listen(24_699);
+  expect(f.due()).toBe(23_200);
+  f.listen(23_199);
   expect(f.sent).toHaveLength(1);
-  f.listen(24_700);
+  f.listen(23_200);
   expect(f.notes().at(-1)).toBe(TURN_NOTE);
-  expect(f.of('note').at(-1)).toMatchObject({ kind: 'turn', handover: true, quietMs: 4500 });
+  expect(f.of('note').at(-1)).toMatchObject({ kind: 'turn', handover: true, quietMs: 3000, waited: ['read'] });
   // The reading lands after the handover: its thread note doesn’t reach Sam in the middle of the question.
   f.at(25_000);
   late.resolve(reading(f.calls.turn.at(-1)!, { focus: 't2', novel: .9 }));
@@ -1180,7 +1202,8 @@ test('a held note is dropped by a pause, the resume restates at once, and a held
   f.setTalking(false);
   await f.turn(602_000);
   expect(offers(f)).toHaveLength(0);
-  f.listen(604_000);
+  expect(f.due()).toBe(603_500);
+  f.listen(603_500);
   await flush();
   expect(offers(f)).toHaveLength(1);
   expect(f.notes('list').at(-1)).toMatch(OFFER_LINE);

@@ -206,5 +206,5 @@ test('Sol settles the participant’s own part early, several responsibilities i
   expect(instructions).toContain('People often hold more than one responsibility');
   expect(instructions).toContain('Never write it when their part is already clear');
   expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
-  expect(MAP_PROMPT_VERSION).toBe('sol-map-v12');
+  expect(MAP_PROMPT_VERSION).toBe('sol-map-v13');
 });

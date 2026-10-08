@@ -69,7 +69,7 @@ export function complaintNote(map: ConversationMap, open: string[], headers = NO
   const names = labels(map, open);
   return [
     headers.list,
-    'They just gave feedback on the interview itself: acknowledge it in a sentence, adapt, and carry on; don’t dwell on it. If they asked to stop, thank them and say goodbye instead.',
+    'They just gave feedback on the interview itself: acknowledge it in one sentence and ask your next question in the same turn, adapted to it; don’t dwell on it. If they asked to stop, thank them and say goodbye instead.',
     ...(names.length ? [`Open threads, if useful: ${names.join(' · ')}`] : []),
   ].join('\n');
 }
@@ -111,13 +111,12 @@ const OFFER = '+offer';
  * nothing leads again until their next turn. `offer` lets Sam offer to stop; granting or withdrawing it resends.
  * When the thread the conversation is on is answered or closed and another leads, the note says so: once when Jev
  * holds it down, and again, even with the same lead, at their first turn after Sol closes it that Jev can't place on
- * another thread. Not when the turn's reading `moved`, with Sam having asked since: Sam may be pulling on that very
- * thread, and the answer's reading says again whether it's finished.
+ * another thread.
  * `state` is what to keep once `text` is sent, or right away when it's null.
  */
 export function nextListNote(
   map: ConversationMap, ranking: RankingState, nowMs: number, previous: ListState,
-  { turn = false, offer = false, headers = NOTE_HEADERS, moved = false }: { turn?: boolean; offer?: boolean; headers?: NoteHeaders; moved?: boolean } = {},
+  { turn = false, offer = false, headers = NOTE_HEADERS }: { turn?: boolean; offer?: boolean; headers?: NoteHeaders } = {},
 ): ListDecision {
   const fresh = pickThreads(map, ranking, nowMs);
   const complaint = turn ? (ranking.reading?.complaint ?? 0) >= RANKING.complaint : previous.complaint;
@@ -135,6 +134,8 @@ export function nextListNote(
     };
   };
   if (complaint) {
+    // A nudge in the moment: a refresh never sends it again, even once a thread it named is gone.
+    if (!turn) return decide({ ...fresh, action: 'none', lead: null, nearby: previous.named }, COMPLAINT, null);
     const open = fresh.ranked.slice(0, RANKING.nearby).map(item => item.id);
     return decide({ ...fresh, action: 'none', lead: null, nearby: open }, COMPLAINT, complaintNote(map, open, headers));
   }
@@ -148,7 +149,7 @@ export function nextListNote(
   }
   const suffix = offer ? OFFER : '';
   if (pick.lead == null) return decide(pick, NO_LEAD + suffix, previous.sent || offer ? emptyListNote(headers, offer) : null, offer);
-  const finished = on == null || on === pick.lead || moved ? null : finish(map, ranking, fresh, on);
+  const finished = on == null || on === pick.lead ? null : finish(map, ranking, fresh, on);
   const done = finished && { id: on!, answered: finished === 'answered' || finished === 'done' };
   return decide(pick, leadKey(map, pick.lead) + suffix, listNote(map, pick, headers, offer, done), offer, finished ? JSON.stringify([on, finished]) : undefined);
 }

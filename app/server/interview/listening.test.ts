@@ -53,7 +53,7 @@ test('every interview gets the listening hold, again after a resume and after a 
   expect(notes(replacement).at(-1)).toBe(HOLD_NOTE);
   await replacement.session.fetch(request('end'));
   await settle(replacement);
-  expect(provenance(replacement).listening).toMatchObject({ windowMs: 2500, lagMs: 1000, afterSamMs: 1500, readWaitMs: 2000, cancels: 0, wakes: 0 });
+  expect(provenance(replacement).listening).toMatchObject({ windowMs: 2500, lagMs: 1000, afterSamMs: 1500, readWaitMs: 500, cancels: 0, wakes: 0 });
   await f.session.fetch(request('end')); // Stop the original owner's timer.
 });
 

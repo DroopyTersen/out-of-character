@@ -756,11 +756,48 @@
     "producer": {
       "records": [
         {
+          "source": "map",
+          "id": "map-uuid",
+          "reasons": [
+            "the interview is about to start; nothing has been said yet"
+          ],
+          "startedAt": 1800000000000,
+          "outcome": "applied",
+          "inputCount": 0,
+          "lastInputId": null,
+          "model": "gpt-6.1-sol",
+          "completedAt": 1800000000000,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 1
+          },
+          "update": {
+            "vantage": null,
+            "preferences": null,
+            "entities": [],
+            "edges": [],
+            "threads": [],
+            "revise": [],
+            "close": [],
+            "drop": []
+          },
+          "changes": {
+            "added": [],
+            "changed": [],
+            "dropped": []
+          },
+          "research": null,
+          "pace": {
+            "verdict": "explore",
+            "reason": "Open threads remain."
+          }
+        },
+        {
           "source": "note",
           "id": "note-uuid",
           "kind": "hold",
           "text": "Turn note: they’re answering, and they may pause before they finish. Say nothing in their pauses; keep listening until a turn note says it’s your turn.",
-          "mapId": null,
+          "mapId": "map-uuid",
           "sentAt": 1800000001000,
           "outcome": "sent",
           "delivery": {
@@ -773,7 +810,7 @@
           "source": "turn",
           "id": "turn-uuid",
           "passageId": "p2",
-          "mapId": null,
+          "mapId": "map-uuid",
           "startedAt": 1800000004000,
           "outcome": "read",
           "durationMs": 1,
@@ -802,7 +839,7 @@
           "id": "note-uuid",
           "kind": "turn",
           "text": "Turn note: they’ve finished and are waiting for you to speak. It’s your turn now.",
-          "mapId": null,
+          "mapId": "map-uuid",
           "sentAt": 1800000004000,
           "handover": true,
           "quietMs": 4000,
@@ -815,8 +852,8 @@
         }
       ],
       "counts": {
-        "maps": 0,
-        "applied": 0,
+        "maps": 1,
+        "applied": 1,
         "turns": 1,
         "traits": 0,
         "notes": 0,
@@ -839,7 +876,7 @@
           "t": 1
         }
       },
-      "mapRecordId": null,
+      "mapRecordId": "map-uuid",
       "log": {
         "blocks": [],
         "logged": {}
@@ -859,7 +896,7 @@
           "novel": 0
         },
         "turn": "p2",
-        "mapStartedAtMs": null
+        "mapStartedAtMs": 0
       },
       "lastMapStart": 1800000000000,
       "reasons": [],
@@ -879,13 +916,18 @@
         "told": null
       },
       "deferredTurnId": null,
-      "mapKey": null,
+      "mapKey": "",
       "lastMapNote": null,
       "samTurns": [
         "p1"
       ],
       "researched": [],
-      "pace": null,
+      "pace": {
+        "verdict": "explore",
+        "reason": "Open threads remain.",
+        "mapId": "map-uuid",
+        "inputId": null
+      },
       "lastOffer": null,
       "woken": []
     }
@@ -913,9 +955,9 @@
     "evaluation_json": "{\"revision\":2,\"readings\":{\"engagement\":{\"value\":null,\"distribution\":null,\"evidence\":null},\"openness\":{\"value\":null,\"distribution\":null,\"evidence\":null},\"specificity\":{\"value\":null,\"distribution\":null,\"evidence\":null}},\"model\":\"fixture\",\"durationMs\":1,\"objectives\":[{\"id\":\"project-delivery\",\"level\":\"explored\",\"levels\":{\"not-yet\":0.01,\"touched\":0.03,\"explored\":0.95,\"set-aside\":0.01},\"achieved\":true,\"probability\":0.95,\"evidence\":{\"entryId\":\"p1\",\"speaker\":\"client\",\"text\":\"Hi, I’m Sam. What did you deliver?\"}}]}",
     "summary_status": "ready",
     "summary_text": "Fixture summary.",
-    "provenance_json": "{\"model\":\"gpt-live-1\",\"voice\":\"cedar\",\"rubricVersion\":\"interview-rubric-v8\",\"simulatorVersion\":\"simulator-v1\",\"actorDigest\":\"40c28c531963\",\"openingDigest\":\"e50e231ed265\",\"workerId\":\"test-worker\",\"workerTag\":\"test-release\",\"contextualDirector\":{\"model\":\"gpt-6.1-sol\",\"effort\":\"low\",\"version\":\"interview-producer-v23\",\"mapPrompt\":\"sol-map-v12\",\"rankingRubric\":\"ranking-rubric-v2\",\"maps\":0,\"applied\":0,\"turns\":1,\"notes\":0,\"research\":0,\"latency\":{\"sol\":null,\"jevTurn\":{\"count\":1,\"p50\":0,\"p90\":0},\"traits\":null,\"lookup\":null,\"noteToSam\":null,\"turnToSam\":null},\"listening\":{\"windowMs\":2500,\"lagMs\":1000,\"afterSamMs\":1500,\"readWaitMs\":2000,\"holds\":1,\"handovers\":1,\"cancels\":0,\"wakes\":0}},\"connection\":{\"segments\":[{\"epoch\":1,\"offsetMs\":0,\"startedAt\":1800000000000,\"endedAt\":1800000004000,\"closeReason\":\"close_requested\",\"finalization\":\"confirmed\",\"usageSeconds\":12,\"greeting\":{\"sentAt\":1800000001000,\"acknowledgedAt\":null,\"retriedAt\":null,\"repliedAt\":1800000001000,\"abandonedAt\":null}}],\"pauses\":[{\"reason\":\"browser\",\"pausedAt\":1800000004000,\"resumedAt\":null,\"durationMs\":2000}]},\"interviewSummary\":{\"model\":\"gpt-6.1-sol\",\"version\":\"interview-summary-v1\",\"attempts\":[{\"startedAt\":1800000006000,\"endedAt\":1800000006000,\"failure\":null,\"usage\":null}]}}",
+    "provenance_json": "{\"model\":\"gpt-live-1\",\"voice\":\"cedar\",\"rubricVersion\":\"interview-rubric-v8\",\"simulatorVersion\":\"simulator-v1\",\"actorDigest\":\"7daa804a97f7\",\"openingDigest\":\"e50e231ed265\",\"workerId\":\"test-worker\",\"workerTag\":\"test-release\",\"contextualDirector\":{\"model\":\"gpt-6.1-sol\",\"effort\":\"low\",\"version\":\"interview-producer-v24\",\"mapPrompt\":\"sol-map-v13\",\"rankingRubric\":\"ranking-rubric-v2\",\"maps\":1,\"applied\":1,\"turns\":1,\"notes\":0,\"research\":0,\"latency\":{\"sol\":{\"count\":1,\"p50\":0,\"p90\":0},\"jevTurn\":{\"count\":1,\"p50\":0,\"p90\":0},\"traits\":null,\"lookup\":null,\"noteToSam\":null,\"turnToSam\":null},\"listening\":{\"windowMs\":2500,\"lagMs\":1000,\"afterSamMs\":1500,\"readWaitMs\":500,\"holds\":1,\"handovers\":1,\"cancels\":0,\"wakes\":0}},\"connection\":{\"segments\":[{\"epoch\":1,\"offsetMs\":0,\"startedAt\":1800000000000,\"endedAt\":1800000004000,\"closeReason\":\"close_requested\",\"finalization\":\"confirmed\",\"usageSeconds\":12,\"greeting\":{\"sentAt\":1800000001000,\"acknowledgedAt\":null,\"retriedAt\":null,\"repliedAt\":1800000001000,\"abandonedAt\":null}}],\"pauses\":[{\"reason\":\"browser\",\"pausedAt\":1800000004000,\"resumedAt\":null,\"durationMs\":2000}]},\"interviewSummary\":{\"model\":\"gpt-6.1-sol\",\"version\":\"interview-summary-v1\",\"attempts\":[{\"startedAt\":1800000006000,\"endedAt\":1800000006000,\"failure\":null,\"usage\":null}]}}",
     "cues_json": "[]",
-    "interventions_json": "[{\"source\":\"note\",\"id\":\"note-uuid\",\"kind\":\"hold\",\"text\":\"Turn note: they’re answering, and they may pause before they finish. Say nothing in their pauses; keep listening until a turn note says it’s your turn.\",\"mapId\":null,\"sentAt\":1800000001000,\"outcome\":\"sent\",\"delivery\":{\"eventId\":\"note-uuid\",\"afterPassageId\":null,\"status\":\"unknown\"}},{\"source\":\"turn\",\"id\":\"turn-uuid\",\"passageId\":\"p2\",\"mapId\":null,\"startedAt\":1800000004000,\"outcome\":\"read\",\"durationMs\":1,\"usage\":{\"inputTokens\":1,\"outputTokens\":1},\"reading\":{\"atMs\":4000,\"focus\":null,\"novel\":0,\"natural\":{},\"states\":{}},\"pick\":{\"current\":null,\"action\":\"none\",\"lead\":null,\"nearby\":[],\"ranked\":[]},\"completedAt\":1800000004000},{\"source\":\"note\",\"id\":\"note-uuid\",\"kind\":\"turn\",\"text\":\"Turn note: they’ve finished and are waiting for you to speak. It’s your turn now.\",\"mapId\":null,\"sentAt\":1800000004000,\"handover\":true,\"quietMs\":4000,\"outcome\":\"sent\",\"delivery\":{\"eventId\":\"note-uuid\",\"afterPassageId\":\"p2\",\"status\":\"unknown\"}},{\"source\":\"grade\",\"id\":\"grade-1\",\"final\":false,\"revision\":2,\"capturedAt\":1800000004000,\"inputCount\":2,\"lastInputId\":\"p2\",\"completedAt\":1800000004000,\"durationMs\":1,\"outcome\":\"graded\",\"objectives\":[{\"id\":\"project-delivery\",\"shown\":[\"explored\",\"p1\"],\"graded\":[\"explored\",\"p1\"],\"levels\":[0.01,0.03,0.95,0.01]}]},{\"source\":\"grade\",\"id\":\"grade-2\",\"final\":true,\"revision\":2,\"capturedAt\":1800000006000,\"inputCount\":2,\"lastInputId\":\"p2\",\"completedAt\":1800000006000,\"durationMs\":1,\"outcome\":\"graded\",\"objectives\":[{\"id\":\"project-delivery\",\"shown\":[\"explored\",\"p1\"],\"graded\":[\"explored\",\"p1\"],\"levels\":[0.01,0.03,0.95,0.01]}]}]",
+    "interventions_json": "[{\"source\":\"map\",\"id\":\"map-uuid\",\"reasons\":[\"the interview is about to start; nothing has been said yet\"],\"startedAt\":1800000000000,\"outcome\":\"applied\",\"inputCount\":0,\"lastInputId\":null,\"model\":\"gpt-6.1-sol\",\"completedAt\":1800000000000,\"usage\":{\"inputTokens\":1,\"outputTokens\":1},\"update\":{\"vantage\":null,\"preferences\":null,\"entities\":[],\"edges\":[],\"threads\":[],\"revise\":[],\"close\":[],\"drop\":[]},\"changes\":{\"added\":[],\"changed\":[],\"dropped\":[]},\"research\":null,\"pace\":{\"verdict\":\"explore\",\"reason\":\"Open threads remain.\"}},{\"source\":\"note\",\"id\":\"note-uuid\",\"kind\":\"hold\",\"text\":\"Turn note: they’re answering, and they may pause before they finish. Say nothing in their pauses; keep listening until a turn note says it’s your turn.\",\"mapId\":\"map-uuid\",\"sentAt\":1800000001000,\"outcome\":\"sent\",\"delivery\":{\"eventId\":\"note-uuid\",\"afterPassageId\":null,\"status\":\"unknown\"}},{\"source\":\"turn\",\"id\":\"turn-uuid\",\"passageId\":\"p2\",\"mapId\":\"map-uuid\",\"startedAt\":1800000004000,\"outcome\":\"read\",\"durationMs\":1,\"usage\":{\"inputTokens\":1,\"outputTokens\":1},\"reading\":{\"atMs\":4000,\"focus\":null,\"novel\":0,\"natural\":{},\"states\":{}},\"pick\":{\"current\":null,\"action\":\"none\",\"lead\":null,\"nearby\":[],\"ranked\":[]},\"completedAt\":1800000004000},{\"source\":\"note\",\"id\":\"note-uuid\",\"kind\":\"turn\",\"text\":\"Turn note: they’ve finished and are waiting for you to speak. It’s your turn now.\",\"mapId\":\"map-uuid\",\"sentAt\":1800000004000,\"handover\":true,\"quietMs\":4000,\"outcome\":\"sent\",\"delivery\":{\"eventId\":\"note-uuid\",\"afterPassageId\":\"p2\",\"status\":\"unknown\"}},{\"source\":\"grade\",\"id\":\"grade-1\",\"final\":false,\"revision\":2,\"capturedAt\":1800000004000,\"inputCount\":2,\"lastInputId\":\"p2\",\"completedAt\":1800000004000,\"durationMs\":1,\"outcome\":\"graded\",\"objectives\":[{\"id\":\"project-delivery\",\"shown\":[\"explored\",\"p1\"],\"graded\":[\"explored\",\"p1\"],\"levels\":[0.01,0.03,0.95,0.01]}]},{\"source\":\"grade\",\"id\":\"grade-2\",\"final\":true,\"revision\":2,\"capturedAt\":1800000006000,\"inputCount\":2,\"lastInputId\":\"p2\",\"completedAt\":1800000006000,\"durationMs\":1,\"outcome\":\"graded\",\"objectives\":[{\"id\":\"project-delivery\",\"shown\":[\"explored\",\"p1\"],\"graded\":[\"explored\",\"p1\"],\"levels\":[0.01,0.03,0.95,0.01]}]}]",
     "spec_id": "project-closeout",
     "spec_version": "project-closeout-v2"
   }

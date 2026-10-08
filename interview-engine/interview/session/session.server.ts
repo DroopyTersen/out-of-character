@@ -372,6 +372,8 @@ export class SessionActor {
     };
     this.interview = { evaluation: null, summary: null };
     this.createProducer();
+    // Sol's first pass runs while the voice connection is made, so its threads are ready at the participant's first words.
+    this.producer?.prepare(now);
     const snapshot = this.state;
     try {
       // The lease is durable before any provider session exists. An end that arrives meanwhile waits for this and

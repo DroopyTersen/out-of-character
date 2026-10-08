@@ -39,6 +39,6 @@ test('the notes paragraph keeps the note-taker’s hunch apart from what the par
   const notes = interviewerBrief(spec, 'riley-cedar').split('\n\n').find(paragraph => paragraph.startsWith('Private notes:'))!;
   expect(notes).toContain('the note-taker’s unconfirmed hunch');
   expect(notes).toContain('never state it as what happened');
-  expect(notes).toContain('ask the open question first');
+  expect(notes).toContain('Offer it as your own guess, as a question they can correct');
   expect(notes).not.toContain('the note-taker’s guess');
 });

@@ -11,7 +11,7 @@ type InterviewObjectiveReading = Reading<WireSpeaker>;
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v23';
+export const PRODUCER_VERSION = 'interview-producer-v24';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -41,7 +41,7 @@ export const PRODUCER_LIMITS = {
    * answer, so the thread note it picks goes out with the turn note. Hold and cancel notes are outside the note budget:
    * a hold goes once per participant turn, a cancel once per turn note.
    */
-  transcriptLag: 1000, listenWindow: 2500, afterSam: 1500, readWait: 2000, holds: 200, handovers: 200, cancels: 60,
+  transcriptLag: 1000, listenWindow: 2500, afterSam: 1500, readWait: 500, holds: 200, handovers: 200, cancels: 60,
   /**
    * The voice service takes at most 500 tokens an event. A handover's notes go as one event when they fit in this many
    * characters; otherwise the map note goes first, on its own.
@@ -108,6 +108,8 @@ export type NoteRecord = {
   handover?: true;
   /** For hold and turn notes, how long both sides had been quiet, as the server last heard it; for a cancel, how long that quiet lasted before the participant spoke again. */
   quietMs?: number;
+  /** For a handover, what it waited on past the listening window: Sam's audio or words (`sam`), or, past that, Jev's reading of their latest words, a deferred pick, a held refresh, or the participant still talking. */
+  waited?: ('sam' | 'read' | 'pick' | 'refresh' | 'talking')[];
   outcome: 'sent' | 'error' | 'rejected'; delivery: NoteDelivery; researchIds?: string[];
   nextSamTurnAt?: number; nextSamTurnAfterId?: string | null;
 };

@@ -67,7 +67,7 @@ const voiced = (text: string) => text.replace(/[^\p{L}\p{N}]+/gu, '').length;
  */
 type Floor = { owed: boolean; heldAt: number | null; handedAt: number | null; retried: boolean; mark: { id: string; length: number } | null; sam: Map<string, string> };
 const idleFloor = (): Floor => ({ owed: false, heldAt: null, handedAt: null, retried: false, mark: null, sam: new Map() });
-type NoteMarks = { wake?: true; handover?: true; quietMs?: number };
+type NoteMarks = { wake?: true; handover?: true; quietMs?: number; waited?: NoteRecord['waited'] };
 type PendingEvent = { event: MapLogEvent; researchId: string };
 type NotePart = [kind: NoteRecord['kind'], note: HeldNote];
 /** A decided note waiting for Sam's next words. */
@@ -160,6 +160,8 @@ export class InterviewProducer {
   private lastChange: number;
   /** Participant turns, by passage and length, that Sam was told are over; their next words are a new turn. */
   private woken = new Set<string>();
+  /** What the pending handover has waited on past its time, for its record. */
+  private waited = new Set<NonNullable<NoteRecord['waited']>[number]>();
   private researched = new Set<string>();
   private lookups = 0;
   private counts: Counts = { maps: 0, applied: 0, turns: 0, traits: 0, notes: 0, research: 0, holds: 0, handovers: 0, cancels: 0 };
@@ -190,6 +192,16 @@ export class InterviewProducer {
     this.work.add(work);
     work.then(() => this.work.delete(work), () => this.work.delete(work));
     this.options.waitUntil?.(work);
+  }
+
+  /**
+   * Sol's first pass, before anything is said: a map seeded from the purpose and topics alone, so the thread note at
+   * the participant's first words gives Sam somewhere to go. Its notes wait for that turn boundary like any other.
+   */
+  prepare(now = Date.now()) {
+    if (this.counts.maps) return;
+    this.wake('the interview is about to start; nothing has been said yet');
+    this.startMap(now, true);
   }
 
   /** Called on the session tick: reads a new participant turn, starts a due Sol call, sends a held map note, makes a held pick, and nudges a silent Sam. */
@@ -224,9 +236,9 @@ export class InterviewProducer {
 
   /**
    * Sam has gone quiet after the participant finished: nothing transcribed and nothing heard for `wakeAfter`, their
-   * latest words complete, and nothing from Sam since but a backchannel or a short reaction. The turn is handed over
-   * as the listening window does. Not after a hanging clause, a request for time or a request to stop, and once per
-   * participant turn.
+   * latest words complete, and nothing from Sam since but a backchannel, a short reaction or a statement with no
+   * question. The turn is handed over as the listening window does. Not after a hanging clause, a request for time or
+   * a request to stop, and once per participant turn.
    */
   private unstall(now: number) {
     if (this.restating || !this.samTurns.size || this.woken.size >= LIMITS.wakes || this.options.talking?.()) return;
@@ -240,8 +252,9 @@ export class InterviewProducer {
     if (!last) return;
     const key = `${last.id}:${last.text.length}`;
     if (this.woken.has(key) || !finishesTurn(last.text) || asksToEnd(last.text)) return;
-    // Sam's question, or a prompt such as "Walk me through the handoff.", leaves the turn with them: their quiet is thinking time.
-    if (settled.slice(index + 1).some(entry => entry.speaker === 'client' && (entry.text.includes('?') || !yieldsTurn(entry.text)))) return;
+    // Sam's question leaves the turn with them: their quiet is thinking time. A statement without one, such as "Fair
+    // point, I'll shift.", doesn't: Sam has stopped, and may be waiting for a turn note that isn't coming.
+    if (settled.slice(index + 1).some(entry => entry.speaker === 'client' && entry.text.includes('?'))) return;
     this.woken.add(key);
     this.handOver(now, { wake: true });
   }
@@ -358,10 +371,21 @@ export class InterviewProducer {
     const last = this.answer();
     if (!last || !finishesTurn(last.text) || asksToEnd(last.text)) return false;
     this.pickHeld(now);
-    if (now < at + LIMITS.readWait && this.unread()) { this.readTurn(now); return false; }
+    if (now < at + LIMITS.readWait && this.unread()) { this.waited.add(this.unreadWhy()); this.readTurn(now); return false; }
     this.counts.handovers++;
-    this.handOver(now, { handover: true, quietMs: now - this.saidAt() });
+    const waited = [...(this.samHeardAt(now) + LIMITS.afterSam > this.saidAt() + LIMITS.listenWindow ? ['sam' as const] : []), ...this.waited];
+    this.waited.clear();
+    this.handOver(now, { handover: true, quietMs: now - this.saidAt(), ...(waited.length ? { waited } : {}) });
     return true;
+  }
+
+  /** Why the participant's latest words count as unread, for the handover's record. */
+  private unreadWhy(): NonNullable<NoteRecord['waited']>[number] {
+    if (this.turnBusy) return 'read';
+    if (this.deferred) return 'pick';
+    if (this.heldRefresh) return 'refresh';
+    if (this.options.talking?.()) return 'talking';
+    return 'read';
   }
 
   /** When the listening hold next needs a look, if it waits on the clock alone; the session sets a timer for it. */
@@ -389,15 +413,16 @@ export class InterviewProducer {
     controller.abort();
   }
 
-  private startMap(now: number) {
-    if (this.call || this.counts.maps >= LIMITS.mapCalls || now - this.lastMapStart < LIMITS.mapFloor) return;
+  /** The seed call, before the interview starts, has no earlier call to space from and nothing to log. */
+  private startMap(now: number, seed = false) {
+    if (this.call || this.counts.maps >= LIMITS.mapCalls || (!seed && now - this.lastMapStart < LIMITS.mapFloor)) return;
     const settled = [...this.options.settled()];
     const unlogged = new Set(unloggedPassages(this.log, settled).map(entry => entry.id));
     const fresh = settled.some((entry, index) => unlogged.has(entry.id) && said(settled, index));
     if (now - this.lastMapStart >= LIMITS.mapTimer && (fresh || this.behind)) this.reasons.add('a minute has passed since your last call');
     if (!this.reasons.size) return;
     // A wake whose news an earlier call already logged has nothing left to say.
-    if (!fresh && !this.behind && !this.events.length) { this.reasons.clear(); return; }
+    if (!seed && !fresh && !this.behind && !this.events.length) { this.reasons.clear(); return; }
     const reasons = [...this.reasons];
     this.reasons.clear();
     this.novelTurns.clear();
@@ -590,7 +615,7 @@ export class InterviewProducer {
       this.deferred = turn;
       turn = undefined;
     } else if (turn) this.deferred = null;
-    const decision = nextListNote(this.map, this.ranking, this.elapsed(now), this.list, { turn: !!turn, offer, headers: noteHeaders(this.options.channel), moved: !!turn && this.moved(turn) });
+    const decision = nextListNote(this.map, this.ranking, this.elapsed(now), this.list, { turn: !!turn, offer, headers: noteHeaders(this.options.channel) });
     if (!decision.text) { this.list = decision.state; return decision.pick; }
     // Sam's lead doesn't move under the participant: a refresh that would change it waits for them to stop, too.
     if (talking && decision.state.lead !== this.list.lead) { this.heldRefresh = true; return decision.pick; }
@@ -598,16 +623,6 @@ export class InterviewProducer {
     const outcome = this.note('list', decision.text, now, { turn, offer: decision.offer });
     if (outcome === 'sent' || outcome === 'held') this.list = decision.state;
     return decision.pick;
-  }
-
-  /**
-   * Sam has asked since the turn Jev read: a reading that finds the thread answered came too late to say so, since
-   * Sam may be pulling on it, and the answer to Sam's question gets its own reading.
-   */
-  private moved(turn: TurnRecord): boolean {
-    const transcript = this.options.transcript?.() ?? this.options.settled();
-    const index = transcript.findIndex(entry => entry.id === turn.passageId);
-    return index >= 0 && transcript.slice(index + 1).some(entry => entry.speaker === 'client' && (entry.text.includes('?') || !yieldsTurn(entry.text)));
   }
 
   /** Sol allows an offer to stop, and the producer's own floors and spacing are met. */

@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
+import { testTechniques } from '../conversation/testSpec';
 import { interviewerBrief, interviewOpening, type BriefedSpec } from './brief.server';
 
 const spec = {
   interviewer: {
     name: 'Riley', role: 'interviewing someone about a recent deal', persona: 'Curious and direct.', opening: 'Hi, I’m Riley. What did you sell?',
-    orientation: ['ORIENTATION ONE', 'ORIENTATION TWO'], boundaries: ['BOUNDARY ONE'],
+    orientation: ['ORIENTATION ONE', 'ORIENTATION TWO'], boundaries: ['BOUNDARY ONE'], techniques: testTechniques,
     voices: [{ id: 'riley-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/riley.png' }],
   },
 } satisfies BriefedSpec;
@@ -15,6 +16,10 @@ test('the brief puts the spec’s ground rules before the engine’s turn-taking
   expect(paragraphs[4]).toStartWith('Turn-taking:');
   expect(paragraphs[6]).toStartWith('The participant decides when the interview ends');
   expect(paragraphs[7]).toStartWith('Technique guide.');
+  const guide = paragraphs[7]!.split('\n');
+  expect(guide[1]).toBe('1. TEST GROUNDING. Ground it. When: First. How: One question. Sounds like: “What is it?”');
+  expect(guide[11]).toBe('11. TEST LESSON. Draw the lesson. When: After a story. How: Ask what to do next time.');
+  expect(guide).toHaveLength(14);
   expect(paragraphs[8]).toStartWith('Private notes:');
   expect(paragraphs.at(-1)).toStartWith('Delegation:');
 });

@@ -4,6 +4,7 @@ import { testFoundry } from '../../providers/testFoundry.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';
 import { threadKey } from '../conversation/ranking';
 import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
+import { testFraming, testTechniques } from '../conversation/testSpec';
 import { FencedError } from '../seams.server';
 import type { PublicSnapshot } from './checkpoint';
 import { SessionActor, type SessionOptions, type SessionServices, type SessionSpec } from './session.server';
@@ -17,9 +18,10 @@ const spec: SessionSpec = {
   id: 'fixture-interview', version: 'fixture-v1',
   interviewer: {
     name: 'Riley', role: 'interviewing someone about a recent project', persona: 'Curious and direct.', opening: 'Hi, I’m Riley. What did you build?',
-    orientation: ['ORIENTATION'], boundaries: ['BOUNDARY'],
+    orientation: ['ORIENTATION'], boundaries: ['BOUNDARY'], techniques: testTechniques,
     voices: [{ id: 'riley-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/riley.png' }],
   },
+  framing: testFraming,
   readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria } }],
   topics,
 };

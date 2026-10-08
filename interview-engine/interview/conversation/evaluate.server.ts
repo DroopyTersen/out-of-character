@@ -4,7 +4,7 @@ import { evidenceBatches } from '../../providers/judge.server';
 import { COVERAGE_LEVELS, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../shared/snapshot';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage, type Speaker } from '../../shared/transcript';
 import { emptyReadings } from './coverage';
-import { interviewQuestions, judgedObjectives, type JudgedSpec } from './rubric.prompt';
+import { interviewerToken, interviewQuestions, judgedObjectives, type JudgedSpec } from './rubric.prompt';
 import { isBackchannel } from './turns';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
@@ -84,9 +84,9 @@ function validate(passages: Passage[]) {
   if (new Set(passages.map(passage => passage.id)).size !== passages.length) throw new Error('Transcript passage IDs must be unique.');
 }
 
-/** The dialogue as every Jev interview call sees it, rendered the same way each time. */
-export function dialogueState(passages: Pick<Passage, 'id' | 'speaker' | 'text'>[]) {
-  return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: passages.map(({ id, speaker, text }) => [id, speaker === 'participant' ? 'participant' : 'sam', text]) };
+/** The dialogue as every Jev interview call sees it, rendered the same way each time, with the interviewer's speaker token. */
+export function dialogueState(passages: Pick<Passage, 'id' | 'speaker' | 'text'>[], interviewer = 'interviewer') {
+  return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: passages.map(({ id, speaker, text }) => [id, speaker === 'participant' ? 'participant' : interviewer, text]) };
 }
 
 /** The final grade: Jev reads the whole transcript once for every reading and objective. */
@@ -96,7 +96,7 @@ export async function evaluateInterview<const S extends JudgedSpec>(input: Evalu
   const { passages } = input;
   const { model, telemetry } = typeof judge === 'object' && 'judge' in judge ? { model: judge.judge, telemetry: judge.telemetry } : { model: judge, telemetry: undefined };
   const result = await experimental_evaluate({
-    model, state: dialogueState(passages), questions: interviewQuestions(input.spec, passages),
+    model, state: dialogueState(passages, interviewerToken(input.spec)), questions: interviewQuestions(input.spec, passages),
     abortSignal: input.signal, maxRetries: 0, ...(telemetry ? { telemetry } : {}),
   });
   return {

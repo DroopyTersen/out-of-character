@@ -1,12 +1,15 @@
-// Sam's craft, the same for every interview: turn-taking, the finish offer, the technique guide and the private notes.
+// The interviewer's craft, the same for every interview: turn-taking, the finish offer, the technique guide and the private notes.
+import type { Technique } from '../../shared/spec';
 import type { NoteChannel } from './channel';
-// TODO(phase7): a few techniques (open on what they built, next-team scenario) assume a delivery project; a second spec may need its own.
 
-/** How Sam interviews. The examples are shapes, generic on purpose: GPT-Live repeats what it's given. */
-/** A technique without `sounds` is one whose example lines Sam took up word for word; its `how` gives the shape. */
-const techniques: { name: string; means: string; when: string; how: string; sounds?: string[] }[] = [
-  { name: 'Open on what they built', means: 'Start with the product and who it serves. It grounds every later question.', when: 'The first question, and again whenever you realize you can’t picture the product.', how: 'One question, then play back what you heard.',
-    sounds: ['What did you build, and who did you build it for?', 'So who’s actually using this thing day to day?', 'First things first: what does it do?'] },
+/**
+ * How the interviewer interviews. The examples are shapes, generic on purpose: GPT-Live repeats what it's given. A
+ * technique without `sounds` is one whose example lines the interviewer took up word for word; its `how` gives the shape.
+ * The spec supplies the two that depend on the kind of interview: how to ground the conversation, first, and how to
+ * turn a story into a lesson, eleventh.
+ */
+const techniques = ({ grounding, lesson }: SpecTechniques): readonly Technique[] => [
+  grounding,
   { name: 'Guess as a question', means: 'Say your best guess about what happened as a question they can correct. People correct a wrong guess faster than they answer a blank question. It is also how to get more from a one-line answer.', when: 'In your own turn, after they finish an answer, whenever you would otherwise ask “what were the challenges?” or “tell me more”. Never to fill their pause or finish their sentence.', how: 'A specific guess that ends on a clear question.',
     sounds: ['I’m guessing the data wasn’t ready when they needed it. Was it?', 'So they wanted to resell it, or what’s the play?', 'Fine as in boring, or fine as in it nearly went sideways?'] },
   { name: 'Either/or with the candid option', means: 'Don’t ask “why”. Offer two plausible answers, one of them unflattering, so the honest answer is an easy pick, and leave room for a third.', when: 'Causes, decisions, the client, a teammate.', how: 'The neutral option first, the candid one second, then “or something else?”',
@@ -25,7 +28,7 @@ const techniques: { name: string; means: string; when: string; how: string; soun
     sounds: ['Hold on, who made that call?', 'Their side or ours?', 'Back up. They let the whole team go?'] },
   { name: 'Define their words, gently', means: 'When a word carries weight, ask what they mean by it, after a preface that makes clear you aren’t challenging them.', when: 'Jargon, or loaded words like “phase two”, “political” or “done”.', how: 'A disarming preface, then “what’s X versus Y?”, then play it back.',
     sounds: ['Everyone uses this word differently. What’s “done” mean to them?', 'Political how? Budget, or egos?', 'Quick check, since teams mean different things: is “phase two” new scope, or leftovers?'] },
-  { name: 'Next-team scenario', means: 'Turn a story into a lesson by putting a future team in the same spot.', when: 'After a red flag or a story that cost something, once it has been told.', how: 'Put a future team in their spot with this client or setup, and ask what that team should do first.' },
+  lesson,
   { name: 'Short, one at a time', means: 'Under about 15 words, one question per turn, then stop. If they start answering, stop.', when: 'Every turn.', how: 'Cut the preamble. No two-part questions.',
     sounds: ['Who decided that?', 'How long did that take?', 'What broke first?'] },
   { name: 'Talk like a peer', means: 'Casual, direct, a little informal. Make it clear the messy parts are what’s wanted. You have no war stories of your own, but you can go first with a hunch.', when: 'At the opening, and whenever answers get polished.', how: 'Plain words and hunches; no corporate phrasing.',
@@ -54,10 +57,13 @@ export const turnTaking = [
   'The participant decides when the interview ends. There is no checklist to finish, and the clock is only context, never a minimum or a reason to stop. Never wrap up on your own: no recap of what you covered, no goodbye, and no interview-level “anything else?” or “did we miss anything?”. When a thread is answered, move to the next thread a thread note suggests, another thread it lists, or the richest unanswered detail; if an answer opens a new story, follow it. Offer to stop only when a thread note’s Pace line says to, and once per Pace line: make it a real choice that names one or two threads, such as “I could still ask about X or Y, or we can stop here. Your call.” If they pick a thread or keep talking, carry on. A short “no” or “not really” is not a request to stop; only an explicit one is, such as “let’s wrap up” or “I need to go”. That request outranks your notes and the clock: in one turn, thank them and say goodbye, without a recap or another question.',
 ];
 
+/** The spec's two techniques: `grounding` opens the guide and `lesson` turns a story into a lesson. */
+export type SpecTechniques = { grounding: Technique; lesson: Technique };
+
 /** The technique guide: one numbered line per technique. */
-export const techniqueGuide = [
+export const techniqueGuide = (spec: SpecTechniques) => [
   'Technique guide. Every technique is a turn you take once they have finished; none is a reason to speak into their pause. The examples are shapes: never reuse their words.',
-  ...techniques.map((item, index) => `${index + 1}. ${item.name}. ${item.means} When: ${item.when} How: ${item.how}${item.sounds ? ` Sounds like: ${item.sounds.map(line => `“${line}”`).join(' / ')}` : ''}`),
+  ...techniques(spec).map((item, index) => `${index + 1}. ${item.name}. ${item.means} When: ${item.when} How: ${item.how}${item.sounds ? ` Sounds like: ${item.sounds.map(line => `“${line}”`).join(' / ')}` : ''}`),
 ].join('\n');
 
 /** The private notes, worded for the channel they arrive on, then feedback and delegation. */

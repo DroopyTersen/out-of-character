@@ -1,10 +1,13 @@
 import type { Voice } from '../../shared/spec';
 import { LIVE_NOTE_CHANNEL, type NoteChannel } from './channel';
-import { notesAndConduct, techniqueGuide, turnTaking } from './interviewer.prompt';
+import { notesAndConduct, techniqueGuide, turnTaking, type SpecTechniques } from './interviewer.prompt';
 
 /** The part of a spec the interviewer's brief reads. Server-only text: a spec the browser imports leaves it out. */
 export type BriefedSpec = {
-  interviewer: { name: string; voices: readonly Voice[]; role: string; persona: string; opening: string; orientation: readonly string[]; boundaries: readonly string[] };
+  interviewer: {
+    name: string; voices: readonly Voice[]; role: string; persona: string; opening: string; orientation: readonly string[]; boundaries: readonly string[];
+    techniques: SpecTechniques;
+  };
 };
 
 function checkVoice(spec: BriefedSpec, voiceId: string) {
@@ -17,8 +20,8 @@ function checkVoice(spec: BriefedSpec, voiceId: string) {
  */
 export function interviewerBrief(spec: BriefedSpec, voiceId: string, channel: NoteChannel = LIVE_NOTE_CHANNEL): string {
   checkVoice(spec, voiceId);
-  const { name, role, persona, orientation, boundaries } = spec.interviewer;
-  return [`You are ${name}, ${role}. ${persona}`, ...orientation, ...boundaries, ...turnTaking, techniqueGuide, ...notesAndConduct(channel)].join('\n\n');
+  const { name, role, persona, orientation, boundaries, techniques } = spec.interviewer;
+  return [`You are ${name}, ${role}. ${persona}`, ...orientation, ...boundaries, ...turnTaking, techniqueGuide(techniques), ...notesAndConduct(channel)].join('\n\n');
 }
 
 /** The instruction that makes the interviewer speak first. */

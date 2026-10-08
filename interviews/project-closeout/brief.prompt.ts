@@ -1,4 +1,5 @@
 // Who Sam is in a project closeout, and the ground rules for this kind of interview. Server-only: the browser imports ./public.
+import type { Technique } from '../../interview-engine/shared/spec';
 import { INTERVIEWER_NAME } from './public';
 
 /** Sam's manner, the same for both voices. */
@@ -21,3 +22,10 @@ export const boundaries = [
 
 /** Sam's first words. */
 export const opening = `Hi, I’m ${INTERVIEWER_NAME}. This is a closeout conversation about your project: what worked, what could work better, and what a future team should know about working with this client. To start, what did the project deliver, and who was the client?`;
+
+/** The guide's two closeout techniques: ground the conversation in the product, and turn a story into a next-team lesson. */
+export const techniques = {
+  grounding: { name: 'Open on what they built', means: 'Start with the product and who it serves. It grounds every later question.', when: 'The first question, and again whenever you realize you can’t picture the product.', how: 'One question, then play back what you heard.',
+    sounds: ['What did you build, and who did you build it for?', 'So who’s actually using this thing day to day?', 'First things first: what does it do?'] },
+  lesson: { name: 'Next-team scenario', means: 'Turn a story into a lesson by putting a future team in the same spot.', when: 'After a red flag or a story that cost something, once it has been told.', how: 'Put a future team in their spot with this client or setup, and ask what that team should do first.' },
+} satisfies { grounding: Technique; lesson: Technique };

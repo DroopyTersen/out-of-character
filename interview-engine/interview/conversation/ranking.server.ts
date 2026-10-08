@@ -161,7 +161,7 @@ export async function evaluateTurn(input: Input, request?: typeof fetch) {
   const started = performance.now();
   const result = await evaluateOnce({
     model: createTypeSafeAi({ apiKey: input.apiKey, fetch: request }).evaluationModel(JEV_MODEL),
-    state: dialogueState(input.transcript.map(toPassage)), questions: turnQuestions(input.map, turn),
+    state: dialogueState(input.transcript.map(toPassage), 'sam'), questions: turnQuestions(input.map, turn),
     abortSignal: input.signal, maxRetries: 0,
   });
   return {

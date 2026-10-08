@@ -4,7 +4,8 @@ import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, Narrati
 export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
 
 // The shell of the narrative runner: SessionReport's lifecycle (app/server/simulator/report.ts) over a NarrativeRun.
-// The simulator keeps SessionReport; the interview's narrative route adopts this one in Phase 4.
+// The simulator keeps SessionReport, and so does the interview's report route while its replies must match the
+// simulator's byte for byte; the narrative route adopts this one with independent reporting (Phase 6).
 
 export const NARRATIVE_MAX_STARTS = 2;
 export const NARRATIVE_DEADLINE_MS = 120_000;
@@ -19,7 +20,7 @@ const idle = (): NarrativeState => ({ status: 'idle', starts: 0, document: null,
  * One bounded narrative run plus one explicit retry, for a host route. Holds no session resources.
  * A completed narrative is answered from memory; the host persists it from `onSettled`.
  */
-// TODO(phase4): re-attach a reloaded page to a running stream instead of answering 409, as the API design describes.
+// TODO(phase6): re-attach a reloaded page to a running stream instead of answering 409, as the API design describes.
 export class NarrativeRunner {
   private current = idle();
   private settled = Promise.resolve();

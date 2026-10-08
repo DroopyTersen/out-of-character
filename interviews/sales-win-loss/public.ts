@@ -1,4 +1,4 @@
-// The sales win/loss interview's browser-safe content; spec.ts assembles it with the narrative prompt.
+// The sales win/loss interview's browser-safe content; spec.ts assembles it with the server-only brief, framing, criteria and narrative prompt.
 // A second, independent spec: it shares no content with project-closeout and depends on nothing in the host.
 
 export const SALES_WIN_LOSS_ID = 'sales-win-loss';

@@ -3,13 +3,14 @@
  *
  *   bun --env-file=.dev.vars scripts/interview-host.ts    # PORT (default 8788), HOST (default 127.0.0.1)
  *
- * It serves the same `/api/interview/...` routes and replies as the Worker, over the engine's in-memory seams: attempts
+ * It serves the same `/api/interview/...` routes and replies as the Worker, including imported narratives, over the engine's in-memory seams: attempts
  * live in this process, wakes are timers, background work runs inline, and archive rows are kept in memory (and written
  * to INTERVIEW_ARCHIVE_DIR as JSON when it is set). It reads the Worker's Foundry and Typesafe variables.
  */
 import { foundryConfig, foundryConfigured } from '../ai/foundry.server';
 import { summarizeInterview } from '../ai/interview/summary.server';
 import { HostedSession } from '../app/server/interview/hosted';
+import { importedNarrative, narrateWith } from '../app/server/interview/narrative';
 import { routeInterview } from '../app/server/interview/routes';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
 import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
@@ -82,13 +83,13 @@ async function open(id: string) {
   return hosted;
 }
 
-/** The Worker's limiter allows three starts a minute per key; this one keeps the same rule in memory. */
-const starts = new Map<string, number[]>();
-const limit = async (key: string) => {
-  const now = Date.now();
-  const recent = (starts.get(key) ?? []).filter(at => now - at < 60_000);
-  if (recent.length >= 3) return false;
-  starts.set(key, [...recent, now]);
+/** The Worker's limiters allow three starts and 180 narratives a minute per key; these keep the same rules in memory. */
+const recent = new Map<string, number[]>();
+const limit = async (key: string, kind: 'session' | 'narrative' = 'session') => {
+  const now = Date.now(), slot = `${kind}:${key}`;
+  const calls = (recent.get(slot) ?? []).filter(at => now - at < 60_000);
+  if (calls.length >= (kind === 'narrative' ? 180 : 3)) return false;
+  recent.set(slot, [...calls, now]);
   return true;
 };
 
@@ -99,6 +100,7 @@ const server = Bun.serve({
     const response = await routeInterview(request, {
       available: () => true, limit,
       session: async (id, command) => (await attempt(id)).fetch(command),
+      narrative: (input, signal) => importedNarrative(input, [spec], narrateWith(providers), signal),
     });
     return response ?? Response.json({ error: 'Not found.' }, { status: 404 });
   },

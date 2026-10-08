@@ -1,28 +1,41 @@
-import { activitySchema, CAPABILITY, resumeSchema, startSchema } from '../../../interview-engine/shared/protocol';
+import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
+import { foundryProviders } from '../../../interview-engine/providers/providers.server';
+import { activitySchema, CAPABILITY, narrativeRequestSchema, resumeSchema, startSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
+import { spec } from '../../../interviews/project-closeout/spec';
 import { BodyError, boundedJson } from '../http';
 import { liveAvailable, simulatorJson } from '../simulator/api';
+import { importedNarrative, narrateWith } from './narrative';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** What a host supplies to the routes: whether paid sessions may start, its rate limiter, and the attempt's session. */
+/** What a host supplies to the routes: whether paid sessions may start, its rate limiters, the attempt's session and imported narratives. */
 export type InterviewGates = {
   available(): boolean;
-  limit(key: string): Promise<boolean>;
+  /** `session`: starts and resumes, which create paid voice sessions. `narrative`: imported transcripts. */
+  limit(key: string, kind?: 'session' | 'narrative'): Promise<boolean>;
   /** Delivers `https://session/<action>` to the attempt's session and returns its reply. */
   session(id: string, command: Request): Promise<Response>;
+  /** Streams the narrative of an imported transcript; no attempt is involved. See `importedNarrative`. */
+  narrative(input: NarrativeRequest, signal: AbortSignal): Response | Promise<Response>;
 };
 
-/** The Worker's gates: the practice simulator's kill switch and limiter, and one InterviewObject per attempt. */
+/** Narratives are 128 KiB of transcript at most (TRANSCRIPT_LIMIT), with room for the JSON around it. */
+const NARRATIVE_BODY_LIMIT = 256 * 1024;
+
+/** The Worker's gates: the practice simulator's kill switch and limiters, one InterviewObject per attempt, and Foundry for narratives. */
 export const handleInterview = (request: Request, env: Env) => routeInterview(request, {
   available: () => liveAvailable(env),
-  limit: async key => (await env.RATE_SIMULATOR.limit({ key })).success,
+  limit: async (key, kind = 'session') => (await (kind === 'narrative' ? env.RATE_JUDGE : env.RATE_SIMULATOR).limit({ key })).success,
   session: (id, command) => env.INTERVIEW_SESSIONS.get(env.INTERVIEW_SESSIONS.idFromName(id)).fetch(command),
+  narrative: (input, signal) => foundryConfigured(env)
+    ? importedNarrative(input, [spec], narrateWith(foundryProviders(foundryConfig(env))), signal)
+    : simulatorJson({ error: 'Narratives are currently unavailable.' }, 503),
 });
 
 /**
  * `/api/interview/...`: the same gates as the practice simulator's routes (same origin, capability header, kill switch,
  * rate limits, bounded bodies), forwarding each command to the attempt's session. The spec and voice checks happen in
- * the session itself. Imported-transcript reports (`/api/interview/reports`) arrive with independent reporting.
+ * the session itself. `/api/interview/narratives` writes an imported transcript's narrative with no attempt involved.
  */
 export async function routeInterview(request: Request, gates: InterviewGates): Promise<Response | null> {
   const url = new URL(request.url);
@@ -39,6 +52,13 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
       const parsed = startSchema.safeParse(await boundedJson(request, 64 * 1024));
       if (!parsed.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
       return forward(parsed.data.id, 'start', JSON.stringify(parsed.data));
+    }
+    if (url.pathname === '/api/interview/narratives') {
+      if (!gates.available()) return simulatorJson({ error: 'Narratives are currently unavailable.' }, 503);
+      if (!(await gates.limit(`narrative:${request.headers.get('CF-Connecting-IP') || 'local'}`, 'narrative'))) return simulatorJson({ error: 'Please wait a minute before requesting another narrative.' }, 429);
+      const parsed = narrativeRequestSchema.safeParse(await boundedJson(request, NARRATIVE_BODY_LIMIT));
+      if (!parsed.success) return simulatorJson({ error: 'Invalid transcript.' }, 400);
+      return await gates.narrative(parsed.data, request.signal);
     }
     const match = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume)$/);
     if (!match || !UUID.test(match[1]!)) return simulatorJson({ error: 'Unknown simulator route.' }, 404);

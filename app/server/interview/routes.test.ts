@@ -1,6 +1,9 @@
 import { expect, test } from 'bun:test';
-import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
-import { handleInterview } from './routes';
+import { fixtureFoundry, fixtureFoundryEnv } from '../../../ai/foundry-fixture';
+import { foundryProviders } from '../../../interview-engine/providers/providers.server';
+import { spec } from '../../../interviews/project-closeout/spec';
+import { importedNarrative, narrateWith } from './narrative';
+import { handleInterview, routeInterview } from './routes';
 
 const id = 'c49f7954-7aab-47f9-a269-752932556c37';
 const capability = `Bearer ${'a'.repeat(64)}`;
@@ -57,4 +60,61 @@ test('commands are validated, forwarded by attempt id, and control passes the ki
   expect((await handleInterview(f.request(`sessions/${id}/resume`, { sdp: 'v=0\r\no=fixture-offer\r\n' }), f.env))!.status).toBe(200);
   expect(f.calls.map(request => new URL(request.url).pathname)).toEqual(['/poll', '/end', '/pause', '/ready', '/resume']);
   expect(f.calls.every(request => request.headers.get('Authorization') === capability)).toBe(true);
+});
+
+const passages = [
+  { id: 'p1', speaker: 'interviewer', text: 'What did you deliver?', startMs: 0, endMs: 900 },
+  { id: 'p2', speaker: 'participant', text: 'We shipped the permit intake portal.', startMs: 1000, endMs: 2500 },
+];
+const narrativeBody = { specId: 'project-closeout', passages };
+const sse = (events: unknown[]) => new Response(new ReadableStream({ start(controller) {
+  for (const value of events) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`));
+  controller.close();
+} }), { headers: { 'Content-Type': 'text/event-stream' } });
+/** Foundry's Responses stream for one narrative document, as the language provider reads it. */
+const narrativeEvents = (document: { text: string }) => [
+  { type: 'response.created', response: { id: 'narrative-fixture', created_at: 1, model: fixtureFoundry.agentModel } },
+  { type: 'response.output_item.added', output_index: 0, item: { type: 'message', id: 'msg-1' } },
+  { type: 'response.output_text.delta', item_id: 'msg-1', delta: JSON.stringify(document) },
+  { type: 'response.completed', response: { usage: { input_tokens: 10, output_tokens: 8, total_tokens: 18 } } },
+];
+
+test('an imported transcript passes the interview gates and needs participant speech', async () => {
+  const f = fixture();
+  const keys: string[] = [];
+  f.env.RATE_JUDGE = { limit: async ({ key }: { key: string }) => { keys.push(key); return { success: true }; } } as unknown as RateLimit;
+  expect((await handleInterview(f.request('narratives', narrativeBody, { Origin: 'https://elsewhere.example' }), f.env))!.status).toBe(403);
+  expect((await handleInterview(f.request('narratives', narrativeBody, { Authorization: '' }), f.env))!.status).toBe(401);
+  expect((await handleInterview(f.request('narratives', narrativeBody), { ...f.env, SIMULATOR_ENABLED: 'false' }))!.status).toBe(503);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, extra: true }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, passages: [{ ...passages[0], speaker: 'trainee' }] }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, passages: [{ ...passages[1], text: 'x'.repeat(300_000) }] }), f.env))!.status).toBe(413);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, specId: 'sales-win-loss' }), f.env))!.status).toBe(404);
+  const empty = await handleInterview(f.request('narratives', { ...narrativeBody, passages: passages.slice(0, 1) }), f.env);
+  expect(empty!.status).toBe(422);
+  expect(await empty!.json() as unknown).toEqual({ error: 'There is not enough conversation to write about.' });
+  expect(keys.every(key => key === 'narrative:local')).toBe(true);
+  f.env.RATE_JUDGE = { limit: async () => ({ success: false }) } as unknown as RateLimit;
+  expect((await handleInterview(f.request('narratives', narrativeBody), f.env))!.status).toBe(429);
+  // Nothing reached an attempt.
+  expect(f.calls).toHaveLength(0);
+});
+
+test('an imported transcript streams its narrative from the language provider, with no attempt involved', async () => {
+  const f = fixture();
+  const document = { text: 'The team shipped the permit intake portal.' };
+  let prompt = '';
+  const providers = foundryProviders(fixtureFoundry, { fetch: (async (_url, init) => {
+    prompt = JSON.parse(String(init?.body)).input.find((item: { role: string }) => item.role === 'user').content[0].text;
+    return sse(narrativeEvents(document));
+  }) as typeof fetch });
+  const response = await routeInterview(f.request('narratives', narrativeBody), {
+    available: () => true, limit: async () => true,
+    session: async () => { throw new Error('No attempt is involved.'); },
+    narrative: (input, signal) => importedNarrative(input, [spec], narrateWith(providers), signal),
+  });
+  expect(response!.status).toBe(200);
+  expect(response!.headers.get('Content-Type')).toContain('text/plain');
+  expect(JSON.parse(await response!.text())).toEqual(document);
+  expect(JSON.parse(prompt).transcript).toEqual([{ speaker: 'INTERVIEWER', text: 'What did you deliver?' }, { speaker: 'PARTICIPANT', text: 'We shipped the permit intake portal.' }]);
 });

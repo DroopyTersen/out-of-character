@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRANSCRIPT_LIMIT, transcriptCharacters } from './transcript';
 
 // The browser's commands, as the HTTP poll protocol carries them. The field names are the practice simulator's
 // (scenarioId is the spec's id, clientId the voice's) until the browser moves to the renamed protocol.
@@ -23,3 +24,14 @@ export const resumeSchema = z.object({ sdp: offerSchema }).strict();
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;
 export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume'] as const;
 export type ProtocolAction = typeof PROTOCOL_ACTIONS[number];
+
+const passageSchema = z.object({
+  id: z.string().min(1).max(100), speaker: z.enum(['participant', 'interviewer']), text: z.string().max(TRANSCRIPT_LIMIT.characters),
+  startMs: z.number().min(0), endMs: z.number().min(0),
+}).strict();
+/** An imported transcript for the narrative route: the spec whose template writes it, and its passages within the evaluator's bound. */
+export const narrativeRequestSchema = z.object({
+  specId: z.string().min(1).max(100),
+  passages: z.array(passageSchema).max(TRANSCRIPT_LIMIT.entries).refine(passages => transcriptCharacters(passages) <= TRANSCRIPT_LIMIT.characters, 'The transcript is too long.'),
+}).strict();
+export type NarrativeRequest = z.infer<typeof narrativeRequestSchema>;

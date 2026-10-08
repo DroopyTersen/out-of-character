@@ -59,17 +59,21 @@ test('poll forwards Sam’s output quiet, bounded, and nothing about the partici
   expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs: 60_000, sequence: Number.MAX_SAFE_INTEGER, network }), f.env))!.status).toBe(200);
   expect(f.calls).toHaveLength(2);
 });
-test('interview starts only with its two voices and summary polling keeps the capability boundary', async () => {
+test('interviews no longer start here, while a running one still polls, ends and reports within the capability boundary', async () => {
   const f = fixture();
   for (const clientId of ['sam-cedar', 'sam-gleam']) {
-    expect((await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'project-closeout', clientId }), f.env))!.status).toBe(200);
+    const refused = (await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'project-closeout', clientId }), f.env))!;
+    expect(refused.status).toBe(400);
+    expect(await refused.json() as { error: string }).toEqual({ error: 'Interviews start at /api/interview/sessions.' });
   }
   expect((await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'project-closeout', clientId: 'morgan' }), f.env))!.status).toBe(400);
   expect((await handleSimulator(f.request('sessions', { ...f.start, scenarioId: 'sharepoint', clientId: 'sam-cedar' }), f.env))!.status).toBe(400);
   expect((await handleSimulator(f.request(`sessions/${id}/poll`, undefined, { Authorization: '' }), f.env))!.status).toBe(401);
   expect((await handleSimulator(f.request(`sessions/${id}/poll`, undefined, { Origin: 'https://elsewhere.example' }), f.env))!.status).toBe(403);
   expect((await handleSimulator(f.request(`sessions/${id}/summary`), f.env))!.status).toBe(404);
-  expect(f.calls).toHaveLength(2);
+  expect(f.calls).toHaveLength(0);
+  for (const action of ['poll', 'end', 'report']) expect((await handleSimulator(f.request(`sessions/${id}/${action}`), f.env))!.status).toBe(200);
+  expect(f.calls.map(call => new URL(call.url).pathname)).toEqual(['/poll', '/end', '/report']);
   expect(f.calls.every(call => call.headers.get('Authorization') === capability)).toBe(true);
 });
 test('creation accepts audio and rejects data channels before reaching the paid session', async () => {

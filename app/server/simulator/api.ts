@@ -40,6 +40,8 @@ export async function handleSimulator(request: Request, env: Env): Promise<Respo
       if (!(await env.RATE_SIMULATOR.limit({ key: request.headers.get('CF-Connecting-IP') || 'local' })).success) return simulatorJson({ error: 'Please wait a minute before starting another practice.' }, 429);
       const parsed = startSchema.safeParse(await boundedJson(request, 64 * 1024));
       if (!parsed.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
+      // New interviews start in the interview's own session; ones already running here still poll, end and report below.
+      if (parsed.data.scenarioId === INTERVIEW_SCENARIO_ID) return simulatorJson({ error: 'Interviews start at /api/interview/sessions.' }, 400);
       return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(parsed.data.id)).fetch(new Request('https://session/start', { method: 'POST', headers: request.headers, body: JSON.stringify(parsed.data) }));
     }
     const match = url.pathname.match(/^\/api\/simulator\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume)$/);

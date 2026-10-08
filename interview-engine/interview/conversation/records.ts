@@ -2,7 +2,7 @@ import type { CallFailure } from '../../providers/diagnostics.server';
 import type { ModelUsage } from '../../providers/structured.server';
 import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import type { WireSpeaker } from '../wire';
-import type { MapDefect, MapPace, MapUpdate } from './map';
+import type { MapDefect, MapUpdate } from './map';
 import type { Band, Pick, ThreadState } from './ranking';
 
 type InterviewObjectiveReading = Reading<WireSpeaker>;
@@ -11,42 +11,14 @@ type InterviewObjectiveReading = Reading<WireSpeaker>;
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v24';
+export const PRODUCER_VERSION = 'interview-producer-v26';
 export const PRODUCER_LIMITS = {
-  /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
-  mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
-  /** Jev turn readings, including re-reads of a turn that grew, and trait reads of new or rewritten threads. */
-  turns: 300, turnTimeout: 3000, traits: 120, traitTimeout: 3000,
-  /** Every note Sam receives, list and map together; set from the pile-up probe. */
-  notes: 100, mapNoteSpacing: 60_000,
-  /**
-   * When Sam may offer the participant the choice to stop, once Sol allows it: never before this many applied maps or
-   * this much active time, and not again within the spacing of the last offer. Ending is otherwise the participant's call.
-   */
-  offerMaps: 3, offerAfter: 10 * 60_000, offerSpacing: 3 * 60_000,
-  research: 3, lookupTimeout: 90_000,
-  /**
-   * Sam sometimes goes quiet after the participant has finished, often after a backchannel. After this much silence
-   * from both sides, Sam gets a turn note, once per participant turn and at most `wakes` times a session.
-   */
-  wakeAfter: 6000, wakes: 12,
-  /**
-   * The listening hold, timed by the participant's transcript rather than their microphone, which background noise
-   * keeps loud. Their words reach the server about `transcriptLag` after they say them, so they are taken to have gone
-   * quiet that long before their last words arrived. Sam decides whether to answer as they stop, before the server
-   * knows they have, so the hold can't be timed to their pause: it goes once, at their first words, and Sam sometimes
-   * takes a finished answer's turn on its own. Otherwise the turn is handed over once they have been quiet for
-   * `listenWindow` after a complete answer and Sam, whose backchannel may fall in their pause, for `afterSam`: long
-   * enough to see whether they went on after it. The handover waits up to `readWait` more for Jev's reading of that
-   * answer, so the thread note it picks goes out with the turn note. Hold and cancel notes are outside the note budget:
-   * a hold goes once per participant turn, a cancel once per turn note.
-   */
-  transcriptLag: 1000, listenWindow: 2500, afterSam: 1500, readWait: 500, holds: 200, handovers: 200, cancels: 60,
-  /**
-   * The voice service takes at most 500 tokens an event. A handover's notes go as one event when they fit in this many
-   * characters; otherwise the map note goes first, on its own.
-   */
-  handoverChars: 1600,
+  /** Shared cap for paid producer calls, including failures and interrupted calls. */
+  calls: 400,
+  /** One Sol call at a time; early wakes are spaced start to start. */
+  mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
+  turnTimeout: 3000, lookupTimeout: 90_000,
+  research: 3, notes: 100,
 };
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
@@ -62,8 +34,6 @@ export type MapRecord = {
   outcome: 'pending' | 'applied' | 'invalid' | 'timeout' | 'error' | 'aborted';
   inputCount: number; lastInputId: string | null; model: string; usage?: ModelUsage;
   update?: MapUpdate; changes?: { added: string[]; changed: string[]; dropped: string[] };
-  /** Sol's call on whether Sam may offer to stop; absent before v18. */
-  pace?: MapPace;
   /** The first few, for an invalid update. */
   defects?: MapDefect[];
   research?: ResearchRequest | null;
@@ -71,45 +41,25 @@ export type MapRecord = {
 };
 /**
  * Jev's reading of one settled participant turn and the pick code made from it. Scores are rounded; ranked is
- * [id, score, band]. A reading that landed while the participant was talking again is `deferred`: its pick waited
- * until they stopped, unless a later reading replaced it.
+ * [id, score, band].
  */
 export type TurnRecord = {
   source: 'turn'; id: string; passageId: string; mapId: string | null; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: ModelUsage;
-  reading?: { atMs: number; focus: string | null; novel: number; complaint?: number; natural: Record<string, number>; states: Record<string, ThreadState> };
+  reading?: { atMs: number; focus: string | null; novel: number; natural: Record<string, number>; states: Record<string, ThreadState> };
   pick?: Omit<Pick, 'ranked'> & { ranked: [id: string, score: number, band: Band][] };
-  deferred?: true;
   failure?: CallFailure;
 };
-/** Spicy and grounding for threads Sol added or rewrote. */
+/** Historical trait readings from interviews before v26; new runs use only natural-next scores. */
 export type TraitRecord = {
   source: 'traits'; id: string; mapId: string | null; threadIds: string[]; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: ModelUsage;
   traits?: Record<string, [spicy: number, grounding: number]>;
   failure?: CallFailure;
 };
-/**
- * nextSamTurnAt marks the first substantive Sam passage after the note, not uptake. A map note lists the lookups its
- * research facts cite. A turn note tells Sam the turn is theirs: after the listening window, or after Sam went quiet
- * past it. A hold note asks Sam to keep listening through a pause; a cancel note withdraws a turn note the participant
- * talked past. Notes sent together share one provider event, and so its `delivery.eventId`: the turn note goes last,
- * after the thread and map notes it hands over with.
- */
+/** A private note and its delivery acknowledgment. nextSamTurnAt measures timing, not whether Sam followed it. */
 export type NoteRecord = {
-  source: 'note'; id: string; kind: 'list' | 'map' | 'turn' | 'hold' | 'cancel'; text: string; mapId: string | null; turnId?: string; sentAt: number;
-  /** When the note was decided, if it waited for Sam's next words; absent when it went out at once. */
-  decidedAt?: number;
-  /** The note let Sam offer the participant the choice to stop. */
-  offer?: true;
-  /** Sent, or released early, because Sam had gone quiet after the participant finished. */
-  wake?: true;
-  /** Sent, or released, when the listening window closed after the participant's complete answer. */
-  handover?: true;
-  /** For hold and turn notes, how long both sides had been quiet, as the server last heard it; for a cancel, how long that quiet lasted before the participant spoke again. */
-  quietMs?: number;
-  /** For a handover, what it waited on past the listening window: Sam's audio or words (`sam`), or, past that, Jev's reading of their latest words, a deferred pick, a held refresh, or the participant still talking. */
-  waited?: ('sam' | 'read' | 'pick' | 'refresh' | 'talking')[];
+  source: 'note'; id: string; kind: 'list' | 'map'; text: string; mapId: string | null; turnId?: string; sentAt: number;
   outcome: 'sent' | 'error' | 'rejected'; delivery: NoteDelivery; researchIds?: string[];
   nextSamTurnAt?: number; nextSamTurnAfterId?: string | null;
 };
@@ -183,13 +133,10 @@ export function fitRecords(records: ProducerLogRecord[], budget: number): Produc
 }
 
 export type LatencyStat = { count: number; p50: number; p90: number } | null;
-/** What the listening hold's timing sent. Summaries archived by v20 and v21 have the microphone's timing instead, and earlier ones none. */
-export type ListeningSummary = { windowMs: number; lagMs: number; afterSamMs: number; readWaitMs: number; holds: number; handovers: number; cancels: number; wakes: number };
 export type ProducerSummary = {
   model: string; effort: 'none' | 'low'; version: string; mapPrompt: string; rankingRubric: string;
   maps: number; applied: number; turns: number; notes: number; research: number;
-  latency: { sol: LatencyStat; jevTurn: LatencyStat; traits: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat; turnToSam?: LatencyStat };
-  listening: ListeningSummary;
+  latency: { sol: LatencyStat; jevTurn: LatencyStat; lookup: LatencyStat; noteToSam: LatencyStat; turnToSam?: LatencyStat };
 };
 
 export function latencyStat(values: number[]): LatencyStat {
@@ -205,9 +152,7 @@ export function producerLatency(records: ProducerLogRecord[]): ProducerSummary['
   return {
     sol: latencyStat(spans(of('map').filter(item => item.outcome === 'applied').map(item => [item.startedAt, item.completedAt]))),
     jevTurn: latencyStat(spans(of('turn').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
-    traits: latencyStat(spans(of('traits').filter(item => item.outcome === 'read').map(item => [item.startedAt, item.completedAt]))),
     lookup: latencyStat(spans(of('research').map(item => [item.requestedAt, item.lookupAt]))),
     noteToSam: latencyStat(spans(of('note').filter(item => item.kind === 'list' || item.kind === 'map').map(item => [item.sentAt, item.nextSamTurnAt]))),
-    turnToSam: latencyStat(spans(of('note').filter(item => item.kind === 'turn').map(item => [item.sentAt, item.nextSamTurnAt]))),
   };
 }

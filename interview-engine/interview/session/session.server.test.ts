@@ -63,9 +63,8 @@ function fakeVoice() {
 }
 
 const services: Partial<SessionServices> = {
-  generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
+  generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
   evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-  evaluateTraits: async input => ({ traits: Object.fromEntries(input.threads.map(thread => [thread.id, { key: threadKey(thread), spicy: .5, grounding: 0 }])), model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }),
   lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
 };
 

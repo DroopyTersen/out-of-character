@@ -1,6 +1,6 @@
 # Conversation map for the closeout interview
 
-Status: **planning, iteration 3 (Andrew's notes on iteration 2: Sol timing and prompt caching, topics go to Sol only, Sol owns closures, truth comes only from the participant). Not implemented.** It will be built in a separate worktree on its own branch.
+Status: **Historical design.** The October 8 simplification follows this page's three-loop principles and the public [Conversation Map explanation](https://outofcharacter.droopy.dev/conversation-map). The current runtime contract is in [the engine README](../../interview-engine/README.md#conversation-runtime). In particular, v26 removes voice-floor permissions and finish grants, uses natural-next scores with a fixed near-tie margin, and replaces per-thread traits with a fresh turn read after map changes. The detailed proposal below is preserved as design history.
 
 Scope:
 - Sam's brief (`ai/interview/scenario.server.ts`)

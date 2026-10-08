@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 import { mapInstructions, mapSeed, type MappedSpec } from '../../interview-engine/interview/conversation/map.prompt';
 import { interviewQuestions, type JudgedSpec } from '../../interview-engine/interview/conversation/rubric.prompt';
 import { interviewerBrief, interviewOpening, type BriefedSpec } from '../../interview-engine/interview/voice/brief.server';
-import { NOTE_CHANNELS } from '../../interview-engine/interview/voice/channel';
 import { validateSpec } from '../../interview-engine/shared/spec';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { spec as closeout } from '../project-closeout/spec';
@@ -54,16 +53,14 @@ test('it shares no wording with the closeout spec and keeps its prompt out of th
   expect(publicSource).not.toMatch(/from '\.\.\//); // nothing from the closeout spec or the host
 });
 
-test('the engine renders a coherent brief for every voice and note channel', () => {
+test('the engine renders a coherent brief for every voice', () => {
   for (const voice of spec.interviewer.voices) {
-    for (const channel of NOTE_CHANNELS) {
-      const brief = interviewerBrief(spec, voice.id, channel);
-      expect(brief).toStartWith(`You are Sam, ${spec.interviewer.role}.`);
-      for (const part of [...spec.interviewer.orientation, ...spec.interviewer.boundaries]) expect(brief).toContain(part);
-      expect(brief).toContain('1. Anchor on the decision.');
-      expect(brief).toContain('11. Rewind the decision.');
-      noCloseout(brief);
-    }
+    const brief = interviewerBrief(spec, voice.id);
+    expect(brief).toStartWith(`You are Sam, ${spec.interviewer.role}.`);
+    for (const part of [...spec.interviewer.orientation, ...spec.interviewer.boundaries]) expect(brief).toContain(part);
+    expect(brief).toContain('1. Anchor on the decision.');
+    expect(brief).toContain('11. Rewind the decision.');
+    noCloseout(brief);
     expect(interviewOpening(spec, voice.id)).toContain(spec.interviewer.opening);
   }
 });

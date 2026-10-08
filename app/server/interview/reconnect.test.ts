@@ -1,6 +1,7 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/map';
-import { HOLD_NOTE, NOTE_HEADERS, TURN_NOTE } from '../../../interview-engine/interview/conversation/notes';
+import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/notes';
+import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
 import { interviewAttempt, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, settle, waitFor } from '../simulator/session-fixture';
 
@@ -41,8 +42,8 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   };
   let maps = 0;
   const f = await live({ overrides: {
-    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateMap: async () => { maps++; return { map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
+    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), natural: Object.fromEntries(input.map.threads.map(thread => [thread.id, .8])), states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    generateMap: async () => { maps++; return { map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
   } });
   const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => String(event.content));
   setSystemTime(epoch + 20_500);
@@ -50,19 +51,13 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   await f.session.fetch(activityPoll(true, true));
   await waitFor(() => maps === 1);
   await settle(f);
-  // Sol mapped after the answer was handed over, so both notes wait for the next turn boundary: Sam asks on its own, so they go with the hold note at the participant's next words, in one event.
-  setSystemTime(epoch + 22_000);
-  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });
-  setSystemTime(epoch + 23_000);
-  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-2', delta: 'Another team, until last spring.', start_ms: 23_000, end_ms: 24_000 });
-  setSystemTime(epoch + 26_000);
   await waitFor(() => notes(f.socket.sent).some(note => note.startsWith(NOTE_HEADERS.list)));
-  const delivered = notes(f.socket.sent).find(note => note.startsWith(NOTE_HEADERS.list))!;
-  expect(delivered).toEndWith(`\n\n${HOLD_NOTE}`);
+  const delivered = notes(f.socket.sent);
+  expect(delivered).toHaveLength(2);
   await lose(f);
   await reconnect(f);
-  // The new session gets the same notes, each in its own event, and no turn note until there are new words.
-  expect(notes(f.socket.sent).sort()).toEqual(delivered.slice(0, -HOLD_NOTE.length - 2).split('\n\n').sort());
+  await waitFor(() => notes(f.socket.sent).length === 2);
+  expect(notes(f.socket.sent).sort()).toEqual(delivered.sort());
   expect(f.socket.sent.map(event => String(event.event_id))).toContain('resume-2');
   await f.session.fetch(request('end'));
   await settle(f);

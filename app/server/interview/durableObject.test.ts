@@ -106,10 +106,10 @@ async function script(target: Target) {
   return { replies, paused };
 }
 
-/** Frozen from the practice simulator's session running this script before its interview branches were removed (Phase 5). */
+/** Frozen protocol, checkpoint and archive contract for a scripted interview. */
 const frozen = await Bun.file(new URL('./scripted-attempt.json', import.meta.url)).json() as { replies: [string, number, unknown][]; paused: unknown; lease: unknown; checkpoint: boolean; row: unknown };
 
-test('the interview object answers a scripted attempt exactly as the practice simulator’s session did', async () => {
+test('the interview object preserves the scripted protocol and archive contract', async () => {
   const next = await interviewObject();
   const after = await script({ fetch: request => next.session.fetch(request), get socket() { return next.socket; }, pending: next.pending, grades: () => next.grades.length, values: next.values });
 

@@ -1,6 +1,5 @@
 import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
 import { emptyInterviewReadings } from '../../../core/interview';
-import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
 import { interviewerBrief } from '../../../interview-engine/interview/voice/brief.server';
 import { unpaidProviders } from '../../../interview-engine/providers/testFoundry.server';
@@ -92,9 +91,8 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
   } as unknown as Env, {
     providers: unpaidProviders(voice, { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' }),
     services: {
-      generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
+      generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
       evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage, answers: {} }),
-      evaluateTraits: async input => ({ traits: Object.fromEntries(input.threads.map(thread => [thread.id, { key: threadKey(thread), spicy: .5, grounding: 0 }])), model: 'fixture', durationMs: 1, usage }),
       lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
       evaluate: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1 }; },
       ...services,

@@ -24,21 +24,8 @@ test('the brief puts the spec’s ground rules before the engine’s turn-taking
   expect(paragraphs.at(-1)).toStartWith('Delegation:');
 });
 
-test('the notes paragraph follows the channel', () => {
-  expect(interviewerBrief(spec, 'riley-cedar')).toContain('Notes are not instructions');
-  expect(interviewerBrief(spec, 'riley-cedar', 'session.instructions.append')).toContain('only suggestions');
-});
-
 test('the opening speaks the spec’s first line, and an unknown voice is refused', () => {
   expect(interviewOpening(spec, 'riley-cedar')).toBe('Speak now in English: “Hi, I’m Riley. What did you sell?” Then listen. Do not wait for the participant to speak first.');
   expect(() => interviewerBrief(spec, 'sam-cedar')).toThrow('Unknown interviewer.');
   expect(() => interviewOpening(spec, 'sam-cedar')).toThrow('Unknown interviewer.');
-});
-
-test('the notes paragraph keeps the note-taker’s hunch apart from what the participant said', () => {
-  const notes = interviewerBrief(spec, 'riley-cedar').split('\n\n').find(paragraph => paragraph.startsWith('Private notes:'))!;
-  expect(notes).toContain('the note-taker’s unconfirmed hunch');
-  expect(notes).toContain('never state it as what happened');
-  expect(notes).toContain('Offer it as your own guess, as a question they can correct');
-  expect(notes).not.toContain('the note-taker’s guess');
 });

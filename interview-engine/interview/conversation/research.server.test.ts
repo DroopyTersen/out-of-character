@@ -26,27 +26,15 @@ const search = { type: 'web_search_call', id: 'search-fixture', status: 'complet
   action: { type: 'search', queries: ['Acme Field Systems official operations'], sources: [{ type: 'url', url: 'https://acme.example/about' }] } };
 const citation = (url: string) => ({ type: 'url_citation', url, title: 'About Acme', start_index: 0, end_index: 10 });
 
-test('a request must name what the participant said, with an identity clue drawn from their words', () => {
-  const base = { kind: 'organization' as const, name: 'ACME Field Systems', clue: null, passageIds: ['p1'] };
-  expect(validateResearchRequest(base, transcript)).toEqual({ ok: true, request: base });
-  expect(validateResearchRequest({ ...base, name: ' Acme Field Systems ', clue: ' a company with sites ' }, transcript))
-    .toEqual({ ok: true, request: { ...base, name: 'Acme Field Systems', clue: 'a company with sites' } });
-  for (const [request, reason] of [
-    [{ ...base, passageIds: [] }, 'passages'],
-    [{ ...base, passageIds: ['s1'] }, 'passages'],
-    [{ ...base, passageIds: ['p1', 'p1'] }, 'passages'],
-    [{ ...base, passageIds: ['missing'] }, 'passages'],
-    [{ ...base, name: 'Another Company' }, 'name_unspoken'],
-    [{ ...base, name: 'Acme Field' }, 'ok'],
-    [{ ...base, name: 'Acme Fie' }, 'name_unspoken'],
-    [{ ...base, name: 'one two three four five six seven' }, 'name_size'],
-    [{ ...base, name: '---' }, 'name_size'],
-    [{ ...base, clue: 'utility in Denver' }, 'clue_unspoken'],
-    [{ ...base, clue: 'we connected sites at acme field systems but the handoff' }, 'clue_size'],
-  ] as [ResearchRequest, string][]) {
-    const result = validateResearchRequest(request, transcript);
-    expect(result.ok ? 'ok' : result.reason).toBe(reason);
+test('the lookup name must occur as whole words in participant speech; Sol supplies its clue', () => {
+  const base: ResearchRequest = { kind: 'organization', name: 'ACME Field Systems', clue: null, passageIds: [] };
+  expect(validateResearchRequest(base, transcript)).toEqual({ ok: true, request: { ...base, passageIds: ['p1'] } });
+  expect(validateResearchRequest({ ...base, clue: ' an industrial supplier ', passageIds: ['missing'] }, transcript))
+    .toEqual({ ok: true, request: { ...base, clue: 'an industrial supplier', passageIds: ['p1'] } });
+  for (const name of ['Another Company', 'Acme Fie', '---', '']) {
+    expect(validateResearchRequest({ ...base, name }, transcript)).toEqual({ ok: false, reason: 'name_unspoken' });
   }
+  expect(validateResearchRequest(base, transcript.slice(0, 1))).toEqual({ ok: false, reason: 'name_unspoken' });
   expect(normalizeResearchName('ACME—Field  Systems!')).toBe('acme field systems');
 });
 

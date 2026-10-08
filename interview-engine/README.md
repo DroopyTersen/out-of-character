@@ -12,6 +12,18 @@ The host then forwards the browser's commands. This repository hosts the engine 
 
 Terms used here are defined in [CONTEXT.md](CONTEXT.md). For why the design looks like this, see `docs/solutioning/interview-engine-api-design.html`.
 
+## Conversation runtime
+
+The voice, turn and map loops run independently. Sam listens and chooses when to respond; the producer sends no hold, cancel, turn-permission or finish-offer instructions. The participant can always redirect or end the interview.
+
+Jev reads each settled participant turn and scores the open gaps for natural next questions. The current thread stays unless another score is more than 0.1 higher; a thread Sol marked related can win a near-tie. Answered, declined and stalled gaps stay out until the next applied map. A transcript correction replaces only that turn's holds. New or rewritten gaps get a reading against the latest answer, without a separate trait-scoring call.
+
+Sol alone edits the map. The first call needs participant speech. New information (Jev probability at least 0.8) or useful public research wakes Sol, with one call in flight and a 20-second start-to-start floor. After a minute, new participant speech or a failed unapplied update also triggers a call. Topic lists stay in Sol's seed. Project facts must cite participant speech; web findings retain their separate source and lookup citation.
+
+Sam receives a short thread note only when the lead or its wording changes, or a named alternative becomes unavailable. Map notes go when their content changes. Both use `session.thinking.append`; they are optional context, not instructions to speak. They are sent immediately, without another delivery timer. This intentionally changes production v22's held-note behavior; unit tests and archived replay cannot establish live interruption quality.
+
+A shared 400-call cap includes failed and interrupted producer calls. Sol, Jev and research deadlines are 50 seconds, 3 seconds and 90 seconds. Research is limited to three calls; ordinary notes to 100. A replacement voice session can receive its existing context beyond the ordinary note cap. Checkpoints retain the map, append-only input log, audit records and transcript cursor; transient ranking is re-read after a restart. Historical trait records remain readable for archived interviews.
+
 ## Layout and import rules
 
 | Folder | What it holds | May import |

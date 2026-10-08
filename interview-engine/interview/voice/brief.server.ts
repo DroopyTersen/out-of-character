@@ -1,5 +1,4 @@
 import type { Voice } from '../../shared/spec';
-import { LIVE_NOTE_CHANNEL, type NoteChannel } from './channel';
 import { notesAndConduct, techniqueGuide, turnTaking, type SpecTechniques } from './interviewer.prompt';
 
 /** The part of a spec the interviewer's brief reads. Server-only text: a spec the browser imports leaves it out. */
@@ -18,10 +17,10 @@ function checkVoice(spec: BriefedSpec, voiceId: string) {
  * The voice model's instructions, in five parts: who the interviewer is and the spec's ground rules, turn-taking,
  * how the interview ends, the technique guide, and the private notes. The interviewer never sees the topics.
  */
-export function interviewerBrief(spec: BriefedSpec, voiceId: string, channel: NoteChannel = LIVE_NOTE_CHANNEL): string {
+export function interviewerBrief(spec: BriefedSpec, voiceId: string): string {
   checkVoice(spec, voiceId);
   const { name, role, persona, orientation, boundaries, techniques } = spec.interviewer;
-  return [`You are ${name}, ${role}. ${persona}`, ...orientation, ...boundaries, ...turnTaking, techniqueGuide(techniques), ...notesAndConduct(channel)].join('\n\n');
+  return [`You are ${name}, ${role}. ${persona}`, ...orientation, ...boundaries, ...turnTaking, techniqueGuide(techniques), ...notesAndConduct()].join('\n\n');
 }
 
 /** The instruction that makes the interviewer speak first. */

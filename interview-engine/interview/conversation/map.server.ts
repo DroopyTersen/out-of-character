@@ -4,15 +4,15 @@ import type { InterviewBackground, InterviewObjectiveReading } from '../../share
 import type { WireEntry } from '../wire';
 import { RESEARCH_KINDS, type ResearchRequest } from './records';
 import {
-  applyMapUpdate, EDGE_KINDS, ENTITY_KINDS, ENTITY_SOURCES, MAP_LIMITS, MAP_PACES, mapTopicIds, renderMapForSol, THREAD_STATUSES,
-  type ConversationMap, type MapChanges, type MapDefect, type MapPace, type MapTopicId, type MapUpdate,
+  applyMapUpdate, EDGE_KINDS, ENTITY_KINDS, ENTITY_SOURCES, MAP_LIMITS, mapTopicIds, renderMapForSol, THREAD_STATUSES,
+  type ConversationMap, type MapChanges, type MapDefect, type MapTopicId, type MapUpdate,
 } from './map';
 import { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 
 export { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 type TranscriptEntry = WireEntry;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v13';
+export const MAP_PROMPT_VERSION = 'sol-map-v15';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -38,12 +38,10 @@ const buildOutputSchema = (topicIds: [MapTopicId, ...MapTopicId[]]) => z.strictO
   revise: z.array(z.strictObject({ id: z.string(), unknown: text(MAP_LIMITS.unknown).min(1), guess: text(MAP_LIMITS.guess).min(1) })),
   close: z.array(z.strictObject({ id: z.string(), status: z.enum(['done', 'off']), reason: text(MAP_LIMITS.reason) })),
   drop: z.array(z.strictObject({ id: z.string(), reason: text(MAP_LIMITS.reason) })),
-  /** Code checks the name and clue were spoken in the cited participant passages before anything leaves the session. */
+  /** Code verifies that the participant named the lookup target. */
   research: z.strictObject({
-    kind: z.enum(RESEARCH_KINDS), name: text(80), clue: text(80).nullable(), passageIds: z.array(z.string()).max(3),
+    kind: z.enum(RESEARCH_KINDS), name: z.string().trim().min(1), clue: z.string().trim().nullable(), passageIds: z.array(z.string()),
   }).nullable(),
-  /** Code honors an offer only while the participant has said nothing new since this call's transcript. */
-  pace: z.strictObject({ verdict: z.enum(MAP_PACES), reason: text(MAP_LIMITS.reason).min(1) }),
 });
 
 const strip = (node: unknown): unknown => {
@@ -174,7 +172,7 @@ export async function generateMap(input: {
   cache?: boolean;
   /** For probes comparing efforts; production uses MAP_EFFORT. */
   effort?: 'low' | 'medium';
-}): Promise<{ map: ConversationMap; update: MapUpdate; changes: MapChanges; research: ResearchRequest | null; pace: MapPace; model: string; usage: ModelUsage }> {
+}): Promise<{ map: ConversationMap; update: MapUpdate; changes: MapChanges; research: ResearchRequest | null; model: string; usage: ModelUsage }> {
   const { output, wire } = mapSchemas(input.spec);
   const { value, model, usage } = await input.structured({
     signal: input.signal, instructions: mapInstructions(input.spec), name: 'conversation_map_update', schema: output, jsonSchema: wire,
@@ -183,8 +181,8 @@ export async function generateMap(input: {
   });
   const parsed = output.safeParse(value);
   if (!parsed.success) throw new MapOutputError(parsed.error.issues.map(issue => ({ kind: 'schema', id: issue.path.join('.'), detail: issue.message })), value, model, usage);
-  const { research, pace, ...update } = parsed.data;
+  const { research, ...update } = parsed.data;
   const result = applyMapUpdate(input.previous, update, input.passages, input.lookups);
   if (!result.ok) throw new MapOutputError(result.defects, value, model, usage);
-  return { map: result.map, update, changes: result.changes, research, pace, model, usage };
+  return { map: result.map, update, changes: result.changes, research, model, usage };
 }

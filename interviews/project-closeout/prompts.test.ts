@@ -4,7 +4,7 @@ import { evaluateInterview } from '../../interview-engine/interview/conversation
 import { mapInstructions, mapSeed } from '../../interview-engine/interview/conversation/map.prompt';
 import { interviewQuestions } from '../../interview-engine/interview/conversation/rubric.prompt';
 import { interviewerBrief, interviewOpening } from '../../interview-engine/interview/voice/brief.server';
-import { NOTE_CHANNELS } from '../../interview-engine/interview/voice/channel';
+import { LIVE_NOTE_CHANNEL } from '../../interview-engine/interview/voice/channel';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { spec } from './spec';
 
@@ -19,9 +19,9 @@ const passages: Passage[] = [
   { id: 'p4', speaker: 'participant', text: 'Their ops director, after a bad storm season.', startMs: 15_000, endMs: 19_000 },
 ];
 
-test('the brief and the opening for every voice and note channel are unchanged', async () => {
+test('the brief and opening match the checked-in fixtures for every voice', async () => {
   for (const voice of spec.interviewer.voices) {
-    for (const channel of NOTE_CHANNELS) expect(interviewerBrief(spec, voice.id, channel)).toBe(await fixture(`brief.${voice.id}.${channel}.txt`));
+    expect(interviewerBrief(spec, voice.id)).toBe(await fixture(`brief.${voice.id}.${LIVE_NOTE_CHANNEL}.txt`));
     expect(interviewOpening(spec, voice.id)).toBe(await fixture(`opening.${voice.id}.txt`));
   }
 });

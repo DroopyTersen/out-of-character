@@ -28,7 +28,7 @@ const update = {
   entities: [{ id: 'e1', kind: 'product', label: 'Routing layer', detail: 'Built for dispatch, per the participant.', source: 'participant', passageId: 'p2' }],
   edges: [{ id: 'r1', kind: 'built', from: PARTICIPANT_ID, to: 'e1' }],
   threads: [{ id: 't1', label: 'Routing first', anchors: ['e1'], unknown: 'who chose to build routing first', guess: 'the client, to unblock a demo', related: [], topics: ['client-decisions'], status: 'open', reason: null }],
-  revise: [], close: [], drop: [], research: null, pace: { verdict: 'explore', reason: 'Routing first is still open.' },
+  revise: [], close: [], drop: [], research: null,
 };
 const solResponse = (value: unknown, usage: Record<string, unknown> = { input_tokens: 9000, output_tokens: 900 }) => Response.json({
   status: 'completed', model: 'gpt-6.1-sol', output: [{ type: 'message', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(value) }] }], usage,
@@ -206,5 +206,5 @@ test('Sol settles the participant’s own part early, several responsibilities i
   expect(instructions).toContain('People often hold more than one responsibility');
   expect(instructions).toContain('Never write it when their part is already clear');
   expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
-  expect(MAP_PROMPT_VERSION).toBe('sol-map-v13');
+  expect(MAP_PROMPT_VERSION).toBe('sol-map-v15');
 });

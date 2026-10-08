@@ -121,8 +121,6 @@ export class SessionActor {
   private interview: InterviewState | undefined;
   private socket: WebSocketLike | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
-  /** The listening hold's next deadline, timed to the moment rather than to the tick. */
-  private floorTimer: ReturnType<typeof setTimeout> | undefined;
   private finishing: Promise<void> | undefined;
   private orphaning: Promise<void> | undefined;
   private connecting: Promise<{ sdp: string }> | undefined;
@@ -237,10 +235,6 @@ export class SessionActor {
         if (activity.sequence != null) this.activitySequence = activity.sequence;
         if (activity.active || activity.audio) this.lastActivity = now;
         if (activity.audio) this.lastAudio = now;
-        if (this.state.status === 'live' && this.producer) {
-          this.producer.hear(now, activity);
-          this.scheduleFloor();
-        }
         const segment = this.segment;
         if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: now, ...activity.network });
       }
@@ -345,8 +339,6 @@ export class SessionActor {
     this.fenced = true;
     clearInterval(this.timer);
     this.timer = undefined;
-    clearTimeout(this.floorTimer);
-    this.floorTimer = undefined;
     this.gradeAbort.abort();
     this.producer?.close();
     this.closeReceived?.();
@@ -372,8 +364,6 @@ export class SessionActor {
     };
     this.interview = { evaluation: null, summary: null };
     this.createProducer();
-    // Sol's first pass runs while the voice connection is made, so its threads are ready at the participant's first words.
-    this.producer?.prepare(now);
     const snapshot = this.state;
     try {
       // The lease is durable before any provider session exists. An end that arrives meanwhile waits for this and
@@ -410,8 +400,6 @@ export class SessionActor {
       providers: this.providers, services: this.paid,
       settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
-      talking: () => { const ready = new Set(settled()); return this.state!.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); },
-      transcript: () => this.state!.transcript,
     });
   }
 
@@ -513,7 +501,6 @@ export class SessionActor {
       snapshot.transcript = next;
       snapshot.revision++;
       this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null, now);
-      this.scheduleFloor();
       if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries * .9 || transcriptCharacters(snapshot.transcript) >= TRANSCRIPT_LIMIT.characters * .9) this.capacityDeadline ??= now + 30_000;
       return;
     }
@@ -544,20 +531,6 @@ export class SessionActor {
     }
   }
 
-  /** Sets one timer for the listening hold's next deadline while the conversation is live. */
-  private scheduleFloor() {
-    clearTimeout(this.floorTimer);
-    this.floorTimer = undefined;
-    const due = !this.fenced && this.state?.status === 'live' ? this.producer?.floorDue(this.now()) : null;
-    if (due == null) return;
-    this.floorTimer = setTimeout(() => {
-      this.floorTimer = undefined;
-      if (this.fenced || this.state?.status !== 'live') return;
-      this.producer?.listen(this.now());
-      this.scheduleFloor();
-    }, Math.max(0, due - this.now()));
-  }
-
   private tick() {
     const snapshot = this.state;
     if (this.fenced || !snapshot || snapshot.status !== 'live') return;
@@ -565,7 +538,6 @@ export class SessionActor {
     if (this.checkLifetime()) return;
     this.unanswered(now);
     this.producer?.tick(now);
-    this.scheduleFloor();
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = JSON.stringify(transcript);
     if (this.interview?.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
@@ -699,8 +671,6 @@ export class SessionActor {
     this.hold(reason, this.now());
     clearInterval(this.timer);
     this.timer = undefined;
-    clearTimeout(this.floorTimer);
-    this.floorTimer = undefined;
     this.gradeAbort.abort();
     this.producer?.pause();
     try { await this.connecting; } catch { /* A failed resume is reported by resume. */ }
@@ -871,7 +841,6 @@ export class SessionActor {
     snapshot.status = 'ending';
     this.producer?.close();
     clearInterval(this.timer);
-    clearTimeout(this.floorTimer);
     this.gradeAbort.abort();
     try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
     await this.pausing?.catch(() => {});

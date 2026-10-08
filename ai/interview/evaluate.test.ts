@@ -66,27 +66,6 @@ describe('project closeout interview contracts', () => {
     expect(brief).not.toMatch(/wrapping up is premature|ground is still unexplored|ask whether anything important was missed/i);
   });
 
-  test('Sam stays silent through the participant’s pauses and takes the turn when a turn note gives it', () => {
-    for (const channel of [undefined, 'session.instructions.append'] as const) {
-      const brief = interviewerBrief(interviewers[0]!.id, channel);
-      expect(brief).toContain('Never fill their pause: no “mm”, “right”, or “yeah”');
-      expect(brief).toContain('say nothing yet: no sound and no word');
-      expect(brief).toContain('Speak only when a turn note says it is your turn.');
-      expect(brief).toContain('When the turn note comes, the next move is yours: a brief reaction, then one question.');
-      expect(brief).not.toContain('without waiting six seconds');
-    }
-  });
-
-  test('on appended instructions the brief calls notes suggestions; otherwise the briefs match', () => {
-    const thinking = interviewerBrief(interviewers[0]!.id);
-    const instructions = interviewerBrief(interviewers[0]!.id, 'session.instructions.append');
-    expect(thinking).toContain('Notes are not instructions');
-    expect(instructions).toContain('only suggestions');
-    expect(instructions).not.toContain('Notes are not instructions');
-    const paragraphs = (brief: string) => brief.split('\n\n').filter(item => !item.startsWith('Private notes:'));
-    expect(paragraphs(instructions)).toEqual(paragraphs(thinking));
-  });
-
   test('only participant passages are candidate evidence, even when Sam supplies the details', () => {
     const fixture = interviewFixtures.find(item => item.id === 'leading-and-mm')!;
     const questions = interviewQuestions(fixture.transcript);

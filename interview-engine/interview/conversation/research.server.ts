@@ -5,7 +5,7 @@ import type { InterviewBackground } from '../../shared/snapshot';
 import type { WireEntry as TranscriptEntry } from '../wire';
 import type { ResearchKind, ResearchRequest } from './records';
 
-/** Only kind, name and clue ever leave the session; the clue is checked as spoken, not as identity-only. */
+/** Only kind, name and clue ever leave the session; Sol chooses the public identity clue. */
 export type ResearchLookup =
   | { status: 'found'; facts: InterviewBackground['facts']; retrievedAt: number; queries: string[] }
   | { status: 'unresolved'; reason: string; queries: string[] };
@@ -23,34 +23,13 @@ export function normalizeResearchName(value: string): string {
   return value.normalize('NFKC').toLocaleLowerCase('en').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 }
 
-// Connectives and generic kinds of organization may appear in a clue without being spoken.
-const GENERIC_CLUE_WORDS = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'at', 'for', 'and', 'or', 'to', 'with', 'by', 'from', 'based', 'near',
-  'company', 'companies', 'organization', 'organisation', 'business', 'firm', 'agency', 'group', 'client', 'customer', 'vendor', 'product', 'tool', 'service']);
-const RESEARCH_CAPS = { nameCharacters: 80, nameWords: 6, clueCharacters: 80, clueWords: 8, passages: 3 };
-
-/**
- * Research may only name what the participant said: the name must be spoken in a cited participant passage,
- * and every content word of the identity clue must appear in those passages. This proves the words were spoken,
- * not that they describe identity: a clue made of spoken project words would pass, so the producer instructions
- * limit clues to public identity (industry, location, website, kind of organization).
- */
+/** A lookup target must occur in the participant's words, never only in Sam's guesses. */
 export function validateResearchRequest(request: ResearchRequest, transcript: TranscriptEntry[]):
   { ok: true; request: ResearchRequest } | { ok: false; reason: string } {
-  const ids = request.passageIds;
-  if (!ids.length || ids.length > RESEARCH_CAPS.passages || new Set(ids).size !== ids.length) return { ok: false, reason: 'passages' };
-  const passages = ids.map(id => transcript.find(entry => entry.id === id));
-  if (passages.some(entry => !entry || entry.speaker !== 'trainee')) return { ok: false, reason: 'passages' };
-  const spoken = passages.map(entry => ` ${normalizeResearchName(entry!.text)} `);
   const name = normalizeResearchName(request.name);
-  if (!name || request.name.trim().length > RESEARCH_CAPS.nameCharacters || name.split(' ').length > RESEARCH_CAPS.nameWords) return { ok: false, reason: 'name_size' };
-  if (!spoken.some(text => text.includes(` ${name} `))) return { ok: false, reason: 'name_unspoken' };
-  const clue = request.clue == null ? '' : normalizeResearchName(request.clue);
-  if (clue) {
-    if (request.clue!.trim().length > RESEARCH_CAPS.clueCharacters || clue.split(' ').length > RESEARCH_CAPS.clueWords) return { ok: false, reason: 'clue_size' };
-    const words = new Set(spoken.join(' ').split(' '));
-    if (clue.split(' ').some(word => !GENERIC_CLUE_WORDS.has(word) && !words.has(word))) return { ok: false, reason: 'clue_unspoken' };
-  }
-  return { ok: true, request: { kind: request.kind, name: request.name.trim(), clue: clue ? request.clue!.trim() : null, passageIds: [...ids] } };
+  const spoken = transcript.filter(entry => entry.speaker === 'trainee' && ` ${normalizeResearchName(entry.text)} `.includes(` ${name} `));
+  if (!name || !spoken.length) return { ok: false, reason: 'name_unspoken' };
+  return { ok: true, request: { ...request, name: request.name.trim(), clue: request.clue?.trim() || null, passageIds: spoken.map(entry => entry.id) } };
 }
 
 /** Repeats of the same name and clue are skipped; a new clue for the same name is a new attempt. */

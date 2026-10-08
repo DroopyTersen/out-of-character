@@ -42,9 +42,17 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Narrative run**: one attempt at writing the narrative: the text as it streams and a `Narrative` result that settles once. `writeNarrative` starts one from a `NarrativeInput` (the template and the passages); `NarrativeRunner` allows a report two runs under a deadline and keeps the settled text.
 
+**Rejoin**: a request that attaches to a narrative run already in progress. `NarrativeRunner.attach` replays what has been written so far and then streams the rest live; a request that drops only detaches, and the run continues until it settles, is cancelled or reaches its deadline. Once settled, a request gets the stored document instead. An imported transcript's run cannot be rejoined, so it is cancelled when its request drops.
+
+**Transport**: how the browser client delivers its commands. The poll transport sends one HTTP request per command; the socket transport (`client/socketTransport.ts`) sends the same commands over one WebSocket per attempt, as `{ id, action, capability, body }`, and receives `{ id, status, body }` replies equal to the HTTP replies. The report, which streams, stays on HTTP; a socket start must name the socket's own attempt. The socket is opt-in on the host.
+
 ## Hosts
 
 **Hosted session**: one attempt as a host serves it (`HostedSession`, in `app/server/interview/hosted.ts`): it turns each request into a `Command` for the actor, answers in the practice simulator's reply shapes, and runs the narrative when the actor asks for the report. Both of this repository's hosts use it.
+
+**Narrative route**: `POST /api/interview/narratives`, which writes the narrative of an imported transcript (a spec id and its passages) with no attempt involved. The narrative streams back and is not stored.
+
+**Socket path**: `GET /api/interview/sessions/:id/socket`, the attempt's WebSocket upgrade. A host accepts it only when `INTERVIEW_SOCKET_ENABLED` is "true", and answers each socket command by building the matching HTTP request and passing it through the same routes.
 
 **Reference host**: `scripts/interview-host.ts`, the engine served by one Bun process over the in-memory seams, with timers for wakes. It proves the engine needs no Cloudflare, and is the smallest example of a host.
 

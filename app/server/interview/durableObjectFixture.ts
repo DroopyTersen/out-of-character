@@ -23,6 +23,21 @@ export const narrated = (text: string, usage: NonNullable<Narrative['usage']> = 
   return { stream: new ReadableStream({ start(controller) { controller.enqueue(JSON.stringify(document)); controller.close(); } }), result: Promise.resolve({ document, failure: null, usage }) };
 };
 
+/** Durable Object storage as far as the store uses it, with its writes and the alarm visible. */
+export function fakeStorage(values = new Map<string, unknown>()) {
+  const calls: string[] = [];
+  let alarm: number | null = null;
+  const storage = {
+    get: async (key: string) => structuredClone(values.get(key)),
+    put: async (key: string, value: unknown) => { calls.push(`put ${key}`); values.set(key, structuredClone(value)); },
+    delete: async (key: string) => { calls.push(`delete ${key}`); return values.delete(key); },
+    setAlarm: async (at: number) => { calls.push('setAlarm'); alarm = at; },
+    deleteAlarm: async () => { calls.push('deleteAlarm'); alarm = null; },
+    deleteAll: async () => { calls.push('deleteAll'); values.clear(); },
+  };
+  return { storage: storage as unknown as DurableObjectStorage, values, calls, alarm: () => alarm };
+}
+
 type Options = {
   values?: Map<string, unknown>;
   /** Replaces the fixture's services, and its narrative when `narrate` is given. */
@@ -46,16 +61,12 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
   /** Each provider session's resume context: what its instructions add after Sam's brief. */
   const created: { context?: string }[] = [];
   let creations = 0;
-  let alarm = 0;
   const interviewJudged: unknown[] = [];
   const pending: Promise<unknown>[] = [];
   let ready = Promise.resolve();
+  const storage = fakeStorage(values);
   const ctx = {
-    storage: {
-      get: async (key: string) => structuredClone(values.get(key)), put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); },
-      delete: async (key: string) => values.delete(key), setAlarm: async (value: number) => { alarm = value; }, deleteAlarm: async () => { alarm = 0; },
-      deleteAll: async () => values.clear(),
-    },
+    storage: storage.storage,
     blockConcurrencyWhile: (fn: () => Promise<void>) => { ready = fn(); }, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); },
   } as unknown as DurableObjectState;
   const voice = {
@@ -90,7 +101,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
   });
   await ready;
   return {
-    session, values, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
+    session, values, interviewJudged, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: storage.alarm, storageCalls: storage.calls,
     /** The newest created provider session's socket, or the newest attached one before any creation. */
     get socket() { return latest ? sockets.get(latest)! : [...sockets.values()].at(-1)!; },
     socketFor: (id: string) => sockets.get(id),

@@ -1,0 +1,29 @@
+{
+ "dialogueColumns": [
+  "id",
+  "speaker",
+  "text"
+ ],
+ "dialogue": [
+  [
+   "p1",
+   "sam",
+   "What did the project deliver, and who was the client?"
+  ],
+  [
+   "p2",
+   "participant",
+   "A dispatch app for a regional utility. I built the routing service."
+  ],
+  [
+   "p3",
+   "sam",
+   "Who decided to start with routing?"
+  ],
+  [
+   "p4",
+   "participant",
+   "Their ops director, after a bad storm season."
+  ]
+ ]
+}

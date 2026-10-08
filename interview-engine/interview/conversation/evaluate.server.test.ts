@@ -3,9 +3,12 @@ import type { Experimental_EvaluationModel, Experimental_EvaluationQuestion } fr
 import type { Passage } from '../../shared/transcript';
 import { dialogueState, evaluateInterview, readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
 import { interviewQuestions, type JudgedSpec } from './rubric.prompt';
+import { testFraming } from './testSpec';
 
 const criteria = ['zero', 'one', 'two', 'three', 'four'] as const;
 const spec = {
+  interviewer: { name: 'Riley' },
+  framing: testFraming,
   readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria } }],
   topics: [{ objectives: [
     { id: 'scope', label: 'Scope', criterion: 'Names what was built.' },
@@ -32,11 +35,14 @@ test('the questions come from the spec, and only participant passages are eviden
   expect(Object.keys(questions)).toEqual(['reading:specificity:observable', 'reading:specificity', 'reading:specificity:evidence',
     'objective:scope', 'objective:scope:evidence', 'objective:role', 'objective:role:evidence']);
   expect(questions['reading:specificity']).toMatchObject({ type: 'score', instructions: { task: 'How concrete?' }, criteria: [...criteria] });
-  expect(questions['objective:scope']).toMatchObject({ instructions: { task: 'How far has the participant covered this closeout topic? Names what was built.' } });
-  expect(questions['objective:role']).toMatchObject({ instructions: { task: 'How far has the participant covered this closeout topic? Names their own work. Only their own work counts.' }, criteria: { explored: 'They state their own work.' } });
+  expect(questions['objective:scope']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names what was built.' } });
+  expect(questions['objective:role']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names their own work. Only their own work counts.' }, criteria: { explored: 'They state their own work.' } });
   const evidence = questions['objective:scope:evidence'];
   if (evidence?.type !== 'choice') throw new Error('Expected a choice.');
   expect(Object.keys(evidence.criteria ?? {})).toEqual(['none', 'p2', 'p4']);
+  expect(questions['objective:scope']).toMatchObject({ instructions: { party: 'TEST PARTY' } });
+  expect(JSON.stringify(evidence.instructions)).toContain('Speakers are participant and riley (the interviewer); client means the test customer.');
+  expect(JSON.stringify(evidence.instructions)).toContain('Do not select Riley’s wording');
 });
 
 test('answers become readings and coverage; a backchannel is never evidence', () => {
@@ -53,8 +59,9 @@ test('answers become readings and coverage; a backchannel is never evidence', ()
   expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([['scope', 'explored', 'p2'], ['role', 'not-yet', null]]);
 });
 
-test('Jev sees participant and sam, and the grade runs on the judge it is given', async () => {
-  expect(dialogueState(passages).dialogue.map(row => row[1])).toEqual(['sam', 'participant', 'sam', 'participant']);
+test('Jev sees participant and the spec’s interviewer, and the grade runs on the judge it is given', async () => {
+  expect(dialogueState(passages).dialogue.map(row => row[1])).toEqual(['interviewer', 'participant', 'interviewer', 'participant']);
+  expect(dialogueState(passages, 'sam').dialogue.map(row => row[1])).toEqual(['sam', 'participant', 'sam', 'participant']);
   const calls: unknown[] = [];
   const judge: Experimental_EvaluationModel = {
     specificationVersion: 'v4', provider: 'test', modelId: 'jev-test', supportedQuestionTypes: ['choice', 'score', 'boolean'],
@@ -64,7 +71,7 @@ test('Jev sees participant and sam, and the grade runs on the judge it is given'
     },
   };
   const result = await evaluateInterview({ spec, passages, revision: 4 }, { judge });
-  expect(calls).toEqual([dialogueState(passages)]);
+  expect(calls).toEqual([dialogueState(passages, 'riley')]);
   expect(result).toMatchObject({ revision: 4, model: 'jev-test', readings: { specificity: { value: null } } });
   expect(result.objectives.every(item => item.level === 'not-yet')).toBe(true);
   await expect(evaluateInterview({ spec, passages: [], revision: 1 }, judge)).rejects.toThrow('Transcript is outside the interview limit.');

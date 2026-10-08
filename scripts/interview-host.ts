@@ -5,12 +5,14 @@
  *
  * It serves the same `/api/interview/...` routes and replies as the Worker, including imported narratives, over the engine's in-memory seams: attempts
  * live in this process, wakes are timers, background work runs inline, and archive rows are kept in memory (and written
- * to INTERVIEW_ARCHIVE_DIR as JSON when it is set). It reads the Worker's Foundry and Typesafe variables.
+ * to INTERVIEW_ARCHIVE_DIR as JSON when it is set). It reads the Worker's Foundry and Typesafe variables, and accepts
+ * the socket transport when INTERVIEW_SOCKET_ENABLED is "true".
  */
 import { foundryConfig, foundryConfigured } from '../ai/foundry.server';
 import { HostedSession } from '../app/server/interview/hosted';
 import { importedNarrative, narrateWith } from '../app/server/interview/narrative';
-import { routeInterview } from '../app/server/interview/routes';
+import { routeInterview, type InterviewGates } from '../app/server/interview/routes';
+import { answerSocket, socketContext, type SocketContext } from '../app/server/interview/socket';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
 import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
@@ -92,16 +94,34 @@ const limit = async (key: string, kind: 'session' | 'narrative' = 'session') => 
   return true;
 };
 
-const server = Bun.serve({
+// The socket transport is opt-in, as on the Worker: INTERVIEW_SOCKET_ENABLED=true.
+const sockets = env.INTERVIEW_SOCKET_ENABLED === 'true';
+const accepted = new WeakSet<Request>();
+const gates: InterviewGates = {
+  available: () => true, limit,
+  session: async (id, command) => (await attempt(id)).fetch(command),
+  narrative: (input, signal) => importedNarrative(input, [spec], narrateWith(providers), signal),
+  ...(sockets ? { socket: (_id: string, upgrade: Request) => {
+    const context = socketContext(upgrade);
+    if (context && server.upgrade(upgrade, { data: context })) accepted.add(upgrade);
+    return accepted.has(upgrade) ? new Response(null) : Response.json({ error: 'Expected a WebSocket upgrade.' }, { status: 426 });
+  } } : {}),
+};
+
+const server = Bun.serve<SocketContext>({
   hostname: env.HOST || '127.0.0.1',
   port: Number(env.PORT || 8788),
   async fetch(request) {
-    const response = await routeInterview(request, {
-      available: () => true, limit,
-      session: async (id, command) => (await attempt(id)).fetch(command),
-      narrative: (input, signal) => importedNarrative(input, [spec], narrateWith(providers), signal),
-    });
+    const response = await routeInterview(request, gates);
+    // Bun answers an accepted upgrade itself.
+    if (accepted.has(request)) return undefined;
     return response ?? Response.json({ error: 'Not found.' }, { status: 404 });
+  },
+  websocket: {
+    // Each command goes through the same routes as its HTTP request.
+    async message(socket, data) {
+      socket.send(await answerSocket(typeof data === 'string' ? data : null, socket.data, request => routeInterview(request, gates)));
+    },
   },
 });
 console.log(`Interview host on ${server.url} (spec ${spec.id} ${spec.version})`);

@@ -35,3 +35,22 @@ export const narrativeRequestSchema = z.object({
   passages: z.array(passageSchema).max(TRANSCRIPT_LIMIT.entries).refine(passages => transcriptCharacters(passages) <= TRANSCRIPT_LIMIT.characters, 'The transcript is too long.'),
 }).strict();
 export type NarrativeRequest = z.infer<typeof narrativeRequestSchema>;
+
+/**
+ * The socket transport: one WebSocket per attempt at `/api/interview/sessions/:id/socket`, opt-in for a host.
+ * Each message is one command, answered by the same handler as its HTTP route; `id` correlates the reply.
+ * The report streams, so it stays on HTTP.
+ */
+export const SOCKET_ACTIONS = ['start', 'poll', 'ready', 'end', 'pause', 'resume'] as const;
+/** The largest command message: a start's SDP offer with room for the JSON around it. */
+export const SOCKET_MESSAGE_LIMIT = 128 * 1024;
+export const socketRequestSchema = z.object({
+  id: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  action: z.enum(SOCKET_ACTIONS),
+  /** The attempt's capability: the 64 hex digits that follow `Bearer ` on HTTP. */
+  capability: z.string().regex(/^[a-f0-9]{64}$/),
+  body: z.unknown().optional(),
+}).strict();
+export type SocketRequest = z.infer<typeof socketRequestSchema>;
+/** The HTTP reply's status and JSON body. `id` is null when the message could not be read. */
+export type SocketReply = { id: number | null; status: number; body: unknown };

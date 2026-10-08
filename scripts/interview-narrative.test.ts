@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
+import type { Passage } from '../interview-engine/shared/transcript';
 import { parseArgs, readTranscript } from './interview-narrative';
 
-const passages = [
+const passages: Passage[] = [
   { id: 'p1', speaker: 'interviewer', text: 'What did you deliver?', startMs: 0, endMs: 900 },
   { id: 'p2', speaker: 'participant', text: 'A permit intake portal.', startMs: 1000, endMs: 2500 },
 ];

@@ -118,3 +118,12 @@ test('an imported transcript streams its narrative from the language provider, w
   expect(JSON.parse(await response!.text())).toEqual(document);
   expect(JSON.parse(prompt).transcript).toEqual([{ speaker: 'INTERVIEWER', text: 'What did you deliver?' }, { speaker: 'PARTICIPANT', text: 'We shipped the permit intake portal.' }]);
 });
+
+test('the socket upgrade reaches the attempt object only when the deployment opts in', async () => {
+  const f = fixture();
+  const upgrade = () => new Request(`https://practice.example/api/interview/sessions/${id}/socket`, { headers: { Origin: 'https://practice.example', Upgrade: 'websocket' } });
+  expect((await handleInterview(upgrade(), f.env))!.status).toBe(404);
+  expect(f.calls).toHaveLength(0);
+  expect((await handleInterview(upgrade(), { ...f.env, INTERVIEW_SOCKET_ENABLED: 'true' } as Env))!.status).toBe(200);
+  expect(f.calls.map(call => new URL(call.url).pathname)).toEqual([`/api/interview/sessions/${id}/socket`]);
+});

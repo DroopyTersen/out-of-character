@@ -7,6 +7,9 @@ import { LIVE_MODEL } from '../simulator/live.server';
 import { d1Archive } from './archiveD1.server';
 import { HostedSession } from './hosted';
 import { narrateWith, type Narrate } from './narrative';
+import { routeInterview, workerGates } from './routes';
+import { serveSocket, socketContext, type SocketContext } from './socket';
+import type { WebSocketLike } from '../../../interview-engine/providers/voice.server';
 
 /** The SessionStore over Durable Object storage, under the keys the practice simulator's session has always used. */
 export function durableStore(storage: DurableObjectStorage): SessionStore {
@@ -40,8 +43,18 @@ const acceptSocket = (response: Response) => {
   return socket;
 };
 
-/** For tests: the providers, the paid calls and the narrative, in place of the ones built from the environment. */
-export type InterviewObjectOverrides = { providers?: Providers; services?: SessionOptions['services']; narrate?: Narrate };
+/** Cloudflare's side of a WebSocket upgrade: the accepted server socket, and the 101 that hands the other end over. */
+const acceptUpgrade = () => {
+  const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
+  server.accept();
+  return { socket: server as WebSocketLike, response: new Response(null, { status: 101, webSocket: client }) };
+};
+
+/** For tests: the providers, the paid calls, the narrative and the socket upgrade, in place of the platform's. */
+export type InterviewObjectOverrides = {
+  providers?: Providers; services?: SessionOptions['services']; narrate?: Narrate;
+  upgrade?: () => { socket: WebSocketLike; response: Response };
+};
 
 /**
  * One interview attempt. The engine's SessionActor owns everything; this object adapts storage, alarms, background
@@ -50,8 +63,11 @@ export type InterviewObjectOverrides = { providers?: Providers; services?: Sessi
 export class InterviewObject extends DurableObject<Env> {
   private session!: HostedSession;
 
+  private readonly upgrade: () => { socket: WebSocketLike; response: Response };
+
   constructor(ctx: DurableObjectState, env: Env, overrides: InterviewObjectOverrides = {}) {
     super(ctx, env);
+    this.upgrade = overrides.upgrade ?? acceptUpgrade;
     ctx.blockConcurrencyWhile(async () => {
       // Unconfigured, the paid calls fail, but owned attempts can still be read and closed.
       const foundry: FoundryConfig = foundryConfigured(env) ? foundryConfig(env) : { resourceName: '', apiKey: '', agentModel: '', fastModel: '', liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL };
@@ -68,8 +84,20 @@ export class InterviewObject extends DurableObject<Env> {
     });
   }
 
-  fetch(request: Request): Promise<Response> {
-    return this.session.fetch(request);
+  async fetch(request: Request): Promise<Response> {
+    const context = socketContext(request);
+    return context ? this.acceptSocket(context) : this.session.fetch(request);
+  }
+
+  /**
+   * The socket transport, which the Worker forwards here only when it is enabled. Each command goes through the
+   * Worker's HTTP routes with this attempt's session, so its gates and replies are the HTTP transport's.
+   */
+  private acceptSocket(context: SocketContext): Response {
+    const { socket, response } = this.upgrade();
+    const gates = { ...workerGates(this.env), session: (_id: string, command: Request) => this.session.fetch(command) };
+    serveSocket(socket, context, request => routeInterview(request, gates));
+    return response;
   }
 
   async alarm() {

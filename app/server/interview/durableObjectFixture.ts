@@ -9,6 +9,7 @@ import { spec } from '../../../interviews/project-closeout/spec';
 import { archiveDatabase, attempt, ProviderSocket } from '../simulator/session-fixture';
 import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
 import type { Narrate } from './narrative';
+import { socketPair } from '../../../interview-engine/client/testSocket';
 
 const { InterviewObject } = await import('./durableObject');
 
@@ -68,10 +69,13 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
     attach: async (id: string) => socketFor(id),
     close: async () => {},
   };
+  let pair = socketPair();
+  const allow = { limit: async () => ({ success: true }) };
   const session = new InterviewObject(ctx, {
     ...fixtureFoundryEnv, TYPESAFE_API_KEY: 'fixture', SIMULATOR_ARCHIVE: archive.d1,
+    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', RATE_SIMULATOR: allow, RATE_JUDGE: allow,
     CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' },
-  } as Env, {
+  } as unknown as Env, {
     providers: { voice, language: {}, judge: {} } as unknown as Providers,
     services: {
       generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
@@ -82,6 +86,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
       ...services,
     },
     narrate: narrate ?? (() => narrated('Fixture summary.')),
+    upgrade: () => ({ socket: pair.server, response: new Response(null) }),
   });
   await ready;
   return {
@@ -90,5 +95,11 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
     get socket() { return latest ? sockets.get(latest)! : [...sockets.values()].at(-1)!; },
     socketFor: (id: string) => sockets.get(id),
     sockets: () => [...sockets.values()], created,
+    /** Opens a browser socket to the object as the Worker forwards an enabled upgrade; it opens once the object accepts. */
+    openSocket(url: string) {
+      const current = pair = socketPair();
+      void session.fetch(new Request(url.replace(/^ws/, 'http'), { headers: { Upgrade: 'websocket', Origin: new URL(url.replace(/^ws/, 'http')).origin } })).then(() => current.accept());
+      return current.browser;
+    },
   };
 }

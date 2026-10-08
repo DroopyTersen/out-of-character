@@ -34,6 +34,16 @@ The preview has its own `TYPESAFE_API_KEY` and Foundry configuration; subsequent
 
 Before that main cutover, record the intended Live deployment and moderation policy. The policy belongs to the Azure model deployment: using this preview's resource and `gpt-live-1` for production would also use its current `out-of-character-live-permissive` policy. Cloudflare secrets do not select or reset that policy. The preview policy adjustment does not authorize a production deployment.
 
+## Running the reference host
+
+The interview engine (`interview-engine/`) does not depend on Cloudflare. `scripts/interview-host.ts` hosts it in one Bun process to prove that: it serves the same `/api/interview/...` routes and replies as the Worker's `InterviewObject`, with the engine's in-memory seams in place of Durable Object storage, alarms and D1.
+
+```sh
+bun --env-file=.dev.vars scripts/interview-host.ts
+```
+
+It reads the same Foundry and `TYPESAFE_API_KEY` values as the Worker (Bun also loads `.env`) and listens on `http://127.0.0.1:8788`; set `PORT` or `HOST` to change that. Attempts live only in the process: wakes are timers, background work runs inline, and archive rows are kept in memory. Set `INTERVIEW_ARCHIVE_DIR` to also write each attempt's latest row there as JSON. Requests need the same `Origin` and `Authorization: Bearer <64 hex>` capability headers as the Worker's routes. The host serves no pages; the interview screens still use `/api/simulator/sessions` until the browser moves to the new routes.
+
 ## The Simulator
 
 `/simulator` adds serious sales and consultancy practice. Choose one of nine scenarios and seven reusable client personalities, then talk to GPT-Live 1. Jev updates seven skills and objectives that can be achieved in any sequence. It also detects when contextual coaching or actor direction could help. GPT-6 Sol then generates specific advice from the dialogue. The client pursues its own interests and respects hidden budget, scope, and approval constraints. After scored practice, GPT-6 Sol with medium reasoning writes a concise, streamed coaching report from the full dialogue, provisional Jev assessment, and delivered advice. Jev scores and objectives appear immediately; validated Sol judgments replace them together when the report finishes. Happy Hour and the Voice Lab remain ungraded. `/simulator/voice-lab` plays a prepared sample for any client and GPT-Live voice while showing the portrait, character profile, sample text, and voice description. The lab needs no microphone or practice session. Preview which clips need recording with `bun scripts/voice-lab-samples.mjs --dry-run`; generate them with `bun --env-file=.dev.vars scripts/voice-lab-samples.mjs --paid`.

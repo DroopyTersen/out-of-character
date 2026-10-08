@@ -19,17 +19,19 @@ export const participantSpoke = (passages: readonly Passage[]) => passages.some(
  * The host's narrative for one transcript: one run plus one retry under the runner's deadline. The live attempt's
  * report and an imported transcript's narrative are both served by this.
  */
-export function narrativeRunner(template: NarrativeInput['template'], passages: Passage[], narrate: Narrate, onSettled?: (narrative: SettledNarrative) => void) {
-  return new NarrativeRunner(signal => narrate({ template, passages }, signal), onSettled ? { onSettled } : {});
+export function narrativeRunner(template: NarrativeInput['template'], passages: Passage[], narrate: Narrate, onSettled?: (narrative: SettledNarrative) => void, track?: (work: Promise<unknown>) => void) {
+  return new NarrativeRunner(signal => narrate({ template, passages }, signal), { ...(onSettled ? { onSettled } : {}), ...(track ? { track } : {}) });
 }
 
 /**
  * An imported transcript's narrative, streamed back and not stored. No attempt is involved: the transcript arrives
- * in the request, the spec is one the host serves, and the run ends with the request.
+ * in the request, the spec is one the host serves, and nothing could rejoin the run, so it ends with the request.
  */
 export function importedNarrative(input: NarrativeRequest, specs: readonly Pick<InterviewSpec, 'id' | 'narrative'>[], narrate: Narrate, signal: AbortSignal): Response {
   const spec = specs.find(item => item.id === input.specId);
   if (!spec) return simulatorJson({ error: 'Unknown interview.' }, 404);
   if (!participantSpoke(input.passages)) return simulatorJson({ error: 'There is not enough conversation to write about.' }, 422);
-  return narrativeRunner(spec.narrative as NarrativeInput['template'], input.passages, narrate).attach(signal);
+  const runner = narrativeRunner(spec.narrative as NarrativeInput['template'], input.passages, narrate);
+  signal.addEventListener('abort', () => runner.cancel(), { once: true });
+  return runner.attach(signal);
 }

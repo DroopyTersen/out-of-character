@@ -8,7 +8,6 @@
  * to INTERVIEW_ARCHIVE_DIR as JSON when it is set). It reads the Worker's Foundry and Typesafe variables.
  */
 import { foundryConfig, foundryConfigured } from '../ai/foundry.server';
-import { summarizeInterview } from '../ai/interview/summary.server';
 import { HostedSession } from '../app/server/interview/hosted';
 import { importedNarrative, narrateWith } from '../app/server/interview/narrative';
 import { routeInterview } from '../app/server/interview/routes';
@@ -79,7 +78,7 @@ async function open(id: string) {
   hosted = SessionActor.restore({
     spec, providers, foundry, typesafeKey, store, background: inlineBackground(), archive,
     log: event => { if (event.type === 'session') console.warn('Interview session', event); },
-  }).then(actor => new HostedSession(actor, { summarize: (input, finish) => summarizeInterview({ ...input, foundry }, finish), model: foundry.agentModel }));
+  }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), template: spec.narrative, model: foundry.agentModel }));
   return hosted;
 }
 

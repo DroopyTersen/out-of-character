@@ -4,7 +4,10 @@ import { emptyMap, type ConversationMap } from '../../../interview-engine/interv
 import { CANCEL_NOTE, HOLD_NOTE, NOTE_HEADERS, TURN_NOTE } from '../../../interview-engine/interview/conversation/notes';
 import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/interview/conversation/records';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
-import { interviewAttempt, objectFixture } from './durableObjectFixture';
+import { toPassage } from '../../../interview-engine/interview/wire';
+import type { Narrative } from '../../../interview-engine/narrative/narrative.server';
+import type { Passage } from '../../../interview-engine/shared/transcript';
+import { interviewAttempt, narrated, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, settle, waitFor } from '../simulator/session-fixture';
 
 // Ported from the practice simulator's session tests when its interview branches were removed (Phase 5).
@@ -41,9 +44,7 @@ test('the producer reads settled participant turns, maps after its floor, and ke
   const f = await objectFixture({ overrides: {
     evaluateTurn: async input => { turns.push(input.transcript.at(-1)!.id); return novelTurn(input); },
     generateMap: async input => { maps.push(input); return mapped(solMap()); },
-    summarize: (input, done) => { summarized = JSON.stringify(input); return new ReadableStream({ start(controller) {
-      const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
-    } }); },
+    narrate: input => { summarized = JSON.stringify(input.passages); return narrated('The participant led an integration.'); },
   } });
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);
@@ -108,7 +109,7 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', maps: 1, applied: 1, turns: 2, notes: 2, research: 0 });
     expect(summarized).not.toContain('PRIVATE');
     expect(summarized).not.toContain('interventions');
-    expect(JSON.parse(summarized).transcript).toEqual(snapshot.transcript);
+    expect(JSON.parse(summarized)).toEqual(snapshot.transcript.map(toPassage));
     expect(f.row()).toBeNull();
   } finally { await f.session.fetch(request('end')); }
 }, 10_000);
@@ -187,9 +188,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam 
         : mapped({ ...input.previous, entities: [{ id: 'e1', kind: 'term', label: '3DEP', detail: fact.text, source: 'research', passageId: 'L1' }], nextIds: { e: 2, r: 1, t: 1 } });
     },
     lookupInterviewBackground: async input => { lookups.push(input); return { status: 'found', facts: [fact], retrievedAt: Date.now(), queries: ['PRIVATE ARCHIVE QUERY'] }; },
-    summarize: (input, done) => { summaryInput = JSON.stringify(input); return new ReadableStream({ start(controller) {
-      const report = { text: 'The participant led an integration.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
-    } }); },
+    narrate: input => { summaryInput = JSON.stringify(input.passages); return narrated('The participant led an integration.'); },
   } });
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);
@@ -241,7 +240,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam 
 test('interview End re-grades coverage over the whole interview and returns pending before one summary completes', async () => {
   const summaryUsage = { inputTokens: 43, outputTokens: 17, reasoningTokens: 9, cachedTokens: 11 };
   let releaseSummary: ((text: string) => void) | undefined;
-  const summarized: { speaker: string; text: string }[][] = [];
+  const summarized: Passage[][] = [];
   const interviewJudged: { transcript: { speaker: string; text: string }[] }[] = [];
   const f = await objectFixture({ overrides: {
     evaluate: async input => {
@@ -257,10 +256,15 @@ test('interview End re-grades coverage over the whole interview and returns pend
         model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {},
       };
     },
-    summarize: (input, done) => { summarized.push(input.transcript); return new ReadableStream({ start(controller) {
-      controller.enqueue('{\"text\":');
-      releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ report: { text }, failure: null, usage: summaryUsage }); controller.close(); releaseSummary = undefined; };
-    } }); },
+    narrate: input => {
+      summarized.push(input.passages);
+      let done!: (result: Narrative) => void;
+      const result = new Promise<Narrative>(resolve => { done = resolve; });
+      return { stream: new ReadableStream({ start(controller) {
+        controller.enqueue('{\"text\":');
+        releaseSummary = text => { controller.enqueue(JSON.stringify(text) + '}'); done({ document: { text }, failure: null, usage: summaryUsage }); controller.close(); releaseSummary = undefined; };
+      } }), result };
+    },
   } });
   f.socket.holdClose = true;
   let ending: Promise<Response> | undefined;
@@ -295,9 +299,10 @@ test('interview End re-grades coverage over the whole interview and returns pend
     expect((await f.session.fetch(request('report', `Bearer ${'b'.repeat(64)}`))).status).toBe(403);
     const response = await f.session.fetch(request('report'));
     const body = response.text();
-    expect((await f.session.fetch(request('report'))).status).toBe(409);
+    // A reloaded page rejoins the running narrative: what was written so far, then the rest, with no second run.
+    const rejoined = (await f.session.fetch(request('report'))).text();
     expect(summarized).toHaveLength(1);
-    expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['trainee', 'trainee']);
+    expect(summarized[0]!.map(entry => entry.speaker)).toEqual(['participant', 'participant']);
     expect(f.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
     expect(JSON.parse(f.interviewRow()!.evaluation_json).objectives.find((item: { id: string }) => item.id === 'project-delivery')).toEqual(final);
     // Each grade's bands, probabilities and evidence IDs are archived privately, without passage text.
@@ -314,6 +319,7 @@ test('interview End re-grades coverage over the whole interview and returns pend
     expect(f.interviewRow()!.summary_text).toBeNull();
     releaseSummary!('The participant credited Jen with resolving the access issue.');
     expect(JSON.parse(await body)).toEqual({ text: 'The participant credited Jen with resolving the access issue.' });
+    expect(await rejoined).toBe(await body);
     await Promise.all(f.pending);
     const ready = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
     expect(ready.interview.summary).toEqual({ status: 'ready', text: 'The participant credited Jen with resolving the access issue.' });
@@ -333,7 +339,7 @@ test('interview End re-grades coverage over the whole interview and returns pend
 
 test('a failed interview summary remains unavailable while the participant transcript stays archived', async () => {
   const f = await objectFixture({ overrides: {
-    summarize: () => { throw new Error('Provider contained private request data.'); },
+    narrate: () => { throw new Error('Provider contained private request data.'); },
   } });
   await f.session.fetch(request('start', capability, interviewAttempt));
   await f.session.fetch(request('ready'));

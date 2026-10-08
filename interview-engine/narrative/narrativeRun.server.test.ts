@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import { NarrativeRunner, within, type Narrative, type NarrativeRun, type SettledNarrative } from './narrativeRun.server';
 
-// Ported from app/server/simulator/report.test.ts: the same lifecycle over a NarrativeRun instead of a finish callback.
+// Ported from app/server/simulator/report.test.ts: the same lifecycle over a NarrativeRun instead of a finish callback,
+// with a second request during a run rejoining it rather than conflicting.
 
 const text = '## Project closeout\n\nThe team shipped the migration two weeks late.';
 const usage = { inputTokens: 100, outputTokens: 50, reasoningTokens: 20, cachedTokens: 0 };
@@ -12,7 +13,7 @@ const deferred = <T>() => {
 };
 const signal = (aborted = false) => { const controller = new AbortController(); if (aborted) controller.abort(); return controller.signal; };
 
-test('idle reads are immediate, concurrent starts conflict, success is kept and settles before archive work', async () => {
+test('idle reads are immediate, a concurrent request rejoins without a second run, success is kept and settles before archive work', async () => {
   const saved: SettledNarrative[] = [];
   let calls = 0, stream!: ReadableStreamDefaultController<string>;
   const result = deferred<Narrative>();
@@ -21,8 +22,9 @@ test('idle reads are immediate, concurrent starts conflict, success is kept and 
   expect(runner.state().starts).toBe(0);
   const response = runner.attach(signal());
   expect(response.headers.get('Content-Encoding')).toBe('identity');
-  expect(runner.attach(signal()).status).toBe(409);
-  const output = response.text();
+  const second = runner.attach(signal());
+  expect(second.status).toBe(200);
+  const output = response.text(), rejoined = second.text();
   let readReturned = false;
   const reading = runner.read().then(value => { readReturned = true; return value; });
   await Promise.resolve(); expect(readReturned).toBe(false);
@@ -30,9 +32,12 @@ test('idle reads are immediate, concurrent starts conflict, success is kept and 
   stream.close();
   result.resolve({ document: { text }, failure: null, usage });
   expect(await output).toBe(text);
+  expect(await rejoined).toBe(text);
   expect(await reading).toEqual({ status: 'completed', starts: 1, document: { text }, failure: null });
-  // A reloaded page gets the stored text without a second run.
-  expect(await runner.attach(signal()).text()).toBe(text);
+  // A reloaded page gets the stored document, as the JSON the stream carried, without a second run.
+  const stored = runner.attach(signal());
+  expect(stored.headers.get('Cache-Control')).toBe('no-store');
+  expect(await stored.json() as unknown).toEqual({ text });
   expect(calls).toBe(1);
   expect(saved).toHaveLength(1);
   expect(saved[0]!.attempts[0]!.usage?.reasoningTokens).toBe(20);
@@ -58,22 +63,52 @@ test('one explicit retry is allowed and a late result cannot replace its outcome
   expect(saved[1]!.attempts).toHaveLength(2);
 });
 
-test('response cancellation and request abort stop the provider and record cancellation once', async () => {
-  for (const byRequest of [false, true]) {
-    const controller = new AbortController();
-    let providerSignal: AbortSignal | undefined;
-    const saved: SettledNarrative[] = [];
-    const runner = new NarrativeRunner(runSignal => {
-      providerSignal = runSignal;
-      return { stream: new ReadableStream({ start(stream) { stream.enqueue('#'); } }), result: new Promise<Narrative>(() => {}) };
-    }, { onSettled: value => { saved.push(value); } });
-    const reader = runner.attach(controller.signal).body!.getReader();
-    await reader.read();
-    if (byRequest) controller.abort(); else await reader.cancel();
-    expect((await runner.read()).failure).toBe('cancelled');
-    expect(providerSignal!.aborted).toBe(true);
-    expect(saved).toHaveLength(1);
-  }
+test('a request that rejoins mid-stream gets what was written, then the rest live', async () => {
+  let stream!: ReadableStreamDefaultController<string>;
+  const result = deferred<Narrative>();
+  const document = JSON.stringify({ text });
+  const runner = new NarrativeRunner(() => ({ stream: new ReadableStream({ start(controller) { stream = controller; } }), result: result.promise }));
+  const first = runner.attach(signal()).body!.pipeThrough(new TextDecoderStream()).getReader();
+  stream.enqueue(document.slice(0, 10));
+  stream.enqueue(document.slice(10, 20));
+  expect((await first.read()).value).toBe(document.slice(0, 10));
+  // The first page reloads: its request goes, and the run carries on for the next one.
+  await first.cancel();
+  expect(runner.state().status).toBe('running');
+  const rejoined = runner.attach(signal()).body!.pipeThrough(new TextDecoderStream()).getReader();
+  let seen = '';
+  while (seen.length < 20) seen += (await rejoined.read()).value;
+  expect(seen).toBe(document.slice(0, 20));
+  stream.enqueue(document.slice(20));
+  stream.close();
+  result.resolve({ document: { text }, failure: null, usage });
+  for (;;) { const next = await rejoined.read(); if (next.done) break; seen += next.value; }
+  expect(JSON.parse(seen)).toEqual({ text });
+  expect(runner.state()).toMatchObject({ status: 'completed', starts: 1 });
+});
+
+test('dropping requests detaches without stopping the run; cancel stops the provider and records cancellation once', async () => {
+  const controller = new AbortController();
+  let providerSignal: AbortSignal | undefined;
+  const saved: SettledNarrative[] = [], tracked: Promise<unknown>[] = [];
+  const runner = new NarrativeRunner(runSignal => {
+    providerSignal = runSignal;
+    return { stream: new ReadableStream({ start(stream) { stream.enqueue('#'); } }), result: new Promise<Narrative>(() => {}) };
+  }, { onSettled: value => { saved.push(value); }, track: work => { tracked.push(work); } });
+  const reader = runner.attach(controller.signal).body!.getReader();
+  await reader.read();
+  controller.abort();
+  await reader.cancel();
+  await Promise.resolve();
+  expect(runner.state().status).toBe('running');
+  expect(providerSignal!.aborted).toBe(false);
+  runner.cancel();
+  expect((await runner.read()).failure).toBe('cancelled');
+  expect(providerSignal!.aborted).toBe(true);
+  runner.cancel();
+  expect(saved).toHaveLength(1);
+  expect(tracked).toHaveLength(1);
+  await tracked[0];
 });
 
 test('an independent deadline settles a provider that never answers and releases status readers', async () => {

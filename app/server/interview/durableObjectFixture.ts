@@ -7,17 +7,25 @@ import type { Providers } from '../../../interview-engine/providers/providers.se
 import { spec } from '../../../interviews/project-closeout/spec';
 // The simulator fixture substitutes the Workers base class before anything imports it.
 import { archiveDatabase, attempt, ProviderSocket } from '../simulator/session-fixture';
-import type { Summarize } from './hosted';
+import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
+import type { Narrate } from './narrative';
 
 const { InterviewObject } = await import('./durableObject');
 
 export const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
 const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 
+/** A narrative run that writes `text` as its JSON document at once and completes. */
+export const unmetered = { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null };
+export const narrated = (text: string, usage: NonNullable<Narrative['usage']> = unmetered): NarrativeRun => {
+  const document = { text };
+  return { stream: new ReadableStream({ start(controller) { controller.enqueue(JSON.stringify(document)); controller.close(); } }), result: Promise.resolve({ document, failure: null, usage }) };
+};
+
 type Options = {
   values?: Map<string, unknown>;
-  /** Replaces the fixture's services, and its summary when `summarize` is given. */
-  overrides?: Partial<SessionServices> & { summarize?: Summarize };
+  /** Replaces the fixture's services, and its narrative when `narrate` is given. */
+  overrides?: Partial<SessionServices> & { narrate?: Narrate };
   archive?: ReturnType<typeof archiveDatabase>;
   /** The first created provider session's id; a replacement owner needs its own to keep sessions distinct. */
   provider?: string;
@@ -27,7 +35,7 @@ type Options = {
  * The interview object over the practice simulator's fixture parts: the same fake provider sockets, the same archive
  * database and the same storage map, so a test reads like the practice simulator's session tests.
  */
-export async function objectFixture({ values = new Map<string, unknown>(), overrides: { summarize, ...services } = {}, archive = archiveDatabase(), provider = 'provider-private-id' }: Options = {}) {
+export async function objectFixture({ values = new Map<string, unknown>(), overrides: { narrate, ...services } = {}, archive = archiveDatabase(), provider = 'provider-private-id' }: Options = {}) {
   const sockets = new Map<string, ProviderSocket>([[provider, new ProviderSocket()]]);
   let latest: string | undefined;
   const socketFor = (id: string) => {
@@ -73,9 +81,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
       evaluate: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1 }; },
       ...services,
     },
-    summarize: summarize ?? ((_input, done) => new ReadableStream({ start(controller) {
-      const report = { text: 'Fixture summary.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
-    } })),
+    narrate: narrate ?? (() => narrated('Fixture summary.')),
   });
   await ready;
   return {

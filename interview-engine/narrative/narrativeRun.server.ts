@@ -3,32 +3,49 @@ import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, Narrati
 
 export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
 
-// The shell of the narrative runner: SessionReport's lifecycle (app/server/simulator/report.ts) over a NarrativeRun.
-// The simulator keeps SessionReport, and so does the interview's report route while its replies must match the
-// simulator's byte for byte; the narrative route adopts this one with independent reporting (Phase 6).
+// SessionReport's lifecycle (app/server/simulator/report.ts) over a NarrativeRun, with the API design's rejoin: a
+// request that arrives while a run is writing attaches to it instead of being refused.
 
 export const NARRATIVE_MAX_STARTS = 2;
 export const NARRATIVE_DEADLINE_MS = 120_000;
 
 export type NarrativeAttempt = { startedAt: number; endedAt: number; failure: NarrativeFailure | null; usage: NarrativeUsage | null };
 export type SettledNarrative = { document: { text: string } | null; attempts: NarrativeAttempt[] };
+export type NarrativeRunnerOptions = {
+  deadlineMs?: number;
+  onSettled?: (narrative: SettledNarrative) => void;
+  /** Keeps a run going after every request has detached, where the platform would otherwise stop it (Cloudflare: `waitUntil`). */
+  track?: (work: Promise<unknown>) => void;
+};
 
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const idle = (): NarrativeState => ({ status: 'idle', starts: 0, document: null, failure: null });
 
+/** One run's text so far, shared by every request attached to it. */
+type Written = { chunks: string[]; ended: 'closed' | 'errored' | null; changed: Promise<void>; notify: () => void };
+const written = (): Written => {
+  const value = { chunks: [], ended: null } as unknown as Written;
+  const arm = () => { value.changed = new Promise(resolve => { value.notify = () => { arm(); resolve(); }; }); };
+  arm();
+  return value;
+};
+
 /**
  * One bounded narrative run plus one explicit retry, for a host route. Holds no session resources.
- * A completed narrative is answered from memory; the host persists it from `onSettled`.
+ * A request made while a run is writing rejoins it: it receives the text written so far, then the rest as it is written.
+ * Dropping a request detaches it without stopping the run, so a reloaded page can rejoin; the deadline bounds the run,
+ * and `cancel()` stops it. A completed narrative is answered from memory; the host persists it from `onSettled`.
  */
-// TODO(phase6): re-attach a reloaded page to a running stream instead of answering 409, as the API design describes.
 export class NarrativeRunner {
   private current = idle();
   private settled = Promise.resolve();
   private attempts: NarrativeAttempt[] = [];
+  private text: Written | undefined;
+  private stop: (() => void) | undefined;
 
   constructor(
     private readonly start: (signal: AbortSignal) => NarrativeRun,
-    private readonly options: { deadlineMs?: number; onSettled?: (narrative: SettledNarrative) => void } = {},
+    private readonly options: NarrativeRunnerOptions = {},
   ) {}
 
   state(): NarrativeState { return this.current; }
@@ -39,10 +56,16 @@ export class NarrativeRunner {
     return this.current;
   }
 
-  /** Starts an attempt and streams it, or answers with the stored text, a conflict, or a spent retry. Aborting `signal` cancels the attempt. */
+  /** Stops a running attempt, which settles as cancelled. */
+  cancel() { this.stop?.(); }
+
+  /**
+   * Streams the running attempt from its start, starts one, or answers with the stored document (as the JSON the
+   * stream carries) or a spent retry.
+   */
   attach(signal: AbortSignal): Response {
-    if (this.current.status === 'running') return json({ error: 'Your report is already being prepared.' }, 409);
-    if (this.current.status === 'completed') return new Response(this.current.document.text, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+    if (this.current.status === 'running' && this.text) return this.listen(this.text);
+    if (this.current.status === 'completed') return json(this.current.document);
     if (this.current.starts >= NARRATIVE_MAX_STARTS) return json({ error: 'The report retry has already been used.' }, 409);
     if (signal.aborted) return json({ error: 'The report request was cancelled.' }, 400);
     const start = this.current.starts + 1, startedAt = Date.now();
@@ -54,7 +77,7 @@ export class NarrativeRunner {
     const finish = (result: Narrative) => {
       if (this.current.starts !== start || this.current.status !== 'running') return;
       clearTimeout(timer);
-      signal.removeEventListener('abort', cancel);
+      this.stop = undefined;
       this.current = result.failure === null
         ? { status: 'completed', starts: start, document: result.document, failure: null }
         : { status: 'failed', starts: start, document: null, failure: result.failure };
@@ -67,9 +90,8 @@ export class NarrativeRunner {
       controller.abort();
       void reader?.cancel().catch(() => {});
     };
-    const cancel = () => abort('cancelled');
+    this.stop = () => abort('cancelled');
     const timer = setTimeout(() => abort('timeout'), this.options.deadlineMs ?? NARRATIVE_DEADLINE_MS);
-    signal.addEventListener('abort', cancel, { once: true });
     let outcome: Promise<void>;
     try {
       const run = this.start(controller.signal);
@@ -79,24 +101,43 @@ export class NarrativeRunner {
       finish({ document: null, failure: 'provider', usage: null });
       return json({ error: 'The report could not be started.' }, 502);
     }
+    const text = this.text = written();
     const settled = this.settled;
+    const end = (how: 'closed' | 'errored') => { text.ended = how; text.notify(); if (this.text === text) this.text = undefined; };
+    // The run is read once, whoever is listening; each attached request replays what this has collected.
+    const pump = (async () => {
+      try {
+        for (;;) {
+          const next = await reader!.read();
+          if (next.done) break;
+          text.chunks.push(next.value);
+          text.notify();
+        }
+        // The result settles alongside the stream; the deadline bounds a run whose result never comes.
+        await Promise.race([outcome, settled]);
+        finish({ document: null, failure: 'provider', usage: null });
+        end('closed');
+      } catch {
+        finish({ document: null, failure: 'provider', usage: null });
+        end('errored');
+      }
+    })();
+    this.options.track?.(pump);
+    return this.listen(text);
+  }
+
+  /** One request's view of a run: everything written so far, then each new chunk, until the run's stream ends. */
+  private listen(text: Written): Response {
+    let index = 0;
     const stream = new ReadableStream<string>({
       async pull(output) {
-        try {
-          const next = await reader!.read();
-          if (next.done) {
-            // The result settles alongside the stream; the deadline bounds a run whose result never comes.
-            await Promise.race([outcome, settled]);
-            finish({ document: null, failure: 'provider', usage: null });
-            output.close();
-          }
-          else output.enqueue(next.value);
-        } catch {
-          finish({ document: null, failure: 'provider', usage: null });
-          output.error(new Error('The report stream was interrupted.'));
+        for (;;) {
+          if (index < text.chunks.length) { output.enqueue(text.chunks[index++]!); return; }
+          if (text.ended === 'closed') { output.close(); return; }
+          if (text.ended === 'errored') { output.error(new Error('The report stream was interrupted.')); return; }
+          await text.changed;
         }
       },
-      cancel,
     });
     return createTextStreamResponse({ stream, headers: { 'Cache-Control': 'no-store, no-transform', 'Content-Encoding': 'identity' } });
   }

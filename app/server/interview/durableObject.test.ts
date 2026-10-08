@@ -3,6 +3,7 @@ import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
 import { emptyInterviewReadings } from '../../../core/interview';
 import { threadKey } from '../../../core/interview-ranking';
 import type { Checkpoint, Lease } from '../../../interview-engine/interview/interview.server';
+import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
 import type { Providers } from '../../../interview-engine/providers/providers.server';
 // The simulator fixture substitutes the Workers base class before anything imports it.
 import { attempt, capability, fixture, settle, waitFor } from '../simulator/session-fixture';
@@ -67,9 +68,11 @@ const producer = {
   evaluateTraits: async (input: { threads: { id: string }[] }) => ({ traits: Object.fromEntries(input.threads.map(thread => [thread.id, { key: threadKey(thread as never), spicy: .5, grounding: 0 }])), model: 'fixture', durationMs: 1, usage }),
   lookupInterviewBackground: async () => ({ status: 'unresolved' as const, reason: 'fixture', queries: [] }),
 };
-const summary = (_input: unknown, done: (result: { report: { text: string }; failure: null; usage: null }) => void) => new ReadableStream<string>({ start(controller) {
-  const report = { text: 'Fixture summary.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close();
-} });
+// The frozen archive row records this summary without usage, as the fixture's earlier summary reported none.
+const summary = (): NarrativeRun => {
+  const document = { text: 'Fixture summary.' };
+  return { stream: new ReadableStream<string>({ start(controller) { controller.enqueue(JSON.stringify(document)); controller.close(); } }), result: Promise.resolve({ document, failure: null, usage: null } as unknown as Narrative) };
+};
 
 /** The new object over the practice simulator's fixture parts: its sockets, its archive database, the same env. */
 async function interviewObject(spare: Awaited<ReturnType<typeof fixture>>) {
@@ -90,7 +93,7 @@ async function interviewObject(spare: Awaited<ReturnType<typeof fixture>>) {
   } as Env, {
     providers: { voice, language: {}, judge: {} } as unknown as Providers,
     services: { ...producer, evaluate: async (input: { revision: number; transcript: { id: string; speaker: string; text: string }[] }) => { grades.push(input.revision); return graded(input.revision, input.transcript) as never; } } as never,
-    summarize: summary as never,
+    narrate: summary,
   });
   await ready;
   return { object, values, pending, storage, grades, socket: spare.socket, row: spare.interviewRow };

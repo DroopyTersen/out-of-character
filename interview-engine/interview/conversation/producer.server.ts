@@ -1,4 +1,4 @@
-import type { FoundryConfig } from '../../providers/foundry.server';
+import { modelName, type Providers } from '../../providers/providers.server';
 import { callFailure } from '../../providers/diagnostics.server';
 import { DirectorOutputError, type ModelUsage } from '../../providers/structured.server';
 import type { InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
@@ -30,7 +30,10 @@ export const producerServices = { generateMap, evaluateTurn, evaluateTraits, loo
 type Options = {
   /** The interviewer's name and the topics the map tracks. */
   spec: MappedSpec;
-  attemptId: string; startedAt: number; foundry: FoundryConfig; typesafeKey: string; services: typeof producerServices;
+  attemptId: string; startedAt: number;
+  /** The bound paid clients the services call: Sol's structured call, Luna's fast model and Jev. */
+  providers: Omit<Providers, 'voice' | 'telemetry' | 'log'>;
+  services: typeof producerServices;
   /** The settled passages in transcript order, stopping at the first one still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
@@ -143,7 +146,11 @@ export class InterviewProducer {
   private heldRefresh = false;
   private mapKey: string | null = null;
   private lastMapNote: number | null = null;
-  /** Notes decided while Sam was quiet: the latest of each kind goes out when Sam next speaks, so none lands in a pause the participant may still be thinking in. */
+  /**
+   * Decided notes, the latest of each kind, waiting for a turn boundary: the turn note of a handover, or the hold or
+   * cancel note at the participant's next words. None lands while Sam is asking, where it can turn the question Sam
+   * is putting into another, or in a pause the participant may still be thinking in.
+   */
   private held = new Map<NoteRecord['kind'], HeldNote>();
   private pace: PaceState | null = null;
   /** Active time of the last offer to stop that reached Sam. */
@@ -163,8 +170,6 @@ export class InterviewProducer {
   private lastSam = 0;
   /** How many letters and digits each participant passage has had transcribed. */
   private heardWords = new Map<string, number>();
-  /** Sam said something substantive after the held notes were decided; they go out once the participant's words stop arriving. */
-  private releaseDue = false;
   private closed = false;
   /** Notes restated for a new provider session are outside the note budget. */
   private restating = false;
@@ -250,7 +255,7 @@ export class InterviewProducer {
   private handOver(now: number, marks: NoteMarks) {
     // A pause with its turn note gets no hold note after it.
     if (this.floor.owed) Object.assign(this.floor, { handedAt: now, heldAt: now });
-    this.deliver(now, marks, this.fixed(TURN_NOTE, now), this.unread());
+    this.deliver(now, marks, ['turn', this.fixed(TURN_NOTE, now)], this.unread());
   }
 
   private fixed(text: string, now: number): HeldNote { return { text, decidedAt: now, mapId: this.mapRecord?.id ?? null, researchIds: [], offer: false }; }
@@ -282,7 +287,7 @@ export class InterviewProducer {
     const cancel = handedAt != null && owed && !this.samSince(handedAt) && this.counts.cancels < LIMITS.cancels;
     if (cancel) {
       this.counts.cancels++;
-      this.send([['cancel', this.fixed(CANCEL_NOTE, now)]], now, { quietMs: Math.max(0, now - LIMITS.transcriptLag - quietSince) });
+      this.deliver(now, { quietMs: Math.max(0, now - LIMITS.transcriptLag - quietSince) }, ['cancel', this.fixed(CANCEL_NOTE, now)], true);
     }
     // The cancel note tells Sam to listen, so it stands for the floor's hold note.
     this.floor = { ...idleFloor(), owed: true, heldAt: cancel ? now : null, mark: this.latestSam && { ...this.latestSam } };
@@ -326,23 +331,23 @@ export class InterviewProducer {
   }
 
   /**
-   * At the participant's first words, while Sam is quiet, Sam gets the hold note. Once the participant has been quiet
-   * for the window after a complete answer, and Sam for `afterSam`, the turn is handed over, as soon as Jev has read
-   * the answer or `readWait` later. Not after a hanging clause, a request for time or a request to stop. A held note
-   * Sam's words released waits for the participant's words to stop arriving. The session also calls it when
-   * `floorDue` comes.
+   * At the participant's first words, while Sam is quiet, Sam gets the hold note, and with it the notes held since
+   * Sam took the turn itself: Sam has asked, so they can't change the question, and they are in hand for the next.
+   * Once the participant has been quiet for the window after a complete answer, and Sam for `afterSam`, the turn is
+   * handed over, as soon as Jev has read the answer or `readWait` later. Not after a hanging clause, a request for
+   * time or a request to stop. The session also calls it when `floorDue` comes.
    */
   listen(now = Date.now()) {
     if (!this.alive || this.restating) return;
     const { inputAt, outputActive } = this.hearing;
-    // A held offer goes only if their words since are read: what they said may outdate it.
-    if (this.releaseDue && (inputAt == null || now - inputAt > LIMITS.releaseQuiet)) this.deliver(now, {}, undefined, this.unread());
     const floor = this.floor;
     if (!floor.owed || outputActive || inputAt == null || floor.handedAt != null || this.handOverDue(now)) return;
-    if (floor.heldAt == null && this.counts.holds < LIMITS.holds) {
+    if (floor.heldAt == null) {
       floor.heldAt = now;
-      this.counts.holds++;
-      this.send([['hold', this.fixed(HOLD_NOTE, now)]], now);
+      const hold = this.counts.holds < LIMITS.holds;
+      if (hold) this.counts.holds++;
+      // Their words since a held offer are unread, so it is dropped: what they said may outdate it.
+      this.deliver(now, {}, hold ? ['hold', this.fixed(HOLD_NOTE, now)] : undefined, true);
     }
   }
 
@@ -363,12 +368,8 @@ export class InterviewProducer {
   floorDue(now = Date.now()): number | null {
     const { inputAt, outputActive } = this.hearing;
     if (!this.alive || inputAt == null) return null;
-    const due = this.releaseDue ? [inputAt + LIMITS.releaseQuiet + 1] : [];
     const { owed, handedAt } = this.floor;
-    if (owed && !outputActive && handedAt == null) {
-      const at = this.handoverAt(now);
-      due.push(at, at + LIMITS.readWait);
-    }
+    const due = owed && !outputActive && handedAt == null ? [this.handoverAt(now), this.handoverAt(now) + LIMITS.readWait] : [];
     // Anything already due waits on words, not the clock: the next transcript change or tick looks again.
     const next = due.filter(at => at > now);
     return next.length ? Math.min(...next) : null;
@@ -408,7 +409,7 @@ export class InterviewProducer {
     this.counts.maps++;
     const record: MapRecord = {
       source: 'map', id: `map-${crypto.randomUUID()}`, reasons, startedAt: now, outcome: 'pending',
-      inputCount: settled.length, lastInputId: settled.at(-1)?.id ?? null, model: this.options.foundry.agentModel,
+      inputCount: settled.length, lastInputId: settled.at(-1)?.id ?? null, model: modelName(this.options.providers.language.agent),
     };
     this.records.push(record);
     for (const { researchId } of events) {
@@ -441,13 +442,13 @@ export class InterviewProducer {
   }
 
   private async generate(record: MapRecord, controller: AbortController, log: MapLog, settled: TranscriptEntry[], now: number, unmapped: boolean) {
-    const { services, foundry, attemptId } = this.options;
+    const { services, providers, attemptId } = this.options;
     const signal = AbortSignal.any([this.abort.signal, controller.signal, AbortSignal.timeout(LIMITS.mapTimeout)]);
     const live = () => this.alive && this.call?.record === record;
     let result: Awaited<ReturnType<typeof services.generateMap>>;
     try {
       result = await services.generateMap({
-        spec: this.options.spec, foundry, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
+        spec: this.options.spec, structured: providers.structured, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
         lookups: this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && item.loggedAt != null ? [item.eventId] : []),
       });
       if (!live()) return;
@@ -508,7 +509,7 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.turnTimeout)]);
     try {
-      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, apiKey: this.options.typesafeKey, signal, atMs: this.elapsed(now) });
+      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, judge: this.options.providers.judge, signal, atMs: this.elapsed(now) });
       if (scope.aborted) return;
       signal.throwIfAborted();
       if (Date.now() - record.startedAt >= LIMITS.turnTimeout) { record.outcome = 'timeout'; return; }
@@ -549,7 +550,7 @@ export class InterviewProducer {
     const map = this.map;
     this.track((async () => {
       try {
-        const result = await this.options.services.evaluateTraits({ map, threads, apiKey: this.options.typesafeKey, signal });
+        const result = await this.options.services.evaluateTraits({ map, threads, judge: this.options.providers.judge, signal });
         if (scope.aborted) return;
         signal.throwIfAborted();
         Object.assign(record, {
@@ -589,7 +590,7 @@ export class InterviewProducer {
       this.deferred = turn;
       turn = undefined;
     } else if (turn) this.deferred = null;
-    const decision = nextListNote(this.map, this.ranking, this.elapsed(now), this.list, { turn: !!turn, offer, headers: noteHeaders(this.options.channel) });
+    const decision = nextListNote(this.map, this.ranking, this.elapsed(now), this.list, { turn: !!turn, offer, headers: noteHeaders(this.options.channel), moved: !!turn && this.moved(turn) });
     if (!decision.text) { this.list = decision.state; return decision.pick; }
     // Sam's lead doesn't move under the participant: a refresh that would change it waits for them to stop, too.
     if (talking && decision.state.lead !== this.list.lead) { this.heldRefresh = true; return decision.pick; }
@@ -597,6 +598,16 @@ export class InterviewProducer {
     const outcome = this.note('list', decision.text, now, { turn, offer: decision.offer });
     if (outcome === 'sent' || outcome === 'held') this.list = decision.state;
     return decision.pick;
+  }
+
+  /**
+   * Sam has asked since the turn Jev read: a reading that finds the thread answered came too late to say so, since
+   * Sam may be pulling on it, and the answer to Sam's question gets its own reading.
+   */
+  private moved(turn: TurnRecord): boolean {
+    const transcript = this.options.transcript?.() ?? this.options.settled();
+    const index = transcript.findIndex(entry => entry.id === turn.passageId);
+    return index >= 0 && transcript.slice(index + 1).some(entry => entry.speaker === 'client' && (entry.text.includes('?') || !yieldsTurn(entry.text)));
   }
 
   /** Sol allows an offer to stop, and the producer's own floors and spacing are met. */
@@ -654,16 +665,16 @@ export class InterviewProducer {
   }
 
   /**
-   * Decides a note. Unless a new provider session needs it at once, it waits for Sam's next words, replacing any held
-   * note of its kind: a note that lands while Sam is quiet can prompt Sam to speak into the participant's pause, and
-   * Sam replies faster than a note can arrive, so holding it costs nothing. Null when the budget is spent.
+   * Decides a note. Unless a new provider session needs it at once, it waits for the next turn boundary, replacing
+   * any held note of its kind: a note that lands while Sam is quiet can prompt Sam to speak into the participant's
+   * pause, one that lands while Sam is asking can turn the question into another, and Sam replies faster than a note
+   * can arrive, so holding it costs nothing. Null when the budget is spent.
    */
   private note(kind: NoteRecord['kind'], text: string, now: number, { turn, researchIds = [], offer = false }: { turn?: TurnRecord; researchIds?: string[]; offer?: boolean } = {}): NoteRecord['outcome'] | 'held' | null {
     if (!this.restating && this.counts.notes >= LIMITS.notes) return null;
     const held: HeldNote = { text, decidedAt: now, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), researchIds, offer };
     if (this.restating || this.options.immediate) return this.send([[kind, held]], now)[0]!.outcome;
     this.held.set(kind, held);
-    this.releaseDue = false;
     return 'held';
   }
 
@@ -696,12 +707,12 @@ export class InterviewProducer {
   }
 
   /**
-   * Sam has started speaking, or has the turn: the held notes go out, the thread note first, then the map note and the
-   * turn note if there is one. A held offer to stop is dropped if the participant has spoken since it was decided, or
-   * `stale` says what they said is unread, since it may outdate the offer; their turn's reading decides again.
+   * A turn boundary: the held notes go out as one event, the thread note first, then the map note, then the
+   * turn-taking note of the boundary if there is one. A held offer to stop is dropped if the participant has spoken
+   * since it was decided, or `stale` says what they said is unread, since it may outdate the offer; their turn's
+   * reading decides again.
    */
-  private deliver(now: number, marks: NoteMarks = {}, turn?: HeldNote, stale = false) {
-    this.releaseDue = false;
+  private deliver(now: number, marks: NoteMarks = {}, tail?: NotePart, stale = false) {
     const parts: NotePart[] = [];
     let budget = LIMITS.notes - this.counts.notes;
     for (const kind of ['list', 'map'] as const) {
@@ -711,7 +722,7 @@ export class InterviewProducer {
       if (!(held.offer && (stale || this.options.talking?.())) && budget-- > 0) parts.push([kind, held]);
       else this.unsent(kind);
     }
-    if (turn) parts.push(['turn', turn]);
+    if (tail) parts.push(tail);
     if (!parts.length) return;
     const fits = parts.reduce((length, [, note]) => length + note.text.length + 2, 0) <= LIMITS.handoverChars;
     const events = fits ? [parts] : [parts.filter(([kind]) => kind === 'map'), parts.filter(([kind]) => kind !== 'map')];
@@ -729,7 +740,7 @@ export class InterviewProducer {
   // ---- Research ----
 
   private request(map: MapRecord, request: ResearchRequest, settled: TranscriptEntry[]) {
-    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map.id, request, model: this.options.foundry.fastModel, requestedAt: Date.now(), outcome: 'pending' };
+    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map.id, request, model: modelName(this.options.providers.language.fast), requestedAt: Date.now(), outcome: 'pending' };
     this.records.push(record);
     const refuse = (outcome: ResearchRecord['outcome'], reason: string) => { record.outcome = outcome; record.reason = reason; record.completedAt = Date.now(); };
     const valid = validateResearchRequest(request, settled);
@@ -752,7 +763,7 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.lookupTimeout)]);
     try {
-      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, foundry: this.options.foundry, signal });
+      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, model: this.options.providers.language.fast, signal });
       if (scope.aborted) return;
       signal.throwIfAborted();
       const now = Date.now();
@@ -779,10 +790,9 @@ export class InterviewProducer {
   // ---- Session events ----
 
   /**
-   * Sam's substantive words release the held notes, though a reaction of a few words doesn't. They wait for the
-   * participant's words to stop arriving, and notes decided after a handover wait for the next one rather than reach
-   * Sam in the middle of the question it's asking. Also marks the next substantive Sam passage at or after a sent
-   * note, not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
+   * Sam's words never release the held notes: a note that reached Sam in the middle of a question has turned it into
+   * another, so they wait for the next turn boundary. Marks the next substantive Sam passage at or after a sent note,
+   * not whether Sam acted on it. A growing passage counts once it is more than a backchannel.
    */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
     if (!this.alive) return;
@@ -790,7 +800,6 @@ export class InterviewProducer {
     if (entry.speaker === 'client' && entry.text.trim()) this.samSaid(entry, now);
     if (entry.speaker === 'trainee') this.participantSaid(entry, now);
     if (entry.speaker !== 'client' || !entry.text.trim() || isBackchannel(entry.text)) { this.listen(now); return; }
-    if (!yieldsTurn(entry.text)) this.releaseDue = this.held.size > 0 && this.floor.handedAt == null;
     this.listen(now);
     if (this.samTurns.has(entry.id)) return;
     this.samTurns.add(entry.id);
@@ -833,7 +842,7 @@ export class InterviewProducer {
   summary(): ProducerSummary {
     const { maps, applied, turns, notes, research } = this.counts;
     return {
-      model: this.options.foundry.agentModel, effort: MAP_EFFORT, version: PRODUCER_VERSION, mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
+      model: modelName(this.options.providers.language.agent), effort: MAP_EFFORT, version: PRODUCER_VERSION, mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
       maps, applied, turns, notes, research, latency: producerLatency(this.records),
       listening: {
         windowMs: LIMITS.listenWindow, lagMs: LIMITS.transcriptLag, afterSamMs: LIMITS.afterSam, readWaitMs: LIMITS.readWait,
@@ -847,7 +856,6 @@ export class InterviewProducer {
     this.hearing = unheard();
     this.floor = idleFloor();
     this.latestSam = null;
-    this.releaseDue = false;
   }
 
   /**

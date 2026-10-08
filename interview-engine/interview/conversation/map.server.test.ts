@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { testFoundry } from '../../providers/testFoundry.server';
-import { DirectorOutputError } from '../../providers/structured.server';
+import { DirectorOutputError, structuredWith } from '../../providers/structured.server';
 import type { WireEntry as TranscriptEntry } from '../wire';
 import { emptyMap, MAP_LIMITS, PARTICIPANT_ID, type ConversationMap } from './map';
 import * as map from './map.server';
@@ -15,7 +15,8 @@ const mapWireSchema = map.mapWireSchema(spec);
 const appendMapLog = (log: MapLog, settled: TranscriptEntry[], events?: MapLogEvent[]) => map.appendMapLog(spec, log, settled, events);
 const renderMapTail = (previous: ConversationMap, tail: MapTail) => map.renderMapTail(spec, previous, tail);
 const mapMessages = (blocks: string[], tail: string) => map.mapMessages(spec, blocks, tail);
-const generateMap = (input: Omit<Parameters<typeof map.generateMap>[0], 'spec'>, request?: Parameters<typeof map.generateMap>[1]) => map.generateMap({ ...input, spec }, request);
+const generateMap = (input: Omit<Parameters<typeof map.generateMap>[0], 'spec' | 'structured'>, request?: Parameters<typeof structuredWith>[1]) =>
+  map.generateMap({ ...input, spec, structured: structuredWith(fixtureFoundry, request) });
 
 const transcript: TranscriptEntry[] = [
   { id: 'p1', speaker: 'client', text: 'What did the project deliver, and who was the client?', startMs: 0, endMs: 4000 },
@@ -80,7 +81,7 @@ test('the tail lists each lookup with its status and the lookups left', () => {
 test('a research request comes back beside the update, not inside it', async () => {
   const ask = { kind: 'product' as const, name: 'routing layer', clue: null, passageIds: ['p2'] };
   const result = await generateMap({
-    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'attempt-1', blocks: [], previous: emptyMap(), tail, passages: transcript,
+    signal: new AbortController().signal, attemptId: 'attempt-1', blocks: [], previous: emptyMap(), tail, passages: transcript,
   }, async () => solResponse({ ...update, research: ask }));
   expect(result.research).toEqual(ask);
   expect(result.update).not.toHaveProperty('research');
@@ -114,7 +115,7 @@ test('the map request uses explicit caching keyed by prompt version and attempt,
   let body: Record<string, any> = {};
   const log = appendMapLog(emptyMapLog(), transcript);
   const result = await generateMap({
-    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'attempt-1', blocks: log.blocks, previous: emptyMap(), tail, passages: transcript,
+    signal: new AbortController().signal, attemptId: 'attempt-1', blocks: log.blocks, previous: emptyMap(), tail, passages: transcript,
   }, async (url, options) => {
     expect(url).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');
     body = JSON.parse(String(options.body));
@@ -148,7 +149,7 @@ test('Sol is sent the schema without string lengths, which zod enforces afterwar
 
 test('a response cut short reports why and what it used', async () => {
   const error = await generateMap({
-    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript,
+    signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript,
   }, async () => Response.json({
     status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, model: 'gpt-6.1-sol',
     output: [{ type: 'reasoning' }], usage: { input_tokens: 9000, output_tokens: 8000, output_tokens_details: { reasoning_tokens: 8000 } },
@@ -162,7 +163,7 @@ test('a response cut short reports why and what it used', async () => {
 test('without caching the map request sends no cache options or breakpoints', async () => {
   let body: Record<string, any> = {};
   await generateMap({
-    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'attempt-1', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript, cache: false,
+    signal: new AbortController().signal, attemptId: 'attempt-1', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript, cache: false,
   }, async (_url, options) => { body = JSON.parse(String(options.body)); return solResponse(update); });
   expect(body.prompt_cache_options).toBeUndefined();
   expect(body.prompt_cache_key).toBeUndefined();
@@ -171,7 +172,7 @@ test('without caching the map request sends no cache options or breakpoints', as
 
 test('a rejected update reports every defect with what Sol returned', async () => {
   const run = (value: unknown, lookups?: string[]) => generateMap({
-    foundry: fixtureFoundry, signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript, lookups,
+    signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript, lookups,
   }, async () => solResponse(value));
   const sam = { ...update, entities: [{ ...update.entities[0]!, passageId: 'p3' }] };
   const error = await run(sam).catch(caught => caught);
@@ -196,4 +197,14 @@ test('existing JSON-context Sol callers send no cache options', async () => {
   expect(body.input).toBe('{"a":1}');
   expect(body.max_output_tokens).toBe(1800);
   expect(body.prompt_cache_options).toBeUndefined();
+});
+
+test('Sol settles the participant’s own part early, several responsibilities included, and keeps gap threads inside it', () => {
+  const instructions = mapInstructions;
+  expect(instructions).toContain('Three threads to keep in mind:');
+  expect(instructions).toContain('- Their part. Until the participant has said what they themselves were responsible for, keep one thread for it');
+  expect(instructions).toContain('People often hold more than one responsibility');
+  expect(instructions).toContain('Never write it when their part is already clear');
+  expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
+  expect(MAP_PROMPT_VERSION).toBe('sol-map-v12');
 });

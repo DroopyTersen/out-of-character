@@ -3,11 +3,12 @@ import { emptyInterviewReadings } from '../../../core/interview';
 import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
 import { interviewerBrief } from '../../../interview-engine/interview/voice/brief.server';
-import type { Providers } from '../../../interview-engine/providers/providers.server';
+import { unpaidProviders } from '../../../interview-engine/providers/testFoundry.server';
 import { spec } from '../../../interviews/project-closeout/spec';
 // The simulator fixture substitutes the Workers base class before anything imports it.
 import { archiveDatabase, attempt, ProviderSocket } from '../simulator/session-fixture';
 import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
+import type { SpecCatalog } from './debriefs';
 import type { Narrate } from './narrative';
 import { socketPair } from '../../../interview-engine/client/testSocket';
 
@@ -45,13 +46,15 @@ type Options = {
   archive?: ReturnType<typeof archiveDatabase>;
   /** The first created provider session's id; a replacement owner needs its own to keep sessions distinct. */
   provider?: string;
+  /** The specs the object can run; the shipped templates otherwise. */
+  catalog?: SpecCatalog;
 };
 
 /**
  * The interview object over the practice simulator's fixture parts: the same fake provider sockets, the same archive
  * database and the same storage map, so a test reads like the practice simulator's session tests.
  */
-export async function objectFixture({ values = new Map<string, unknown>(), overrides: { narrate, ...services } = {}, archive = archiveDatabase(), provider = 'provider-private-id' }: Options = {}) {
+export async function objectFixture({ values = new Map<string, unknown>(), overrides: { narrate, ...services } = {}, archive = archiveDatabase(), provider = 'provider-private-id', catalog }: Options = {}) {
   const sockets = new Map<string, ProviderSocket>([[provider, new ProviderSocket()]]);
   let latest: string | undefined;
   const socketFor = (id: string) => {
@@ -87,7 +90,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
     SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', RATE_SIMULATOR: allow, RATE_JUDGE: allow,
     CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' },
   } as unknown as Env, {
-    providers: { voice, language: {}, judge: {} } as unknown as Providers,
+    providers: unpaidProviders(voice, { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' }),
     services: {
       generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
       evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage, answers: {} }),
@@ -97,6 +100,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
       ...services,
     },
     narrate: narrate ?? (() => narrated('Fixture summary.')),
+    ...(catalog ? { catalog } : {}),
     upgrade: () => ({ socket: pair.server, response: new Response(null) }),
   });
   await ready;

@@ -9,7 +9,7 @@ export type EngineEvent =
   | { type: 'timing'; operation: string; durationMs: number }
   | { type: 'transcript'; id: string; speaker: string; text: string }
   /** A checkpoint or archive write that failed, or an owner that found itself superseded. Ids only, never content. */
-  | { type: 'session'; event: 'checkpoint.failed' | 'archive.failed' | 'fenced'; id: string; category?: 'partial' | 'final' };
+  | { type: 'session'; event: 'checkpoint.failed' | 'archive.failed' | 'fenced' | 'closure.abandoned'; id: string; category?: 'partial' | 'final' };
 
 const token = (value: unknown): string | undefined => typeof value === 'string' && /^[a-zA-Z0-9_.:-]{1,100}$/.test(value) ? value : undefined;
 

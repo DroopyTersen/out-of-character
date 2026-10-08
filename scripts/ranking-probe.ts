@@ -6,6 +6,7 @@
  * A map applies once its Sol call finished (start plus latency); the replay stops a cadence after the last Sol call. The report holds transcript-derived notes: keep it out of the repo.
  */
 import { evaluateTraits, evaluateTurn, latestTurn } from '../ai/interview/ranking.server';
+import { judgeModel } from '../interview-engine/providers/judge.server';
 import { yieldsTurn } from '../core/interview';
 import type { ConversationMap } from '../core/interview-map';
 import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../core/interview-notes';
@@ -20,6 +21,7 @@ if (!output) throw new Error('Pass --output=<path>; the report holds transcript-
 const limit = Number(flag('limit') ?? 80);
 const apiKey = process.env.TYPESAFE_API_KEY;
 if (!apiKey) throw new Error('Load TYPESAFE_API_KEY with bun --env-file=.dev.vars.');
+const judge = judgeModel({ apiKey });
 
 const raw = await Bun.file(path).json();
 const row = (Array.isArray(raw) ? (raw[0]?.results?.[0] ?? raw[0]) : raw) as Record<string, unknown>;
@@ -66,7 +68,7 @@ for (const turn of turns.slice(0, limit)) {
     if (threads.length) {
       const started = performance.now();
       try {
-        const traits = await evaluateTraits({ map: ready.map, threads, apiKey, signal: AbortSignal.timeout(10_000) });
+        const traits = await evaluateTraits({ map: ready.map, threads, judge, signal: AbortSignal.timeout(10_000) });
         state = withTraits(state, traits.traits);
         traitCalls.push({ mapCall: ready.call, threads: threads.length, durationMs: traits.durationMs, inputTokens: traits.usage.inputTokens });
       } catch (error) {
@@ -82,7 +84,7 @@ for (const turn of turns.slice(0, limit)) {
   const started = performance.now();
   let item: Row;
   try {
-    const result = await evaluateTurn({ transcript: settled, map, apiKey, atMs: turn.atMs, signal: AbortSignal.timeout(10_000) });
+    const result = await evaluateTurn({ transcript: settled, map, judge, atMs: turn.atMs, signal: AbortSignal.timeout(10_000) });
     state = observeTurn(state, map, result.reading, latestTurn(settled)[0]!.id);
     // The producer's thread note as of interview-producer-v17, picked as if the participant had stopped talking.
     const decision = nextListNote(map, state, turn.atMs, list, { turn: true });

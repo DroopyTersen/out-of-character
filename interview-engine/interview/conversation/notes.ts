@@ -25,7 +25,8 @@ export const MAP_NOTE_LIMITS = { known: 6, research: 3 };
 export const oneLine = (text: string) => text.replace(/[\s\p{Cc}]+/gu, ' ').trim();
 const sentence = (text: string) => { const line = oneLine(text); return /[.!?]$/.test(line) ? line : `${line}.`; };
 
-const gap = (thread: MapThread) => `still unknown: ${sentence(thread.unknown)}${thread.guess ? ` Guess: ${sentence(thread.guess)}` : ''}`;
+/** The guess is Sol's, so the note says so: Sam may offer it for the participant to knock down, never as what happened. */
+const gap = (thread: MapThread) => `still unknown: ${sentence(thread.unknown)}${thread.guess ? ` Unconfirmed hunch: ${sentence(thread.guess)}` : ''}`;
 
 /**
  * Sol judged the ground covered: Sam's next turn after an answer offers, once, a real choice between the threads still open and
@@ -110,12 +111,13 @@ const OFFER = '+offer';
  * nothing leads again until their next turn. `offer` lets Sam offer to stop; granting or withdrawing it resends.
  * When the thread the conversation is on is answered or closed and another leads, the note says so: once when Jev
  * holds it down, and again, even with the same lead, at their first turn after Sol closes it that Jev can't place on
- * another thread.
+ * another thread. Not when the turn's reading `moved`, with Sam having asked since: Sam may be pulling on that very
+ * thread, and the answer's reading says again whether it's finished.
  * `state` is what to keep once `text` is sent, or right away when it's null.
  */
 export function nextListNote(
   map: ConversationMap, ranking: RankingState, nowMs: number, previous: ListState,
-  { turn = false, offer = false, headers = NOTE_HEADERS }: { turn?: boolean; offer?: boolean; headers?: NoteHeaders } = {},
+  { turn = false, offer = false, headers = NOTE_HEADERS, moved = false }: { turn?: boolean; offer?: boolean; headers?: NoteHeaders; moved?: boolean } = {},
 ): ListDecision {
   const fresh = pickThreads(map, ranking, nowMs);
   const complaint = turn ? (ranking.reading?.complaint ?? 0) >= RANKING.complaint : previous.complaint;
@@ -146,7 +148,7 @@ export function nextListNote(
   }
   const suffix = offer ? OFFER : '';
   if (pick.lead == null) return decide(pick, NO_LEAD + suffix, previous.sent || offer ? emptyListNote(headers, offer) : null, offer);
-  const finished = on == null || on === pick.lead ? null : finish(map, ranking, fresh, on);
+  const finished = on == null || on === pick.lead || moved ? null : finish(map, ranking, fresh, on);
   const done = finished && { id: on!, answered: finished === 'answered' || finished === 'done' };
   return decide(pick, leadKey(map, pick.lead) + suffix, listNote(map, pick, headers, offer, done), offer, finished ? JSON.stringify([on, finished]) : undefined);
 }

@@ -9,6 +9,7 @@
  * the socket transport when INTERVIEW_SOCKET_ENABLED is "true".
  */
 import { foundryConfig, foundryConfigured } from '../ai/foundry.server';
+import { memoryDebriefStore, specCatalog, templates, type DebriefGates, type HostedSpec } from '../app/server/interview/debriefs';
 import { HostedSession } from '../app/server/interview/hosted';
 import { importedNarrative, narrateWith } from '../app/server/interview/narrative';
 import { routeInterview, type InterviewGates } from '../app/server/interview/routes';
@@ -16,7 +17,8 @@ import { answerSocket, socketContext, type SocketContext } from '../app/server/i
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
 import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
-import { spec } from '../interviews/project-closeout/spec';
+import { draftDebrief } from '../interview-engine/setup/draft.server';
+import { startSchema } from '../interview-engine/shared/protocol';
 
 const env = process.env;
 if (!foundryConfigured(env) || !env.TYPESAFE_API_KEY) {
@@ -57,14 +59,28 @@ const archive: Archive = {
   },
 };
 
-/** One hosted session per attempt id, restored on first use and dropped once its store has been cleared. */
+// Approved debriefs live in this process; the templates are always served.
+const debriefs: DebriefGates = {
+  store: memoryDebriefStore(), catalog: specCatalog(memoryDebriefStore()),
+  draft: (input, signal) => draftDebrief({ description: input.description, interviewer: { name: input.base.interviewer.name }, model: providers.language.agent, signal }),
+};
+debriefs.catalog = specCatalog(debriefs.store);
+
+/**
+ * One hosted session per attempt id, opened on first use under the debrief its start names (the first template for
+ * anything else) and dropped once its store has been cleared.
+ */
 const attempts = new Map<string, Promise<HostedSession>>();
-function attempt(id: string) {
+async function attempt(id: string, command: Request) {
   let hosted = attempts.get(id);
-  if (!hosted) attempts.set(id, hosted = open(id));
+  if (!hosted) {
+    const parsed = new URL(command.url).pathname === '/start' ? startSchema.safeParse(await command.clone().json().catch(() => null)) : null;
+    const named = parsed?.success ? await debriefs.catalog.resolve(parsed.data.scenarioId) : null;
+    attempts.set(id, hosted = open(id, named ?? templates[0]!));
+  }
   return hosted;
 }
-async function open(id: string) {
+async function open(id: string, spec: HostedSpec) {
   const record = memoryRecord();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let hosted: Promise<HostedSession> | undefined;
@@ -78,7 +94,7 @@ async function open(id: string) {
     timer = at == null ? undefined : setTimeout(() => void wake().catch(error => console.error('Interview wake failed', id, error)), Math.max(0, at - Date.now()));
   } });
   hosted = SessionActor.restore({
-    spec, providers, foundry, typesafeKey, store, background: inlineBackground(), archive,
+    spec, providers, store, background: inlineBackground(), archive,
     log: event => { if (event.type === 'session') console.warn('Interview session', event); },
   }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), template: spec.narrative, model: foundry.agentModel }));
   return hosted;
@@ -99,8 +115,9 @@ const sockets = env.INTERVIEW_SOCKET_ENABLED === 'true';
 const accepted = new WeakSet<Request>();
 const gates: InterviewGates = {
   available: () => true, limit,
-  session: async (id, command) => (await attempt(id)).fetch(command),
-  narrative: (input, signal) => importedNarrative(input, [spec], narrateWith(providers), signal),
+  session: async (id, command) => (await attempt(id, command)).fetch(command),
+  narrative: (input, signal) => importedNarrative(input, id => debriefs.catalog.resolve(id), narrateWith(providers), signal),
+  debriefs,
   ...(sockets ? { socket: (_id: string, upgrade: Request) => {
     const context = socketContext(upgrade);
     if (context && server.upgrade(upgrade, { data: context })) accepted.add(upgrade);
@@ -124,4 +141,4 @@ const server = Bun.serve<SocketContext>({
     },
   },
 });
-console.log(`Interview host on ${server.url} (spec ${spec.id} ${spec.version})`);
+console.log(`Interview host on ${server.url} (templates ${templates.map(spec => `${spec.id} ${spec.version}`).join(', ')})`);

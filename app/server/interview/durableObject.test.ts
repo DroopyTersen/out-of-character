@@ -148,3 +148,81 @@ test('the report waits for an end and is refused without participant speech', as
   expect(await report.json() as unknown).toEqual({ error: 'There is not enough scored conversation to review.' });
   expect((await (await send(next.session, 'poll')).json() as { report: { status: string } }).report.status).toBe('ineligible');
 });
+
+// --- An approved ad hoc debrief: the object resolves its spec at start and pins it for every later owner. ---
+
+const { specCatalog, memoryDebriefStore } = await import('./debriefs');
+const { approveDebrief } = await import('../../../interview-engine/setup/approve.server');
+const { vendorReview } = await import('../../../interview-engine/setup/setup.test');
+const { spec: closeout } = await import('../../../interviews/project-closeout/spec');
+
+async function adHocCatalog() {
+  const store = memoryDebriefStore();
+  const approved = await approveDebrief(closeout, vendorReview);
+  await store.put({ id: approved.id, version: approved.version, base: closeout.id, approvedAt: 1000, record: { ...vendorReview, id: approved.id, base: closeout.id } });
+  return { catalog: specCatalog(store), approved };
+}
+const adHocStart = (scenarioId: string, cap = capability) => (target: { fetch(request: Request): Promise<Response> }) =>
+  target.fetch(new Request('https://session/start', { method: 'POST', headers: { Authorization: cap }, body: JSON.stringify({ ...interviewAttempt, scenarioId }) }));
+
+test('an attempt under an approved debrief runs, archives and resumes under that debrief’s id and version, and reports with its narrative', async () => {
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  const { catalog, approved } = await adHocCatalog();
+  const templates: string[] = [];
+  const narrate = (input: { template: { id: string; version: string } }) => { templates.push(`${input.template.id} ${input.template.version}`); return summary(); };
+  const first = await objectFixture({ catalog, overrides: { narrate: narrate as never } });
+  expect((await adHocStart('no-such-debrief')(first.session)).status).toBe(400);
+  expect(first.values.has('spec')).toBe(false);
+  const started = await adHocStart(approved.id)(first.session);
+  expect(started.status).toBe(200);
+  expect(first.values.get('spec')).toEqual({ id: approved.id, version: approved.version });
+  setSystemTime(epoch + 1000);
+  await send(first.session, 'ready');
+  // Sam's brief is the approved debrief's, not the base template's.
+  expect(first.created).toHaveLength(1);
+  first.socket.emit({ type: 'session.output_transcript.delta', event_id: 'o1', delta: vendorReview.opening, start_ms: 0, end_ms: 900 });
+  first.socket.emit({ type: 'session.input_transcript.delta', event_id: 'i1', delta: 'I owned the renewal and the weekly vendor calls.', start_ms: 1500, end_ms: 2400 });
+  setSystemTime(epoch + 4000);
+  await waitFor(() => first.interviewJudged.length >= 1);
+  await settle(first);
+  expect((await send(first.session, 'pause')).status).toBe(200);
+  await settle(first);
+  expect(first.interviewRow()).toMatchObject({ scenario_id: approved.id, spec_id: approved.id, spec_version: approved.version, archive_state: 'partial' });
+
+  // A replacement owner restores from the same storage and resolves the same debrief, by id and version.
+  const second = await objectFixture({ catalog, values: first.values, archive: first.archive, provider: 'provider-second', overrides: { narrate: narrate as never } });
+  const polled = await (await send(second.session, 'poll')).json() as { scenarioId: string; status: string };
+  expect(polled).toMatchObject({ scenarioId: approved.id, status: 'paused' });
+  setSystemTime(epoch + 6000);
+  expect((await send(second.session, 'end')).status).toBe(200);
+  await settle(second);
+  expect((await send(second.session, 'report')).status).toBe(200);
+  await settle(second);
+  expect(templates).toEqual([`${approved.narrative.id} ${approved.narrative.version}`]);
+  expect(second.interviewRow()).toMatchObject({ spec_id: approved.id, spec_version: approved.version, archive_state: 'final', summary_status: 'ready' });
+});
+
+test('a start that names a debrief still honours an end that arrived first, and a pinned attempt ignores other debriefs', async () => {
+  const epoch = 1_800_000_000_000;
+  setSystemTime(epoch);
+  const { catalog, approved } = await adHocCatalog();
+  const f = await objectFixture({ catalog });
+  expect((await send(f.session, 'end')).status).toBe(200);
+  expect(f.values.get('lease')).toMatchObject({ closed: true });
+  const started = await adHocStart(approved.id)(f.session);
+  expect(started.status).toBe(409);
+  expect(f.values.get('spec')).toEqual({ id: approved.id, version: approved.version });
+  expect(f.creations()).toBe(0);
+  // Once pinned, a start under the base template is a mismatch, not a new attempt.
+  expect((await send(f.session, 'start')).status).toBe(400);
+  setSystemTime(epoch + 60_000);
+  await f.session.alarm();
+  expect(f.values.size).toBe(0);
+});
+
+test('an owner whose stored debrief is no longer served fails to restore instead of running the wrong spec', async () => {
+  const { approved } = await adHocCatalog();
+  const values = new Map<string, unknown>([['spec', { id: approved.id, version: approved.version }]]);
+  await expect(objectFixture({ values, catalog: specCatalog(memoryDebriefStore()) })).rejects.toThrow('no longer served');
+});

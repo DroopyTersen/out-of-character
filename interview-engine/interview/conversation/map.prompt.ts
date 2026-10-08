@@ -33,8 +33,9 @@ export function mapInstructions(spec: MappedSpec): string {
       `- topics: the one or two ${topic}s its answer would explore, or none; not topics it merely mentions.`,
       'When a thread is about a person or organization whose role or side is not yet known, its first unknown is who they are, such as unknown "who Morgan is: client, delivery team or vendor", guess "a client-side product owner". Revise it to the story once that is answered. This applies only to someone a thread is about, not to every name.',
       'A good thread is anchored in something the participant said, and its answer would teach a future team something: a decision and who made it, a consequence, a tradeoff, friction on either side, a practice that worked, or a quiet win. Prefer gaps the participant can answer firsthand, and never write one about what happened while they were away or after they left, unless they have shown they know it secondhand. While useful gaps remain, keep roughly 4-10 threads open: enough choice, not a backlog. Never invent threads to fill a count: once the participant has covered the ground, fewer open threads is right.',
-      'Two threads to keep in mind:',
+      'Three threads to keep in mind:',
       `- ${defaultThread}`,
+      `- Their part. Until the participant has said what they themselves were responsible for, keep one thread for it, anchored on them: unknown "what the participant was responsible for on the project", guess from their vantage. People often hold more than one responsibility, so when they name one, revise it to whether they held others, and close it done once their part is clear. Never write it when their part is already clear from what they have said. Once it is, prefer gap threads their stated part can answer firsthand, and write none about work they have said was someone else's.`,
       '- A win. When the participant shows pride or says something went well ("the launch went really smoothly"), write a thread for what made it work, so the win yields a practice to repeat.',
     ].join('\n'),
     [

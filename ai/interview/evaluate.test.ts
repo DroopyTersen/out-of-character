@@ -29,8 +29,8 @@ describe('project closeout interview contracts', () => {
       for (const item of row.participant.objectives) expect(item).toMatchObject({ level: expect.any(String), levels: expect.any(Object) });
     }
   });
-  test('one authored Sam serves both voices and the original 14 subtopics', () => {
-    expect(interviewTopics.flatMap(topic => topic.objectives.map(item => item.id))).toHaveLength(14);
+  test('one authored Sam serves both voices and the 20 closeout objectives', () => {
+    expect(interviewTopics.flatMap(topic => topic.objectives.map(item => item.id))).toHaveLength(20);
     expect(interviewers.map(item => item.voice)).toEqual(['cedar', 'gleam']);
     expect(interviewers[0]!.behavior).toBe(interviewers[1]!.behavior);
     for (const interviewer of interviewers) {

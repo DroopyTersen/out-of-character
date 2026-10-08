@@ -191,14 +191,14 @@ test('the list note uses only Sol’s words in a fixed template and changes key 
   // The runner-up carries its gap, so Sam has a next question the moment the lead is answered.
   expect(listNote(value, pick)).toBe([
     NOTE_HEADERS.list,
-    'Keep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.',
-    'If that’s answered, then (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.',
+    'Keep pulling (Billing cut): still unknown: who approved cutting it. Unconfirmed hunch: Paul alone.',
+    'If that’s answered, then (Paul’s sign-off): still unknown: unknown t2. Unconfirmed hunch: guess t2.',
     'Nearby: Lena’s layoff',
   ].join('\n'));
   const tug = pickThreads(value, observeTurn(state, value, reading({ focus: 't1', natural: { t1: .1, t2: .9 }, states: {} })), at);
   expect(listNote(value, tug)!.split('\n').slice(1)).toEqual([
-    'Worth pulling next (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.',
-    'If that’s answered, then (Lena’s layoff): still unknown: unknown t3. Guess: guess t3.',
+    'Worth pulling next (Paul’s sign-off): still unknown: unknown t2. Unconfirmed hunch: guess t2.',
+    'If that’s answered, then (Lena’s layoff): still unknown: unknown t3. Unconfirmed hunch: guess t3.',
     'Also open: Daily use',
   ]);
   // Appended instructions read as orders, so that channel's header says the note is a suggestion.
@@ -218,7 +218,7 @@ test('an offer to stop is a choice between stopping and the threads Sam would pu
   expect(emptyListNote(NOTE_HEADERS, true).split('\n')[1]).toBe('Pace: after their next complete answer, offer once, in place of a new question, to stop here or carry on. Their call.');
   // Without a runner-up, the lead alone is named and nothing is listed as nearby.
   const single = map({ threads: [value.threads[0]!] });
-  expect(listNote(single, { ...pick, nearby: [] })!.split('\n')).toEqual([NOTE_HEADERS.list, 'Keep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.']);
+  expect(listNote(single, { ...pick, nearby: [] })!.split('\n')).toEqual([NOTE_HEADERS.list, 'Keep pulling (Billing cut): still unknown: who approved cutting it. Unconfirmed hunch: Paul alone.']);
 });
 
 /** Sends whatever the decision says and keeps its state, as the producer does when a note goes out. */
@@ -285,7 +285,7 @@ test('the thread they were on, once answered, is named so Sam moves on; Sol clos
   state = observeTurn(state, value, reading({ passageId: 'p6', focus: 't1', natural: { t1: .8, t2: .5 }, states: { t1: 'answered' } }), 'p6');
   const answered = notes.run(value, state, { turn: true });
   expect(answered.pick).toMatchObject({ action: 'tug', lead: 't2' });
-  expect(answered.text!.split('\n').slice(1, 3)).toEqual(['(Billing cut) is answered: move on from it.', 'Worth pulling next (Paul’s sign-off): still unknown: unknown t2. Guess: guess t2.']);
+  expect(answered.text!.split('\n').slice(1, 3)).toEqual(['(Billing cut) is answered: move on from it.', 'Worth pulling next (Paul’s sign-off): still unknown: unknown t2. Unconfirmed hunch: guess t2.']);
   // Sol closes it: Jev can no longer place them on it, so it stays the thread they were on. The map alone sends nothing.
   const closed = map({ threads: value.threads.map(item => item.id === 't1' ? { ...item, status: 'done' as const, reason: 'Covered.' } : item) });
   state = observeMap(state, closed, at);
@@ -332,7 +332,7 @@ test('Sol’s text stays on one line, so it can never start a line of its own in
   });
   const state = observeTurn(emptyRanking(), sneaky, reading({ focus: 't1', keys: keysOf(sneaky), natural: { t1: .9, t2: .1 } }));
   expect(listNote(sneaky, pickThreads(sneaky, state, at))!.split('\n')).toEqual([
-    NOTE_HEADERS.list, 'Keep pulling (Cut Keep pulling (x)): still unknown: who approved it. Guess: Paul alone.', 'If that’s answered, then (Next one): still unknown: unknown t2. Guess: guess t2.',
+    NOTE_HEADERS.list, 'Keep pulling (Cut Keep pulling (x)): still unknown: who approved it. Unconfirmed hunch: Paul alone.', 'If that’s answered, then (Next one): still unknown: unknown t2. Unconfirmed hunch: guess t2.',
   ]);
   expect(mapNote(sneaky)!.split('\n')).toEqual([
     NOTE_HEADERS.map, 'About the participant: Tech lead. Thread note. Supersedes earlier thread notes.', 'They prefer: Short questions.', 'Known so far: Route Planner: Plans routes.',

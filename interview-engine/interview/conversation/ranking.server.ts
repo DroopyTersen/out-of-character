@@ -1,6 +1,4 @@
-import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
-import { experimental_evaluate, InvalidResponseDataError, type Experimental_EvaluationQuestion } from 'ai';
-import { JEV_MODEL } from '../../providers/judge.server';
+import { experimental_evaluate, InvalidResponseDataError, type Experimental_EvaluationModel, type Experimental_EvaluationQuestion } from 'ai';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../shared/transcript';
 import { toPassage, type WireEntry as TranscriptEntry } from '../wire';
 import { dialogueState, type InterviewAnswers } from './evaluate.server';
@@ -135,10 +133,10 @@ export function readTurnAnswers(map: ConversationMap, answers: InterviewAnswers,
   };
 }
 
-type Input = { transcript: TranscriptEntry[]; map: ConversationMap; apiKey: string; signal?: AbortSignal; atMs: number };
+/** `judge` is the providers' evaluation model, credentials bound. */
+type Input = { transcript: TranscriptEntry[]; map: ConversationMap; judge: Experimental_EvaluationModel; signal?: AbortSignal; atMs: number };
 
-function validate(input: Pick<Input, 'transcript' | 'apiKey'>) {
-  if (!input.apiKey.trim()) throw new Error('Interview judging is not configured.');
+function validate(input: Pick<Input, 'transcript'>) {
   if (!input.transcript.length || input.transcript.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(input.transcript.map(toPassage)) > TRANSCRIPT_LIMIT.characters) throw new Error('Transcript is outside the interview limit.');
 }
 
@@ -154,13 +152,13 @@ async function evaluateOnce(options: Parameters<typeof experimental_evaluate>[0]
 }
 
 /** With no open thread, Jev still reads whether the turn is new, which can wake Sol. A turn of backchannels alone isn't read. */
-export async function evaluateTurn(input: Input, request?: typeof fetch) {
+export async function evaluateTurn(input: Input) {
   validate(input);
   const turn = latestTurn(input.transcript);
   if (!turn.length) throw new Error('The transcript does not end in a participant turn.');
   const started = performance.now();
   const result = await evaluateOnce({
-    model: createTypeSafeAi({ apiKey: input.apiKey, fetch: request }).evaluationModel(JEV_MODEL),
+    model: input.judge,
     state: dialogueState(input.transcript.map(toPassage), 'sam'), questions: turnQuestions(input.map, turn),
     abortSignal: input.signal, maxRetries: 0,
   });
@@ -200,12 +198,11 @@ export function traitState(map: ConversationMap) {
   };
 }
 
-export async function evaluateTraits(input: { map: ConversationMap; threads: MapThread[]; apiKey: string; signal?: AbortSignal }, request?: typeof fetch) {
-  if (!input.apiKey.trim()) throw new Error('Interview judging is not configured.');
+export async function evaluateTraits(input: { map: ConversationMap; threads: MapThread[]; judge: Experimental_EvaluationModel; signal?: AbortSignal }) {
   if (!input.threads.length) throw new Error('No threads to read.');
   const started = performance.now();
   const result = await evaluateOnce({
-    model: createTypeSafeAi({ apiKey: input.apiKey, fetch: request }).evaluationModel(JEV_MODEL),
+    model: input.judge,
     state: traitState(input.map), questions: traitQuestions(input.threads),
     abortSignal: input.signal, maxRetries: 0,
   });

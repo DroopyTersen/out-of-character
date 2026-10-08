@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { judgeModel } from '../../providers/judge.server';
 import type { WireEntry as TranscriptEntry } from '../wire';
 import { emptyMap, type ConversationMap, type MapThread } from './map';
 import { threadKey } from './ranking';
@@ -136,12 +137,12 @@ test('a Jev selection that isn’t its own top option is retried once; a second 
     }, { preconnect: fetch.preconnect });
     return { request, calls: () => calls };
   };
-  const input = { transcript, map, apiKey: 'fixture-key', atMs: 5000 };
+  const input = (request: typeof fetch) => ({ transcript, map, judge: judgeModel({ apiKey: 'fixture-key', fetch: request }), atMs: 5000 });
   const flaky = replies([bad, good]);
-  const result = await evaluateTurn(input, flaky.request);
+  const result = await evaluateTurn(input(flaky.request));
   expect(flaky.calls()).toBe(2);
   expect(result.reading).toMatchObject({ passageId: 'p2', focus: 't3', natural: { t1: .1, t3: .8 }, states: { t1: 'open', t3: 'open' } });
   const broken = replies([bad, bad]);
-  await expect(evaluateTurn(input, broken.request)).rejects.toThrow('highest-probability');
+  await expect(evaluateTurn(input(broken.request))).rejects.toThrow('highest-probability');
   expect(broken.calls()).toBe(2);
 });

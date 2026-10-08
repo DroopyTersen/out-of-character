@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import type { FoundryConfig } from '../../providers/foundry.server';
-import { requestSol, type ModelUsage, type SolMessage } from '../../providers/structured.server';
+import type { ModelUsage, SolMessage, StructuredRequest } from '../../providers/structured.server';
 import type { InterviewBackground, InterviewObjectiveReading } from '../../shared/snapshot';
 import type { WireEntry } from '../wire';
 import { RESEARCH_KINDS, type ResearchRequest } from './records';
@@ -13,7 +12,7 @@ import { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 export { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 type TranscriptEntry = WireEntry;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v11';
+export const MAP_PROMPT_VERSION = 'sol-map-v12';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -163,7 +162,10 @@ export class MapOutputError extends Error {
 }
 
 export async function generateMap(input: {
-  spec: MappedSpec; foundry: FoundryConfig; signal: AbortSignal; attemptId: string; blocks: string[]; previous: ConversationMap; tail: MapTail;
+  spec: MappedSpec;
+  /** The providers' structured call to the agent model. */
+  structured: StructuredRequest;
+  signal: AbortSignal; attemptId: string; blocks: string[]; previous: ConversationMap; tail: MapTail;
   /** Every passage Sol has seen, to check what participant facts cite. */
   passages: Pick<TranscriptEntry, 'id' | 'speaker'>[];
   /** The IDs of every event in the log, to check what research facts cite. */
@@ -172,13 +174,13 @@ export async function generateMap(input: {
   cache?: boolean;
   /** For probes comparing efforts; production uses MAP_EFFORT. */
   effort?: 'low' | 'medium';
-}, request: (url: string, options: RequestInit) => Promise<Response> = fetch): Promise<{ map: ConversationMap; update: MapUpdate; changes: MapChanges; research: ResearchRequest | null; pace: MapPace; model: string; usage: ModelUsage }> {
+}): Promise<{ map: ConversationMap; update: MapUpdate; changes: MapChanges; research: ResearchRequest | null; pace: MapPace; model: string; usage: ModelUsage }> {
   const { output, wire } = mapSchemas(input.spec);
-  const { value, model, usage } = await requestSol({
-    foundry: input.foundry, signal: input.signal, instructions: mapInstructions(input.spec), name: 'conversation_map_update', schema: output, jsonSchema: wire,
+  const { value, model, usage } = await input.structured({
+    signal: input.signal, instructions: mapInstructions(input.spec), name: 'conversation_map_update', schema: output, jsonSchema: wire,
     effort: input.effort ?? MAP_EFFORT, maxOutputTokens: MAP_MAX_OUTPUT_TOKENS,
     messages: mapMessages(input.spec, input.blocks, renderMapTail(input.spec, input.previous, input.tail)), cacheKey: input.cache === false ? null : mapCacheKey(input.attemptId),
-  }, request);
+  });
   const parsed = output.safeParse(value);
   if (!parsed.success) throw new MapOutputError(parsed.error.issues.map(issue => ({ kind: 'schema', id: issue.path.join('.'), detail: issue.message })), value, model, usage);
   const { research, pace, ...update } = parsed.data;

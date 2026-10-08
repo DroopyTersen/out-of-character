@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { fixtureFoundry, fixtureFoundryEnv } from '../../../ai/foundry-fixture';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
 import { spec } from '../../../interviews/project-closeout/spec';
+import { archiveDatabase } from '../simulator/session-fixture';
 import { importedNarrative, narrateWith } from './narrative';
 import { handleInterview, routeInterview } from './routes';
 
@@ -14,7 +15,7 @@ function fixture() {
   const env = {
     SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', ...fixtureFoundryEnv, TYPESAFE_API_KEY: 'not-a-real-key',
     RATE_SIMULATOR: { limit: async () => ({ success: true }) },
-    INTERVIEW_SESSIONS: namespace(calls), SIMULATOR_SESSIONS: namespace(simulator),
+    INTERVIEW_SESSIONS: namespace(calls), SIMULATOR_SESSIONS: namespace(simulator), SIMULATOR_ARCHIVE: archiveDatabase().d1,
   } as unknown as Env;
   const request = (path: string, body?: unknown, headers: Record<string, string> = {}) => new Request(`https://practice.example/api/interview/${path}`, {
     method: 'POST', headers: { Origin: 'https://practice.example', Authorization: capability, 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined,
@@ -89,7 +90,7 @@ test('an imported transcript passes the interview gates and needs participant sp
   expect((await handleInterview(f.request('narratives', { ...narrativeBody, extra: true }), f.env))!.status).toBe(400);
   expect((await handleInterview(f.request('narratives', { ...narrativeBody, passages: [{ ...passages[0], speaker: 'trainee' }] }), f.env))!.status).toBe(400);
   expect((await handleInterview(f.request('narratives', { ...narrativeBody, passages: [{ ...passages[1], text: 'x'.repeat(300_000) }] }), f.env))!.status).toBe(413);
-  expect((await handleInterview(f.request('narratives', { ...narrativeBody, specId: 'sales-win-loss' }), f.env))!.status).toBe(404);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, specId: 'no-such-debrief' }), f.env))!.status).toBe(404);
   const empty = await handleInterview(f.request('narratives', { ...narrativeBody, passages: passages.slice(0, 1) }), f.env);
   expect(empty!.status).toBe(422);
   expect(await empty!.json() as unknown).toEqual({ error: 'There is not enough conversation to write about.' });
@@ -111,7 +112,7 @@ test('an imported transcript streams its narrative from the language provider, w
   const response = await routeInterview(f.request('narratives', narrativeBody), {
     available: () => true, limit: async () => true,
     session: async () => { throw new Error('No attempt is involved.'); },
-    narrative: (input, signal) => importedNarrative(input, [spec], narrateWith(providers), signal),
+    narrative: (input, signal) => importedNarrative(input, async id => id === spec.id ? spec : null, narrateWith(providers), signal),
   });
   expect(response!.status).toBe(200);
   expect(response!.headers.get('Content-Type')).toContain('text/plain');

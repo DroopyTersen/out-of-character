@@ -22,7 +22,7 @@ export function archiveProvenance(row: InterviewArchiveRow, host: ArchiveHost): 
 export function d1Archive(db: D1Database, host: ArchiveHost): Archive {
   return {
     write: row => writeInterviewArchive(db, {
-      state: row.state, capturedAt: row.capturedAt,
+      specId: row.specId, specVersion: row.specVersion, state: row.state, capturedAt: row.capturedAt,
       snapshot: row.snapshot,
       provenance: archiveProvenance(row, host), interventions: row.producerLog,
     }),

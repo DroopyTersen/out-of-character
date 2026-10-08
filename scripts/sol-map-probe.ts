@@ -9,6 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { foundryConfig } from '../ai/foundry.server';
+import { structuredWith } from '../interview-engine/providers/structured.server';
 import { appendMapLog, emptyMapLog, generateMap, MapOutputError, MAP_EFFORT, MAP_PROMPT_VERSION, renderMapTail, researchLogEvent, settledPrefix, type MapLogEvent, type MapTail } from '../ai/interview/map.server';
 import { DirectorOutputError } from '../ai/simulator/sol.server';
 import { emptyMap, renderMapForSol, type MapChanges, type MapDefect, type MapPace } from '../core/interview-map';
@@ -118,7 +119,7 @@ while (at != null && rows.length < limit) {
   const base = { call: rows.length + 1, atMs: at, reasons, blocks: log.blocks.length, tail: renderMapTail(map, tail) };
   let result: Row;
   try {
-    const value = await generateMap({ foundry, signal: AbortSignal.timeout(timeout), attemptId, blocks: log.blocks, previous: map, passages: settled, lookups: events.filter(event => event.used && event.found).map(event => event.id), cache, effort, tail }, request);
+    const value = await generateMap({ structured: structuredWith(foundry, request), signal: AbortSignal.timeout(timeout), attemptId, blocks: log.blocks, previous: map, passages: settled, lookups: events.filter(event => event.used && event.found).map(event => event.id), cache, effort, tail });
     map = value.map;
     maps.push({ call: base.call, map });
     result = { ...base, latencyMs: Math.round(performance.now() - started), outcome: 'ok', usage: value.usage, changes: { ...value.changes, kept: value.changes.kept.length }, update: lastUpdate, pace: value.pace, ...counts() };

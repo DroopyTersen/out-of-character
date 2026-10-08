@@ -34,3 +34,11 @@ test('the opening speaks the spec’s first line, and an unknown voice is refuse
   expect(() => interviewerBrief(spec, 'sam-cedar')).toThrow('Unknown interviewer.');
   expect(() => interviewOpening(spec, 'sam-cedar')).toThrow('Unknown interviewer.');
 });
+
+test('the notes paragraph keeps the note-taker’s hunch apart from what the participant said', () => {
+  const notes = interviewerBrief(spec, 'riley-cedar').split('\n\n').find(paragraph => paragraph.startsWith('Private notes:'))!;
+  expect(notes).toContain('the note-taker’s unconfirmed hunch');
+  expect(notes).toContain('never state it as what happened');
+  expect(notes).toContain('ask the open question first');
+  expect(notes).not.toContain('the note-taker’s guess');
+});

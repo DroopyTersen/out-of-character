@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
-import type { Providers } from '../../providers/providers.server';
-import { testFoundry } from '../../providers/testFoundry.server';
+import { unpaidProviders } from '../../providers/testFoundry.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';
 import { threadKey } from '../conversation/ranking';
 import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
@@ -76,9 +75,9 @@ function fixture({ record = memoryRecord(), voice = fakeVoice(), archive = memor
   const events: unknown[] = [];
   const store = memoryStore(record);
   const background = inlineBackground();
-  const providers = { voice: voice.voice, language: {}, judge: {} } as unknown as Providers;
+  const providers = unpaidProviders(voice.voice);
   const options: SessionOptions = {
-    spec, providers, foundry: testFoundry, typesafeKey: 'fixture', store, background, archive, lazyWake,
+    spec, providers, store, background, archive, lazyWake,
     now: () => clock, log: event => events.push(event),
     services: {
       ...services,
@@ -276,4 +275,137 @@ test('a provider drop pauses a live conversation, and a resume continues it with
   expect(body(await f.send(actor, 'ready')).status).toBe('live');
   await f.send(actor, 'end');
   await f.background.settle();
+});
+
+// Resource lifecycle: a provider session is paid for from creation, so none may be opened for an attempt that is
+// ending, and every one that is opened must be recorded for closure or closed at once.
+
+const deferred = <T = void>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(fn => { resolve = fn; }); return { promise, resolve }; };
+const wakesOf = (f: ReturnType<typeof fixture>) => {
+  const wakes: (number | null)[] = [];
+  const original = f.options.store.wake;
+  f.options.store.wake = async at => { wakes.push(at); await original(at); };
+  return wakes;
+};
+
+test('an end that arrives while the lease is being saved waits for it and opens no provider session', async () => {
+  const f = fixture();
+  const saving = deferred();
+  const held = deferred();
+  const original = f.options.store.save;
+  let saves = 0;
+  f.options.store.save = async patch => { await original(patch); if (saves++ === 0) { saving.resolve(); await held.promise; } };
+  const actor = await f.restore();
+  const opening = f.send(actor, 'start', start);
+  await saving.promise;
+  const ending = f.send(actor, 'end');
+  held.resolve();
+  const [started, ended] = await Promise.all([opening, ending]);
+  expect(started).toEqual({ status: 409, body: { error: 'The attempt was cancelled.' } });
+  expect(body(ended).status).toBe('ended');
+  expect(f.voice.created).toHaveLength(0);
+  expect(f.record.lease).toEqual({ capability, deadline: EPOCH + 3_600_000, closed: true });
+  expect(f.record.wakeAt).toBe(EPOCH + 300_000);
+  await f.background.settle();
+  expect(f.archive.rows.size).toBe(0);
+});
+
+test('a start and an end in the same moment leave nothing open', async () => {
+  const f = fixture();
+  const actor = await f.restore();
+  const [started, ended] = await Promise.all([f.send(actor, 'start', start), f.send(actor, 'end')]);
+  expect(started.status).toBe(409);
+  expect(body(ended).status).toBe('ended');
+  expect(f.voice.created).toHaveLength(0);
+  expect(f.record.lease!.closed).toBe(true);
+  await actor.wake();
+  expect(f.record.lease).toBeUndefined();
+});
+
+test('an end that arrives after creation began is answered once the session is recorded, and the session is closed', async () => {
+  const f = fixture();
+  const creating = deferred();
+  const held = deferred();
+  const original = f.options.providers.voice.create;
+  f.options.providers.voice.create = async input => { creating.resolve(); await held.promise; return original(input); };
+  const actor = await f.restore();
+  const opening = f.send(actor, 'start', start);
+  await creating.promise;
+  const ending = f.send(actor, 'end');
+  held.resolve();
+  const [started, ended] = await Promise.all([opening, ending]);
+  expect(started.status).toBe(409);
+  expect(body(ended)).toMatchObject({ status: 'ended', finalization: 'confirmed' });
+  expect(f.voice.created).toHaveLength(1);
+  expect(f.voice.sockets.get('provider-1')!.sent).toContainEqual({ type: 'session.close' });
+  expect(f.record.lease).toEqual({ capability, deadline: EPOCH + 3_600_000, closed: true });
+});
+
+test('a provider session created after another owner took over is closed by the owner that created it', async () => {
+  const f = fixture();
+  const creating = deferred();
+  const held = deferred();
+  const original = f.options.providers.voice.create;
+  f.options.providers.voice.create = async input => { creating.resolve(); await held.promise; return original(input); };
+  const actor = await f.restore();
+  const opening = f.send(actor, 'start', start);
+  await creating.promise;
+  // The successor restores a lease that names no provider session, so it can never close this one from the store.
+  const other = fixture({ record: f.record, voice: f.voice, archive: f.archive });
+  const successor = await other.restore();
+  expect(f.record.lease?.providerId).toBeUndefined();
+  held.resolve();
+  expect(await opening).toEqual({ status: 409, body: { error: 'Another owner has taken over this attempt.' } });
+  expect(f.voice.created).toHaveLength(1);
+  expect(f.voice.closed).toEqual(['provider-1']);
+  expect(f.record.lease?.providerId).toBeUndefined();
+  await successor.wake();
+  expect(f.record.lease).toBeUndefined();
+});
+
+test('a closure the provider refuses is retried on a scheduled wake, then given up once the attempt is long over', async () => {
+  const f = fixture();
+  f.record.lease = { capability, providerId: 'orphan-1', unconfirmed: ['orphan-0'], deadline: EPOCH + 3_600_000, closed: false };
+  const wakes = wakesOf(f);
+  let refusals = 0;
+  f.options.providers.voice.close = async id => { if (id === 'orphan-1') { refusals++; throw new Error('provider outage'); } f.voice.closed.push(id); };
+  const actor = await f.restore();
+  await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
+  expect(f.voice.closed).toEqual(['orphan-0']);
+  expect(f.record.lease).toEqual({ capability, providerId: 'orphan-1', deadline: EPOCH + 3_600_000, closed: false });
+  expect(wakes).toEqual([EPOCH + 15_000]);
+  f.at(15_000);
+  await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
+  expect(wakes).toEqual([EPOCH + 15_000, EPOCH + 30_000]);
+  expect(refusals).toBe(2);
+  // An hour past the lease's deadline the provider has long ended the session itself.
+  f.at(3_600_000 + 60 * 60_000);
+  await actor.wake();
+  expect(f.record.lease).toMatchObject({ closed: true });
+  expect(f.record.lease!.providerId).toBeUndefined();
+  expect(f.events).toContainEqual({ type: 'session', event: 'closure.abandoned', id: '' });
+  await actor.wake();
+  expect(f.record.lease).toBeUndefined();
+});
+
+test('a start whose attachment fails ends the attempt, and every later wake schedules the next closure retry', async () => {
+  const f = fixture();
+  const wakes = wakesOf(f);
+  f.options.providers.voice.attach = async () => { throw new Error('provider outage'); };
+  f.options.providers.voice.close = async () => { throw new Error('provider outage'); };
+  const actor = await f.restore();
+  const started = await f.send(actor, 'start', start);
+  expect(started.status).toBe(502);
+  expect(actor.snapshot()).toMatchObject({ status: 'interrupted', finalization: 'unconfirmed' });
+  expect(f.record.lease).toMatchObject({ providerId: 'provider-1', closed: false });
+  expect(f.record.wakeAt).toBe(EPOCH + 15_000);
+  f.at(15_000);
+  await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
+  expect(f.record.wakeAt).toBe(EPOCH + 30_000);
+  f.options.providers.voice.close = async id => { f.voice.closed.push(id); };
+  f.at(30_000);
+  await actor.wake();
+  expect(f.voice.closed).toEqual(['provider-1']);
+  expect(f.record.lease).toMatchObject({ closed: true });
+  expect(wakes.at(-1)).toBe(EPOCH + 30_000 + 300_000);
 });

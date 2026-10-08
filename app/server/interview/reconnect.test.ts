@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/map';
-import { NOTE_HEADERS, TURN_NOTE } from '../../../interview-engine/interview/conversation/notes';
+import { HOLD_NOTE, NOTE_HEADERS, TURN_NOTE } from '../../../interview-engine/interview/conversation/notes';
 import { interviewAttempt, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, settle, waitFor } from '../simulator/session-fixture';
 
@@ -50,7 +50,7 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   await f.session.fetch(activityPoll(true, true));
   await waitFor(() => maps === 1);
   await settle(f);
-  // Sol mapped after the answer was handed over, so both notes go with the next handover, in one event.
+  // Sol mapped after the answer was handed over, so both notes wait for the next turn boundary: Sam asks on its own, so they go with the hold note at the participant's next words, in one event.
   setSystemTime(epoch + 22_000);
   f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });
   setSystemTime(epoch + 23_000);
@@ -58,11 +58,11 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   setSystemTime(epoch + 26_000);
   await waitFor(() => notes(f.socket.sent).some(note => note.startsWith(NOTE_HEADERS.list)));
   const delivered = notes(f.socket.sent).find(note => note.startsWith(NOTE_HEADERS.list))!;
-  expect(delivered).toEndWith(`\n\n${TURN_NOTE}`);
+  expect(delivered).toEndWith(`\n\n${HOLD_NOTE}`);
   await lose(f);
   await reconnect(f);
   // The new session gets the same notes, each in its own event, and no turn note until there are new words.
-  expect(notes(f.socket.sent).sort()).toEqual(delivered.slice(0, -TURN_NOTE.length - 2).split('\n\n').sort());
+  expect(notes(f.socket.sent).sort()).toEqual(delivered.slice(0, -HOLD_NOTE.length - 2).split('\n\n').sort());
   expect(f.socket.sent.map(event => String(event.event_id))).toContain('resume-2');
   await f.session.fetch(request('end'));
   await settle(f);

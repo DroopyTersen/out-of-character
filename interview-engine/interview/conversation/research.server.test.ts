@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { foundryProvider } from '../../providers/foundry.server';
 import { testFoundry } from '../../providers/testFoundry.server';
 import type { ResearchRequest } from './records';
 import { lookupInterviewBackground, normalizeResearchName, researchKey, validateResearchRequest } from './research.server';
@@ -9,7 +10,10 @@ const transcript = [
   { id: 's1', speaker: 'client' as const, text: 'Did Acme Field Systems cause the delay?', startMs: 0, endMs: 1000 },
   { id: 'p1', speaker: 'trainee' as const, text: 'We connected sites at Acme—Field Systems, but the handoff was private.', startMs: 1000, endMs: 4000 },
 ];
-const input = { foundry: fixtureFoundry, signal: new AbortController().signal };
+const input = { signal: new AbortController().signal };
+/** The lookup over the fast model, with the substituted HTTP bound into the model as the providers bind it. */
+const lookup = (value: Omit<Parameters<typeof lookupInterviewBackground>[0], 'model'>, request: typeof fetch) =>
+  lookupInterviewBackground({ ...value, model: foundryProvider(fixtureFoundry, request).responses(fixtureFoundry.fastModel) });
 const response = (output: unknown[]) => Response.json({
   id: 'resp-fixture', created_at: 1, model: 'gpt-6-luna', output,
   usage: { input_tokens: 100, output_tokens: 80, total_tokens: 180 },
@@ -65,7 +69,7 @@ test('lookup sends only the public target and returns only provider-listed facts
     ], unresolved: null }, [citation('https://acme.example/about')])]);
   }) as typeof fetch;
   const target = { kind: 'organization' as const, name: 'Acme Field Systems' };
-  const result = await lookupInterviewBackground({ target, clue: 'field sites', ...input }, request);
+  const result = await lookup({ target, clue: 'field sites', ...input }, request);
   if (result.status !== 'found') throw new Error('Expected background.');
   expect(result.facts).toEqual([{ text: 'Acme operates distributed field sites.', title: 'About Acme', url: 'https://acme.example/about' }]);
   expect(result.queries).toEqual(['Acme Field Systems official operations']);
@@ -85,10 +89,10 @@ test('uncited, non-HTTP and empty results are unresolved, with the provider reas
     [[], []],
   ] as const) {
     const request = (async () => response([search, message({ facts, unresolved: null }, [...annotations])])) as unknown as typeof fetch;
-    expect(await lookupInterviewBackground({ target, clue: null, ...input }, request)).toEqual({ status: 'unresolved', reason: 'No reliable cited public source matched.', queries: ['Acme Field Systems official operations'] });
+    expect(await lookup({ target, clue: null, ...input }, request)).toEqual({ status: 'unresolved', reason: 'No reliable cited public source matched.', queries: ['Acme Field Systems official operations'] });
   }
   const ambiguous = (async () => response([search, message({ facts: [], unresolved: 'Several organizations share this name.' })])) as unknown as typeof fetch;
-  expect(await lookupInterviewBackground({ target, clue: null, ...input }, ambiguous)).toMatchObject({ status: 'unresolved', reason: 'Several organizations share this name.' });
+  expect(await lookup({ target, clue: null, ...input }, ambiguous)).toMatchObject({ status: 'unresolved', reason: 'Several organizations share this name.' });
 });
 
 test('a URL annotation can substantiate a fact when search action sources are absent', async () => {
@@ -98,12 +102,12 @@ test('a URL annotation can substantiate a fact when search action sources are ab
     { ...search, action: { type: 'search', queries: ['Acme Field Systems'] } },
     message({ facts: [fact], unresolved: null }, [citation(fact.url)]),
   ])) as unknown as typeof fetch;
-  expect(await lookupInterviewBackground({ target, clue: null, ...input }, request)).toMatchObject({ status: 'found', facts: [fact] });
+  expect(await lookup({ target, clue: null, ...input }, request)).toMatchObject({ status: 'found', facts: [fact] });
 });
 
 test('provider failure makes one request', async () => {
   let calls = 0;
   const request = (async () => { calls++; return Response.json({ error: { message: 'unavailable' } }, { status: 429 }); }) as unknown as typeof fetch;
-  await expect(lookupInterviewBackground({ target: { kind: 'term', name: 'Acme' }, clue: null, ...input }, request)).rejects.toThrow();
+  await expect(lookup({ target: { kind: 'term', name: 'Acme' }, clue: null, ...input }, request)).rejects.toThrow();
   expect(calls).toBe(1);
 });

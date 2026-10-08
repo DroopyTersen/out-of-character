@@ -66,24 +66,25 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     setSystemTime(epoch + 22_000);
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'Who else worked on it?', start_ms: 21_000, end_ms: 22_000 });
     await nextTick();
-    expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held for the next handover, not sent into Sam's question.
+    expect(noteEvents(f.socket.sent)).toHaveLength(0); // Held for the next turn boundary, not sent into Sam's question.
     setSystemTime(epoch + 23_000);
     f.socket.emit({ type: 'session.input_transcript.delta', delta: 'Priya ran the data pipeline.', start_ms: 23_000, end_ms: 24_000 });
     setSystemTime(epoch + 26_000);
     await waitFor(() => noteEvents(f.socket.sent).length === 1);
+    await waitFor(() => turns.length === 2); // The second answer is read after the notes went out with its first words.
     expect(maps).toHaveLength(1);
     expect(maps[0]!.attemptId).toBe(interviewAttempt.id);
     expect(maps[0]!.passages.map(entry => entry.id)).toEqual(['p1']);
     expect(maps[0]!.tail.reasons).toHaveLength(1);
     expect(maps[0]!.tail.reasons[0]).toContain('(p1)');
-    // One event with the turn: the thread note first, the map, then the turn note.
+    // Sam asked on its own, so one event at the participant's next words: the thread note first, the map, then the hold note.
     const [handed] = noteEvents(f.socket.sent);
     const content = String(handed!.content);
     expect(handed).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
     expect(content.startsWith(NOTE_HEADERS.list)).toBe(true);
     expect(content).toMatch(/PRIVATE UNKNOWN[^]*PRIVATE VANTAGE/);
-    expect(content).toEndWith(TURN_NOTE);
-    expect(turnNotes(f.socket.sent)).toEqual([HOLD_NOTE, TURN_NOTE, HOLD_NOTE]);
+    expect(content).toEndWith(HOLD_NOTE);
+    expect(turnNotes(f.socket.sent)).toEqual([HOLD_NOTE, TURN_NOTE, TURN_NOTE]); // The second answer’s own handover followed its reading.
     f.socket.emit({ type: 'session.output_transcript.delta', delta: 'What did Priya hand over?', start_ms: 26_000, end_ms: 27_000 });
     // Notes are never instructions; Sam's silence after the participant spoke drew the greeting once more.
     expect(f.socket.sent.filter(event => event.type === 'session.instructions.append').map(event => event.event_id)).toEqual(['opening', 'opening-again']);
@@ -98,13 +99,13 @@ test('the producer reads settled participant turns, maps after its floor, and ke
     await Promise.all(f.pending);
     const row = f.interviewRow()!;
     const records = JSON.parse(row.interventions_json).filter((record: { source: string; kind?: string }) => record.source !== 'grade' && !['hold', 'turn', 'cancel'].includes(record.kind!));
-    expect(records.map((record: { source: string }) => record.source)).toEqual(['turn', 'map', 'traits', 'turn', 'note', 'note']);
+    expect(records.map((record: { source: string }) => record.source)).toEqual(['turn', 'map', 'traits', 'note', 'note', 'turn']);
     expect(records[0]).toMatchObject({ passageId: 'p1', outcome: 'read', reading: { novel: .9 } });
     expect(records[1]).toMatchObject({ outcome: 'applied', inputCount: 1, lastInputId: 'p1', changes: { added: ['e1', 't1'] } });
-    // Both notes were decided at Sol's map, after the first handover, and held past Sam's question for the next one.
+    // Both notes were decided at Sol's map, after the first handover, and held past Sam's question until the participant spoke again.
     const delivery = { eventId: handed!.event_id, status: 'accepted', startMs: 2000, endMs: 2400 };
-    expect(records[4]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, handover: true, nextSamTurnAfterId: 'p3', delivery });
-    expect(records[5]).toMatchObject({ kind: 'map', outcome: 'sent', sentAt: epoch + 26_000, decidedAt: epoch + 20_500, delivery });
+    expect(records[3]).toMatchObject({ kind: 'list', outcome: 'sent', mapId: records[1].id, nextSamTurnAfterId: 'p3', sentAt: epoch + 23_000, delivery });
+    expect(records[4]).toMatchObject({ kind: 'map', outcome: 'sent', sentAt: epoch + 23_000, decidedAt: epoch + 20_500, delivery });
     expect(JSON.parse(row.cues_json)).toEqual([]);
     expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, effort: 'low', maps: 1, applied: 1, turns: 2, notes: 2, research: 0 });
     expect(summarized).not.toContain('PRIVATE');
@@ -198,7 +199,7 @@ test.each(['accepted', 'rejected'] as const)('interview research %s reaches Sam 
   // Audio the browser hears keeps the silent-greeting watchdog from replacing the voice session.
   await f.session.fetch(activityPoll(false, true));
   await waitFor(() => lookups.length === 1);
-  expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, foundry: expect.objectContaining({ resourceName: 'fixture-foundry', agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' }), signal: expect.any(AbortSignal) }]);
+  expect(lookups).toEqual([{ target: { kind: 'term', name: '3DEP' }, clue: null, model: 'gpt-6-luna', signal: expect.any(AbortSignal) }]);
   await Promise.all(f.pending);
   expect(noteEvents(f.socket.sent)).toHaveLength(0);
   // The found lookup wakes Sol, which reads it in its log before Sam hears of it.
@@ -389,12 +390,12 @@ test.each(['accepted', 'rejected'] as const)('a list note receipt %s is archived
   f.socket.emit({ type: 'session.input_transcript.delta', delta: 'The cutover schedule.', start_ms: 28_000, end_ms: 29_000 });
   setSystemTime(epoch + 31_000);
   await waitFor(() => turns === 3);
-  // Each answer was handed over, and the rejected handover once more.
-  await waitFor(() => f.socket.sent.filter(event => String(event.content).endsWith(TURN_NOTE)).length === (receipt === 'accepted' ? 3 : 4));
+  // Each answer was handed over; the rejected thread note rides with the next handover.
+  await waitFor(() => f.socket.sent.filter(event => String(event.content).endsWith(TURN_NOTE)).length === 3);
   await settle(f);
   const lists = noteEvents(f.socket.sent, 'list');
   expect(lists).toHaveLength(receipt === 'accepted' ? 1 : 2);
-  // The thread note goes out again with the turn; the map note sent with it waits for its spacing.
+  // The first delivery rode the hold note; the thread note goes out again with the turn, and the map note sent with it waits for its spacing.
   if (receipt === 'rejected') {
     const resent = String(lists[1]!.content);
     expect(resent).toEndWith(`\n\n${TURN_NOTE}`);

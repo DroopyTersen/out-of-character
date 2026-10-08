@@ -9,7 +9,9 @@ import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewReadings, interviewSu
 /** The project closeout interview. Server code reads it whole, with the interviewer's brief, the framing, Jev's criteria and the narrative prompt; browser code imports ./public so they stay out of the bundle. */
 export const spec = validateSpec({
   id: INTERVIEW_SCENARIO_ID,
-  version: 'project-closeout-v1',
+  // Bumped when the topics or criteria change: an attempt pins the version it started under, and the catalog serves
+  // only the current version of a shipped template, so a live attempt from before a bump cannot restore after it.
+  version: 'project-closeout-v2',
   interviewer: { name: INTERVIEWER_NAME, voices: interviewVoices, role, persona, opening, orientation, boundaries, techniques },
   framing,
   topics: interviewTopics.map(topic => ({ ...topic, objectives: topic.objectives.map(objective => ({ ...objective, criterion: topicCriteria[objective.id], ...topicRules[objective.id] })) })),

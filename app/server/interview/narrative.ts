@@ -25,10 +25,10 @@ export function narrativeRunner(template: NarrativeInput['template'], passages: 
 
 /**
  * An imported transcript's narrative, streamed back and not stored. No attempt is involved: the transcript arrives
- * in the request, the spec is one the host serves, and nothing could rejoin the run, so it ends with the request.
+ * in the request, the spec is one the host's catalog resolves, and nothing could rejoin the run, so it ends with the request.
  */
-export function importedNarrative(input: NarrativeRequest, specs: readonly Pick<InterviewSpec, 'id' | 'narrative'>[], narrate: Narrate, signal: AbortSignal): Response {
-  const spec = specs.find(item => item.id === input.specId);
+export async function importedNarrative(input: NarrativeRequest, resolve: (id: string) => Promise<Pick<InterviewSpec, 'id' | 'narrative'> | null>, narrate: Narrate, signal: AbortSignal): Promise<Response> {
+  const spec = await resolve(input.specId);
   if (!spec) return simulatorJson({ error: 'Unknown interview.' }, 404);
   if (!participantSpoke(input.passages)) return simulatorJson({ error: 'There is not enough conversation to write about.' }, 422);
   const runner = narrativeRunner(spec.narrative as NarrativeInput['template'], input.passages, narrate);

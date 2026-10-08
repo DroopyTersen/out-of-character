@@ -11,7 +11,7 @@ type InterviewObjectiveReading = Reading<WireSpeaker>;
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v22';
+export const PRODUCER_VERSION = 'interview-producer-v23';
 export const PRODUCER_LIMITS = {
   /** Sol: one call in flight, gaps measured start to start. The timeout stays under the timer so a slow call never delays the next. */
   mapCalls: 90, mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
@@ -47,8 +47,6 @@ export const PRODUCER_LIMITS = {
    * characters; otherwise the map note goes first, on its own.
    */
   handoverChars: 1600,
-  /** A topic note waits until no words of the participant's have arrived for this long; while they speak, their words arrive up to about a second apart. */
-  releaseQuiet: 1200,
 };
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];

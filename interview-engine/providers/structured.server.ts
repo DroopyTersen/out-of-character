@@ -35,16 +35,21 @@ const responseSchema = z.object({
 /** An input message. `cache` ends a reusable prefix there with an explicit breakpoint; at most four may be written per request. */
 export type SolMessage = { role: 'developer' | 'user'; text: string; cache?: boolean };
 type SolContext = { context: unknown } | { messages: SolMessage[]; cacheKey: string | null };
+type SolRequest = {
+  signal: AbortSignal; instructions: string; name: string; schema: z.ZodType; effort?: 'low' | 'medium'; maxOutputTokens?: number;
+  /** The JSON schema sent, when it should differ from `schema`'s, such as without string lengths. */
+  jsonSchema?: Record<string, unknown>;
+};
+/** A structured call to the agent model with the resource and credentials already bound: what the Providers carry. */
+export type StructuredInput = SolRequest & SolContext;
+export type StructuredResult = { value: unknown; model: string; usage: ModelUsage };
+export type StructuredRequest = (input: StructuredInput) => Promise<StructuredResult>;
 
 /**
  * One strict-JSON Sol response. The caller validates the parsed value against the dialogue it supplied.
  * With messages and a cache key, only the marked prefixes are cached (explicit mode); a null key sends no cache options.
  */
-export async function requestSol(input: {
-  foundry: FoundryConfig; signal: AbortSignal; instructions: string; name: string; schema: z.ZodType; effort?: 'low' | 'medium'; maxOutputTokens?: number;
-  /** The JSON schema sent, when it should differ from `schema`'s, such as without string lengths. */
-  jsonSchema?: Record<string, unknown>;
-} & SolContext, request: (url: string, options: RequestInit) => Promise<Response> = fetch): Promise<{ value: unknown; model: string; usage: ModelUsage }> {
+export async function requestSol(input: { foundry: FoundryConfig } & StructuredInput, request: (url: string, options: RequestInit) => Promise<Response> = fetch): Promise<StructuredResult> {
   const effort = input.effort ?? 'low';
   const cache = 'messages' in input && input.cacheKey != null;
   const body = 'messages' in input ? {
@@ -83,3 +88,7 @@ function readUsage(usage: z.infer<typeof responseSchema>['usage']): ModelUsage {
     ...(usage?.output_tokens_details?.reasoning_tokens != null ? { reasoningTokens: usage.output_tokens_details.reasoning_tokens } : {}),
   };
 }
+
+/** Binds the resource and its credentials once, so the callers carry no credentials of their own. */
+export const structuredWith = (foundry: FoundryConfig, request: (url: string, options: RequestInit) => Promise<Response> = fetch): StructuredRequest =>
+  input => requestSol({ foundry, ...input }, request);

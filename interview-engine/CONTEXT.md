@@ -24,6 +24,12 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Narrative phase**: writing a document from a transcript and a `NarrativeTemplate`. Needs only a language model. Lives in `narrative/`.
 
+**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in `setup/`; the live actor never sees setup concerns.
+
+**Approved debrief**: the spec `approveDebrief` builds from a base template and an approved record: the template's cast, persona, boundaries, techniques, readings and limits under the record's role, opening, orientation, framing and topics, with the generic topic-sectioned narrative. Its id is the record's (by default the title's slug); its version is the id plus a digest of the record and the base's id and version, so an attempt's archive row names exactly what it ran under.
+
+**Catalog**: the host's lookup from a spec id (and optionally a version) to a runnable spec: the shipped templates by id, then stored approvals, re-approved against their base template. The attempt object pins the id and version it started under and resolves the same spec on restore; a start that names a spec the catalog cannot resolve is rejected.
+
 **Server-only spec fields**: the parts of an `InterviewSpec` the browser never sees: each objective's `criterion` (and optional `creditRule` and `explored`), each reading's `rubric`, the interviewer's `role`, `persona`, `orientation`, `boundaries`, `opening` and `techniques`, and the spec's `framing`. A spec's public file stays label-only; its `*.prompt.ts` files hold this text.
 
 **Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/conversation/rubric.prompt.ts`).

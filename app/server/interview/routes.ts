@@ -1,7 +1,7 @@
 import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
 import { activitySchema, CAPABILITY, narrativeRequestSchema, resumeSchema, startSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
-import { spec } from '../../../interviews/project-closeout/spec';
+import { routeDebriefs, workerDebriefs, type DebriefGates } from './debriefs';
 import { BodyError, boundedJson } from '../http';
 import { liveAvailable, simulatorJson } from '../simulator/api';
 import { importedNarrative, narrateWith } from './narrative';
@@ -22,6 +22,8 @@ export type InterviewGates = {
    * a host without it serves HTTP only, and its socket path is unknown.
    */
   socket?(id: string, upgrade: Request): Response | Promise<Response>;
+  /** Debrief setup: templates, drafts and approvals, and the catalog imported narratives resolve their spec from. Opt-in: without it the setup routes are unknown. */
+  debriefs?: DebriefGates;
 };
 
 /** Whether this deployment accepts the socket transport. Off unless `INTERVIEW_SOCKET_ENABLED` is "true". */
@@ -35,15 +37,19 @@ const NARRATIVE_BODY_LIMIT = 256 * 1024;
  * The Worker's gates: the practice simulator's kill switch and limiters, one InterviewObject per attempt, Foundry for
  * narratives, and the attempt's object for its socket when sockets are enabled.
  */
-export const workerGates = (env: Env): InterviewGates => ({
-  available: () => liveAvailable(env),
-  limit: async (key, kind = 'session') => (await (kind === 'narrative' ? env.RATE_JUDGE : env.RATE_SIMULATOR).limit({ key })).success,
-  session: (id, command) => attemptObject(env, id).fetch(command),
-  narrative: (input, signal) => foundryConfigured(env)
-    ? importedNarrative(input, [spec], narrateWith(foundryProviders(foundryConfig(env))), signal)
-    : simulatorJson({ error: 'Narratives are currently unavailable.' }, 503),
-  ...(socketsEnabled(env) ? { socket: (id: string, upgrade: Request) => attemptObject(env, id).fetch(upgrade) } : {}),
-});
+export function workerGates(env: Env): InterviewGates {
+  const debriefs = workerDebriefs(env);
+  return {
+    available: () => liveAvailable(env),
+    limit: async (key, kind = 'session') => (await (kind === 'narrative' ? env.RATE_JUDGE : env.RATE_SIMULATOR).limit({ key })).success,
+    session: (id, command) => attemptObject(env, id).fetch(command),
+    narrative: (input, signal) => foundryConfigured(env)
+      ? importedNarrative(input, id => debriefs.catalog.resolve(id), narrateWith(foundryProviders(foundryConfig(env))), signal)
+      : simulatorJson({ error: 'Narratives are currently unavailable.' }, 503),
+    debriefs,
+    ...(socketsEnabled(env) ? { socket: (id: string, upgrade: Request) => attemptObject(env, id).fetch(upgrade) } : {}),
+  };
+}
 
 export const handleInterview = (request: Request, env: Env) => routeInterview(request, workerGates(env));
 
@@ -55,6 +61,8 @@ export const handleInterview = (request: Request, env: Env) => routeInterview(re
 export async function routeInterview(request: Request, gates: InterviewGates): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/interview/')) return null;
+  // Setup happens before any attempt exists, so it has no attempt capability; the paid gates still apply to drafting.
+  if (url.pathname.startsWith('/api/interview/debriefs')) return routeDebriefs(request, url, gates.debriefs, { available: gates.available, limit: key => gates.limit(key, 'narrative') });
   const socket = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/socket$/);
   if (socket) {
     // The browser cannot set headers on a WebSocket, so each command carries its capability instead.

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-design-preview",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-drew-code-out-of-character/21c0b970-d0d0-46be-9e07-1739fe7e7c94/scratchpad/serve.ts"],
+      "port": 4873
+    }
+  ]
+}

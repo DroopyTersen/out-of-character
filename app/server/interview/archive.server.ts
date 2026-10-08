@@ -2,9 +2,11 @@ import type { InterviewSession } from '../../../core/interview';
 import type { SessionSnapshot } from '../../../core/simulator/types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
 import { fitRecords, type ProducerLogRecord } from '../../../core/interview-producer';
-import { spec } from '../../../interviews/project-closeout/spec';
 
 export type InterviewArchiveWrite = {
+  /** The spec the attempt ran under: the archive never assumes one. */
+  specId: string;
+  specVersion: string;
   state: 'partial' | 'final';
   capturedAt: number;
   snapshot: SessionSnapshot & { interview: InterviewSession };
@@ -17,7 +19,7 @@ export const ROW_BYTES = 1_990_000;
 const encoder = new TextEncoder();
 
 /** Interview rows stay outside routine simulator transcript exports. */
-export async function writeInterviewArchive(db: D1Database, { state, capturedAt, snapshot, provenance, interventions }: InterviewArchiveWrite): Promise<void> {
+export async function writeInterviewArchive(db: D1Database, { specId, specVersion, state, capturedAt, snapshot, provenance, interventions }: InterviewArchiveWrite): Promise<void> {
   const summary = snapshot.interview.summary;
   const columns = [
     snapshot.id, snapshot.scenarioId, snapshot.clientId, snapshot.startedAt, capturedAt,
@@ -25,7 +27,7 @@ export async function writeInterviewArchive(db: D1Database, { state, capturedAt,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.interview.evaluation ? JSON.stringify(snapshot.interview.evaluation) : null,
     summary?.status ?? 'pending', summary?.text ?? null,
-    JSON.stringify(provenance), '[]', spec.id, spec.version,
+    JSON.stringify(provenance), '[]', specId, specVersion,
   ];
   // Producer records take whatever the rest of the row leaves.
   const used = columns.reduce<number>((sum, value) => sum + (typeof value === 'string' ? encoder.encode(value).byteLength : 8), 0);

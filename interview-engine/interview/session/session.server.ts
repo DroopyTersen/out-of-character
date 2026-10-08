@@ -1,7 +1,7 @@
 import type { EngineEvent } from '../../providers/diagnostics.server';
 import { callFailure } from '../../providers/diagnostics.server';
 import { LiveSessionGone, transcriptEvent } from '../../providers/gptLive.server';
-import type { FoundryConfig, Providers, WebSocketLike } from '../../providers/providers.server';
+import type { Providers, WebSocketLike } from '../../providers/providers.server';
 import { activitySchema, CAPABILITY, resumeSchema, startSchema } from '../../shared/protocol';
 import { NETWORK_SAMPLES } from '../../shared/network';
 import type { InterviewEvaluation, SessionPause, SessionWarning } from '../../shared/snapshot';
@@ -33,10 +33,8 @@ export type SessionServices = typeof producerServices & { evaluate: Evaluate };
 
 export type SessionOptions = {
   spec: SessionSpec;
+  /** Every paid client, credentials bound: nothing else in the options can reach a provider. */
   providers: Providers;
-  /** Sol, Jev's turn reads and Luna still take the resource and the key; the providers cover Sam and the coverage grade. */
-  foundry: FoundryConfig;
-  typesafeKey: string;
   store: SessionStore;
   background: Background;
   archive: Archive;
@@ -67,6 +65,11 @@ const GREETING_REPLACE_MS = 25_000;
 const UNRESPONSIVE = 'The voice service is not responding. You can end this attempt and try again.';
 const FENCED = 'Another owner has taken over this attempt.';
 const INVALID = 'Invalid simulator request.';
+const CANCELLED = 'The attempt was cancelled.';
+/** How long after the lease's deadline a provider session's closure is still retried. */
+const CLOSURE_GRACE_MS = 60 * 60_000;
+/** The attempt was ended before its provider session was opened; nothing paid happened. */
+class Cancelled extends Error { constructor() { super(CANCELLED); this.name = 'Cancelled'; } }
 const clientSpoke = (transcript: WireEntry[]) => transcript.some(entry => entry.speaker === 'client' && entry.text.trim());
 const reply = (body: unknown, status = 200): Reply => ({ status, body });
 const within = <T>(work: Promise<T>, ms: number) => new Promise<T>((resolve, reject) => {
@@ -105,8 +108,6 @@ export class SessionActor {
   private readonly spec: SessionSpec;
   private readonly limits: InterviewLimits;
   private readonly providers: Providers;
-  private readonly foundry: FoundryConfig;
-  private readonly typesafeKey: string;
   private readonly store: SessionStore;
   private readonly background: Background;
   private readonly archive: Archive;
@@ -169,8 +170,6 @@ export class SessionActor {
     this.spec = options.spec;
     this.limits = options.spec.limits ?? defaultLimits;
     this.providers = options.providers;
-    this.foundry = options.foundry;
-    this.typesafeKey = options.typesafeKey;
     this.store = options.store;
     this.background = options.background;
     this.archive = options.archive;
@@ -373,22 +372,30 @@ export class SessionActor {
     };
     this.interview = { evaluation: null, summary: null };
     this.createProducer();
-    await this.save({ lease: this.lease });
-    await this.setWake(this.now() + 30_000);
     const snapshot = this.state;
     try {
-      this.connecting = this.openLive(input);
+      // The lease is durable before any provider session exists. An end that arrives meanwhile waits for this and
+      // then finds no segment to close, because creation is skipped once the attempt is ending.
+      this.connecting = this.connect(input);
       const created = await this.connecting;
-      if (snapshot.status === 'ending' || this.lease.closed) return reply({ error: 'The attempt was cancelled.' }, 409);
+      if (this.finishing || snapshot.status === 'ending' || this.lease.closed) return reply({ error: CANCELLED }, 409);
       this.lastSeen = this.now();
       this.timer = setInterval(() => this.tick(), 500);
       return reply({ sdp: created.sdp, snapshot: this.publicSnapshot() });
     } catch (error) {
       if (error instanceof FencedError || this.fenced) throw error;
+      if (error instanceof Cancelled) return reply({ error: CANCELLED }, 409);
       snapshot.message = 'The voice connection could not be established.';
       await this.end(true);
       return reply({ error: snapshot.message }, 502);
     }
+  }
+
+  /** Saves the new lease, then opens the first provider session unless the attempt has been ended meanwhile. */
+  private async connect(input: { clientId: string; sdp: string }) {
+    await this.save({ lease: this.lease! });
+    await this.setWake(this.now() + 30_000);
+    return this.openLive(input);
   }
 
   private createProducer() {
@@ -398,7 +405,7 @@ export class SessionActor {
     const prefix = () => { const ready = new Set(settled()); return settledPrefix(this.state!.transcript, entry => ready.has(entry)); };
     this.producer = new InterviewProducer({
       spec: this.spec, attemptId: snapshot.id, startedAt: snapshot.startedAt,
-      foundry: this.foundry, typesafeKey: this.typesafeKey, services: this.paid,
+      providers: this.providers, services: this.paid,
       settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
       talking: () => { const ready = new Set(settled()); return this.state!.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); },
@@ -412,11 +419,19 @@ export class SessionActor {
 
   /** A resumed session appends the rebuilt conversation after the unchanged brief. */
   private async openLive(input: { clientId: string; sdp: string }, offsetMs = 0, context?: string) {
+    // Checked last thing before the paid call: an end or a fence that arrived during the writes above must not open a session.
+    if (this.fenced) throw new FencedError();
+    if (this.finishing || this.state?.status === 'ending') throw new Cancelled();
     const instructions = [interviewerBrief(this.spec, input.clientId), context].filter(Boolean).join('\n\n');
     const created = await this.providers.voice.create({ sdp: input.sdp, voice: this.voiceName(input.clientId), instructions });
     const segment: Segment = { epoch: ++this.epoch, providerId: created.id, offsetMs, startedAt: this.now(), endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null };
     this.segments.push(segment);
-    await this.persistLease();
+    try { await this.persistLease(); }
+    catch (error) {
+      // The lease never recorded this session, so no owner will ever close it from the store: close it now, best effort.
+      await this.providers.voice.close(created.id).catch(() => {});
+      throw error;
+    }
     this.socket = await this.providers.voice.attach(created.id);
     this.listen(this.socket, segment);
     return { sdp: created.sdp };
@@ -973,7 +988,13 @@ export class SessionActor {
     }
     if (failed.length) {
       await this.persistLease(failed);
-      throw new Error('Closure not confirmed.');
+      // A host without platform retries needs the next attempt scheduled here. Closure is given up once the sessions
+      // have long outlived the attempt: the provider ends them itself, and this lease must not retry forever.
+      if (this.now() < lease.deadline + CLOSURE_GRACE_MS) {
+        await this.setWake(this.now() + 15_000);
+        throw new Error('Closure not confirmed.');
+      }
+      this.report({ type: 'session', event: 'closure.abandoned', id: this.state?.id ?? '' });
     }
     lease.closed = true;
     await this.persistLease([]);

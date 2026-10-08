@@ -27,7 +27,7 @@ function fixture() {
 }
 
 const base: InterviewArchiveWrite = {
-  state: 'partial', capturedAt: 2000,
+  specId: 'project-closeout', specVersion: 'project-closeout-v1', state: 'partial', capturedAt: 2000,
   snapshot: {
     id: 'interview-1', scenarioId: 'project-closeout', clientId: 'sam-cedar',
     status: 'live', startedAt: 1000, limitSeconds: 3600, warning: null, revision: 1,

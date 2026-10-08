@@ -17,5 +17,4 @@ export const mapWireSchema = engine.mapWireSchema(spec);
 export const appendMapLog = (log: engine.MapLog, settled: WireEntry[], events?: engine.MapLogEvent[]) => engine.appendMapLog(spec, log, settled, events);
 export const renderMapTail = (previous: ConversationMap, tail: engine.MapTail) => engine.renderMapTail(spec, previous, tail);
 export const mapMessages = (blocks: string[], tail: string) => engine.mapMessages(spec, blocks, tail);
-export const generateMap = (input: Omit<Parameters<typeof engine.generateMap>[0], 'spec'>, request?: Parameters<typeof engine.generateMap>[1]) =>
-  engine.generateMap({ ...input, spec }, request);
+export const generateMap = (input: Omit<Parameters<typeof engine.generateMap>[0], 'spec'>) => engine.generateMap({ ...input, spec });

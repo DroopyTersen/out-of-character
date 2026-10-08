@@ -1,17 +1,17 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { CANCEL_NOTE, HOLD_NOTE, TURN_NOTE } from '../../../core/interview-notes';
-import { activityPoll, attempt, capability, fixture, request, settle, waitFor } from './session-fixture';
+import { CANCEL_NOTE, HOLD_NOTE, TURN_NOTE } from '../../../interview-engine/interview/conversation/notes';
+import { interviewAttempt, objectFixture } from './durableObjectFixture';
+import { activityPoll, capability, request, settle, waitFor } from '../simulator/session-fixture';
 
 // The listening hold across real session ownership; only the provider and paid judges are substituted.
 afterEach(() => setSystemTime());
-const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
-type Fixture = Awaited<ReturnType<typeof fixture>>;
+type Fixture = Awaited<ReturnType<typeof objectFixture>>;
 const read = async (response: Response | Promise<Response>) => (await response).json() as Promise<Record<string, any>>;
 const poll = (f: Fixture) => read(f.session.fetch(request('poll')));
 const notes = (f: Fixture) => f.socket.sent.filter(event => String(event.event_id).startsWith('note-')).map(event => event.content);
 /** Sam's question, as the participant's answer is about to begin. */
 async function live(f?: Fixture) {
-  f ??= await fixture();
+  f ??= await objectFixture();
   await f.session.fetch(request('start', capability, interviewAttempt));
   await f.session.fetch(request('ready'));
   f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-1', delta: 'Who owns the site today?', start_ms: 0, end_ms: 1200 });
@@ -33,7 +33,7 @@ async function restart(f: Fixture, edit: (checkpoint: any) => void = () => {}) {
   await settle(f);
   setSystemTime();
   edit(f.values.get('checkpoint'));
-  return fixture({ values: f.values, archive: f.archive, provider: 'replacement' });
+  return objectFixture({ values: f.values, archive: f.archive, provider: 'replacement' });
 }
 
 test('every interview gets the listening hold, again after a resume and after a restart', async () => {

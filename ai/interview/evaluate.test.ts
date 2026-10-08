@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { Experimental_EvaluationQuestion } from 'ai';
-import { interviewTopics, INTERVIEW_SCENARIO_ID, type CoverageLevel } from '../../core/interview';
+import { interviewTopics, type CoverageLevel } from '../../core/interview';
 import { interviewFixtures } from './fixtures';
 import recordings from './recordings.json';
 import { readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
 import { INTERVIEW_RUBRIC_VERSION, interviewQuestions } from './rubric';
-import { interviewerBrief, interviewOpening, interviewScenario, interviewers } from './scenario.server';
+import { interviewerBrief, interviewOpening, interviewers } from './scenario.server';
 
 function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
   return Object.fromEntries(Object.entries(questions).map(([id, question]) => {
@@ -30,9 +30,7 @@ describe('project closeout interview contracts', () => {
     }
   });
   test('one authored Sam serves both voices and the original 14 subtopics', () => {
-    expect(interviewScenario.id).toBe(INTERVIEW_SCENARIO_ID);
-    expect(interviewScenario.objectives.map(item => item.id)).toEqual(interviewTopics.flatMap(topic => topic.objectives.map(item => item.id)));
-    expect(interviewScenario.objectives).toHaveLength(14);
+    expect(interviewTopics.flatMap(topic => topic.objectives.map(item => item.id))).toHaveLength(14);
     expect(interviewers.map(item => item.voice)).toEqual(['cedar', 'gleam']);
     expect(interviewers[0]!.behavior).toBe(interviewers[1]!.behavior);
     for (const interviewer of interviewers) {

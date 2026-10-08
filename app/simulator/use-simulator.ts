@@ -9,7 +9,7 @@ export type SimulatorPhase = 'selection' | 'connecting' | 'live' | 'paused' | 'e
 export type AttemptChoice = { scenarioId: string; clientId: string };
 /**
  * `left` marks an attempt its page held on the way out; a duplicated tab copies the storage without it. `route` is the
- * session routes the attempt started on; a claim saved before it was recorded started on the practice simulator's.
+ * session routes the attempt started on; a claim saved without one rejoins this page's routes.
  */
 type SavedAttempt = Attempt & AttemptChoice & { left?: boolean; route?: SessionRoutes };
 
@@ -98,7 +98,7 @@ export function useSimulator(report: ReportActions, { kind, sessions = SIMULATOR
     const active = () => generation.current === attempt;
     const beginReport = () => reportActions.current.begin(live.attempt.id);
     // A rejoined attempt stays on the routes it started on.
-    const route = saved ? saved.route ?? SIMULATOR_SESSIONS : sessions;
+    const route = saved?.route ?? sessions;
     const live = new LiveConnection<SessionSnapshot>(pollTransport(route), {
       snapshot: value => {
         if (!active()) return;

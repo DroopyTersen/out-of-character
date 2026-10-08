@@ -142,26 +142,22 @@ async function script(target: Target) {
   return { replies, paused };
 }
 
-test('the interview object answers a scripted attempt exactly as the practice simulator’s session does', async () => {
-  let oldGrades = 0;
-  const old = await fixture({ overrides: {
-    ...producer as object,
-    evaluateInterview: async input => { oldGrades++; return graded(input.revision, input.transcript) as never; },
-    summarizeInterview: summary as never,
-  } });
-  const before = await script({ fetch: request => old.session.fetch(request), get socket() { return old.socket; }, pending: old.pending, grades: () => oldGrades, values: old.values });
+/** Frozen from the practice simulator's session running this script before its interview branches were removed (Phase 5). */
+const frozen = await Bun.file(new URL('./scripted-attempt.json', import.meta.url)).json() as { replies: [string, number, unknown][]; paused: unknown; lease: unknown; checkpoint: boolean; row: unknown };
+
+test('the interview object answers a scripted attempt exactly as the practice simulator’s session did', async () => {
   const spare = await fixture();
   const next = await interviewObject(spare);
   const after = await script({ fetch: request => next.object.fetch(request), get socket() { return spare.socket; }, pending: next.pending, grades: () => next.grades.length, values: next.values });
 
   expect(after.replies.map(([action, status]) => [action, status])).toEqual([['poll', 404], ['start', 200], ['start', 403], ['ready', 200], ['poll', 200], ['pause', 200], ['poll', 200], ['end', 200], ['poll', 200], ['report', 200], ['poll', 200]]);
-  expect(after.replies).toEqual(before.replies);
+  expect(after.replies).toEqual(frozen.replies);
   // The paused checkpoint is the one a restore reads; the note ids inside it are random.
   expect(after.paused).toBeDefined();
-  expect(uuids(after.paused)).toEqual(uuids(before.paused));
-  expect(next.values.get('lease')).toEqual(old.values.get('lease'));
-  expect(next.values.has('checkpoint')).toBe(old.values.has('checkpoint'));
-  expect(uuids(next.row())).toEqual(uuids(old.interviewRow()));
+  expect(uuids(after.paused)).toEqual(frozen.paused);
+  expect(next.values.get('lease')).toEqual(frozen.lease);
+  expect(next.values.has('checkpoint')).toBe(frozen.checkpoint);
+  expect(uuids(next.row())).toEqual(frozen.row);
 }, 15_000);
 
 test('the alarm wakes the session: an end that arrived before its start is forgotten once the hold passes', async () => {

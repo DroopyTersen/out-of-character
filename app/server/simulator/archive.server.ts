@@ -1,5 +1,4 @@
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
-import { INTERVIEW_RUBRIC_VERSION } from '../../../ai/interview/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { SIMULATOR_VERSION, type ClientEnding, type PublicSnapshot, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
@@ -22,7 +21,7 @@ export type ArchiveProvenance = {
   openingDigest: string;
   workerId: string | null;
   workerTag: string | null;
-  /** The simulator's director, or the interview's producer. */
+  /** The simulator's director, or the interview's producer (the interview archive shares this provenance shape). */
   contextualDirector: DirectorSummary | ProducerSummary | null;
   interviewSummary?: { model: string; version: string; attempts: ReportAttempt[] };
   /** One entry per provider session, and each connection pause. Provider ids are never archived. */
@@ -47,7 +46,7 @@ export type ArchiveWrite = {
   interventions: InterventionRecord[];
 };
 
-export async function archiveProvenance(env: Env, snapshot: PublicSnapshot, contextualDirector: DirectorSummary | ProducerSummary | null): Promise<ArchiveProvenance> {
+export async function archiveProvenance(env: Env, snapshot: PublicSnapshot, contextualDirector: DirectorSummary | null): Promise<ArchiveProvenance> {
   const scenario = getScenario(snapshot.scenarioId), client = getClient(snapshot.clientId);
   const digest = async (text: string) => {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -55,7 +54,7 @@ export async function archiveProvenance(env: Env, snapshot: PublicSnapshot, cont
   };
   const [actorDigest, openingDigest] = await Promise.all([digest(actorBrief(scenario, client)), digest(openingInstruction(scenario, client))]);
   return {
-    model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, voice: client.voice, rubricVersion: snapshot.interview ? INTERVIEW_RUBRIC_VERSION : RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
+    model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, voice: client.voice, rubricVersion: RUBRIC_VERSION, simulatorVersion: SIMULATOR_VERSION,
     actorDigest, openingDigest, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null,
     contextualDirector,
   };

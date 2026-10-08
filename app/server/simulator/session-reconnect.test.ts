@@ -1,12 +1,9 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../../core/simulator/types';
-import { emptyMap, type ConversationMap } from '../../../core/interview-map';
-import { NOTE_HEADERS, TURN_NOTE } from '../../../core/interview-notes';
 import { activityPoll, attempt, capability, fixture, request, settle, waitFor } from './session-fixture';
 
 // Pause and resume across real session ownership; only the provider and paid judges are substituted.
 afterEach(() => setSystemTime());
-const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 const action = (name: string, body?: unknown) => new Request(`https://session/${name}`, { method: 'POST', headers: { Authorization: capability }, ...(body ? { body: JSON.stringify(body) } : {}) });
 const resume = (f: Fixture) => f.session.fetch(action('resume', { sdp: 'v=0\r\no=fixture-resume\r\n' }));
@@ -242,62 +239,4 @@ test('a restart holds a live conversation for its browser and closes the orphane
   expect(connection.segments.map((segment: { epoch: number; finalization: string }) => [segment.epoch, segment.finalization])).toEqual([[1, 'confirmed'], [2, 'confirmed']]);
   expect(connection.pauses).toMatchObject([{ reason: 'restart' }]);
   await f.session.fetch(request('end')); // Stop the original owner's timer.
-});
-
-test('a resumed interview restates Sam’s notes to the new provider session', async () => {
-  const epoch = 1_800_000_000_000;
-  setSystemTime(epoch);
-  const map: ConversationMap = {
-    ...emptyMap(), participant: { vantage: 'Their team owns the site today.', preferences: [] },
-    entities: [{ id: 'e1', kind: 'product', label: 'Site', detail: 'Owned by the participant’s team.', source: 'participant', passageId: 'p1' }],
-    threads: [{ id: 't1', label: 'Site ownership', anchors: ['e1'], unknown: 'who owned the site before', guess: 'another team', related: [], topics: [], status: 'open', reason: null }],
-    nextIds: { e: 2, r: 1, t: 2 },
-  };
-  let maps = 0;
-  const f = await live({ overrides: {
-    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    generateMap: async () => { maps++; return { map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
-  } }, interviewAttempt);
-  const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => String(event.content));
-  setSystemTime(epoch + 20_500);
-  // Sam's opening is still playing, so the silence watchdog stays out of it.
-  await f.session.fetch(activityPoll(true, true));
-  await waitFor(() => maps === 1);
-  await settle(f);
-  // Sol mapped after the answer was handed over, so both notes go with the next handover, in one event.
-  setSystemTime(epoch + 22_000);
-  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-2', delta: 'Who owned it before?', start_ms: 21_000, end_ms: 22_000 });
-  setSystemTime(epoch + 23_000);
-  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-2', delta: 'Another team, until last spring.', start_ms: 23_000, end_ms: 24_000 });
-  setSystemTime(epoch + 26_000);
-  await waitFor(() => notes(f.socket.sent).some(note => note.startsWith(NOTE_HEADERS.list)));
-  const delivered = notes(f.socket.sent).find(note => note.startsWith(NOTE_HEADERS.list))!;
-  expect(delivered).toEndWith(`\n\n${TURN_NOTE}`);
-  await lose(f);
-  await reconnect(f);
-  // The new session gets the same notes, each in its own event, and no turn note until there are new words.
-  expect(notes(f.socket.sent).sort()).toEqual(delivered.slice(0, -TURN_NOTE.length - 2).split('\n\n').sort());
-  expect(f.socket.sent.map(event => String(event.event_id))).toContain('resume-2');
-  await f.session.fetch(request('end'));
-  await settle(f);
-  expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string; kind: string }) => record.source === 'note' && ['list', 'map'].includes(record.kind))).toHaveLength(4);
-});
-
-test('a restarted interview keeps its readings and summary state, stored inside the checkpoint snapshot', async () => {
-  const f = await live({}, interviewAttempt);
-  await lose(f);
-  const before = await poll(f);
-  expect(before.interview).toMatchObject({ summary: null, background: [] });
-  // The stored shape is unchanged, so checkpoints saved before the interview state moved beside the snapshot still restore.
-  const stored = (f.values.get('checkpoint') as { snapshot: Record<string, unknown> }).snapshot;
-  expect(stored.interview).toEqual({ evaluation: before.interview.evaluation, summary: null });
-  expect(stored.interview).not.toHaveProperty('background');
-  const replacement = await fixture({ values: f.values, archive: f.archive, provider: 'replacement' });
-  const state = await poll(replacement);
-  expect(state.interview).toEqual(before.interview);
-  await reconnect(replacement);
-  expect(await read(replacement.session.fetch(request('end')))).toMatchObject({ status: 'ended', interview: { summary: { status: 'pending', text: null } } });
-  await settle(replacement);
-  expect(replacement.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
-  await f.session.fetch(request('end'));
 });

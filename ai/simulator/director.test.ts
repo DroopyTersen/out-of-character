@@ -43,9 +43,9 @@ test('actor context excludes consultant plans, scoring, and hint history', () =>
   expect(Object.keys(context.context)).not.toContain('progress');
 });
 
-test('interview scenarios are rejected; the interview producer owns Sam direction', () => {
+test('the interview is not a director scenario', () => {
   expect(() => directorContext({ ...input, scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', audience: 'actor', reason: { condition: 'knowledge', probability: .91 } }))
-    .toThrow('Interview direction uses the interview producer.');
+    .toThrow('Unknown scenario.');
 });
 
 test('only delivered generated advice suppresses repetition; failed drafts and fixed alerts do not', () => {

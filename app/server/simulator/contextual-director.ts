@@ -16,7 +16,7 @@ type Options = {
   settled: () => TranscriptEntry[]; isFresh: (transcript: TranscriptEntry[]) => boolean; send: (event: Record<string, unknown>) => boolean;
 };
 
-/** Owns optional simulator interventions, never audio, grades or the session snapshot. The interview uses InterviewProducer. */
+/** Owns optional simulator interventions, never audio, grades or the session snapshot. */
 export class ContextualDirector {
   private gate = new DirectorGate();
   readonly records: InterventionRecord[] = [];

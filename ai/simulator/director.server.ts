@@ -3,7 +3,6 @@ import { experimental_evaluate } from 'ai';
 import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
 import { JEV_MODEL } from '../judging';
 import type { FoundryConfig } from '../foundry.server';
-import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
 import { DirectorOutputError, requestSol } from './sol.server';
 import { getClient, getScenario, publicCatalog } from './scenarios.server';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../core/simulator/state';
@@ -33,8 +32,6 @@ export function validateDirectorResult(value: unknown, transcript: TranscriptEnt
 /** Construct each audience's context; never serialize the full private scenario or evaluation. */
 export function directorContext(input: Omit<DirectorInput, 'foundry' | 'signal'>) {
   if (!input.transcript.length || input.transcript.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(input.transcript) > TRANSCRIPT_LIMIT.characters) throw new Error('Director transcript is outside the simulator limit.');
-  // The interview has its own producer; this director serves simulator scenarios only.
-  if (input.scenarioId === INTERVIEW_SCENARIO_ID) throw new Error('Interview direction uses the interview producer.');
   const scenario = getScenario(input.scenarioId), client = getClient(input.clientId);
   const observations = input.history.filter((item): item is ObservationRecord => item.source === 'observation' && item.audience === input.audience && item.completedAt != null && item.signals.length > 0);
   const context = input.audience === 'trainee'

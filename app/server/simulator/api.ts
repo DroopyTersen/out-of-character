@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { INTERVIEW_SCENARIO_ID, interviewVoices } from '../../../core/interview';
+import { INTERVIEW_SCENARIO_ID } from '../../../core/interview';
 import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/scenarios.server';
 import { BodyError, boundedJson } from '../http';
 import { foundryConfigured } from '../../../ai/foundry.server';
@@ -20,7 +20,7 @@ export const startSchema = z.object({
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
   sdp: offer,
-}).strict().refine(input => (input.scenarioId === INTERVIEW_SCENARIO_ID) === interviewVoices.some(voice => voice.id === input.clientId), 'Choose an interviewer for an interview.');
+}).strict();
 export const resumeSchema = z.object({ sdp: offer }).strict();
 export const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.TYPESAFE_API_KEY;
 export const simulatorJson = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -38,10 +38,11 @@ export async function handleSimulator(request: Request, env: Env): Promise<Respo
     if (url.pathname === '/api/simulator/sessions') {
       if (!liveAvailable(env)) return simulatorJson({ error: 'Live practice is currently unavailable. You can explore the workshop.' }, 503);
       if (!(await env.RATE_SIMULATOR.limit({ key: request.headers.get('CF-Connecting-IP') || 'local' })).success) return simulatorJson({ error: 'Please wait a minute before starting another practice.' }, 429);
-      const parsed = startSchema.safeParse(await boundedJson(request, 64 * 1024));
+      const body = await boundedJson(request, 64 * 1024);
+      // Interviews run in their own session; say where, rather than calling the scenario unknown.
+      if ((body as { scenarioId?: unknown } | null)?.scenarioId === INTERVIEW_SCENARIO_ID) return simulatorJson({ error: 'Interviews start at /api/interview/sessions.' }, 400);
+      const parsed = startSchema.safeParse(body);
       if (!parsed.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
-      // New interviews start in the interview's own session; ones already running here still poll, end and report below.
-      if (parsed.data.scenarioId === INTERVIEW_SCENARIO_ID) return simulatorJson({ error: 'Interviews start at /api/interview/sessions.' }, 400);
       return env.SIMULATOR_SESSIONS.get(env.SIMULATOR_SESSIONS.idFromName(parsed.data.id)).fetch(new Request('https://session/start', { method: 'POST', headers: request.headers, body: JSON.stringify(parsed.data) }));
     }
     const match = url.pathname.match(/^\/api\/simulator\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume)$/);

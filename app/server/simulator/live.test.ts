@@ -3,32 +3,22 @@ import { fixtureFoundry } from '../../../ai/foundry-fixture';
 import { attachLive, createLive, LiveSessionGone } from './live.server';
 
 test('WebRTC creation uses Foundry and the configured Live deployment with private server context', async () => {
-  const result = await createLive({ scenarioId: 'project-closeout', clientId: 'sam-cedar', sdp: 'v=0\r\nsynthetic offer' }, { ...fixtureFoundry, liveModel: 'live-deployment' }, (async (url, options) => {
+  const result = await createLive({ scenarioId: 'sharepoint', clientId: 'morgan', sdp: 'v=0\r\nsynthetic offer' }, { ...fixtureFoundry, liveModel: 'live-deployment' }, (async (url, options) => {
     expect(url).toBe('https://fixture-foundry.openai.azure.com/openai/v1/live/sessions');
     expect(new Headers(options?.headers).get('api-key')).toBe('fixture-secret');
     expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     const body = JSON.parse(String(options?.body));
     expect(body).toMatchObject({
-      session: { model: 'live-deployment', store: false, audio: { output: { voice: 'cedar' } } },
+      session: { model: 'live-deployment', store: false, audio: { output: { voice: 'meridian' } } },
       transport: { type: 'webrtc', sdp: 'v=0\r\nsynthetic offer' },
     });
     expect(body.session.instructions.length).toBeGreaterThan(0);
-    // Neither role runs outside work, so the session offers no delegation target.
+    // The client runs no outside work, so the session offers no delegation target.
     expect(body.session).not.toHaveProperty('delegation');
     expect(JSON.stringify(body)).not.toContain('fixture-secret');
     return Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
   }) as typeof fetch);
   expect(result).toEqual({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
-});
-
-test('an interview’s provider session gets Sam’s turn-note turn-taking', async () => {
-  let instructions = '';
-  await createLive({ scenarioId: 'project-closeout', clientId: 'sam-cedar', sdp: 'v=0' }, fixtureFoundry, (async (_url, options) => {
-    instructions = JSON.parse(String(options?.body)).session.instructions;
-    return Response.json({ session: { id: 'session-fixture' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } });
-  }) as typeof fetch);
-  expect(instructions).toContain('say nothing yet: no sound and no word');
-  expect(instructions).toContain('Speak only when a turn note says it is your turn.');
 });
 
 test('the control WebSocket attaches to Foundry with server-only authentication', async () => {

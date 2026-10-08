@@ -41,7 +41,7 @@ export type Client = {
 export type ScenarioSummary = {
   id: string;
   title: string;
-  category: 'Sales' | 'Consultancy' | 'Interview';
+  category: 'Sales' | 'Consultancy';
   summary: string;
   lead: string;
   briefing?: string[];
@@ -106,7 +106,7 @@ export type SessionSnapshot = {
 
 /**
  * What the browser receives: the session's snapshot, plus the interview's readings, summary status and background
- * for an interview. The session keeps the interview state beside its snapshot and composes this on the way out.
+ * for an interview. The interview object keeps that state beside its snapshot and composes this on the way out.
  */
 export type PublicSnapshot = SessionSnapshot & { interview?: InterviewSession };
 

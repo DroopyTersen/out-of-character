@@ -2,8 +2,6 @@ import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
 import { Database } from 'bun:sqlite';
 import { mock } from 'bun:test';
 import { emptySkills } from '../../../core/simulator/types';
-import { emptyInterviewReadings } from '../../../core/interview';
-import { threadKey } from '../../../core/interview-ranking';
 
 // Bun cannot load the Workers runtime. Substitute only its base-class/storage
 // boundary and paid network adapters; exercise the actual session owner/events.
@@ -37,7 +35,7 @@ export const request = (action: string, cap = capability, input = attempt) => ne
 // The fake media endpoint has no Sam audio.
 export const activityPoll = (active: boolean, audio = false) => new Request('https://session/poll', { method: 'POST', headers: { Authorization: capability }, body: JSON.stringify({ active, audio, outputQuietMs: 60_000 }) });
 
-function archiveDatabase() {
+export function archiveDatabase() {
   const sqlite = new Database(':memory:');
   sqlite.exec(migration);
   sqlite.exec(interventionsMigration);
@@ -74,7 +72,7 @@ function archiveDatabase() {
   return { d1, row, interviewRow, failNext: () => { failNext = true; }, holdNext };
 }
 
-class ProviderSocket extends EventTarget {
+export class ProviderSocket extends EventTarget {
   readyState = 1;
   holdClose = false;
   sent: Record<string, unknown>[] = [];
@@ -110,7 +108,6 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
   let alarm = 0;
   let creations = 0;
   const judged: unknown[] = [];
-  const interviewJudged: unknown[] = [];
   const endings: string[] = [];
   const pending: Promise<unknown>[] = [];
   const ctx = {
@@ -136,18 +133,12 @@ export async function fixture({ pendingCreation, values = new Map<string, unknow
     evaluateEnding: async input => { endings.push(input.transcript.at(-1)!.id); return { model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, probability: .02, passageId: null }; },
     generateDirector: async input => ({ action: 'intervene', text: 'Own only decisions within the client role.', evidenceIds: [input.transcript[0]!.id], model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
     recheckDirector: async () => ({ probability: .99, usage: { inputTokens: 1, outputTokens: 1 } }),
-    generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, pace: { verdict: 'explore' as const, reason: 'Open threads remain.' }, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
-    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
-    evaluateTraits: async input => ({ traits: Object.fromEntries(input.threads.map(thread => [thread.id, { key: threadKey(thread), spicy: .5, grounding: 0 }])), model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }),
-    lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
     generateReport: () => { throw new Error('No report provider configured in this fixture.'); },
-    evaluateInterview: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }; },
-    summarizeInterview: (_input, done) => new ReadableStream({ start(controller) { const report = { text: 'Fixture summary.' }; controller.enqueue(JSON.stringify(report)); done({ report, failure: null, usage: null }); controller.close(); } }),
     ...overrides,
   });
   await ready;
   return {
-    session, values, judged, interviewJudged, endings, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
+    session, values, judged, endings, pending, archive, row: archive.row, interviewRow: archive.interviewRow, creations: () => creations, alarm: () => alarm,
     /** The newest created provider session's socket, or the newest attached one before any creation. */
     get socket() { return latest ? sockets.get(latest)! : [...sockets.values()].at(-1)!; },
     socketFor: (id: string) => sockets.get(id),

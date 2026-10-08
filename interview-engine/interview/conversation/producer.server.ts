@@ -243,13 +243,14 @@ export class InterviewProducer {
         outcome: 'read', durationMs: result.durationMs, usage: usageOf(result.usage),
         reading: {
           atMs: reading.atMs, focus: reading.focus, novel: round(reading.novel),
+          ...(reading.feedback != null ? { feedback: round(reading.feedback) } : {}),
           natural: roundAll(reading.natural), states: reading.states,
         },
       } satisfies Partial<TurnRecord>);
       // Sol may have landed a different map while Jev read. The next tick reads against that map.
       if (record.mapId !== (this.mapRecord?.id ?? null)) return;
       this.ranking = observeTurn(this.ranking, this.map, reading, latestTurn(settled)[0]!.id);
-      if (reading.novel >= RANKING.novel && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'trainee')) this.wake(`the participant's latest turn (${reading.passageId}) adds something the map lacks`);
+      if ((reading.novel >= RANKING.novel || (reading.feedback ?? 0) >= RANKING.novel) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'trainee')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
       if (scope.aborted) return;

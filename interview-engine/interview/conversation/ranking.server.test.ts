@@ -78,7 +78,7 @@ test('a short reply can confirm a declarative guess without a question mark', ()
 
 test('turn questions cover focus, newness and each open thread; closed threads, guesses and topics stay out', () => {
   const questions = turnQuestions(map, latestTurn(transcript));
-  expect(Object.keys(questions)).toEqual(['focus', 'new', 'natural:t1', 'state:t1', 'natural:t3', 'state:t3']);
+  expect(Object.keys(questions)).toEqual(['focus', 'new', 'feedback', 'natural:t1', 'state:t1', 'natural:t3', 'state:t3']);
   expect(Object.keys((questions.focus as { criteria: object }).criteria)).toEqual(['none', 't1', 't3']);
   expect(Object.keys((questions['state:t1'] as { criteria: object }).criteria)).toEqual(['open', 'answered', 'declined', 'stalled']);
   expect(JSON.stringify(questions.new)).toContain('Route Planner (Plans routes for field crews.)');
@@ -88,23 +88,23 @@ test('turn questions cover focus, newness and each open thread; closed threads, 
   const text = JSON.stringify(questions);
   expect(text).not.toContain('a guess Jev never sees');
   expect(text).not.toContain('client-decisions');
-  expect(Object.keys(turnQuestions({ ...map, threads: [] }, latestTurn(transcript)))).toEqual(['new']);
+  expect(Object.keys(turnQuestions({ ...map, threads: [] }, latestTurn(transcript)))).toEqual(['new', 'feedback']);
 });
 
 test('turn answers become a reading; an invalid answer rejects the whole reading', () => {
   const answers: InterviewAnswers = {
-    focus: { type: 'choice', choice: 't3' }, new: { type: 'boolean', probability: .7 },
+    focus: { type: 'choice', choice: 't3' }, new: { type: 'boolean', probability: .7 }, feedback: { type: 'boolean', probability: .92 },
     'natural:t1': { type: 'boolean', probability: .2 }, 'state:t1': { type: 'choice', choice: 'stalled' },
     'natural:t3': { type: 'boolean', probability: .9 }, 'state:t3': { type: 'choice', choice: 'open' },
   };
   expect(readTurnAnswers(map, answers, 'p2', 5000)).toEqual({
-    passageId: 'p2', atMs: 5000, focus: 't3', novel: .7, keys: { t1: threadKey(map.threads[0]!), t3: threadKey(map.threads[2]!) },
+    passageId: 'p2', atMs: 5000, focus: 't3', novel: .7, feedback: .92, keys: { t1: threadKey(map.threads[0]!), t3: threadKey(map.threads[2]!) },
     natural: { t1: .2, t3: .9 }, states: { t1: 'stalled', t3: 'open' },
   });
   expect(readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 'none' } }, 'p2', 5000).focus).toBeNull();
   expect(() => readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 't2' } }, 'p2', 5000)).toThrow('focus');
   expect(() => readTurnAnswers(map, { ...answers, 'state:t1': { type: 'choice', choice: 'later' } }, 'p2', 5000)).toThrow('state:t1');
-  expect(readTurnAnswers({ ...map, threads: [] }, { new: { type: 'boolean', probability: .1 } }, 'p2', 5000)).toMatchObject({ focus: null, natural: {}, states: {} });
+  expect(readTurnAnswers({ ...map, threads: [] }, { new: { type: 'boolean', probability: .1 }, feedback: { type: 'boolean', probability: 0 } }, 'p2', 5000)).toMatchObject({ focus: null, natural: {}, states: {} });
 });
 
 test('a malformed Jev selection fails its one call; a valid reading retains the provider’s scores', async () => {
@@ -113,7 +113,7 @@ test('a malformed Jev selection fails its one call; a valid reading retains the 
   const reply = (focus: Record<string, number>) => ({
     model: 'jev-1.13.0', usage: { input_tokens: 900, output_tokens: 6 },
     answers: {
-      focus: state('t3', focus), new: { type: 'noul', noul: .2 }, 'natural:t1': { type: 'noul', noul: .1 }, 'natural:t3': { type: 'noul', noul: .8 },
+      focus: state('t3', focus), new: { type: 'noul', noul: .2 }, feedback: { type: 'noul', noul: .9 }, 'natural:t1': { type: 'noul', noul: .1 }, 'natural:t3': { type: 'noul', noul: .8 },
       'state:t1': state('open', { open: .9, answered: .05, declined: .03, stalled: .02 }), 'state:t3': state('open', { open: .6, answered: .3, declined: .05, stalled: .05 }),
     },
   });

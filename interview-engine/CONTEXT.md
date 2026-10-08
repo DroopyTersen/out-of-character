@@ -44,6 +44,8 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Note channel**: how Sol's notes reach Sam during the conversation. The live session appends them to Sam's thinking. The delivery probe compares the current thread note with a no-note control.
 
+**Silence check**: after five seconds of fresh, measured microphone and playback quiet with no transcript change, the session asks Jev who should speak next. A strong continue judgment sends one conditional reminder; waiting, uncertainty, sound, new transcript text or a changed session prevents it. Each unchanged exchange is checked once, with no retry and at most 120 checks per attempt. Decisions, receipts and the next observed speech stay in the private connection archive. Interview feedback is judged separately from new project facts in the producer's existing Jev request, so a new preference can wake Sol without another call.
+
 **Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
 
 **Narrative run**: one attempt at writing the narrative: the text as it streams and a `Narrative` result that settles once. `writeNarrative` starts one from a `NarrativeInput` (the template and the passages); `NarrativeRunner` allows a report two runs under a deadline and keeps the settled text.

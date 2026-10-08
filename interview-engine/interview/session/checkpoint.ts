@@ -3,6 +3,7 @@ import type { FeedbackStatus, InterviewBackground, InterviewEvaluation, SessionP
 import type { ProducerCheckpoint } from '../conversation/producer.server';
 import type { GradeRecord, ProducerSummary } from '../conversation/records';
 import type { WireEntry, WireSpeaker } from '../wire';
+import type { SilenceRecord } from './silence.server';
 
 // The shapes the running protocol and its stored attempts use today. The snapshot keeps the practice simulator's
 // field names (scenarioId, clientId, trainee and client) until the browser moves to InterviewSnapshot.
@@ -50,6 +51,8 @@ export type Segment = {
   greeting?: GreetingLog;
   /** The browser's periodic media-quality reports for this connection, for diagnostics. */
   network?: NetworkRecord[];
+  /** Bounded silence judgments and any continuation reminders, never exposed in the public snapshot. */
+  silence?: SilenceRecord[];
 };
 export type PauseRecord = { epoch: number; reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; endedAt: number | null };
 /** What a lost owner needs to finish the attempt. In-flight paid work is not kept. */

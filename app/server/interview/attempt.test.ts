@@ -90,7 +90,7 @@ test('settled answers drive private optional notes without gating Sam’s turns'
   } finally { await f.session.fetch(request('end')); }
 }, 10_000);
 
-test('long interview silence never creates an automatic turn instruction', async () => {
+test('a transcript gap without measured microphone quiet never creates an automatic turn instruction', async () => {
   const f = await objectFixture();
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);

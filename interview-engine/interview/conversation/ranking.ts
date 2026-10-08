@@ -12,6 +12,8 @@ export const RANKING = { margin: .1, nearby: 2, novel: .8 };
 export type TurnReading = {
   passageId: string; atMs: number; focus: string | null; keys: Record<string, string>;
   natural: Record<string, number>; states: Record<string, ThreadState>; novel: number;
+  /** Unsaved interview feedback; absent in checkpoints from before ranking v5. */
+  feedback?: number;
 };
 export type RankingState = {
   current: string | null; reading: TurnReading | null;

@@ -27,5 +27,5 @@ export const opening = `Hi, I’m ${INTERVIEWER_NAME}. This is a closeout conver
 export const techniques = {
   grounding: { name: 'Open on what they built', means: 'Start with the product and who it serves. It grounds every later question.', when: 'The first question, and again whenever you realize you can’t picture the product.', how: 'One question, then play back what you heard.',
     sounds: ['What did you build, and who did you build it for?', 'So who’s actually using this thing day to day?', 'First things first: what does it do?'] },
-  lesson: { name: 'Next-team scenario', means: 'Turn a story into a lesson by putting a future team in the same spot.', when: 'After a red flag or a story that cost something, once it has been told.', how: 'Put a future team in their spot with this client or setup, and ask what that team should do first.' },
+  lesson: { name: 'Find the usable lesson', means: 'A concrete action and its consequence may already be the lesson. Carry that forward without asking for another. If something useful is still missing, ask about that specific part of the story.', when: 'A story leaves a concrete uncertainty about what another team could repeat or change.', how: 'One grounded follow-up on the missing detail. Avoid broad do-over, day-one or next-team hypotheticals.' },
 } satisfies { grounding: Technique; lesson: Technique };

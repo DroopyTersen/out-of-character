@@ -23,6 +23,7 @@ import { toPassage, toWireSpeaker, type WireEntry, type WireSpeaker } from '../w
 import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, PublicSnapshot, Segment, WireSnapshot } from './checkpoint';
 import { appendTranscript, settledTranscript } from './transcript';
 import { conversationSoFar, NO_EXTERNAL_TASK, resumeInstruction } from './voice.prompt';
+import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_CONTINUE, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 
 /** The parts of a spec the session reads: the interviewer's brief, Jev's rubric, Sol's topics and the limits. */
 export type SessionSpec = Pick<InterviewSpec, 'id' | 'version' | 'limits'> & BriefedSpec & JudgedSpec & MappedSpec;
@@ -30,7 +31,7 @@ export type SessionSpec = Pick<InterviewSpec, 'id' | 'version' | 'limits'> & Bri
 export type SessionEvaluation = InterviewEvaluation<string, WireSpeaker>;
 type Evaluate = (input: { transcript: WireEntry[]; revision: number; signal: AbortSignal }) => Promise<SessionEvaluation>;
 /** The paid calls, replaceable for tests: Sol, Jev's turn reads, Luna, and Jev's coverage grade. */
-export type SessionServices = typeof producerServices & { evaluate: Evaluate };
+export type SessionServices = typeof producerServices & { evaluate: Evaluate; evaluateSilence: typeof evaluateSilence };
 
 export type SessionOptions = {
   spec: SessionSpec;
@@ -162,6 +163,10 @@ export class SessionActor {
   private greeting: { eventId: string; content: string } | undefined;
   /** When either side's transcript last grew. */
   private lastSpeech = 0;
+  private quietSample: { at: number; ms: number } | undefined;
+  private silenceCheckedRevision = -1;
+  private silenceCheck: Promise<void> | undefined;
+  private silenceAbort: AbortController | undefined;
   private replacedSilent = false;
   private finalArchive: Promise<void> | undefined;
   private narrativeArchive = Promise.resolve();
@@ -179,7 +184,7 @@ export class SessionActor {
     this.archive = options.archive;
     this.now = options.now ?? Date.now;
     this.report = options.log ?? options.providers.log ?? (() => {});
-    this.paid = { ...producerServices, evaluate: judgeWith(options.spec, options.providers), ...options.services };
+    this.paid = { ...producerServices, evaluate: judgeWith(options.spec, options.providers), evaluateSilence, ...options.services };
     this.lazyWake = options.lazyWake ?? false;
     this.lastSeen = this.lastActivity = this.lastAudio = this.now();
   }
@@ -241,6 +246,9 @@ export class SessionActor {
         if (activity.sequence != null) this.activitySequence = activity.sequence;
         if (activity.active || activity.audio) this.lastActivity = now;
         if (activity.audio) this.lastAudio = now;
+        this.quietSample = activity.sequence != null && !activity.audio && activity.outputQuietMs != null && activity.inputQuietMs != null
+          ? { at: now, ms: Math.min(activity.outputQuietMs, activity.inputQuietMs) } : undefined;
+        if (!this.quietSample || this.quietSample.ms < SILENCE_MS) this.silenceAbort?.abort();
         const segment = this.segment;
         if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: now, ...activity.network });
       }
@@ -261,6 +269,7 @@ export class SessionActor {
     }
     if (action === 'end') await this.end();
     this.checkLifetime();
+    if (action === 'poll' && this.state.status === 'live') this.checkSilence(this.now());
     return reply(this.publicSnapshot());
   }
 
@@ -346,6 +355,7 @@ export class SessionActor {
     clearInterval(this.timer);
     this.timer = undefined;
     this.gradeAbort.abort();
+    this.silenceAbort?.abort();
     this.producer?.close();
     this.closeReceived?.();
     // The provider session stays open: the new owner knows it from the lease and closes it.
@@ -418,6 +428,7 @@ export class SessionActor {
     // Checked last thing before the paid call: an end or a fence that arrived during the writes above must not open a session.
     if (this.fenced) throw new FencedError();
     if (this.finishing || this.state?.status === 'ending') throw new Cancelled();
+    this.quietSample = undefined;
     const instructions = [interviewerBrief(this.spec, input.clientId), context].filter(Boolean).join('\n\n');
     const created = await this.providers.voice.create({ sdp: input.sdp, voice: this.voiceName(input.clientId), instructions });
     const segment: Segment = { epoch: ++this.epoch, providerId: created.id, offsetMs, startedAt: this.now(), endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null };
@@ -500,6 +511,9 @@ export class SessionActor {
       const now = this.now();
       this.passageUpdatedAt.set(changed.id, now);
       this.lastActivity = this.lastSpeech = now;
+      this.silenceAbort?.abort();
+      const reminder = segment.silence?.findLast(item => item.outcome === 'sent' && !item.nextSpeech);
+      if (reminder) reminder.nextSpeech = { at: now, passageId: changed.id, speaker: changed.speaker };
       if (delta.type !== 'session.input_transcript.delta' && segment.greeting && segment.greeting.repliedAt == null) {
         segment.greeting.repliedAt = now;
         if (snapshot.message === UNRESPONSIVE) snapshot.message = null;
@@ -517,6 +531,8 @@ export class SessionActor {
         ...(typeof event.start_ms === 'number' && Number.isFinite(event.start_ms) ? { startMs: event.start_ms + segment.offsetMs } : {}),
         ...(typeof event.end_ms === 'number' && Number.isFinite(event.end_ms) ? { endMs: event.end_ms + segment.offsetMs } : {}),
       });
+      const reminder = segment.silence?.find(item => item.id === event.client_event_id && item.outcome === 'sent');
+      if (reminder) reminder.acknowledgedAt ??= this.now();
     }
     if (event.type === 'session.delegation.created') {
       const delegation = event.delegation as { id?: unknown; target?: unknown } | undefined;
@@ -528,6 +544,8 @@ export class SessionActor {
     }
     if (event.type === 'error') {
       const error = event.error as { client_event_id?: unknown } | undefined;
+      const reminder = segment.silence?.find(item => item.id === error?.client_event_id);
+      if (reminder) { reminder.outcome = 'rejected'; return; }
       // A declined optional note need not interrupt an otherwise-working interview.
       if (typeof error?.client_event_id === 'string' && /^(cue|note)-/.test(error.client_event_id)) {
         this.producer?.providerEvent(error.client_event_id, false);
@@ -554,6 +572,44 @@ export class SessionActor {
     for (const entry of transcript) this.judgedPassages.add(entry.id);
     this.grading = this.grade(transcript, snapshot.revision, false, now).finally(() => { this.grading = undefined; });
     this.background.track(this.grading);
+  }
+
+  /** A transcript gap alone is not silence. Require fresh, measurable quiet on both browser audio streams. */
+  private isQuiet(now: number) {
+    return !!this.quietSample && now - this.quietSample.at <= 2000 && this.quietSample.ms >= SILENCE_MS
+      && now - this.lastSpeech >= SILENCE_MS;
+  }
+
+  private checkSilence(now: number) {
+    const snapshot = this.state!, segment = this.segment;
+    if (this.silenceCheck || segment?.greeting?.repliedAt == null || this.silenceCheckedRevision === snapshot.revision || !this.isQuiet(now)) return;
+    if (!snapshot.transcript.some(entry => entry.speaker === 'trainee') || this.segments.reduce((n, item) => n + (item.silence?.length ?? 0), 0) >= MAX_SILENCE_CHECKS) return;
+    const transcript = snapshot.transcript.slice(-8);
+    const record: SilenceRecord = { id: `silence-${crypto.randomUUID()}`, version: SILENCE_VERSION, revision: snapshot.revision,
+      passageIds: transcript.map(entry => entry.id), startedAt: now, quietMs: this.quietSample!.ms, outcome: 'pending' };
+    (segment.silence ??= []).push(record);
+    this.silenceCheckedRevision = snapshot.revision;
+    const abort = this.silenceAbort = new AbortController();
+    this.silenceCheck = this.judgeSilence(transcript, segment, record, abort).finally(() => { this.silenceCheck = undefined; });
+    this.background.track(this.silenceCheck);
+  }
+
+  private async judgeSilence(transcript: WireEntry[], segment: Segment, record: SilenceRecord, abort: AbortController) {
+    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(3000)]);
+    try {
+      const result = await this.paid.evaluateSilence({ transcript, judge: this.providers.judge, signal });
+      Object.assign(record, result);
+      signal.throwIfAborted();
+      if (this.fenced || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision || !this.isQuiet(this.now())) record.outcome = 'stale';
+      else if (result.probability < SILENCE_CONTINUE) record.outcome = 'wait';
+      else {
+        record.outcome = 'sent';
+        if (!this.send({ type: 'session.instructions.append', event_id: record.id, delegation_id: null, content: CONTINUE_INTERVIEW })) record.outcome = 'error';
+      }
+    } catch (error) {
+      record.outcome = abort.signal.aborted ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'error';
+      record.failure = callFailure(error);
+    } finally { record.completedAt = this.now(); }
   }
 
   /** Asks the interviewer to speak on the current provider session; the live tick watches for a reply. */
@@ -678,10 +734,13 @@ export class SessionActor {
     clearInterval(this.timer);
     this.timer = undefined;
     this.gradeAbort.abort();
+    this.silenceAbort?.abort();
+    this.quietSample = undefined;
     this.producer?.pause();
     try { await this.connecting; } catch { /* A failed resume is reported by resume. */ }
     await this.closeSegment();
     await this.grading;
+    await this.silenceCheck;
     this.gradeAbort = new AbortController();
     if (this.finishing) return;
     await this.saveCheckpoint();
@@ -848,9 +907,12 @@ export class SessionActor {
     this.producer?.close();
     clearInterval(this.timer);
     this.gradeAbort.abort();
+    this.silenceAbort?.abort();
+    this.quietSample = undefined;
     try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
     await this.pausing?.catch(() => {});
     await this.grading;
+    await this.silenceCheck;
     this.gradeAbort = new AbortController();
     const current = this.segment;
     // Only the newest session can still be open; any other unclosed one is left to the closure lease.

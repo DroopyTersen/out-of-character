@@ -5,6 +5,7 @@ import { pollTransport } from './transport';
 // Browser media and the session server are substituted; the connection's own pause, heartbeat, and resume logic is real.
 class FakeTrack { enabled = true; stopped = false; stop() { this.stopped = true; } }
 class FakeStream {
+  constructor(readonly microphone = false) {}
   tracks = [new FakeTrack()];
   getTracks() { return this.tracks; }
   getAudioTracks() { return this.tracks; }
@@ -27,12 +28,16 @@ class FakePeer extends EventTarget {
 class FakeAudioContext {
   /** Whether every meter, the microphone and Sam's playback, picks up sound. */
   static loud = false;
+  static inputLoud: boolean | undefined;
   state = 'running';
   sampleRate = 48_000;
   createAnalyser() {
-    return { fftSize: 1024, frequencyBinCount: 512, context: this, getByteTimeDomainData: (samples: Uint8Array) => samples.fill(FakeAudioContext.loud ? 140 : 128), getByteFrequencyData: (samples: Uint8Array) => samples.fill(0) };
+    const meter = { microphone: false, fftSize: 1024, frequencyBinCount: 512, context: this,
+      getByteTimeDomainData: (samples: Uint8Array) => samples.fill((meter.microphone ? FakeAudioContext.inputLoud ?? FakeAudioContext.loud : FakeAudioContext.loud) ? 140 : 128),
+      getByteFrequencyData: (samples: Uint8Array) => samples.fill(0) };
+    return meter;
   }
-  createMediaStreamSource() { return { connect() {} }; }
+  createMediaStreamSource(stream: FakeStream) { return { connect(meter: { microphone: boolean }) { meter.microphone = stream.microphone; } }; }
   async resume() {}
   async close() { this.state = 'closed'; }
 }
@@ -71,7 +76,7 @@ const original = { fetch: globalThis.fetch, navigator: Object.getOwnPropertyDesc
 const browser = { onLine: true };
 const globals = globalThis as Record<string, unknown>;
 beforeAll(() => {
-  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: async () => new FakeStream() }, get onLine() { return browser.onLine; } } });
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: async () => new FakeStream(true) }, get onLine() { return browser.onLine; } } });
   Object.assign(globals, { window: new EventTarget(), document: Object.assign(new EventTarget(), { visibilityState: 'visible' }), RTCPeerConnection: FakePeer, AudioContext: FakeAudioContext, Audio: FakeAudio, MediaStream: FakeStream });
   globalThis.fetch = (async (url: string, options: RequestInit) => {
     const action = url === '/api/simulator/sessions' ? 'start' : url.split('/').at(-1)!;
@@ -88,6 +93,7 @@ afterAll(() => {
   for (const name of ['window', 'document', 'RTCPeerConnection', 'AudioContext', 'Audio', 'MediaStream']) delete globals[name];
 });
 beforeEach(() => {
+  FakeAudioContext.inputLoud = undefined;
   jest.useFakeTimers();
   Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], override: undefined });
   browser.onLine = true;
@@ -334,5 +340,28 @@ test("a loud microphone alone is not activity; Sam's playback is", async () => {
   peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
   await advance(2000);
   expect(reported().slice(seen)).toContainEqual([true, true]);
+  await connection.end();
+});
+
+test('microphone sound promptly cancels measured quiet without pretending Sam is audible, and mute makes it unknown', async () => {
+  const { connection, peer } = await connected();
+  peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
+  await advance(6000);
+  const recent = () => server.polls.at(-1) as { inputQuietMs: number | null; outputQuietMs: number | null; audio: boolean };
+  expect(recent().inputQuietMs).toBeGreaterThanOrEqual(5000);
+  expect(recent().outputQuietMs).toBeGreaterThanOrEqual(5000);
+  const seen = server.polls.length;
+  FakeAudioContext.inputLoud = true;
+  await advance(100);
+  expect(server.polls.length).toBeGreaterThan(seen);
+  expect(recent()).toMatchObject({ inputQuietMs: 0, audio: false });
+  expect(recent().outputQuietMs).toBeGreaterThanOrEqual(5000);
+  FakeAudioContext.inputLoud = false;
+  await advance(1500);
+  expect(recent().inputQuietMs).toBeGreaterThan(0);
+  expect(recent().inputQuietMs).toBeLessThan(1600);
+  connection.mute(true);
+  await advance(1500);
+  expect(recent().inputQuietMs).toBeNull();
   await connection.end();
 });

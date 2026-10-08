@@ -26,8 +26,8 @@ export function mapInstructions(spec: MappedSpec): string {
     [
       'Threads. A thread is a gap worth pulling on, never a question.',
       `- label: a short noun phrase ${name} would recognize, 2-6 words: "Dana cutting the reporting module".`,
-      '- unknown: one thing we do not know yet, at most 12 words, written to follow "still unknown:", names capitalized: "who approved cutting the reporting module". One question only: never join two with "and".',
-      `- guess: your best guess at the answer, at most 15 words: "Dana alone, under budget pressure". Guess the answer, not the question: "the team changed its process after launch" restates the gap; "they moved demos from monthly to weekly" is a guess. A low-confidence guess is fine. ${name} offers it as an either/or for the participant to correct, so it must be plausible from what was said and never an accusation.`,
+      '- unknown: one thing we do not know yet, at most 12 words, written to follow "still unknown:", names capitalized: "who approved cutting the reporting module". One question only: never join two with "and". Establish whether an unconfirmed event, problem or trade-off existed before asking what it was or what caused it: "whether fitting the existing components required any trade-offs". An anchor does not establish the premise.',
+      `- guess: an optional hypothesis for ${name} to explore, at most 15 words: "Dana alone, under budget pressure". Guess the answer, not the question: "the team changed its process after launch" restates the gap; "they moved demos from monthly to weekly" is a guess. It must be plausible from what was said, never an accusation or a claim that an unconfirmed problem exists. For a whether gap, no problem or trade-off may be the plausible answer.`,
       `- anchors: the 1-4 entity IDs it is about; participant counts. At least one is more specific than the product or the engagement as a whole, except for a gap thread on a ${topic} the participant has given little to hang on (see below).`,
       '- related: other threads that are the same story, such as a layoff and a feature cut that were both budget decisions.',
       `- topics: the one or two ${topic}s its answer would explore, or none; not topics it merely mentions.`,
@@ -40,7 +40,7 @@ export function mapInstructions(spec: MappedSpec): string {
     ].join('\n'),
     [
       'Closing threads. Only you change a thread\'s status, and done and off need a reason. Use done when a thread is fully answered; reopen it if the transcript later shows more to the same gap. A different question is a new thread, not a reopened one. Use off when:',
-      '- the participant declined it or deflected it twice;',
+      '- the participant declined it or deflected it twice. An explicit "already covered" or "move on" is a decline now: close that line of inquiry and its adjacent same-story threads, without rewriting them into another version of the rejected question;',
       '- it makes no sense given their vantage, such as how the client received a tech lead who started after the participant went on leave, unless they have shown they know it secondhand. When they say they were away or had left ("no idea, I wasn\'t there"), close off every open thread about what happened then or how it turned out; never reword one toward the time before they left;',
       '- its premise is false because the participant contradicted what it assumes.',
       `Check every open thread against the vantage on every call. An off thread stays off unless the participant brings it back. Once ${name} has asked about a thread, never leave it unchanged: when the participant's answer fills the unknown, close it done with the answer as the reason; when it answers only part, or answers for the team instead of themselves, revise the unknown to the part still missing; when it rejects the premise ("no, that wasn't the bottleneck"), close it off. A thread asked without getting anywhere needs a sharper unknown or guess, asking another way or about a neighboring fact; close it off only if the rewrite also goes nowhere. A call made because a thread stalled is your cue to rewrite it. Jev's thread signals, when present, are fallible hints; decide from the transcript. Drop a thread only to merge a duplicate ("merged into t7") or remove a mistake; otherwise close it so the record stays.`,
@@ -60,4 +60,3 @@ export function mapSeed(spec: MappedSpec): string {
     `${spec.framing.topic.toUpperCase()}S (id - label: what explored means)\n${spec.topics.map(topic => `${topic.label}\n${topic.objectives.map(item => `- ${item.id} - ${item.label}: ${criteria.get(item.id)}`).join('\n')}`).join('\n')}`,
   ].join('\n\n');
 }
-

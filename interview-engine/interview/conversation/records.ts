@@ -11,7 +11,7 @@ type InterviewObjectiveReading = Reading<WireSpeaker>;
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v26';
+export const PRODUCER_VERSION = 'interview-producer-v27';
 export const PRODUCER_LIMITS = {
   /** Shared cap for paid producer calls, including failures and interrupted calls. */
   calls: 400,
@@ -46,7 +46,7 @@ export type MapRecord = {
 export type TurnRecord = {
   source: 'turn'; id: string; passageId: string; mapId: string | null; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: ModelUsage;
-  reading?: { atMs: number; focus: string | null; novel: number; natural: Record<string, number>; states: Record<string, ThreadState> };
+  reading?: { atMs: number; focus: string | null; novel: number; feedback?: number; natural: Record<string, number>; states: Record<string, ThreadState> };
   pick?: Omit<Pick, 'ranked'> & { ranked: [id: string, score: number, band: Band][] };
   failure?: CallFailure;
 };

@@ -10,7 +10,7 @@ const packets = z.number().int().min(0).max(1_000_000);
 const delay = z.number().int().min(0).max(60_000).nullable();
 const network = z.object({ ms: z.number().int().min(0).max(600_000), received: packets, lost: packets, concealed: z.number().min(0).max(1).nullable(), jitterMs: delay, sentLost: packets.nullable(), rttMs: delay }).strict();
 /** `active`: a click or key press since the last report. `audio`: Sam's playback was audible in the last 1.5 s. */
-export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), outputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), outputQuietMs: quietDuration, inputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   // Diagnostics only: a report this server cannot read is dropped, never a failed poll.
   network: network.optional().catch(undefined) }).strict();
 export type Activity = z.infer<typeof activitySchema>;

@@ -28,7 +28,7 @@ const jevUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
 const facts = [{ text: 'OpenStreetMap is a collaborative, openly licensed world map.', url: 'https://www.openstreetmap.org/about', title: 'About OpenStreetMap' }];
 const request = (name: string, clue: string | null = null): ResearchRequest => ({ kind: 'product', name, clue, passageIds: ['p2'] });
 const MINUTE = 'a minute has passed since your last call';
-const novelReason = (id: string) => `the participant's latest turn (${id}) adds something the map lacks`;
+const novelReason = (id: string) => `the participant's latest turn (${id}) adds facts or feedback the map lacks`;
 
 type Services = typeof producerServices;
 type Input<K extends keyof Services> = Parameters<Services[K]>[0];
@@ -545,4 +545,17 @@ test('a new voice session receives its map and cue even after the normal note bu
   expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes + 2);
   await f.step(120_500);
   expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes + 2);
+});
+
+test('unsaved interview feedback wakes Sol at the existing floor even without new project facts', async () => {
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel: .05, feedback: .95 }) });
+  await f.step(0);
+  await f.step(19_999);
+  expect(f.calls.map).toHaveLength(0);
+  await f.step(20_000);
+  expect(f.calls.map).toHaveLength(1);
+  expect(f.calls.map[0]!.passages.map(item => item.id)).toEqual(['p1', 'p2']);
+  expect(f.of('turn')[0]!.reading).toMatchObject({ novel: .05, feedback: .95 });
+  await f.step(40_000);
+  expect(f.calls.map).toHaveLength(1); // No repeated wake without an unlogged participant turn.
 });

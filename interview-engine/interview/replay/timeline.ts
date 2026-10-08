@@ -75,7 +75,7 @@ export function producerTimeline({ startedAt, transcript, records, topics = [] }
         const pick = record.pick;
         rows.push({
           id: record.id, lane: 'turn', atMs: at(record.startedAt), title: `Jev turn · ${record.passageId}`,
-          detail: join([reading && `focus ${reading.focus ?? 'none'}`, reading && `novel ${reading.novel.toFixed(2)}`, states.join(', '),
+          detail: join([reading && `focus ${reading.focus ?? 'none'}`, reading && `novel ${reading.novel.toFixed(2)}`, reading?.feedback != null && `feedback ${reading.feedback.toFixed(2)}`, states.join(', '),
             pick && (pick.action === 'none' ? 'pick none' : `${pick.action} ${pick.lead}${pick.nearby.length ? ` · nearby ${pick.nearby.join(', ')}` : ''}`)]),
           outcome: record.outcome, latencyMs: record.durationMs ?? span(record.startedAt, record.completedAt), parts: [],
         });

@@ -492,3 +492,167 @@ test('failed live coverage retries once per participant input and interviewer sp
     expect(calls).toBe(4);
   } finally { await f.send(actor, 'end'); }
 }, 10_000);
+
+const silenceResult = (probability: number) => ({ probability, model: 'fixture', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } });
+const measuredQuiet = (sequence: number, inputQuietMs: number | null = 5000, outputQuietMs: number | null = 5000) => JSON.stringify({ sequence, active: false, audio: false, inputQuietMs, outputQuietMs });
+const reminders = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('silence-'));
+
+async function stranded(check: SessionServices['evaluateSilence']) {
+  const f = fixture();
+  f.options.services!.evaluateSilence = check;
+  const { actor, socket } = await conversation(f);
+  f.at(4000);
+  say(socket, 'output', 'ack', 'That sounds useful.', 4000);
+  f.at(9000);
+  return { ...f, actor, socket };
+}
+
+test('measured silence gets one Jev check per unchanged exchange and a private, acknowledged reminder', async () => {
+  const inputs: string[][] = [];
+  const f = await stranded(async input => { inputs.push(input.transcript.map(p => p.text)); return silenceResult(.97); });
+  try {
+    const publicState = body(await f.send(f.actor, 'poll', measuredQuiet(1)));
+    await f.background.settle();
+    expect(inputs).toEqual([['Hi, I’m Riley. What did you build?', 'A claims portal for the adjusters.', 'That sounds useful.']]);
+    expect(reminders(f.socket)).toHaveLength(1);
+    const id = reminders(f.socket)[0]!.event_id;
+    f.socket.emit({ type: 'session.instructions.appended', client_event_id: id });
+    for (let sequence = 2; sequence <= 4; sequence++) {
+      f.at(9000 + sequence * 1000);
+      await f.send(f.actor, 'poll', measuredQuiet(sequence, 10_000, 10_000));
+    }
+    expect(inputs).toHaveLength(1);
+    expect(reminders(f.socket)).toHaveLength(1);
+    expect(JSON.stringify(publicState)).not.toContain('silence-');
+    say(f.socket, 'output', 'continued', 'Who tried it first?', 15_000);
+    await f.send(f.actor, 'end');
+    await f.background.settle();
+    const checks = f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence;
+    expect(checks).toMatchObject([{ id, outcome: 'sent', probability: .97, quietMs: 5000, acknowledgedAt: EPOCH + 9000, nextSpeech: { speaker: 'client', passageId: 'p4' } }]);
+  } finally { await f.send(f.actor, 'end'); }
+});
+
+test.each([.03, .6])('a wait or uncertain silence judgment (%s) keeps listening without polling Jev repeatedly', async probability => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return silenceResult(probability); });
+  try {
+    await f.send(f.actor, 'poll', measuredQuiet(1));
+    await f.background.settle();
+    f.at(20_000);
+    await f.send(f.actor, 'poll', measuredQuiet(2, 16_000, 16_000));
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(0);
+    await f.send(f.actor, 'end');
+    await f.background.settle();
+    expect(f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence).toMatchObject([{ outcome: 'wait', probability }]);
+  } finally { await f.send(f.actor, 'end'); }
+});
+
+test('five seconds of measured quiet starts the check despite a trailing recent-audio report', async () => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return silenceResult(.97); });
+  try {
+    f.at(5000);
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true, inputQuietMs: 1000, outputQuietMs: 1000 }));
+    expect(calls).toBe(0);
+    f.at(8999);
+    await f.send(f.actor, 'poll', measuredQuiet(2, 4999, 4999));
+    expect(calls).toBe(0);
+    f.at(9000);
+    await f.send(f.actor, 'poll', measuredQuiet(3));
+    await f.background.settle();
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(1);
+  } finally { await f.send(f.actor, 'end'); }
+});
+
+test('unknown, short or out-of-order quiet reports cannot start a silence judgment', async () => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return silenceResult(.97); });
+  try {
+    await f.send(f.actor, 'poll', quietPoll); // Older clients provide no microphone or ordering evidence.
+    await f.send(f.actor, 'poll', measuredQuiet(1, null));
+    await f.send(f.actor, 'poll', measuredQuiet(2, 5000, null));
+    await f.send(f.actor, 'poll', measuredQuiet(3, 4999));
+    await f.send(f.actor, 'poll', measuredQuiet(4, 5000, 4999));
+    await f.send(f.actor, 'poll', measuredQuiet(5, 0));
+    await f.send(f.actor, 'poll', measuredQuiet(4)); // Late quiet cannot overwrite newer sound.
+    expect(calls).toBe(0);
+    f.at(9500);
+    say(f.socket, 'input', 'new-fragment', 'And one more thing—', 5000);
+    await f.send(f.actor, 'poll', measuredQuiet(6)); // A new, unsettled transcript also vetoes it.
+    expect(calls).toBe(0);
+    f.at(14_500);
+    await f.send(f.actor, 'poll', measuredQuiet(7));
+    await f.background.settle();
+    expect(calls).toBe(1);
+  } finally { await f.send(f.actor, 'end'); }
+});
+
+test.each(['transcript', 'microphone', 'playback', 'missing-meter', 'stale-report'] as const)('a pending silence decision is discarded after %s changes', async change => {
+  const result = deferred<ReturnType<typeof silenceResult>>();
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return result.promise; });
+  try {
+    await f.send(f.actor, 'poll', measuredQuiet(1));
+    expect(calls).toBe(1);
+    f.at(9500);
+    if (change === 'transcript') say(f.socket, 'input', 'fresh', 'Actually, let me explain—', 6000);
+    if (change === 'microphone') await f.send(f.actor, 'poll', measuredQuiet(3, 0));
+    if (change === 'playback') await f.send(f.actor, 'poll', measuredQuiet(3, 6000, 0));
+    if (change === 'missing-meter') await f.send(f.actor, 'poll', measuredQuiet(3, null));
+    if (change === 'stale-report') f.at(11_001);
+    // An older report cannot cancel the veto, nor can another poll duplicate the pending call.
+    if (change !== 'stale-report') await f.send(f.actor, 'poll', measuredQuiet(2));
+    result.resolve(silenceResult(.99));
+    await f.background.settle();
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(0);
+    await f.send(f.actor, 'end');
+    await f.background.settle();
+    expect(f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence).toMatchObject([{ outcome: change === 'stale-report' ? 'stale' : 'aborted' }]);
+  } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
+});
+
+test.each(['end', 'pause', 'fence'] as const)('a pending silence decision cannot speak after %s', async action => {
+  const result = deferred<ReturnType<typeof silenceResult>>();
+  const f = await stranded(async () => result.promise);
+  try {
+    await f.send(f.actor, 'poll', measuredQuiet(1));
+    let ending: Promise<unknown> | undefined;
+    if (action === 'end') ending = f.send(f.actor, 'end');
+    if (action === 'pause') await f.send(f.actor, 'pause');
+    if (action === 'fence') { memoryStore(f.record); await f.actor.wake(); }
+    result.resolve(silenceResult(.99));
+    await ending;
+    await f.background.settle();
+    expect(reminders(f.socket)).toHaveLength(0);
+    if (action === 'pause') {
+      await f.send(f.actor, 'resume', JSON.stringify({ sdp: attempt.sdp }));
+      await f.send(f.actor, 'ready');
+      const resumed = f.voice.sockets.get('provider-2')!;
+      expect(reminders(resumed)).toHaveLength(0);
+      await f.send(f.actor, 'poll', measuredQuiet(2));
+      expect(reminders(resumed)).toHaveLength(0); // Old dialogue and measurements do not replace the resume greeting.
+    }
+  } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
+});
+
+test('a failed silence check is recorded once; it never fails the interview or retries an unchanged exchange', async () => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; throw new Error('Do not retain this provider body.'); });
+  try {
+    await f.send(f.actor, 'poll', measuredQuiet(1));
+    await f.background.settle();
+    f.at(20_000);
+    const snapshot = body(await f.send(f.actor, 'poll', measuredQuiet(2, 16_000, 16_000)));
+    expect(snapshot).toMatchObject({ status: 'live', message: null });
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(0);
+    await f.send(f.actor, 'end');
+    await f.background.settle();
+    const checks = f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence;
+    expect(checks).toMatchObject([{ outcome: 'error', failure: { name: 'Error' } }]);
+    expect(JSON.stringify(checks)).not.toContain('provider body');
+  } finally { await f.send(f.actor, 'end'); }
+});

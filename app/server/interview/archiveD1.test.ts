@@ -62,6 +62,23 @@ test('rows land in interview_attempts with the archive upsert rules', async () =
   expect(JSON.parse(f.row()!.provenance_json).model).toBe('gpt-live');
 });
 
+test('a recovered narrative retains the failed attempt and successful token usage in D1', async () => {
+  const f = fixture();
+  await d1Archive(f.db, host).write(archiveRow('final', 5000, 'ready', {
+    model: 'agent', version: 'summary-v2', attempts: [
+      { startedAt: 3000, endedAt: 3500, failure: 'timeout', usage: null },
+      { startedAt: 3600, endedAt: 4900, failure: null, usage: { inputTokens: 120, outputTokens: 45, reasoningTokens: 20, cachedTokens: 80 } },
+    ],
+  }));
+  const stored = JSON.parse(f.row()!.provenance_json).interviewSummary;
+  expect(stored.model).toBe('agent');
+  expect(stored.version).toBe('summary-v2');
+  expect(stored.attempts).toEqual([
+    { startedAt: 3000, endedAt: 3500, failure: 'timeout', usage: null },
+    { startedAt: 3600, endedAt: 4900, failure: null, usage: { inputTokens: 120, outputTokens: 45, reasoningTokens: 20, cachedTokens: 80 } },
+  ]);
+});
+
 test('each row carries its own spec identity, so attempts under different specs archive side by side', async () => {
   const f = fixture();
   const archive = d1Archive(f.db, host);

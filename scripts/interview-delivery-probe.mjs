@@ -4,8 +4,8 @@ import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { interviewers, interviewerBrief, interviewOpening } from '../ai/interview/scenario.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
-import { emptyMap } from '../core/interview-map.ts';
-import { listNote, noteHeaders } from '../core/interview-notes.ts';
+import { emptyMap } from '../interview-engine/interview/conversation/map.ts';
+import { listNote, LIVE_NOTE_CHANNEL } from '../interview-engine/interview/conversation/notes.ts';
 import { appendTranscript } from '../core/simulator/state.ts';
 import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mjs';
 
@@ -13,9 +13,8 @@ import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mj
 // Each run: Sam opens; a synthetic participant names three threads in one answer, and a
 // hand-written thread note on the least salient one arrives while they are still speaking.
 // Sam's next two turns are measured, then the participant asks to finish.
-// Cells are <thinking|instructions>:<options|directions>:<gap|sentence>, plus a no-note control.
-// Each channel gets its own note headers and brief protocol, as the session would send them.
-// Usage: bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --cell=thinking:options:gap [--runs=3] [--voice=sam-cedar]
+// Compare the current production thread note with a no-note control, using the same brief.
+// Usage: bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --cell=cue [--runs=3] [--voice=sam-cedar]
 //        bun --env-file=.dev.vars scripts/interview-delivery-probe.mjs --paid --all [--runs=3]
 //        bun scripts/interview-delivery-probe.mjs --summary
 // A usable run (see unusable()) is skipped, so an interrupted --all resumes and an unusable run is redone; the probe stops
@@ -26,15 +25,13 @@ import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mj
 // conversation.wav in each run is for listening.
 const option = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const root = process.env.ACCEPTANCE_OUTPUT || 'output/interview-delivery';
-const CHANNELS = { thinking: 'session.thinking.append', instructions: 'session.instructions.append' };
-const CELLS = ['control', ...Object.keys(CHANNELS).flatMap(channel => ['options', 'directions'].flatMap(phrasing => ['gap', 'sentence'].map(shape => `${channel}:${phrasing}:${shape}`)))];
+const CELLS = ['control', 'cue'];
 
 // The note's thread comes up once, early and in passing; the answer dwells on the other two.
 const target = {
   label: 'Launch approval',
   unknown: 'who made the final launch call and what they needed to see',
   guess: 'the agency’s operations director, after a service desk rehearsal',
-  sentence: 'So who actually made the final call to launch, and what did they need to see first?',
 };
 const others = ['VPN access wait', 'Priya’s pipeline handoff'];
 const lines = [
@@ -48,31 +45,22 @@ const DEAD_AIR_MS = 8000;
 const FRAME = 960; // 20 ms of 24 kHz mono 16-bit PCM
 const SPOKEN = lines.join(' ');
 // Bump when a change alters what a run does (the participant, the note, the timing), not only how it is scored.
-const HARNESS = 2;
+const HARNESS = 3;
 const IDENTITY = ['harness', 'model', 'voice', 'briefDigest', 'note'];
 const measured = report => report.segments.slice(0, 2);
 const mean = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100) / 100 : '–';
 
-function note(cell) {
-  const [channel, phrasing, shape] = cell.split(':');
-  const headers = noteHeaders(CHANNELS[channel]);
-  if (phrasing === 'options' && shape === 'gap') {
-    // The production template, filled as Sol would fill it.
-    const thread = (id, label, gap = {}) => ({ id, label, anchors: [], unknown: '', guess: '', related: [], topics: [], status: 'open', reason: null, ...gap });
-    const map = { ...emptyMap(), threads: [thread('t1', target.label, { unknown: target.unknown, guess: target.guess }), ...others.map((label, index) => thread(`t${index + 2}`, label))] };
-    return listNote(map, { current: null, action: 'tug', lead: 't1', nearby: ['t2', 't3'], ranked: [] }, headers);
-  }
-  const body = phrasing === 'options'
-    ? `Worth pulling next (${target.label}): you could ask, “${target.sentence}”\nAlso open: ${others.join(' · ')}`
-    : shape === 'gap' ? `Ask next about ${target.label}: still unknown: ${target.unknown}. Guess: ${target.guess}.` : `Ask next: “${target.sentence}”`;
-  return `${headers.list}\n${body}`;
+function note() {
+  const thread = (id, label, gap = {}) => ({ id, label, anchors: [], unknown: '', guess: '', related: [], topics: [], status: 'open', reason: null, ...gap });
+  const map = { ...emptyMap(), threads: [thread('t1', target.label, { unknown: target.unknown, guess: target.guess }), ...others.map((label, index) => thread(`t${index + 2}`, label))] };
+  return listNote(map, { current: null, action: 'tug', lead: 't1', nearby: ['t2', 't3'], ranked: [] });
 }
 
 if (process.argv.includes('--summary')) {
   const reports = [];
   for (const name of (await readdir(root).catch(() => [])).sort()) {
     const file = Bun.file(`${root}/${name}/report.json`);
-    if (await file.exists()) reports.push(await file.json());
+    if (await file.exists()) { const report = await file.json(); if (report.harness === HARNESS) reports.push(report); }
   }
   const share = (count, total) => total ? `${count}/${total}` : '–';
   const usable = reports.filter(item => !unusable(item));
@@ -136,11 +124,10 @@ const audible = audio => {
 const digest = text => createHash('sha256').update(text).digest('hex').slice(0, 12);
 const directory = (cell, index) => `${root}/${cell.replaceAll(':', '-')}-r${index}`;
 const previous = async (cell, index) => { const file = Bun.file(`${directory(cell, index)}/report.json`); return await file.exists() ? file.json() : null; };
-const channelOf = cell => cell === 'control' ? 'thinking' : cell.split(':')[0];
-const sessionFor = cell => ({ ...liveConfiguration(INTERVIEW_SCENARIO_ID, interviewerId), model: foundry.liveModel, instructions: interviewerBrief(interviewerId, CHANNELS[channelOf(cell)]) });
+const sessionFor = () => ({ ...liveConfiguration(INTERVIEW_SCENARIO_ID, interviewerId), model: foundry.liveModel, instructions: interviewerBrief(interviewerId) });
 const identity = cell => {
-  const session = sessionFor(cell);
-  return { harness: HARNESS, model: session.model, voice: session.audio.output.voice, briefDigest: digest(session.instructions), note: cell === 'control' ? null : note(cell) };
+  const session = sessionFor();
+  return { harness: HARNESS, model: session.model, voice: session.audio.output.voice, briefDigest: digest(session.instructions), note: cell === 'control' ? null : note() };
 };
 for (const cell of cells) {
   const expected = identity(cell);
@@ -156,10 +143,9 @@ async function run(cell, index) {
   const prior = await previous(cell, index);
   if (prior && !unusable(prior)) return null;
   await mkdir(output, { recursive: true, mode: 0o700 });
-  const channel = channelOf(cell);
-  const noteText = cell === 'control' ? null : note(cell);
+  const noteText = cell === 'control' ? null : note();
   const opening = interviewOpening(interviewerId);
-  const session = sessionFor(cell);
+  const session = sessionFor();
   const report = { cell, run: index, checkedAt: new Date().toISOString(), ...identity(cell), noteEvent: null, samDuringAnswer: lines.map(() => 0), uptake: null, segments: [], transcript: [], deadAir: [], delegations: 0, providerErrors: [], errors: [], finalized: false, usageSeconds: null };
   const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
   const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
@@ -182,8 +168,8 @@ async function run(cell, index) {
     if (clip) {
       audio = clip.subarray(offset, Math.min(offset + FRAME, clip.length)); offset += audio.length;
       if (step === 1 && noteText && !report.noteEvent && offset >= clip.length * NOTE_AT) {
-        report.noteEvent = { channel: CHANNELS[channel], sentAt: Date.now(), inputMs: inputBytes / 48, acknowledgedAt: null, beforeReply: null };
-        if (!send({ type: CHANNELS[channel], event_id: 'probe-note', delegation_id: null, content: noteText })) report.errors.push('Note could not be sent.');
+        report.noteEvent = { channel: LIVE_NOTE_CHANNEL, sentAt: Date.now(), inputMs: inputBytes / 48, acknowledgedAt: null, beforeReply: null };
+        if (!send({ type: LIVE_NOTE_CHANNEL, event_id: 'probe-note', delegation_id: null, content: noteText })) report.errors.push('Note could not be sent.');
       }
       if (offset >= clip.length) { clip = undefined; inputEnded = Date.now(); }
     }
@@ -236,9 +222,9 @@ async function run(cell, index) {
     report.noteEvent.beforeReply = !!report.noteEvent.acknowledgedAt && !!replyStartedAt && report.noteEvent.acknowledgedAt < replyStartedAt;
   }
   const spoken = `${SPOKEN} ${opening}`;
-  report.segments = said.slice(1).map(text => measure(text.trim(), noteText ?? note('thinking:options:gap'), spoken));
+  report.segments = said.slice(1).map(text => measure(text.trim(), noteText ?? note(), spoken));
   // The control's replies against every cell's note: the overlap a reply has with no note sent.
-  if (!noteText) report.baselines = Object.fromEntries(CELLS.slice(1).map(cell => [cell, report.segments.slice(0, 2).map(segment => measure(segment.text, note(cell), spoken).parrotShare)]));
+  if (!noteText) report.baselines = Object.fromEntries(CELLS.slice(1).map(cell => [cell, report.segments.slice(0, 2).map(segment => measure(segment.text, note(), spoken).parrotShare)]));
   report.uptake = { first: askedIn(report.segments[0]) === 'target', second: askedIn(report.segments[1]) === 'target' };
   // One track for listening: the participant as sent, and Sam as a client would play it.
   const mix = Buffer.alloc(Math.max(inputBytes, samCursor));

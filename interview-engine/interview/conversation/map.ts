@@ -10,8 +10,7 @@ export const ENTITY_KINDS = ['person', 'org', 'product', 'feature', 'event', 'de
 export const ENTITY_SOURCES = ['participant', 'research', 'seed'] as const;
 export const EDGE_KINDS = ['built', 'part-of', 'decided', 'works-for', 'involved', 'happened-during'] as const;
 export const THREAD_STATUSES = ['open', 'done', 'off'] as const;
-/** Sol's call on whether Sam may offer the participant the choice to stop; explore unless continuing would add little. */
-/** The spec's objective IDs: the closeout topics a thread may say its answer would explore. */
+/** The spec's objective IDs: the topics a thread may say its answer would explore. */
 export const mapTopicIds = (spec: { topics: readonly TopicGroup[] }) => spec.topics.flatMap(topic => topic.objectives.map(item => item.id));
 /** The participant is an ordinary node with a fixed ID, so anchors and edges can point at them. */
 export const PARTICIPANT_ID = 'participant';

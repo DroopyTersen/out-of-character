@@ -15,6 +15,7 @@ import { evaluateInterview } from '../conversation/evaluate.server';
 import { settledPrefix, type MappedSpec } from '../conversation/map.server';
 import { InterviewProducer, producerServices } from '../conversation/producer.server';
 import { gradeObjectives, type GradeRecord } from '../conversation/records';
+import { upToParticipant } from '../conversation/ranking.server';
 import { INTERVIEW_RUBRIC_VERSION, type JudgedSpec } from '../conversation/rubric.prompt';
 import { FencedError, type Archive, type Background, type InterviewArchiveRow, type NarrativeProvenance, type SessionStore } from '../seams.server';
 import { interviewerBrief, interviewOpening, type BriefedSpec } from '../voice/brief.server';
@@ -28,7 +29,7 @@ export type SessionSpec = Pick<InterviewSpec, 'id' | 'version' | 'limits'> & Bri
 /** Jev's readings with the wire's speaker names. */
 export type SessionEvaluation = InterviewEvaluation<string, WireSpeaker>;
 type Evaluate = (input: { transcript: WireEntry[]; revision: number; signal: AbortSignal }) => Promise<SessionEvaluation>;
-/** The paid calls, replaceable for tests: Sol, Jev's turn and trait reads, Luna, and Jev's coverage grade. */
+/** The paid calls, replaceable for tests: Sol, Jev's turn reads, Luna, and Jev's coverage grade. */
 export type SessionServices = typeof producerServices & { evaluate: Evaluate };
 
 export type SessionOptions = {
@@ -59,6 +60,11 @@ export type Reply = { status: number; body: unknown; terminal?: true; report?: t
 
 const GRADE_INTERVAL_MS = 5000;
 const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
+/** Keep answered questions and corrections; a trailing interviewer turn adds no participant evidence. */
+function gradingText(transcript: WireEntry[]): string {
+  const answered = upToParticipant(transcript);
+  return answered.length ? JSON.stringify(answered.map(({ id, speaker, text }) => [id, speaker, text])) : '';
+}
 // The provider has no command that guarantees speech, and it can accept the greeting and stay silent.
 const GREETING_RETRY_MS = 10_000;
 const GREETING_REPLACE_MS = 25_000;
@@ -539,9 +545,9 @@ export class SessionActor {
     this.unanswered(now);
     this.producer?.tick(now);
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
-    const text = JSON.stringify(transcript);
+    const text = gradingText(transcript);
     if (this.interview?.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
-    if (!transcript.some(item => item.speaker === 'trainee') || this.grading || text === this.gradedText || now - this.lastGrade < GRADE_INTERVAL_MS || this.gradeCalls >= MAX_LIVE_GRADES) return;
+    if (!text || this.grading || text === this.gradedText || now - this.lastGrade < GRADE_INTERVAL_MS || this.gradeCalls >= MAX_LIVE_GRADES) return;
     this.lastGrade = now;
     this.gradedText = text;
     // A quoted source must stay exact, even if more speech arrives during grading.
@@ -827,7 +833,7 @@ export class SessionActor {
   }
 
   private isFresh(transcript: WireEntry[]): boolean {
-    return JSON.stringify(transcript) === JSON.stringify(settledTranscript(this.state!.transcript, this.passageUpdatedAt, this.now()));
+    return gradingText(transcript) === gradingText(settledTranscript(this.state!.transcript, this.passageUpdatedAt, this.now()));
   }
 
   private end(interrupted = false): Promise<void> {

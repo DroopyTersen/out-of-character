@@ -12,9 +12,9 @@ import { foundryConfig } from '../ai/foundry.server';
 import { structuredWith } from '../interview-engine/providers/structured.server';
 import { appendMapLog, emptyMapLog, generateMap, MapOutputError, MAP_EFFORT, MAP_PROMPT_VERSION, renderMapTail, researchLogEvent, settledPrefix, type MapLogEvent, type MapTail } from '../ai/interview/map.server';
 import { DirectorOutputError } from '../ai/simulator/sol.server';
-import { emptyMap, renderMapForSol, type MapChanges, type MapDefect } from '../core/interview-map';
+import { emptyMap, renderMapForSol, type MapChanges, type MapDefect } from '../interview-engine/interview/conversation/map';
 import { yieldsTurn, type CoverageLevel, type InterviewBackground } from '../core/interview';
-import { PRODUCER_LIMITS } from '../core/interview-producer';
+import { PRODUCER_LIMITS } from '../interview-engine/interview/conversation/records';
 import type { DirectorUsage } from '../core/simulator/director';
 import type { TranscriptEntry } from '../core/simulator/types';
 

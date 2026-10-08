@@ -14,7 +14,7 @@ export function archiveProvenance(row: InterviewArchiveRow, host: ArchiveHost): 
     actorDigest: provenance.actorDigest, openingDigest: provenance.openingDigest, workerId: host.workerId, workerTag: host.workerTag,
     contextualDirector: provenance.producer, connection: provenance.connection,
   };
-  if (provenance.narrative) value.interviewSummary = provenance.narrative as NonNullable<ArchiveProvenance['interviewSummary']>;
+  if (provenance.narrative) value.interviewSummary = provenance.narrative;
   return value;
 }
 

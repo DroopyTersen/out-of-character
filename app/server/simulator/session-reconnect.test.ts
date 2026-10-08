@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../../core/simulator/types';
-import { activityPoll, attempt, capability, fixture, request, settle, waitFor } from './session-fixture';
+import { activityPoll, attempt, capability, fixture, request, settle } from './session-fixture';
 
 // Pause and resume across real session ownership; only the provider and paid judges are substituted.
 afterEach(() => setSystemTime());

@@ -1,7 +1,7 @@
 import type { InterviewSession } from '../../../core/interview';
 import type { SessionSnapshot } from '../../../core/simulator/types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
-import { fitRecords, type ProducerLogRecord } from '../../../core/interview-producer';
+import { fitRecords, type ProducerLogRecord } from '../../../interview-engine/interview/conversation/records';
 
 export type InterviewArchiveWrite = {
   /** The spec the attempt ran under: the archive never assumes one. */

@@ -5,14 +5,10 @@ import { z } from 'zod';
 import { foundryConfig, foundryProvider } from '../ai/foundry.server.ts';
 import { yieldsTurn } from '../core/interview.ts';
 
-// Listening-hold rehearsal through the real browser and server: the interview page in headless Chrome against a local
-// dev server, with a synthetic microphone. A fictional participant, written turn by turn by the
-// fast model and voiced by local speech synthesis, answers Sam's questions and pauses inside some answers (1.5-5 s, after
-// a finished sentence or a hanging clause, or a breath). With --noise=brown, a fan-like brown noise bed plays under the
-// microphone throughout. Measures, from Sam's audio as the page plays it and the server's archived notes: hold, turn and
-// cancel notes; Sam taking over inside a pause; listening sounds; the time from a finished answer to Sam's question;
-// participant passages transcribed outside their answers; and, per handover, how long the floor had been quiet, where
-// the voice service placed the event against Sam's first words, and whether Sam's question took up its thread note.
+// Listening rehearsal through the real browser and local server with a synthetic microphone.
+// A fictional participant answers Sam and pauses inside some answers (1.5–5 seconds).
+// Measures actual playback: takeovers inside pauses, listening sounds, reply latency and phantom
+// participant passages. Archive receipts show note delivery, not whether a note caused a reply.
 // Usage: bun --env-file=.dev.vars scripts/interview-listening-rehearsal.mjs --paid [--label=a] [--answers=6] [--noise=brown]
 // Needs the dev server (ACCEPTANCE_URL, default http://127.0.0.1:5174) with migrated local D1. Reports go to output/ (gitignored).
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid for a bounded paid rehearsal.');
@@ -22,7 +18,7 @@ if (!(answers >= 2 && answers <= 10)) throw new Error('--answers must be 2 to 10
 const noise = option('noise') ?? null;
 if (noise != null && noise !== 'brown') throw new Error('--noise must be brown.');
 const base = process.env.ACCEPTANCE_URL || 'http://127.0.0.1:5174';
-const output = `output/interview-listening/handover-${option('label') ?? 'a'}`;
+const output = `output/interview-listening/run-${option('label') ?? 'a'}`;
 const foundry = foundryConfig(process.env);
 const provider = foundryProvider(foundry);
 const BYTES_PER_MS = 48; // 24 kHz mono 16-bit PCM
@@ -31,7 +27,6 @@ const SAM_DONE_MS = 1200;
 const HELLO_AFTER_MS = 20_000;
 const DEADLINE_MS = 9 * 60_000;
 const SOUND_MS = 700; // Shorter audible stretches are listening sounds, longer ones speech.
-const LAG_MS = 1250; // How far a note can trail the audio it answers: the transcript arrives about a second behind speech.
 const NOISE_RMS = .03; // A fan or air conditioner near a laptop microphone, against speech at about .1.
 
 const PERSONA = `You are Jordan, a software developer, in a voice interview with Sam, who is collecting lessons from a project Jordan just finished. Everything below is fictional; use only these facts. If Sam asks about something they don't cover, say briefly that you don't know or weren't involved.
@@ -260,10 +255,10 @@ finally {
   await browser.close();
 }
 
-// The archived producer records: the server's own account of the listening hold.
+// Read the local archive and current thread/map note receipts.
 let row = null;
 if (/^[0-9a-f-]{36}$/.test(report.sessionId ?? '')) {
-  for (let attempt = 0; attempt < 12 && !row?.provenance_json; attempt++) {
+  for (let attempt = 0; attempt < 12 && row?.archive_state !== 'final'; attempt++) {
     await Bun.sleep(5000);
     const query = Bun.spawn(['bunx', 'wrangler', 'd1', 'execute', 'out-of-character-simulator', '--local', '--json', '--command',
       `SELECT archive_state, provenance_json, interventions_json FROM interview_attempts WHERE id = '${report.sessionId}'`], { stdout: 'pipe', stderr: 'ignore' });
@@ -273,37 +268,7 @@ if (/^[0-9a-f-]{36}$/.test(report.sessionId ?? '')) {
   }
 }
 const records = row ? JSON.parse(row.interventions_json).filter(record => record.source === 'note') : [];
-const listening = row ? JSON.parse(row.provenance_json).contextualDirector?.listening ?? null : null;
-report.notes = records.filter(record => record.kind === 'hold' || record.kind === 'cancel' || record.handover).map(({ kind, sentAt, quietMs, handover }) => ({ kind, sentAt, quietMs, handover }));
-report.listening = listening;
-
-// Per handover: one event carrying the latest notes with the turn note last. The voice service acknowledges an appended
-// event once its timeline reaches the end of it (startMs/endMs, on the transcript's timeline); Sam's first words after
-// the handover should start at or after that end. `before` is Sam speech that began between the participant's answer
-// and the handover: speaking without permission.
-report.handovers = records.filter(record => record.kind === 'turn' && record.handover).map(turn => {
-  const parts = records.filter(record => record.delivery?.eventId === turn.delivery?.eventId);
-  const { startMs = null, endMs = null, status = null, acknowledgedAt = null } = turn.delivery ?? {};
-  const answer = report.transcript.findLast(entry => entry.speaker === 'trainee' && entry.seenAt != null && entry.seenAt <= turn.sentAt);
-  const reply = startMs == null ? null : report.transcript.find(entry => entry.speaker === 'client' && entry.endMs > startMs && !yieldsTurn(entry.text));
-  const before = report.transcript.filter(entry => entry.speaker === 'client' && answer && entry.startMs > answer.endMs && startMs != null && entry.startMs < startMs && !yieldsTurn(entry.text));
-  return { sentAt: turn.sentAt, quietMs: turn.quietMs, parts: parts.map(record => record.kind), chars: parts.reduce((sum, record) => sum + record.text.length + 2, -2),
-    status, ackMs: acknowledgedAt == null ? null : acknowledgedAt - turn.sentAt, eventMs: endMs == null ? null : endMs - startMs,
-    replyAfterEndMs: reply && endMs != null ? reply.startMs - endMs : null, before: before.length,
-    answer: answer?.text ?? null, reply: reply?.text ?? null, thread: parts.find(record => record.kind === 'list')?.text ?? null };
-});
-// Whether Sam's question took up the thread note handed over with the turn: a separate fast-model judgment.
-const judged = report.handovers.filter(item => item.thread && item.reply);
-if (judged.length) {
-  try {
-    const result = await generateText({
-      model: provider.responses(foundry.fastModel), providerOptions: { openai: { reasoningEffort: 'low', store: false } },
-      output: Output.object({ schema: z.object({ items: z.array(z.object({ index: z.number().int(), follows: z.enum(['note', 'participant', 'neither']) })) }) }),
-      prompt: `For each item, an interviewer received a private note naming threads worth pulling, then asked the reply shown after the participant's answer. Say whether the reply asks about a thread the note names ("note"), only follows up on the participant's answer without a named thread ("participant"), or neither.\n\n${judged.map((item, index) => `Item ${index}\nNote: ${item.thread}\nAnswer: ${item.answer}\nReply: ${item.reply}`).join('\n\n')}`,
-    });
-    for (const { index, follows } of result.output.items) if (judged[index]) judged[index].follows = follows;
-  } catch (error) { report.errors.push(`Thread judgment failed: ${error.message}`); }
-}
+report.notes = records.map(({ kind, sentAt, delivery }) => ({ kind, sentAt, delivery }));
 
 // Per answer: what Sam did inside each pause, and between the end of the answer and the question.
 const speechAfter = (from, to) => report.sam.filter(span => span.start >= from && span.start < to);
@@ -311,14 +276,12 @@ const analysis = report.lines.map((line, index) => {
   const next = report.lines[index + 1]?.start ?? Infinity;
   const inPauses = line.pauses.map(pause => {
     const spans = speechAfter(pause.start, pause.end + 250);
-    return { kind: pause.kind, ms: pause.ms, sounds: spans.filter(span => span.end - span.start < SOUND_MS).length, takeover: spans.some(span => span.end - span.start >= SOUND_MS),
-      notes: report.notes.filter(note => note.sentAt >= pause.start && note.sentAt < pause.end + LAG_MS).map(note => note.kind) };
+    return { kind: pause.kind, ms: pause.ms, sounds: spans.filter(span => span.end - span.start < SOUND_MS).length, takeover: spans.some(span => span.end - span.start >= SOUND_MS) };
   });
   const after = speechAfter(line.end, next);
   const question = after.find(span => span.end - span.start >= SOUND_MS);
-  const turn = report.notes.find(note => note.kind === 'turn' && note.sentAt >= line.end - 250 && note.sentAt < next);
   return { index: line.index, pauses: inPauses, soundsBeforeQuestion: after.filter(span => span.end - span.start < SOUND_MS && (!question || span.start < question.start)).length,
-    turnNoteMs: turn ? turn.sentAt - line.end : null, questionMs: question ? question.start - line.end : null, hello: !!line.hello };
+    questionMs: question ? question.start - line.end : null, hello: !!line.hello };
 });
 const pauses = analysis.flatMap(item => item.pauses);
 // Participant passages first seen outside every answer and its transcript lag: words the noise or Sam's audio made up.
@@ -327,14 +290,13 @@ const phantoms = report.transcript.filter(entry => entry.speaker === 'trainee' &
 const times = analysis.map(item => item.questionMs).filter(value => value != null).sort((a, b) => a - b);
 report.analysis = analysis;
 report.result = {
-  noise, counts: listening && { holds: listening.holds, handovers: listening.handovers, cancels: listening.cancels, wakes: listening.wakes },
-  handovers: report.handovers.map(({ quietMs, parts, chars, status, ackMs, eventMs, replyAfterEndMs, before, follows }) => ({ quietMs, parts: parts.join('+'), chars, status, ackMs, eventMs, replyAfterEndMs, before, follows: follows ?? null })),
+  noise, noteReceipts: report.notes.map(({ kind, sentAt, delivery }) => ({ kind, status: delivery?.status ?? null, ackMs: delivery?.acknowledgedAt == null ? null : delivery.acknowledgedAt - sentAt })),
   phantoms,
   answers: report.lines.length, pauses: pauses.length, takeovers: pauses.filter(pause => pause.takeover).length,
   soundsInPauses: pauses.reduce((sum, pause) => sum + pause.sounds, 0), soundsBeforeQuestion: analysis.reduce((sum, item) => sum + item.soundsBeforeQuestion, 0),
-  medianQuestionMs: times.length ? times[Math.floor(times.length / 2)] : null, questionMs: analysis.map(item => item.questionMs), turnNoteMs: analysis.map(item => item.turnNoteMs),
+  medianQuestionMs: times.length ? times[Math.floor(times.length / 2)] : null, questionMs: analysis.map(item => item.questionMs),
   hellos: report.hellos, status: report.status, archived: row?.archive_state ?? null, errors: report.errors,
 };
 await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
 console.log(JSON.stringify({ output, ...report.result }, null, 2));
-if (report.errors.length || !listening) process.exitCode = 1;
+if (report.errors.length || report.status !== 'ended' || row?.archive_state !== 'final') process.exitCode = 1;

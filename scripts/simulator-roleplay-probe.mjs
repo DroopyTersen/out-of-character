@@ -1,3 +1,5 @@
+import { spec } from '../interviews/project-closeout/spec.ts';
+import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { createHash } from 'node:crypto';
 import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
@@ -9,11 +11,11 @@ import { settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
-import { NOTE_HEADERS } from '../core/interview-notes.ts';
+import { NOTE_HEADERS } from '../interview-engine/interview/conversation/notes.ts';
 import { interviewTurnGaps } from '../core/interview-timeline.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
-import { InterviewProducer, producerServices } from '../app/server/simulator/interview-producer.ts';
+import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
 // real GPT-Live supplies the client. In interviews the producer sends Sam its thread and map
@@ -538,7 +540,7 @@ const startedAt = Date.now();
 const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
 // As in the session, Sol's append-only log reads only up to the first passage still being transcribed.
 const prefix = () => { const ready = new Set(settled()); return settledPrefix(report.transcript, entry => ready.has(entry)); };
-const producer = isInterview ? new InterviewProducer({ attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices, settled: prefix, send }) : null;
+const producer = isInterview ? new InterviewProducer({ attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, spec, providers: foundryProviders({ ...foundry, typesafeKey: process.env.TYPESAFE_API_KEY }), services: producerServices, settled: prefix, send }) : null;
 const directions = producer ?? contextual;
 if (!notesEnabled) directions.close();
 report.interventions = directions.records;

@@ -1,3 +1,5 @@
+import { spec } from '../interviews/project-closeout/spec.ts';
+import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { generateText, Output } from 'ai';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
@@ -5,14 +7,14 @@ import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server
 import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
 import { settledPrefix } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
-import { InterviewProducer, producerServices } from '../app/server/simulator/interview-producer.ts';
+import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
 // speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the
-// participant's transcript and Sam's playback, with the silence watchdog. Early on they answer fully; from --wind minutes they tire and say so;
+// participant's settled transcript. Early on they answer fully; from --wind minutes they tire and say so;
 // they turn down Sam's first offer to stop, and ask to finish at Sam's second offer or at --stop minutes.
 // A participant left waiting says "Hello? Are you still there?" after 15 s, as a real one did.
 // Measures: when Sam offers to stop and how, how Sam ends, silences after finished answers and what broke them, and
@@ -101,17 +103,10 @@ const inputMs = () => Date.now() - inputStartedAt;
 const startedAt = Date.now();
 const producer = new InterviewProducer({
   // Short: Sol's cache key, which includes it, is capped at 64 characters.
-  attemptId: `rh-${crypto.randomUUID()}`, startedAt, foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: producerServices,
+  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec, providers: foundryProviders({ ...foundry, typesafeKey: process.env.TYPESAFE_API_KEY }), services: producerServices,
   settled: prefix, coverage: () => coverage, send,
-  talking: () => !!current || (() => { const ready = new Set(settled()); return report.transcript.some(entry => entry.speaker === 'trainee' && !ready.has(entry)); })(),
-  transcript: () => report.transcript,
 });
-// As the browser reports it: how long Sam's playback has been quiet, on the playback clock.
-const producerTimer = setInterval(() => {
-  const now = Date.now();
-  producer.hear(now, { outputQuietMs: audibleUntil ? Math.min(60_000, Math.max(0, now - audibleUntil)) : null });
-  producer.tick(now);
-}, 100);
+const producerTimer = setInterval(() => producer.tick(), 100);
 const close = () => { if (closing) return; closing = true; clearTimeout(pacing); clearInterval(producerTimer); producer.close(); send({ type: 'session.close' }); };
 
 function play(text, kind) {
@@ -248,10 +243,9 @@ await producer.settle();
 const at = ms => Math.round(ms - startedAt + (startedAt - inputStartedAt));
 report.producer = producer.summary();
 report.notes = producer.records.filter(item => item.source === 'note').map(note => ({
-  kind: note.kind, sentMs: at(note.sentAt), ...(note.decidedAt ? { decidedMs: at(note.decidedAt) } : {}), ...(note.offer ? { offer: true } : {}), ...(note.wake ? { wake: true } : {}),
+  kind: note.kind, sentMs: at(note.sentAt), delivery: note.delivery,
   samMs: note.nextSamTurnAt ? at(note.nextSamTurnAt) : null, text: note.text,
 }));
-report.paceVerdicts = producer.records.filter(item => item.source === 'map' && item.pace).map(item => ({ atMs: at(item.startedAt), verdict: item.pace.verdict }));
 report.records = producer.records;
 await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
 // Sam's audio on the input clock, with the participant's lines, for listening review.
@@ -260,12 +254,11 @@ const mix = Buffer.alloc(length + (length % 2));
 for (const [start, audio] of received) for (let i = 0; i + 1 < audio.length && start + i + 1 < mix.length; i += 2) mix.writeInt16LE(audio.readInt16LE(i), start + i);
 await writeFile(`${output}/sam.pcm`, mix);
 await Bun.spawn(['ffmpeg', '-y', '-loglevel', 'error', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', `${output}/sam.pcm`, `${output}/sam.wav`], { stderr: 'ignore' }).exited;
-const turnNotes = report.notes.filter(note => note.kind === 'turn');
 console.log(JSON.stringify({
   output, minutes: +(inputMs() / 60_000).toFixed(1), usageSeconds: report.usageSeconds, samTurns: report.samTurns, multiQuestions: report.multiQuestions,
-  offers: report.offers.map(item => `${(item.atMs / 60_000).toFixed(1)}m`), offerNotes: report.notes.filter(note => note.offer).map(note => `${(note.sentMs / 60_000).toFixed(1)}m`),
+  offers: report.offers.map(item => `${(item.atMs / 60_000).toFixed(1)}m`),
   recaps: report.recaps.length, anythingElse: report.anythingElse.length, ending: report.ending, samEnded: report.samEnded,
-  gapsOver4s: report.gaps.filter(item => item.gapMs >= 4000).map(item => `${(item.afterMs / 1000).toFixed(0)}s:${(item.gapMs / 1000).toFixed(1)}`), hellos: report.hellos, turnNotes: turnNotes.map(note => ({ sentMs: note.sentMs, samMs: note.samMs })),
+  gapsOver4s: report.gaps.filter(item => item.gapMs >= 4000).map(item => `${(item.afterMs / 1000).toFixed(0)}s:${(item.gapMs / 1000).toFixed(1)}`), hellos: report.hellos, notes: report.notes.length,
   errors: report.errors,
 }));
 if (!report.finalized || report.errors.length) process.exitCode = 1;

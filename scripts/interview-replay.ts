@@ -3,11 +3,11 @@
  * Recorded readings approximate the new policy: this cannot predict Sam's speech or score newly introduced gaps.
  * Usage: bun scripts/interview-replay.ts <row.json>... [--json=<private path>] [--baseline=<earlier --json>] [--verbose]
  */
-import { latestTurn, upToParticipant } from '../ai/interview/ranking.server';
-import { applyMapUpdate, emptyMap, type ConversationMap } from '../core/interview-map';
-import { emptyListState, nextListNote } from '../core/interview-notes';
-import { type MapRecord, type NoteRecord, type ProducerLogRecord, type TurnRecord } from '../core/interview-producer';
-import { emptyRanking, observeMap, observeTurn, threadKey } from '../core/interview-ranking';
+import { latestTurn, upToParticipant } from '../interview-engine/interview/conversation/ranking.server';
+import { applyMapUpdate, emptyMap, type ConversationMap } from '../interview-engine/interview/conversation/map';
+import { emptyListState, nextListNote } from '../interview-engine/interview/conversation/notes';
+import { type MapRecord, type NoteRecord, type ProducerLogRecord, type TurnRecord } from '../interview-engine/interview/conversation/records';
+import { emptyRanking, observeMap, observeTurn, threadKey } from '../interview-engine/interview/conversation/ranking';
 import { parseTimelineExport } from '../core/interview-timeline';
 
 const args = Bun.argv.slice(2);

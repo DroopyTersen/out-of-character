@@ -5,12 +5,12 @@
  * Paid: one Jev call per settled participant turn that isn't backchannels alone.
  * A map applies once its Sol call finished (start plus latency); the replay stops a cadence after the last Sol call. The report holds transcript-derived notes: keep it out of the repo.
  */
-import { evaluateTurn, latestTurn } from '../ai/interview/ranking.server';
+import { evaluateTurn, latestTurn } from '../interview-engine/interview/conversation/ranking.server';
 import { judgeModel } from '../interview-engine/providers/judge.server';
 import { yieldsTurn } from '../core/interview';
-import type { ConversationMap } from '../core/interview-map';
-import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../core/interview-notes';
-import { emptyRanking, observeMap, observeTurn, RANKING, type Pick, type TurnReading } from '../core/interview-ranking';
+import type { ConversationMap } from '../interview-engine/interview/conversation/map';
+import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../interview-engine/interview/conversation/notes';
+import { emptyRanking, observeMap, observeTurn, RANKING, type Pick, type TurnReading } from '../interview-engine/interview/conversation/ranking';
 import type { TranscriptEntry } from '../core/simulator/types';
 
 const [path, reportPath, ...flags] = Bun.argv.slice(2);

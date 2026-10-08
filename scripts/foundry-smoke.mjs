@@ -1,12 +1,13 @@
+import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { foundryConfig } from '../ai/foundry.server.ts';
 import { generateScene } from '../ai/scenes.ts';
 import { characters } from '../core/characters.ts';
 import { generateDirector } from '../ai/simulator/director.server.ts';
 import { appendMapLog, emptyMapLog, generateMap } from '../ai/interview/map.server.ts';
-import { evaluateTurn } from '../ai/interview/ranking.server.ts';
-import { emptyMap } from '../core/interview-map.ts';
-import { lookupInterviewBackground } from '../ai/interview/research.server.ts';
+import { evaluateTurn } from '../interview-engine/interview/conversation/ranking.server.ts';
+import { emptyMap } from '../interview-engine/interview/conversation/map.ts';
+import { lookupInterviewBackground } from '../interview-engine/interview/conversation/research.server.ts';
 import { summarizeInterview } from '../ai/interview/summary.server.ts';
 import { generateReport } from '../ai/simulator/report.server.ts';
 import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
@@ -17,6 +18,7 @@ import { captureLiveClip } from './lib/live-voice-clip.mjs';
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to verify the configured providers.');
 const foundry = foundryConfig(process.env);
 if (!process.env.TYPESAFE_API_KEY) throw new Error('TypeSafe is not configured.');
+const providers = foundryProviders({ ...foundry, typesafeKey: process.env.TYPESAFE_API_KEY });
 const output = process.env.ACCEPTANCE_OUTPUT || 'output/foundry-smoke';
 await mkdir(output, { recursive: true, mode: 0o700 });
 const transcript = [
@@ -47,11 +49,11 @@ const checks = {
     return { model: result.model, threads: map.threads.length, entities: map.entities.length, research: result.research, usage: result.usage };
   },
   ranking: async () => {
-    const result = await evaluateTurn({ transcript, map, apiKey: process.env.TYPESAFE_API_KEY, signal: signal(), atMs: 21_000 });
+    const result = await evaluateTurn({ transcript, map, judge: providers.judge, signal: signal(), atMs: 21_000 });
     return { model: result.model, durationMs: result.durationMs, threads: Object.keys(result.reading.states).length };
   },
   research: async () => {
-    const result = await lookupInterviewBackground({ target: { kind: 'product', name: 'OpenStreetMap' }, clue: null, foundry, signal: signal() });
+    const result = await lookupInterviewBackground({ target: { kind: 'product', name: 'OpenStreetMap' }, clue: null, model: providers.language.fast, signal: signal() });
     if (result.status !== 'found') throw new Error(`Public research unresolved: ${result.reason}`);
     return result;
   },

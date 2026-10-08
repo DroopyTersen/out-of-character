@@ -42,7 +42,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Brief**: Sam's instructions for one voice: the spec's persona, orientation and boundaries around the engine's own turn-taking, technique and note-handling guidance.
 
-**Note channel**: how Sol's notes reach Sam during the conversation. The live session appends them to Sam's thinking; the delivery probe compares appending them to the instructions. The brief names the channel so its wording matches.
+**Note channel**: how Sol's notes reach Sam during the conversation. The live session appends them to Sam's thinking. The delivery probe compares the current thread note with a no-note control.
 
 **Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
 

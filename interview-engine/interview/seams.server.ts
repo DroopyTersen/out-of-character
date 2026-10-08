@@ -1,8 +1,10 @@
 import type { Passage } from '../shared/transcript';
 import type { ProducerLogRecord, ProducerSummary } from './conversation/records';
 import type { Checkpoint, ConnectionLog, Lease, PublicSnapshot } from './session/checkpoint';
+import type { NarrativeProvenance } from '../shared/narrative';
 
 export type { Checkpoint, Lease } from './session/checkpoint';
+export type { NarrativeProvenance } from '../shared/narrative';
 
 /** A save was refused because a newer owner of the attempt has taken over. The superseded owner stops. */
 export class FencedError extends Error {
@@ -33,9 +35,6 @@ export type Background = { track(work: Promise<unknown>): void };
 /** Upserts the attempt's archive row by id. Best effort: a failed write is logged, never retried. */
 export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
 export type Seams = { store: SessionStore; background: Background; archive: Archive };
-
-/** How the narrative was written, as the host settled it. */
-export type NarrativeProvenance = { model: string; version: string; attempts: unknown[] };
 
 /**
  * One archived attempt. A partial row is written every 30 seconds while live; the final row once the attempt ends,

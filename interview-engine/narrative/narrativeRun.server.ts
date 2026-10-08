@@ -1,7 +1,9 @@
 import { createTextStreamResponse } from 'ai';
-import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
+import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState } from './narrative.server';
+import type { NarrativeAttempt } from '../shared/narrative';
 
 export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
+export type { NarrativeAttempt } from '../shared/narrative';
 
 // SessionReport's lifecycle (app/server/simulator/report.ts) over a NarrativeRun, with the API design's rejoin: a
 // request that arrives while a run is writing attaches to it instead of being refused.
@@ -9,7 +11,6 @@ export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, Narrati
 export const NARRATIVE_MAX_STARTS = 2;
 export const NARRATIVE_DEADLINE_MS = 120_000;
 
-export type NarrativeAttempt = { startedAt: number; endedAt: number; failure: NarrativeFailure | null; usage: NarrativeUsage | null };
 export type SettledNarrative = { document: { text: string } | null; attempts: NarrativeAttempt[] };
 export type NarrativeRunnerOptions = {
   deadlineMs?: number;

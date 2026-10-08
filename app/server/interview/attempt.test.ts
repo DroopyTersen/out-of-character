@@ -6,10 +6,8 @@ import { threadKey } from '../../../interview-engine/interview/conversation/rank
 import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/interview/conversation/records';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
 import { toPassage } from '../../../interview-engine/interview/wire';
-import type { Narrative } from '../../../interview-engine/narrative/narrative.server';
-import type { Passage } from '../../../interview-engine/shared/transcript';
 import { interviewAttempt, narrated, objectFixture } from './durableObjectFixture';
-import { activityPoll, capability, request, settle, waitFor } from '../simulator/session-fixture';
+import { activityPoll, capability, request, waitFor } from '../simulator/session-fixture';
 
 // Ported from the practice simulator's session tests when its interview branches were removed (Phase 5).
 afterEach(() => setSystemTime());

@@ -5,13 +5,12 @@ import type { InterviewObjectiveReading as Reading } from '../../shared/snapshot
 import type { PauseSpan } from '../../shared/timing';
 import type { WireEntry as TranscriptEntry, WireSpeaker } from '../wire';
 import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from './map';
-import { MAP_PROMPT_VERSION, MapOutputError } from './map.server';
-import { emptyListNote, NOTE_HEADERS } from './notes';
+import { MapOutputError } from './map.server';
+import { NOTE_HEADERS } from './notes';
 import * as engine from './producer.server';
 import { producerServices } from './producer.server';
 import { threadKey, type TurnReading } from './ranking';
-import { RANKING_RUBRIC_VERSION } from './ranking.server';
-import { PRODUCER_LIMITS, PRODUCER_VERSION, type ProducerLogRecord, type ResearchRequest } from './records';
+import { PRODUCER_LIMITS, type ProducerLogRecord, type ResearchRequest } from './records';
 import { testSpec } from './testSpec';
 
 type InterviewObjectiveReading = Reading<WireSpeaker>;

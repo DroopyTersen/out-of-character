@@ -3,9 +3,10 @@ import { actorBrief, getClient, getScenario, openingInstruction } from '../../..
 import { SIMULATOR_VERSION, type ClientEnding, type PublicSnapshot, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
-import type { ProducerSummary } from '../../../core/interview-producer';
+import type { ProducerSummary } from '../../../interview-engine/interview/conversation/records';
 import type { NetworkRecord } from '../../../interview-engine/shared/network';
-import type { ReportArchive, ReportAttempt } from './report';
+import type { NarrativeProvenance } from '../../../interview-engine/shared/narrative';
+import type { ReportArchive } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
   const result = await db.prepare('UPDATE simulator_attempts SET report_json = ? WHERE id = ?').bind(JSON.stringify(report), id).run();
@@ -23,7 +24,7 @@ export type ArchiveProvenance = {
   workerTag: string | null;
   /** The simulator's director, or the interview's producer (the interview archive shares this provenance shape). */
   contextualDirector: DirectorSummary | ProducerSummary | null;
-  interviewSummary?: { model: string; version: string; attempts: ReportAttempt[] };
+  interviewSummary?: NarrativeProvenance;
   /** One entry per provider session, and each connection pause. Provider ids are never archived. */
   connection?: ConnectionLog;
   /** Each walk-out judgment, and the walk-out that ended the attempt. Simulator scenarios only. */

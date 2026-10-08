@@ -3,25 +3,15 @@ import { INTERVIEW_SCENARIO_ID } from '../../../core/interview';
 import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/scenarios.server';
 import { BodyError, boundedJson } from '../http';
 import { foundryConfigured } from '../../../ai/foundry.server';
+import { activitySchema, CAPABILITY, resumeSchema, startSchema as sessionStartSchema } from '../../../interview-engine/shared/protocol';
+
+export { activitySchema, resumeSchema };
 
 const uuid = z.string().uuid();
-const quietDuration = z.number().int().min(0).max(60_000).nullable().optional();
-const packets = z.number().int().min(0).max(1_000_000);
-const delay = z.number().int().min(0).max(60_000).nullable();
-const network = z.object({ ms: z.number().int().min(0).max(600_000), received: packets, lost: packets, concealed: z.number().min(0).max(1).nullable(), jitterMs: delay, sentLost: packets.nullable(), rttMs: delay }).strict();
-/** `active`: a click or key press since the last report. `audio`: Sam's playback was audible in the last 1.5 s. */
-export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), outputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
-  // Diagnostics only: a report this server cannot read is dropped, never a failed poll.
-  network: network.optional().catch(undefined) }).strict();
-// Foundry does not filter frontend events; deny data channels so actor context stays private.
-const offer = z.string().min(20).max(60_000).startsWith('v=0').refine(sdp => !/^m=(?!audio )/m.test(sdp), 'Only audio media is allowed.');
-export const startSchema = z.object({
-  id: uuid,
+export const startSchema = sessionStartSchema.extend({
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
-  sdp: offer,
-}).strict();
-export const resumeSchema = z.object({ sdp: offer }).strict();
+});
 export const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.TYPESAFE_API_KEY;
 export const simulatorJson = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 
@@ -33,7 +23,7 @@ export async function handleSimulator(request: Request, env: Env): Promise<Respo
   }
   if (request.method !== 'POST') return simulatorJson({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('Origin') !== url.origin) return simulatorJson({ error: 'Same-origin requests are required.' }, 403);
-  if (!/^Bearer [a-f0-9]{64}$/.test(request.headers.get('Authorization') ?? '')) return simulatorJson({ error: 'Session capability is required.' }, 401);
+  if (!CAPABILITY.test(request.headers.get('Authorization') ?? '')) return simulatorJson({ error: 'Session capability is required.' }, 401);
   try {
     if (url.pathname === '/api/simulator/sessions') {
       if (!liveAvailable(env)) return simulatorJson({ error: 'Live practice is currently unavailable. You can explore the workshop.' }, 503);

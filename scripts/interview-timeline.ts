@@ -2,7 +2,7 @@
  * Prints one interview's producer timeline from a locally exported `interview_attempts` row.
  * Usage: bun scripts/interview-timeline.ts <row.json>. Reads only the file; makes no network or model call.
  */
-import { producerLatency } from '../core/interview-producer';
+import { producerLatency } from '../interview-engine/interview/conversation/records';
 import { formatTimelineRows, interviewTurnGaps, parseTimelineExport, producerTimeline, TIMELINE_LANES, type TimelineLane } from '../core/interview-timeline';
 
 const [path, ...flags] = Bun.argv.slice(2);

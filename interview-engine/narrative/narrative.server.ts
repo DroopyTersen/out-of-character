@@ -1,11 +1,11 @@
 import type { NarrativeTemplate } from '../shared/spec';
 import type { Passage } from '../shared/transcript';
+import type { NarrativeFailure, NarrativeUsage } from '../shared/narrative';
+
+export type { NarrativeFailure, NarrativeUsage } from '../shared/narrative';
 
 /** The written document: Markdown prose, as the spec's narrative schema returns it. */
 export type NarrativeDocument = { text: string };
-export type NarrativeFailure = 'provider' | 'invalid' | 'cancelled' | 'timeout';
-/** What one narrative call reported. The shape of the simulator's `ReportUsage`. */
-export type NarrativeUsage = { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; cachedTokens: number | null };
 export type Narrative =
   | { document: NarrativeDocument; failure: null; usage: NarrativeUsage }
   | { document: null; failure: NarrativeFailure; usage: NarrativeUsage | null };

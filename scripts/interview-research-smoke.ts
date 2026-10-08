@@ -1,7 +1,7 @@
-import { lookupInterviewBackground } from '../ai/interview/research.server';
+import { lookupInterviewBackground } from '../interview-engine/interview/conversation/research.server';
 import { foundryConfig } from '../ai/foundry.server';
 import { foundryProvider } from '../interview-engine/providers/foundry.server';
-import type { ResearchKind } from '../core/interview-producer';
+import type { ResearchKind } from '../interview-engine/interview/conversation/records';
 
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to run this bounded synthetic provider smoke.');
 const foundry = foundryConfig(process.env);

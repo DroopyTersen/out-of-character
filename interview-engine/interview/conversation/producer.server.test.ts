@@ -265,6 +265,10 @@ test('withdrawing every map fact supersedes the previous map note', async () => 
   expect(f.notes('map')).toHaveLength(2);
   expect(f.notes('map').at(-1)).toContain('withdrawn');
   expect(f.notes('map').at(-1)).not.toContain('OpenStreetMap');
+  f.producer.providerEvent(f.of('note').findLast(note => note.kind === 'map')!.id, false);
+  await f.step(80_500);
+  expect(f.notes('map')).toHaveLength(3);
+  expect(f.notes('map').at(-1)).toBe(f.notes('map')[1]!);
 });
 
 

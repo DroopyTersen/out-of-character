@@ -270,7 +270,7 @@ export class InterviewProducer {
     if (!this.mapRecord) return;
     const key = mapNoteKey(this.map);
     if (key === this.mapKey) return;
-    const text = mapNote(this.map) ?? (this.mapKey ? emptyMapNote() : null);
+    const text = mapNote(this.map) ?? (this.records.some(record => record.source === 'note' && record.kind === 'map') ? emptyMapNote() : null);
     if (!text) { this.mapKey = key; return; }
     const cited = new Set(mapNoteResearch(this.map).map(entity => entity.passageId));
     const researchIds = this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && cited.has(item.eventId) ? [item.id] : []);

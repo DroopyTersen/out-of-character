@@ -1,0 +1,806 @@
+{
+  "schemaVersion": 1,
+  "description": "Synthetic dialogue only. Historical holdout-prefixed IDs are regression cases, not a fresh holdout. Expected outcome uses P(continue) >= 0.85.",
+  "cases": [
+    {
+      "id": "synthetic-explicit-end",
+      "transcript": [
+        {
+          "id": "s0",
+          "speaker": "trainee",
+          "text": "Let\u2019s wrap up, I need to go.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "s1",
+          "speaker": "client",
+          "text": "Thanks for your time. Goodbye.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "finished",
+        "evidenceIds": [
+          "s0",
+          "s1"
+        ],
+        "reason": "The participant explicitly asks to wrap up and the interviewer says goodbye.",
+        "severityIfWrong": "critical"
+      }
+    },
+    {
+      "id": "synthetic-thinking",
+      "transcript": [
+        {
+          "id": "s0",
+          "speaker": "client",
+          "text": "Who made the decision?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "s1",
+          "speaker": "trainee",
+          "text": "Let me think about that.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "s2",
+          "speaker": "client",
+          "text": "Take your time.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "s0",
+          "s1",
+          "s2"
+        ],
+        "reason": "The participant asks for time to think and the interviewer grants that time. The question is still unanswered.",
+        "severityIfWrong": "critical"
+      }
+    },
+    {
+      "id": "synthetic-question-without-punctuation",
+      "transcript": [
+        {
+          "id": "s0",
+          "speaker": "trainee",
+          "text": "We tested with the authors.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "s1",
+          "speaker": "client",
+          "text": "Which reports did they check",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "s0",
+          "s1"
+        ],
+        "reason": "The interviewer asks which reports were checked. The words form an unanswered question despite the missing question mark.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-finished-answer",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Who built the prototype?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "I did. Then Jordan took over for production.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "Got it. Thanks.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant fully answers who built the prototype and who took over. The interviewer only acknowledges and thanks them.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-ack-with-personal-opinion",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "How did you handle the scope?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "We cut the optional dashboard.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "Honestly, that sounds like the right call.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant explains the scope decision. The interviewer expresses agreement without asking for another answer.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-question-then-thinking",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Who signed it off?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Hang on. I need a moment to remember.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "Sure.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant explicitly requests a moment to remember, and the interviewer agrees. The answer has not yet been given.",
+        "severityIfWrong": "critical"
+      }
+    },
+    {
+      "id": "holdout-question-followed-by-period",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "The contract was fixed price.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Who agreed to that? I mean on the customer side.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The interviewer asks who agreed on the customer side. The clarification following the question does not remove the need for a participant answer.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-unfinished-after-backchannel",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "What changed during testing?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Well, the biggest thing was that the",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "Mm-hmm.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant stops mid-clause while beginning the answer. The interviewer's backchannel leaves that unfinished answer with the participant.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-explicit-yield",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "Actually, there is something else.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Go ahead. I\u2019m listening.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant signals more to say, and the interviewer explicitly invites them to go ahead. That contribution is still pending.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-request-repeat",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Did the rollout need much support?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Could you repeat that? The sound dropped.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant asks the interviewer to repeat a question after an audio dropout. The interviewer must respond before an answer can be expected.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-participant-clarification",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Who owned it?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Do you mean the prototype or the released version?",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant asks which version the interviewer means. The interviewer needs to clarify the question.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-topic-declined",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "How did you gather feedback?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "We already covered that. Let\u2019s move on.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "Fair enough.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant asks to move on from an already covered topic, and the interviewer accepts. The interview remains open and needs a new interviewer turn.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-does-not-know",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "What happened after launch?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "I wasn\u2019t involved after launch, so I don\u2019t know.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "Understood.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant gives a complete answer explaining that they do not know because they were not involved. The interviewer only acknowledges it.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-answered-no",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Were there any trade-offs?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "No. It all fit the requirements.",
+          "startMs": 2000,
+          "endMs": 3000
+        },
+        {
+          "id": "p3",
+          "speaker": "client",
+          "text": "That makes sense.",
+          "startMs": 4000,
+          "endMs": 5000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2",
+          "p3"
+        ],
+        "reason": "The participant answers the question with a denial and explanation. The interviewer's agreement does not ask for further participant input.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-finished-call",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "That\u2019s all I wanted to cover today. Let\u2019s stop.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Thanks for sharing your experience. Bye.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "finished",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant explicitly asks to stop and the interviewer closes with a goodbye.",
+        "severityIfWrong": "critical"
+      }
+    },
+    {
+      "id": "holdout-request-to-stop-listening",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "Just let me finish my thought.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Of course, go on.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant explicitly asks to be allowed to finish their thought. The interviewer agrees and returns the floor to them.",
+        "severityIfWrong": "critical"
+      }
+    },
+    {
+      "id": "holdout-thinking-with-no-ack",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "When did that happen?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Let me think...",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant explicitly asks for time to think rather than answering the question. The interviewer should preserve that pause.",
+        "severityIfWrong": "critical"
+      }
+    },
+    {
+      "id": "holdout-unanswered-invitation",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "We had an unusual release process.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Tell me how that worked.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The interviewer invites the participant to explain the release process. That invitation has not been answered.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-unfinished-sam-question",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "We used their existing platform.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "And did that mean\u2014",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "ambiguous",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "ambiguous",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant's statement is complete, but the interviewer then starts and leaves a question unfinished. The intended question and whether the interviewer was interrupted are missing, so the words do not establish whether to finish the interviewer turn or await the participant.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-short-answer-awaiting-response",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Did you need to rebuild it?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "No.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant's short negative answer fully answers the yes-or-no question. No unfinished thought or request for time is supplied.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-participant-ack-question-outstanding",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "client",
+          "text": "Could you walk me through the release?",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "trainee",
+          "text": "Sure. Let me start with the planning.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant accepts the invitation and announces where they will begin, but has not yet described the release. Their answer is still developing.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-empathy-after-complete-story",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "The team was reduced in half. We kept the delivery date by dropping the optional reports. That was how we got through it.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Oof. That sounds hard.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": true,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "continue",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant completes the story and its outcome. The interviewer offers empathy without asking a question or inviting more detail.",
+        "severityIfWrong": "major"
+      }
+    },
+    {
+      "id": "holdout-paused-by-participant",
+      "transcript": [
+        {
+          "id": "p1",
+          "speaker": "trainee",
+          "text": "Can you give me a minute? I\u2019m looking at my notes.",
+          "startMs": 0,
+          "endMs": 1000
+        },
+        {
+          "id": "p2",
+          "speaker": "client",
+          "text": "Absolutely. Take your time.",
+          "startMs": 2000,
+          "endMs": 3000
+        }
+      ],
+      "expectedContinue": false,
+      "labelStatus": "independently-agreed",
+      "origin": "prior-silence-experiment-synthetic",
+      "split": "regression",
+      "independentLabel": {
+        "state": "wait",
+        "evidenceIds": [
+          "p1",
+          "p2"
+        ],
+        "reason": "The participant explicitly requests a minute to consult notes, and the interviewer agrees to wait.",
+        "severityIfWrong": "critical"
+      }
+    }
+  ]
+}

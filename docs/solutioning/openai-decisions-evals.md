@@ -8,7 +8,7 @@ Start with a paired, offline interview comparison: **silence → turn readings/t
 
 The interview engine already accepts an evaluation model. Use that seam for an experiment-only adapter; a production provider switch, another orchestration layer, and a rewrite of Sam/Sol/Luna are unnecessary for this comparison. Simulator and character-game evals follow as separate gates before claiming a repository-wide replacement.
 
-**Status:** design and seed-corpus preparation complete; provider comparison not run. The branch contains a synthetic silence fixture pack and an independent-label rubric. Private source manifests, real cases, and label-review artifacts are under `.data/openai-decisions-evals/`, already ignored by Git. API account access, measured quality, latency, and cost remain untested. No production configuration changes are part of this work.
+**Status:** the bounded interview comparison and low-effort tuning are complete. See [measured results and the selected settings](openai-decisions-results.md). Andrew asked to stop when close rather than pursue every proposed gate; Decisions was close enough for practical interview use after silence and coverage calibration. The design below records the original broader experiment options, not outstanding required work. Private inputs and results remain under ignored `.data/openai-decisions-evals/`. The production provider is unchanged.
 
 ## API contract verified today
 
@@ -149,11 +149,13 @@ bun scripts/interview-replay.ts output/interview-review/2026-10-08-506432d/archi
 bun test interview-engine/interview/session/silence.server.test.ts interview-engine/interview/session/session.server.test.ts interview-engine/interview/conversation/ranking.server.test.ts interview-engine/interview/conversation/ranking.test.ts interview-engine/interview/conversation/evaluate.server.test.ts
 ```
 
-The proposed comparison runner above does not exist yet. Existing paid scripts such as `ai/interview/run.ts`, `ai/simulator/run.ts`, and `scripts/interview-silence-probe.ts` are Jev-only; running them alone cannot answer the replacement question. Keep their historical result files intact when implementing the paired runner.
+The paired runner now exists at `ai/decisions/run.ts`, with report generation at `ai/decisions/report.ts`. See the measured-results document for current commands. Existing paid scripts such as `ai/interview/run.ts`, `ai/simulator/run.ts`, and `scripts/interview-silence-probe.ts` remain Jev-only; their historical results were preserved.
 
 Verification for this design: both anchor archives replayed locally; all 20 selected turn inputs reconstructed with the cutoff/availability checks; the 23 committed synthetic cases have unique IDs and valid evidence references; the targeted existing interview suite passed **54 tests / 322 assertions**. These checks use local fixtures and provider substitutes; no paid Decisions or Jev comparison was performed.
 
-## Remaining evidence before a replacement decision
+## Original broader evidence plan
+
+The measured-results document supersedes this checklist for the practical interview decision. Broader replacement and live voice acceptance remain separate work.
 
 - Independently adjudicated real turn/grade labels, reserved session split, and a new unseen validation set.
 - Access to the requested Decisions endpoint, effective request limits, resolved model and actual usage/billing. Public documentation does not establish this account's access or an Azure equivalent.

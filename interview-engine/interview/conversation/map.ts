@@ -31,7 +31,7 @@ export type MapParticipant = { vantage: string; preferences: MapPreference[] };
 /** `passageId` is the participant passage a participant fact cites, the lookup event a research fact cites, and null for a seed fact. */
 export type MapEntity = { id: string; kind: EntityKind; label: string; detail: string; source: EntitySource; passageId: string | null };
 export type MapEdge = { id: string; kind: EdgeKind; from: string; to: string };
-/** A gap, never a question: Sam turns the unknown and the guess into a question of its own. Every thread carries a guess. */
+/** A gap, never a question: Sam asks about the unknown. A guess may be empty when no useful hypothesis is grounded. */
 export type MapThread = {
   id: string; label: string; anchors: string[]; unknown: string; guess: string;
   related: string[]; topics: MapTopicId[]; status: ThreadStatus; reason: string | null;

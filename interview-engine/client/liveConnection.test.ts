@@ -343,25 +343,19 @@ test("a loud microphone alone is not activity; Sam's playback is", async () => {
   await connection.end();
 });
 
-test('microphone sound promptly cancels measured quiet without pretending Sam is audible, and mute makes it unknown', async () => {
+test('microphone noise sends no extra activity reports and never reports Sam as audible', async () => {
   const { connection, peer } = await connected();
   peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
   await advance(6000);
-  const recent = () => server.polls.at(-1) as { inputQuietMs: number | null; outputQuietMs: number | null; audio: boolean };
-  expect(recent().inputQuietMs).toBeGreaterThanOrEqual(5000);
-  expect(recent().outputQuietMs).toBeGreaterThanOrEqual(5000);
   const seen = server.polls.length;
   FakeAudioContext.inputLoud = true;
   await advance(100);
-  expect(server.polls.length).toBeGreaterThan(seen);
-  expect(recent()).toMatchObject({ inputQuietMs: 0, audio: false });
-  expect(recent().outputQuietMs).toBeGreaterThanOrEqual(5000);
-  FakeAudioContext.inputLoud = false;
+  expect(server.polls.length).toBe(seen);
   await advance(1500);
-  expect(recent().inputQuietMs).toBeGreaterThan(0);
-  expect(recent().inputQuietMs).toBeLessThan(1600);
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
+  expect(server.polls.at(-1)).not.toHaveProperty('inputQuietMs');
   connection.mute(true);
   await advance(1500);
-  expect(recent().inputQuietMs).toBeNull();
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
   await connection.end();
 });

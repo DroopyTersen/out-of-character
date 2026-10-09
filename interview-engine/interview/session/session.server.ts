@@ -163,7 +163,6 @@ export class SessionActor {
   private greeting: { eventId: string; content: string } | undefined;
   /** When either side's transcript last grew. */
   private lastSpeech = 0;
-  private quietSample: { at: number; ms: number } | undefined;
   private silenceCheckedRevision = -1;
   private silenceCheck: Promise<void> | undefined;
   private silenceAbort: AbortController | undefined;
@@ -246,9 +245,6 @@ export class SessionActor {
         if (activity.sequence != null) this.activitySequence = activity.sequence;
         if (activity.active || activity.audio) this.lastActivity = now;
         if (activity.audio) this.lastAudio = now;
-        this.quietSample = activity.sequence != null && !activity.audio && activity.outputQuietMs != null && activity.inputQuietMs != null
-          ? { at: now, ms: Math.min(activity.outputQuietMs, activity.inputQuietMs) } : undefined;
-        if (!this.quietSample || this.quietSample.ms < SILENCE_MS) this.silenceAbort?.abort();
         const segment = this.segment;
         if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: now, ...activity.network });
       }
@@ -428,7 +424,6 @@ export class SessionActor {
     // Checked last thing before the paid call: an end or a fence that arrived during the writes above must not open a session.
     if (this.fenced) throw new FencedError();
     if (this.finishing || this.state?.status === 'ending') throw new Cancelled();
-    this.quietSample = undefined;
     const instructions = [interviewerBrief(this.spec, input.clientId), context].filter(Boolean).join('\n\n');
     const created = await this.providers.voice.create({ sdp: input.sdp, voice: this.voiceName(input.clientId), instructions });
     const segment: Segment = { epoch: ++this.epoch, providerId: created.id, offsetMs, startedAt: this.now(), endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null };
@@ -561,6 +556,7 @@ export class SessionActor {
     const now = this.now();
     if (this.checkLifetime()) return;
     this.unanswered(now);
+    this.checkSilence(now);
     this.producer?.tick(now);
     const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
     const text = gradingText(transcript);
@@ -574,19 +570,14 @@ export class SessionActor {
     this.background.track(this.grading);
   }
 
-  /** A transcript gap alone is not silence. Require fresh, measurable quiet on both browser audio streams. */
-  private isQuiet(now: number) {
-    return !!this.quietSample && now - this.quietSample.at <= 2000 && this.quietSample.ms >= SILENCE_MS
-      && now - this.lastSpeech >= SILENCE_MS;
-  }
-
+  /** Transcript inactivity triggers the check; Jev decides whose turn it is. Audio levels are irrelevant. */
   private checkSilence(now: number) {
     const snapshot = this.state!, segment = this.segment;
-    if (this.silenceCheck || segment?.greeting?.repliedAt == null || this.silenceCheckedRevision === snapshot.revision || !this.isQuiet(now)) return;
+    if (snapshot.status !== 'live' || this.silenceCheck || segment?.greeting?.repliedAt == null || this.silenceCheckedRevision === snapshot.revision || now - this.lastSpeech < SILENCE_MS) return;
     if (!snapshot.transcript.some(entry => entry.speaker === 'trainee') || this.segments.reduce((n, item) => n + (item.silence?.length ?? 0), 0) >= MAX_SILENCE_CHECKS) return;
     const transcript = snapshot.transcript.slice(-8);
     const record: SilenceRecord = { id: `silence-${crypto.randomUUID()}`, version: SILENCE_VERSION, revision: snapshot.revision,
-      passageIds: transcript.map(entry => entry.id), startedAt: now, quietMs: this.quietSample!.ms, outcome: 'pending' };
+      passageIds: transcript.map(entry => entry.id), startedAt: now, quietMs: now - this.lastSpeech, outcome: 'pending' };
     (segment.silence ??= []).push(record);
     this.silenceCheckedRevision = snapshot.revision;
     const abort = this.silenceAbort = new AbortController();
@@ -600,7 +591,7 @@ export class SessionActor {
       const result = await this.paid.evaluateSilence({ transcript, judge: this.providers.judge, signal });
       Object.assign(record, result);
       signal.throwIfAborted();
-      if (this.fenced || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision || !this.isQuiet(this.now())) record.outcome = 'stale';
+      if (this.fenced || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision) record.outcome = 'stale';
       else if (result.probability < SILENCE_CONTINUE) record.outcome = 'wait';
       else {
         record.outcome = 'sent';
@@ -735,7 +726,6 @@ export class SessionActor {
     this.timer = undefined;
     this.gradeAbort.abort();
     this.silenceAbort?.abort();
-    this.quietSample = undefined;
     this.producer?.pause();
     try { await this.connecting; } catch { /* A failed resume is reported by resume. */ }
     await this.closeSegment();
@@ -908,7 +898,6 @@ export class SessionActor {
     clearInterval(this.timer);
     this.gradeAbort.abort();
     this.silenceAbort?.abort();
-    this.quietSample = undefined;
     try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
     await this.pausing?.catch(() => {});
     await this.grading;

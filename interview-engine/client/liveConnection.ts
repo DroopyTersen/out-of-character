@@ -73,7 +73,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private activeSincePoll = false;
   private lastAudioAt = 0;
   private outputQuietSince: number | undefined;
-  private inputQuietSince: number | undefined;
   private outputQuietSent = true;
   private meterUpdatedAt = 0;
   private activitySequence = 0;
@@ -225,17 +224,12 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     return !!this.outputMeter && this.context?.state === 'running' && !this.audio.paused && this.pc?.connectionState === 'connected';
   }
 
-  private canMeasureInput() {
-    return !!this.inputMeter && this.context?.state === 'running' && this.pc?.connectionState === 'connected' && !!this.stream?.getAudioTracks().some(track => track.enabled);
-  }
-
   private activity(active: boolean) {
     const now = Date.now();
     const fresh = now - this.meterUpdatedAt < 250;
     // Sam audible is quiet for 0 ms; null only when the playback can't be measured.
     return { active, audio: now - this.lastAudioAt < 1500, sequence: ++this.activitySequence,
-      outputQuietMs: fresh && this.canMeasureOutput() ? Math.min(60_000, now - (this.outputQuietSince ?? now)) : null,
-      inputQuietMs: fresh && this.canMeasureInput() ? Math.min(60_000, now - (this.inputQuietSince ?? now)) : null };
+      outputQuietMs: fresh && this.canMeasureOutput() ? Math.min(60_000, now - (this.outputQuietSince ?? now)) : null };
   }
 
   /** Media quality since the last read, at most every few seconds. A slow or failed read is skipped, never waited on. */
@@ -263,25 +257,22 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
       const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
       const now = Date.now();
       const previousQuiet = this.outputQuietSince;
-      const previousInputQuiet = this.inputQuietSince;
       const running = this.context?.state === 'running';
-      // Microphone noise never extends the session's idle lease, but it vetoes a silence intervention before ASR arrives.
+      // Only Sam's playback extends the session's idle lease; microphone noise does not.
       const samAudible = running && output.level > .03 && !this.audio.paused;
       this.meterUpdatedAt = now;
       this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
-      this.inputQuietSince = this.canMeasureInput() && input.level <= .03 ? this.inputQuietSince ?? now : undefined;
       if (samAudible) {
         this.keepActive();
         this.lastAudioAt = now;
       }
-      // Report either side starting to make sound promptly, so a pending silence judgment can be discarded.
+      // Report playback changes promptly for activity and connection diagnostics.
       const outputStarted = previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null;
-      const inputStarted = previousInputQuiet != null && now - previousInputQuiet >= 600 && this.inputQuietSince == null;
       const outputStopped = !this.outputQuietSent && this.outputQuietSince != null && now - this.outputQuietSince >= SPEECH_QUIET_MS;
       if (this.outputQuietSince == null) this.outputQuietSent = false;
       if (outputStopped) this.outputQuietSent = true;
       // An older periodic report is ignored on the server.
-      if ((outputStarted || outputStopped || inputStarted) && !this.ending) {
+      if ((outputStarted || outputStopped) && !this.ending) {
         void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
       }
       this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
@@ -488,7 +479,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.stream = undefined;
     this.pc = undefined;
     this.inputMeter = this.outputMeter = undefined;
-    this.inputQuietSince = this.outputQuietSince = undefined;
+    this.outputQuietSince = undefined;
     this.outputQuietSent = true;
     this.callbacks.levels(silentLevels);
   }

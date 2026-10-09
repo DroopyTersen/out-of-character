@@ -6,6 +6,7 @@ import { emptyMap, MAP_LIMITS, PARTICIPANT_ID, type ConversationMap } from './ma
 import * as map from './map.server';
 import { emptyMapLog, mapCacheKey, MapOutputError, MAP_PROMPT_VERSION, researchLogEvent, settledPrefix, unloggedPassages, type MapLog, type MapLogEvent, type MapTail } from './map.server';
 import { testSpec as spec } from './testSpec';
+import { listNote } from './notes';
 
 const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
 const mapInstructions = map.mapInstructions(spec);
@@ -147,6 +148,28 @@ test('Sol is sent the schema without string lengths, which zod enforces afterwar
   expect(mapOutputSchema.safeParse(long).success).toBe(false);
 });
 
+test('new and revised map threads accept empty guesses and still send their unknown to Sam', async () => {
+  // The real structured adapter and map validation run; only paid HTTP is replaced with Sol-shaped output.
+  const input = { signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], tail, passages: transcript };
+  const first = await generateMap({ ...input, previous: emptyMap() }, async () => solResponse({
+    ...update, threads: [{ ...update.threads[0]!, guess: '' }],
+  }));
+  expect(first.map.threads[0]).toMatchObject({ id: 't1', unknown: 'who chose to build routing first', guess: '' });
+  const revised = await generateMap({ ...input, previous: first.map }, async () => solResponse({
+    vantage: null, preferences: null, entities: [], edges: [], threads: [],
+    revise: [{ id: 't1', unknown: 'how routing was accepted', guess: '  ' }], close: [], drop: [], research: null,
+  }));
+  expect(revised.map.threads[0]).toMatchObject({ unknown: 'how routing was accepted', guess: '' });
+  const note = listNote(revised.map, { current: 't1', action: 'keep', lead: 't1', nearby: [], ranked: [] });
+  expect(note).toContain('still unknown: how routing was accepted.');
+  expect(note).not.toContain('Guess:');
+  const invalid = await generateMap({ ...input, previous: first.map }, async () => solResponse({
+    ...update, threads: [], entities: [], edges: [], revise: [{ id: 't1', unknown: '', guess: '' }],
+  })).catch(error => error);
+  expect(invalid).toBeInstanceOf(MapOutputError);
+  expect(invalid.defects).toContainEqual(expect.objectContaining({ kind: 'schema', id: 'revise.0.unknown' }));
+});
+
 test('a response cut short reports why and what it used', async () => {
   const error = await generateMap({
     signal: new AbortController().signal, attemptId: 'a', blocks: ['b1'], previous: emptyMap(), tail, passages: transcript,
@@ -206,5 +229,5 @@ test('Sol settles the participant’s own part early, several responsibilities i
   expect(instructions).toContain('People often hold more than one responsibility');
   expect(instructions).toContain('Never write it when their part is already clear');
   expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
-  expect(MAP_PROMPT_VERSION).toBe('sol-map-v16');
+  expect(MAP_PROMPT_VERSION).toBe('sol-map-v17');
 });

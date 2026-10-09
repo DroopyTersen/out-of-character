@@ -494,7 +494,6 @@ test('failed live coverage retries once per participant input and interviewer sp
 }, 10_000);
 
 const silenceResult = (probability: number) => ({ probability, model: 'fixture', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } });
-const measuredQuiet = (sequence: number, inputQuietMs: number | null = 5000, outputQuietMs: number | null = 5000) => JSON.stringify({ sequence, active: false, audio: false, inputQuietMs, outputQuietMs });
 const reminders = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('silence-'));
 
 async function stranded(check: SessionServices['evaluateSilence']) {
@@ -503,15 +502,15 @@ async function stranded(check: SessionServices['evaluateSilence']) {
   const { actor, socket } = await conversation(f);
   f.at(4000);
   say(socket, 'output', 'ack', 'That sounds useful.', 4000);
-  f.at(9000);
+  f.at(8000);
   return { ...f, actor, socket };
 }
 
-test('measured silence gets one Jev check per unchanged exchange and a private, acknowledged reminder', async () => {
+test('transcript inactivity gets one Jev check per unchanged exchange and a private, acknowledged reminder', async () => {
   const inputs: string[][] = [];
   const f = await stranded(async input => { inputs.push(input.transcript.map(p => p.text)); return silenceResult(.97); });
   try {
-    const publicState = body(await f.send(f.actor, 'poll', measuredQuiet(1)));
+    const publicState = body(await f.send(f.actor, 'poll'));
     await f.background.settle();
     expect(inputs).toEqual([['Hi, I’m Riley. What did you build?', 'A claims portal for the adjusters.', 'That sounds useful.']]);
     expect(reminders(f.socket)).toHaveLength(1);
@@ -519,7 +518,7 @@ test('measured silence gets one Jev check per unchanged exchange and a private, 
     f.socket.emit({ type: 'session.instructions.appended', client_event_id: id });
     for (let sequence = 2; sequence <= 4; sequence++) {
       f.at(9000 + sequence * 1000);
-      await f.send(f.actor, 'poll', measuredQuiet(sequence, 10_000, 10_000));
+      await f.send(f.actor, 'poll');
     }
     expect(inputs).toHaveLength(1);
     expect(reminders(f.socket)).toHaveLength(1);
@@ -528,7 +527,7 @@ test('measured silence gets one Jev check per unchanged exchange and a private, 
     await f.send(f.actor, 'end');
     await f.background.settle();
     const checks = f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence;
-    expect(checks).toMatchObject([{ id, outcome: 'sent', probability: .97, quietMs: 5000, acknowledgedAt: EPOCH + 9000, nextSpeech: { speaker: 'client', passageId: 'p4' } }]);
+    expect(checks).toMatchObject([{ id, version: 'interview-silence-v2', outcome: 'sent', probability: .97, quietMs: 4000, acknowledgedAt: EPOCH + 8000, nextSpeech: { speaker: 'client', passageId: 'p4' } }]);
   } finally { await f.send(f.actor, 'end'); }
 });
 
@@ -536,10 +535,10 @@ test.each([.03, .6])('a wait or uncertain silence judgment (%s) keeps listening 
   let calls = 0;
   const f = await stranded(async () => { calls++; return silenceResult(probability); });
   try {
-    await f.send(f.actor, 'poll', measuredQuiet(1));
+    await f.send(f.actor, 'poll');
     await f.background.settle();
     f.at(20_000);
-    await f.send(f.actor, 'poll', measuredQuiet(2, 16_000, 16_000));
+    await f.send(f.actor, 'poll');
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(0);
     await f.send(f.actor, 'end');
@@ -548,69 +547,89 @@ test.each([.03, .6])('a wait or uncertain silence judgment (%s) keeps listening 
   } finally { await f.send(f.actor, 'end'); }
 });
 
-test('five seconds of measured quiet starts the check despite a trailing recent-audio report', async () => {
+test('four seconds without transcript growth starts Jev even when the browser reports sound', async () => {
   let calls = 0;
   const f = await stranded(async () => { calls++; return silenceResult(.97); });
   try {
     f.at(5000);
     await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true, inputQuietMs: 1000, outputQuietMs: 1000 }));
     expect(calls).toBe(0);
-    f.at(8999);
-    await f.send(f.actor, 'poll', measuredQuiet(2, 4999, 4999));
+    f.at(7999);
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: true, audio: true, inputQuietMs: 0, outputQuietMs: 0 }));
     expect(calls).toBe(0);
-    f.at(9000);
-    await f.send(f.actor, 'poll', measuredQuiet(3));
+    f.at(8000);
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 3, active: true, audio: true, inputQuietMs: 0, outputQuietMs: 0 }));
     await f.background.settle();
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(1);
   } finally { await f.send(f.actor, 'end'); }
 });
 
-test('unknown, short or out-of-order quiet reports cannot start a silence judgment', async () => {
+test('the server timer checks transcript inactivity without any browser quiet reports', async () => {
   let calls = 0;
   const f = await stranded(async () => { calls++; return silenceResult(.97); });
   try {
-    await f.send(f.actor, 'poll', quietPoll); // Older clients provide no microphone or ordering evidence.
-    await f.send(f.actor, 'poll', measuredQuiet(1, null));
-    await f.send(f.actor, 'poll', measuredQuiet(2, 5000, null));
-    await f.send(f.actor, 'poll', measuredQuiet(3, 4999));
-    await f.send(f.actor, 'poll', measuredQuiet(4, 5000, 4999));
-    await f.send(f.actor, 'poll', measuredQuiet(5, 0));
-    await f.send(f.actor, 'poll', measuredQuiet(4)); // Late quiet cannot overwrite newer sound.
+    f.at(7999);
+    await Bun.sleep(550);
     expect(calls).toBe(0);
-    f.at(9500);
-    say(f.socket, 'input', 'new-fragment', 'And one more thing—', 5000);
-    await f.send(f.actor, 'poll', measuredQuiet(6)); // A new, unsettled transcript also vetoes it.
+    f.at(8000);
+    await Bun.sleep(550);
+    await f.background.settle();
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(1);
+  } finally { await f.send(f.actor, 'end'); }
+});
+
+test.each(['input', 'output'] as const)('new %s transcript text restarts the four-second interval', async speaker => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return silenceResult(.03); });
+  try {
+    f.at(7000);
+    say(f.socket, speaker, 'new-fragment', 'And one more thing—', 5000);
+    f.at(10_999);
+    await f.send(f.actor, 'poll');
     expect(calls).toBe(0);
-    f.at(14_500);
-    await f.send(f.actor, 'poll', measuredQuiet(7));
+    f.at(11_000);
+    await f.send(f.actor, 'poll');
     await f.background.settle();
     expect(calls).toBe(1);
   } finally { await f.send(f.actor, 'end'); }
 });
 
-test.each(['transcript', 'microphone', 'playback', 'missing-meter', 'stale-report'] as const)('a pending silence decision is discarded after %s changes', async change => {
+test.each(['input', 'output'] as const)('a pending silence decision is discarded when %s transcript text arrives', async speaker => {
   const result = deferred<ReturnType<typeof silenceResult>>();
   let calls = 0;
   const f = await stranded(async () => { calls++; return result.promise; });
   try {
-    await f.send(f.actor, 'poll', measuredQuiet(1));
+    await f.send(f.actor, 'poll');
     expect(calls).toBe(1);
     f.at(9500);
-    if (change === 'transcript') say(f.socket, 'input', 'fresh', 'Actually, let me explain—', 6000);
-    if (change === 'microphone') await f.send(f.actor, 'poll', measuredQuiet(3, 0));
-    if (change === 'playback') await f.send(f.actor, 'poll', measuredQuiet(3, 6000, 0));
-    if (change === 'missing-meter') await f.send(f.actor, 'poll', measuredQuiet(3, null));
-    if (change === 'stale-report') f.at(11_001);
-    // An older report cannot cancel the veto, nor can another poll duplicate the pending call.
-    if (change !== 'stale-report') await f.send(f.actor, 'poll', measuredQuiet(2));
+    say(f.socket, speaker, 'fresh', 'Actually, let me explain—', 6000);
+    await f.send(f.actor, 'poll');
     result.resolve(silenceResult(.99));
     await f.background.settle();
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(0);
     await f.send(f.actor, 'end');
     await f.background.settle();
-    expect(f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence).toMatchObject([{ outcome: change === 'stale-report' ? 'stale' : 'aborted' }]);
+    expect(f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence).toMatchObject([{ outcome: 'aborted' }]);
+  } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
+});
+
+test('room noise, playback and missing meters cannot cancel a pending transcript judgment', async () => {
+  const result = deferred<ReturnType<typeof silenceResult>>();
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return result.promise; });
+  try {
+    await f.send(f.actor, 'poll');
+    expect(calls).toBe(1);
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true, inputQuietMs: 0, outputQuietMs: 0 }));
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: false, audio: false, inputQuietMs: null, outputQuietMs: null }));
+    f.at(10_500);
+    result.resolve(silenceResult(.99));
+    await f.background.settle();
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(1);
   } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
 });
 
@@ -618,7 +637,7 @@ test.each(['end', 'pause', 'fence'] as const)('a pending silence decision cannot
   const result = deferred<ReturnType<typeof silenceResult>>();
   const f = await stranded(async () => result.promise);
   try {
-    await f.send(f.actor, 'poll', measuredQuiet(1));
+    await f.send(f.actor, 'poll');
     let ending: Promise<unknown> | undefined;
     if (action === 'end') ending = f.send(f.actor, 'end');
     if (action === 'pause') await f.send(f.actor, 'pause');
@@ -632,8 +651,8 @@ test.each(['end', 'pause', 'fence'] as const)('a pending silence decision cannot
       await f.send(f.actor, 'ready');
       const resumed = f.voice.sockets.get('provider-2')!;
       expect(reminders(resumed)).toHaveLength(0);
-      await f.send(f.actor, 'poll', measuredQuiet(2));
-      expect(reminders(resumed)).toHaveLength(0); // Old dialogue and measurements do not replace the resume greeting.
+      await f.send(f.actor, 'poll');
+      expect(reminders(resumed)).toHaveLength(0); // Old dialogue does not replace the resume greeting.
     }
   } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
 });
@@ -642,10 +661,10 @@ test('a failed silence check is recorded once; it never fails the interview or r
   let calls = 0;
   const f = await stranded(async () => { calls++; throw new Error('Do not retain this provider body.'); });
   try {
-    await f.send(f.actor, 'poll', measuredQuiet(1));
+    await f.send(f.actor, 'poll');
     await f.background.settle();
     f.at(20_000);
-    const snapshot = body(await f.send(f.actor, 'poll', measuredQuiet(2, 16_000, 16_000)));
+    const snapshot = body(await f.send(f.actor, 'poll'));
     expect(snapshot).toMatchObject({ status: 'live', message: null });
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(0);

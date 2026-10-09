@@ -12,7 +12,7 @@ import { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 export { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 type TranscriptEntry = WireEntry;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v16';
+export const MAP_PROMPT_VERSION = 'sol-map-v17';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -30,12 +30,12 @@ const buildOutputSchema = (topicIds: [MapTopicId, ...MapTopicId[]]) => z.strictO
   edges: z.array(z.strictObject({ id: z.string(), kind: z.enum(EDGE_KINDS), from: z.string(), to: z.string() })),
   threads: z.array(z.strictObject({
     id: z.string(), label: text(MAP_LIMITS.label), anchors: z.array(z.string()).max(MAP_LIMITS.anchors),
-    unknown: text(MAP_LIMITS.unknown).min(1), guess: text(MAP_LIMITS.guess).min(1),
+    unknown: text(MAP_LIMITS.unknown).min(1), guess: text(MAP_LIMITS.guess),
     related: z.array(z.string()).max(MAP_LIMITS.related),
     topics: z.array(z.enum(topicIds)).max(MAP_LIMITS.topics),
     status: z.enum(THREAD_STATUSES), reason: text(MAP_LIMITS.reason).nullable(),
   })),
-  revise: z.array(z.strictObject({ id: z.string(), unknown: text(MAP_LIMITS.unknown).min(1), guess: text(MAP_LIMITS.guess).min(1) })),
+  revise: z.array(z.strictObject({ id: z.string(), unknown: text(MAP_LIMITS.unknown).min(1), guess: text(MAP_LIMITS.guess) })),
   close: z.array(z.strictObject({ id: z.string(), status: z.enum(['done', 'off']), reason: text(MAP_LIMITS.reason) })),
   drop: z.array(z.strictObject({ id: z.string(), reason: text(MAP_LIMITS.reason) })),
   /** Code verifies that the participant named the lookup target. */

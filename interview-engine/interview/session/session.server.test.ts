@@ -10,6 +10,7 @@ import { testFraming, testTechniques } from '../conversation/testSpec';
 import { FencedError } from '../seams.server';
 import type { PublicSnapshot } from './checkpoint';
 import { SessionActor, type SessionOptions, type SessionServices } from './session.server';
+import { resumeInstruction, typedAnswerCue } from './voice.prompt';
 
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the
 // network is substituted; timing, the lease, checkpoints, fencing and the archive are real.
@@ -750,4 +751,291 @@ test.each([false, true])('resume preserves the accepted definition when the orig
   expect(instructions.includes('Atlas')).toBe(hasContext);
   await replacement.send(resumed, 'end');
   await replacement.background.settle();
+});
+
+// Typed answers: saved before they are acknowledged, forwarded once to the same provider session, and frozen.
+
+const typed = (id: string, text: string) => JSON.stringify({ id, text });
+const forwards = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('typed-'));
+type Receipt = { acceptedId: string; snapshot: PublicSnapshot };
+/** Holds the next checkpoint write until released; `fail` makes it throw once released. */
+function holdCheckpoint(f: ReturnType<typeof fixture>, { fail = false } = {}) {
+  const gate = deferred();
+  const reached = deferred();
+  const original = f.store.save;
+  let held = false;
+  f.store.save = async patch => {
+    if (patch.checkpoint && !held) {
+      held = true;
+      reached.resolve();
+      await gate.promise;
+      if (fail) throw new Error('store outage');
+    }
+    await original(patch);
+  };
+  return { release: gate.resolve, reached: reached.promise };
+}
+const checkpointWrites = (f: ReturnType<typeof fixture>) => {
+  const writes: string[][] = [];
+  const original = f.store.save;
+  f.store.save = async patch => { if (patch.checkpoint) writes.push(patch.checkpoint.snapshot.transcript.map(entry => entry.id)); await original(patch); };
+  return writes;
+};
+
+test('a typed answer is checkpointed before its receipt, forwarded once, and frozen against later speech', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  const id = crypto.randomUUID();
+  const text = '  We cut the review queue from five days to one.  ';
+  const hold = holdCheckpoint(f);
+  f.at(4000);
+  let settled = false;
+  const sending = f.send(actor, 'submitText', typed(id, text)).then(result => { settled = true; return result; });
+  await hold.reached;
+  // Appended at once, on the speech timeline, but not yet acknowledged or delivered.
+  expect(actor.transcript().at(-1)).toEqual({ id: `typed-${id}`, speaker: 'participant', text, startMs: 4000, endMs: 4000 });
+  expect(settled).toBe(false);
+  expect(forwards(socket)).toHaveLength(0);
+  hold.release();
+  const accepted = await sending;
+  expect(accepted.status).toBe(200);
+  const receipt = accepted.body as Receipt;
+  expect(receipt.acceptedId).toBe(id);
+  expect(receipt.snapshot.transcript.at(-1)!.id).toBe(`typed-${id}`);
+  expect(f.record.checkpoint!.snapshot.transcript.at(-1)).toMatchObject({ id: `typed-${id}`, text });
+  expect(forwards(socket)).toEqual([{ type: 'session.thinking.append', event_id: `typed-${id}`, delegation_id: null, content: typedAnswerCue(text) }]);
+  expect(String(forwards(socket)[0]!.content)).toContain(text);
+  // Speech within two seconds starts a new passage rather than extending the typed one.
+  say(socket, 'input', 'e3', 'And it stuck.', 4500);
+  expect(actor.transcript().map(entry => [entry.id, entry.text])).toEqual([
+    ['p1', 'Hi, I’m Riley. What did you build?'], ['p2', 'A claims portal for the adjusters.'], [`typed-${id}`, text], ['p4', 'And it stuck.'],
+  ]);
+  await f.send(actor, 'end');
+  await f.background.settle();
+  expect(f.archive.rows.get(attempt.id)!.transcript.map(entry => entry.id)).toContain(`typed-${id}`);
+});
+
+test('a typed answer is validated, deduplicated by id, and refused unless the interview is live', async () => {
+  const f = fixture();
+  const actor = await f.restore();
+  await f.send(actor, 'start', start);
+  const id = crypto.randomUUID();
+  expect(await f.send(actor, 'submitText', typed(id, 'Too early.'))).toEqual({ status: 409, body: { error: 'The interview is not live.' } });
+  await f.send(actor, 'ready');
+  const socket = f.voice.sockets.get('provider-1')!;
+  expect(await f.send(actor, 'submitText', typed(id, '  \n '))).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
+  expect(await f.send(actor, 'submitText', typed('not-a-uuid', 'Hello.'))).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
+  expect(await f.send(actor, 'submitText', typed(id, 'x'.repeat(2001)))).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
+  expect((await f.send(actor, 'submitText', typed(id, 'A claims portal.'))).status).toBe(200);
+  const revision = actor.snapshot()!.revision;
+  const again = await f.send(actor, 'submitText', typed(id, 'A claims portal.'));
+  expect(again.status).toBe(200);
+  expect((again.body as Receipt).acceptedId).toBe(id);
+  expect(actor.transcript().filter(entry => entry.id === `typed-${id}`)).toHaveLength(1);
+  expect(actor.snapshot()!.revision).toBe(revision);
+  expect(forwards(socket)).toHaveLength(1);
+  expect(await f.send(actor, 'submitText', typed(id, 'Something else.'))).toEqual({ status: 409, body: { error: 'This answer was already sent with different text.' } });
+  await f.send(actor, 'pause');
+  await f.background.settle();
+  expect(actor.snapshot()!.status).toBe('paused');
+  expect(await f.send(actor, 'submitText', typed(crypto.randomUUID(), 'While paused.'))).toEqual({ status: 409, body: { error: 'The interview is not live.' } });
+  await f.send(actor, 'end');
+  expect(await f.send(actor, 'submitText', typed(crypto.randomUUID(), 'After the end.'))).toEqual({ status: 409, body: { error: 'The interview is not live.' } });
+  expect(actor.transcript().map(entry => entry.id)).toEqual([`typed-${id}`]);
+});
+
+test('concurrent sends of the same typed answer share one save and one delivery', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  const writes = checkpointWrites(f);
+  const id = crypto.randomUUID();
+  const [first, second] = await Promise.all([f.send(actor, 'submitText', typed(id, 'Five days to one.')), f.send(actor, 'submitText', typed(id, 'Five days to one.'))]);
+  expect(first).toEqual(second);
+  expect(first.status).toBe(200);
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toContain(`typed-${id}`);
+  expect(forwards(socket)).toHaveLength(1);
+  await f.send(actor, 'end');
+});
+
+test('a failed save is retryable with the same id, and the retry writes the checkpoint again', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  const hold = holdCheckpoint(f, { fail: true });
+  hold.release();
+  const id = crypto.randomUUID();
+  expect(await f.send(actor, 'submitText', typed(id, 'Five days to one.'))).toEqual({ status: 503, body: { error: 'Your answer could not be saved. Try again.' } });
+  expect(actor.transcript().at(-1)!.id).toBe(`typed-${id}`);
+  expect(f.record.checkpoint).toBeUndefined();
+  expect(forwards(socket)).toHaveLength(0);
+  const retried = await f.send(actor, 'submitText', typed(id, 'Five days to one.'));
+  expect(retried.status).toBe(200);
+  expect((retried.body as Receipt).acceptedId).toBe(id);
+  expect(f.record.checkpoint!.snapshot.transcript.map(entry => entry.id)).toContain(`typed-${id}`);
+  expect(actor.transcript().filter(entry => entry.id === `typed-${id}`)).toHaveLength(1);
+  // The interviewer hears the answer once it is finally saved, not only after a resume.
+  expect(forwards(socket)).toHaveLength(1);
+  expect(forwards(socket)[0]!.event_id).toBe(`typed-${id}`);
+  await f.send(actor, 'end');
+});
+
+test('a retry of a saved typed answer is acknowledged while paused and after the end', async () => {
+  const f = fixture();
+  const { actor } = await conversation(f);
+  const id = crypto.randomUUID();
+  expect((await f.send(actor, 'submitText', typed(id, 'Five days to one.'))).status).toBe(200);
+  await f.send(actor, 'pause');
+  await f.background.settle();
+  expect(actor.snapshot()!.status).toBe('paused');
+  const paused = await f.send(actor, 'submitText', typed(id, 'Five days to one.'));
+  expect(paused.status).toBe(200);
+  expect((paused.body as Receipt).acceptedId).toBe(id);
+  await f.send(actor, 'end');
+  const ended = await f.send(actor, 'submitText', typed(id, 'Five days to one.'));
+  expect(ended.status).toBe(200);
+  expect((ended.body as Receipt).snapshot.status).toBe('ended');
+  expect(actor.transcript().filter(entry => entry.id === `typed-${id}`)).toHaveLength(1);
+});
+
+test('a typed answer saved after its session paused is not forwarded; the resumed interviewer responds to it', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  const hold = holdCheckpoint(f);
+  const id = crypto.randomUUID();
+  f.at(4000);
+  const sending = f.send(actor, 'submitText', typed(id, 'Five days to one.'));
+  await hold.reached;
+  await f.send(actor, 'pause');
+  expect(actor.snapshot()!.status).toBe('paused');
+  hold.release();
+  expect((await sending).status).toBe(200);
+  await f.background.settle();
+  expect(forwards(socket)).toHaveLength(0);
+  expect(f.record.checkpoint!.snapshot.transcript.at(-1)!.id).toBe(`typed-${id}`);
+  expect((await f.send(actor, 'resume', JSON.stringify({ sdp: attempt.sdp }))).status).toBe(200);
+  await f.send(actor, 'ready');
+  const resumed = f.voice.sockets.get('provider-2')!;
+  expect(forwards(resumed)).toHaveLength(0);
+  expect(String(resumed.sent[0]!.content)).toContain('typed that last answer rather than speaking it');
+  expect(f.voice.created[1]!.instructions).toContain('The participant: Five days to one.');
+  await f.send(actor, 'end');
+});
+
+test('a provider rejection of a typed answer keeps it and pauses for a reconnect', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  const id = crypto.randomUUID();
+  expect((await f.send(actor, 'submitText', typed(id, 'Five days to one.'))).status).toBe(200);
+  socket.emit({ type: 'error', error: { client_event_id: `typed-${id}` } });
+  await f.background.settle();
+  const paused = body(await f.send(actor, 'poll', quietPoll));
+  expect(paused).toMatchObject({ status: 'paused', message: 'Your answer is saved. Reconnect to continue.', pause: { reason: 'provider' } });
+  expect(paused.transcript.at(-1)!.id).toBe(`typed-${id}`);
+  expect(f.record.checkpoint!.segments[0]!.typedErrors).toEqual([{ id: `typed-${id}`, at: EPOCH + 3000 }]);
+  await f.send(actor, 'end');
+});
+
+test('an end while a typed answer’s save is failing still ends the attempt and removes its checkpoint', async () => {
+  const f = fixture();
+  const { actor } = await conversation(f);
+  f.at(30_000);
+  await actor.wake();
+  expect(f.record.checkpoint).toBeDefined();
+  const hold = holdCheckpoint(f, { fail: true });
+  const id = crypto.randomUUID();
+  const sending = f.send(actor, 'submitText', typed(id, 'Five days to one.'));
+  await hold.reached;
+  const ending = f.send(actor, 'end');
+  hold.release();
+  expect((await sending).status).toBe(503);
+  expect(body(await ending).status).toBe('ended');
+  expect(f.record.checkpoint).toBeUndefined();
+  await f.background.settle();
+  expect(f.archive.rows.get(attempt.id)!.transcript.map(entry => entry.id)).toContain(`typed-${id}`);
+});
+
+const composing = (sequence: number, value?: boolean) => JSON.stringify({ sequence, active: true, audio: false, ...(value === undefined ? {} : { composing: value }) });
+
+test('composing cancels a pending silence judgment, and closing the draft starts a fresh four-second interval', async () => {
+  const first = deferred<ReturnType<typeof silenceResult>>();
+  let calls = 0;
+  const f = await stranded(async () => ++calls === 1 ? first.promise : silenceResult(.99));
+  try {
+    await f.send(f.actor, 'poll');
+    expect(calls).toBe(1);
+    await f.send(f.actor, 'poll', composing(1, true));
+    first.resolve(silenceResult(.99));
+    await f.background.settle();
+    expect(reminders(f.socket)).toHaveLength(0);
+    f.at(20_000);
+    await f.send(f.actor, 'poll');
+    await f.send(f.actor, 'poll', composing(2));
+    expect(calls).toBe(1);
+    // A stale report cannot close the draft.
+    await f.send(f.actor, 'poll', composing(2, false));
+    f.at(30_000);
+    await f.send(f.actor, 'poll');
+    expect(calls).toBe(1);
+    await f.send(f.actor, 'poll', composing(3, false));
+    f.at(33_999);
+    await f.send(f.actor, 'poll');
+    expect(calls).toBe(1);
+    f.at(34_000);
+    await f.send(f.actor, 'poll');
+    await f.background.settle();
+    expect(calls).toBe(2);
+    expect(reminders(f.socket)).toHaveLength(1);
+    await f.send(f.actor, 'end');
+    await f.background.settle();
+    expect(f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence).toMatchObject([{ outcome: 'aborted' }, { outcome: 'sent' }]);
+  } finally { first.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
+});
+
+test('an unnumbered poll cannot open a draft', async () => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return silenceResult(.97); });
+  try {
+    await f.send(f.actor, 'poll', JSON.stringify({ active: true, audio: false, composing: true }));
+    await f.background.settle();
+    expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(1);
+  } finally { await f.send(f.actor, 'end'); }
+});
+
+test('a ready carrying an open draft protects the session from its first moment live', async () => {
+  let calls = 0;
+  const f = fixture();
+  f.options.services!.evaluateSilence = async () => { calls++; return silenceResult(.97); };
+  const actor = await f.restore();
+  await f.send(actor, 'start', start);
+  expect((await f.send(actor, 'ready', JSON.stringify({ active: false }))).status).toBe(400);
+  expect(actor.snapshot()!.status).toBe('connecting');
+  expect(body(await f.send(actor, 'ready', composing(5, true))).status).toBe('live');
+  const socket = f.voice.sockets.get('provider-1')!;
+  try {
+    say(socket, 'output', 'e1', 'What did you build?', 0);
+    say(socket, 'input', 'e2', 'A claims portal.', 1500);
+    say(socket, 'output', 'e3', 'That sounds useful.', 3000);
+    f.at(20_000);
+    await f.send(actor, 'poll');
+    expect(calls).toBe(0);
+    await f.send(actor, 'poll', composing(6, false));
+    f.at(24_000);
+    await f.send(actor, 'poll');
+    await f.background.settle();
+    expect(calls).toBe(1);
+  } finally { await f.send(actor, 'end'); }
+});
+
+test('the resume cue treats a typed last answer as complete and keeps the cut-off wording for speech', () => {
+  const transcript = [
+    { id: 'p1', speaker: 'interviewer' as const, text: 'What did you build?', startMs: 0, endMs: 900 },
+    { id: 'typed-c49f7954-7aab-47f9-a269-752932556c37', speaker: 'participant' as const, text: 'A claims portal.', startMs: 1000, endMs: 1000 },
+  ];
+  const typedCue = resumeInstruction('Riley', transcript, 5000);
+  expect(typedCue).toContain('The participant typed that last answer rather than speaking it, and it is complete. Respond to it now, then listen.');
+  expect(typedCue).not.toContain('cut off');
+  const spoken = resumeInstruction('Riley', [transcript[0]!, { ...transcript[1]!, id: 'p2' }], 5000);
+  expect(spoken).toContain('may have been cut off');
+  expect(typedAnswerCue('A "quoted" answer.')).toBe('The participant typed this answer instead of speaking: "A "quoted" answer.". Respond to it now as if they had said it aloud.');
 });

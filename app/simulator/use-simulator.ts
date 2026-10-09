@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { LiveConnection, stableLink, type Attempt, type ConnectionSnapshot, type Link } from '../../interview-engine/client/liveConnection';
-import type { StartInput } from '../../interview-engine/shared/protocol';
+import type { StartInput, SubmitTextReply } from '../../interview-engine/shared/protocol';
 import { silentLevels } from '../../interview-engine/client/audioLevels';
 import { pollTarget, pollTransport } from '../../interview-engine/client/transport';
 import type { ReportActions } from './use-report';
@@ -161,11 +161,21 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
     connection.current?.dispose(); connection.current = null;
     setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels(silentLevels); setLink(stableLink);
   }
+  /** A nonempty typed draft pauses the microphone; without a connection there is nothing to protect. */
+  function setComposing(value: boolean) { connection.current?.setComposing(value); }
+  /** Sends one typed answer; a superseded attempt never reports it accepted. */
+  async function submitText(text: string): Promise<SubmitTextReply> {
+    const live = connection.current, attempt = generation.current;
+    if (!live) throw new Error('The interview is not live.');
+    const reply = await live.submitText(text);
+    if (generation.current !== attempt) throw new Error('The interview is not live.');
+    return reply;
+  }
   function toggleMute() { setMuted(value => { connection.current?.mute(!value); return !value; }); }
   // Locally lost media is paused before the server's state says so.
   const held = link.state === 'paused' || link.state === 'resuming';
   const shown: SimulatorPhase = held && phase === 'live' ? 'paused' : phase;
-  return { phase: shown, snapshot, error, muted, levels, link, end, reset, toggleMute,
+  return { phase: shown, snapshot, error, muted, levels, link, end, reset, toggleMute, setComposing, submitText,
     start: (scenarioId: string, clientId: string) => begin({ scenarioId, clientId }),
     resume: () => { void connection.current?.resume(); },
     keepActive: () => connection.current?.keepActive(), playAudio: () => { void connection.current?.playAudio().catch(() => setError('Audio playback is still blocked by the browser.')); } };

@@ -63,6 +63,27 @@ test('commands are validated, forwarded by attempt id, and control passes the ki
   expect(f.calls.every(request => request.headers.get('Authorization') === capability)).toBe(true);
 });
 
+test('a typed answer and a ready report are bounded, validated and forwarded with their bodies', async () => {
+  const f = fixture();
+  const answer = { id: '2f1e4a8c-7b9d-4c3e-8a1f-0d2b3c4e5f60', text: '  Five days to one.  ' };
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, text: '   ' }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, extra: true }), f.env))!.status).toBe(400);
+  // Escaped text within the character limit still fits the body bound; a larger body is refused before it is read.
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, text: '"'.repeat(2000) }), f.env))!.status).toBe(200);
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, padding: 'x'.repeat(17 * 1024) }), f.env))!.status).toBe(413);
+  const disabled = { ...f.env, SIMULATOR_ENABLED: 'false' };
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, answer), disabled))!.status).toBe(200);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`, { sequence: 3, active: false, audio: false, composing: true }), f.env))!.status).toBe(200);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`, { active: 'yes' }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`, { active: false, audio: false, padding: 'x'.repeat(400) }), f.env))!.status).toBe(413);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`), f.env))!.status).toBe(200);
+  expect(f.calls.map(request => new URL(request.url).pathname)).toEqual(['/submitText', '/submitText', '/ready', '/ready']);
+  expect(await f.calls[1]!.json() as unknown).toEqual(answer);
+  expect(await f.calls[2]!.json() as unknown).toEqual({ sequence: 3, active: false, audio: false, composing: true });
+  expect(await f.calls[3]!.text()).toBe('');
+  expect(f.calls.every(request => request.headers.get('Authorization') === capability)).toBe(true);
+});
+
 const passages = [
   { id: 'p1', speaker: 'interviewer', text: 'What did you deliver?', startMs: 0, endMs: 900 },
   { id: 'p2', speaker: 'participant', text: 'We shipped the permit intake portal.', startMs: 1000, endMs: 2500 },

@@ -10,6 +10,11 @@ export const RESUME_SEED_CHARACTERS = 40_000;
 const other = 'the participant';
 const capitalized = (text: string) => text[0]!.toUpperCase() + text.slice(1);
 
+/** A typed participant answer, forwarded to the live voice session once its checkpoint is saved. The text is bounded by the protocol. */
+export function typedAnswerCue(text: string): string {
+  return `The participant typed this answer instead of speaking: "${text}". Respond to it now as if they had said it aloud.`;
+}
+
 /** A resumed voice session starts empty; this rebuilds the interviewer's memory from the saved transcript. */
 export function conversationSoFar(interviewerName: string, transcript: Passage[]): string {
   const lines = transcript.filter(entry => entry.text.trim()).map(entry => `${entry.speaker === 'participant' ? capitalized(other) : `You (${interviewerName})`}: ${entry.text.trim()}`);
@@ -43,7 +48,9 @@ export function resumeInstruction(interviewerName: string, transcript: Passage[]
     own ? `The last thing you said was ${quote(own)}.` : '',
     theirs ? `The last thing ${other} said was ${quote(theirs)}.` : '',
     spoken.at(-1)?.speaker === 'participant'
-      ? `${capitalized(other)} was speaking when the call dropped and may have been cut off. Invite them to finish their thought, briefly echoing their last words, then listen.`
+      ? spoken.at(-1)!.id.startsWith('typed-')
+        ? `${capitalized(other)} typed that last answer rather than speaking it, and it is complete. Respond to it now, then listen.`
+        : `${capitalized(other)} was speaking when the call dropped and may have been cut off. Invite them to finish their thought, briefly echoing their last words, then listen.`
       : 'If your last question is still unanswered, ask it again briefly in fresh words; otherwise continue naturally from the last exchange. Then listen.',
     'Do not re-ask anything already answered in the conversation so far.',
   ].filter(Boolean).join(' ');

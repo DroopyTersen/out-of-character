@@ -4,8 +4,23 @@
     {
       "name": "api-design-preview",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["/private/tmp/claude-501/-Users-drew-code-out-of-character/21c0b970-d0d0-46be-9e07-1739fe7e7c94/scratchpad/serve.ts"],
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-drew-code-out-of-character/21c0b970-d0d0-46be-9e07-1739fe7e7c94/scratchpad/serve.ts"
+      ],
       "port": 4873
+    },
+    {
+      "name": "dev",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5199",
+        "--strictPort"
+      ],
+      "port": 5199
     }
   ]
 }

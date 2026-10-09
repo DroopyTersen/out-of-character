@@ -1,4 +1,5 @@
 import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../shared/network';
+import type { SubmitTextReply } from '../shared/protocol';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
 import { SPEECH_QUIET_MS } from '../shared/timing';
 import { readAudio, silentLevels, type AudioLevels } from './audioLevels';
@@ -40,6 +41,10 @@ const POLL_GRACE_MS = 10_000;
 const HEARTBEAT_MS = 5000;
 /** A pause younger than this reconnects by itself once, when the server answers again. */
 const AUTO_RESUME_MS = 60_000;
+/** A typed answer is retried under its one id for at most this long. */
+const SUBMIT_GIVE_UP_MS = 30_000;
+const SUBMIT_UNSENT = 'Your answer could not be sent. Check your connection and try again.';
+const NOT_LIVE = 'The interview is not live.';
 
 /** Browser media only. The server owns transcripts, judgments, actor context, and the paused hold. */
 export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
@@ -80,6 +85,8 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private networkCounters: NetworkCounters | undefined;
   private muted = false;
   private autoMuted = false;
+  /** The host has an unsent typed draft: the microphone is off and the server holds its silence nudges. */
+  private composing = false;
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
   private ending: Promise<void> | undefined;
 
@@ -90,7 +97,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   get attempt(): Attempt { return { id: this.id, capability: this.capability }; }
   private request(action: ProtocolAction, body?: unknown, { keepalive = false, signal = this.controller.signal }: { keepalive?: boolean; signal?: AbortSignal } = {}): Promise<unknown> {
-    const timeoutMs = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : 30_000;
+    const timeoutMs = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : action === 'submitText' ? 10_000 : 30_000;
     return this.transport.request(action, body, { attempt: this.attempt, timeoutMs, keepalive, signal });
   }
 
@@ -167,7 +174,8 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     await pc.setRemoteDescription({ type: 'answer', sdp: answer });
     await this.until(pc, 'connectionstatechange', () => pc.connectionState === 'connected', 15_000, 'The voice connection timed out.', segment.signal);
     if (stopped()) return false;
-    const ready = await this.request('ready') as S;
+    // The server applies the current activity, including an open draft, before going live.
+    const ready = await this.request('ready', this.activity(false)) as S;
     if (stopped()) return false;
     this.callbacks.snapshot(ready);
     return true;
@@ -228,7 +236,9 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     const now = Date.now();
     const fresh = now - this.meterUpdatedAt < 250;
     // Sam audible is quiet for 0 ms; null only when the playback can't be measured.
-    return { active, audio: now - this.lastAudioAt < 1500, sequence: ++this.activitySequence,
+    // Time-based, so a reloaded page never repeats a number the server already saw.
+    this.activitySequence = Math.max(this.activitySequence + 1, now);
+    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing,
       outputQuietMs: fresh && this.canMeasureOutput() ? Math.min(60_000, now - (this.outputQuietSince ?? now)) : null };
   }
 
@@ -397,7 +407,58 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   keepActive = () => { this.activeSincePoll = true; };
   mute(muted: boolean) { this.muted = muted; this.applyMute(); }
-  private applyMute() { this.stream?.getAudioTracks().forEach(track => { track.enabled = !this.muted && !this.autoMuted; }); }
+  private applyMute() { this.stream?.getAudioTracks().forEach(track => { track.enabled = !this.muted && !this.composing && !this.autoMuted; }); }
+
+  /** Whether polls run for the current media connection; otherwise the next `ready` carries the state. */
+  private polling() {
+    return this.reachedLive && !this.ending && !this.segment.signal.aborted && (this.link.state === 'stable' || this.link.state === 'reconnecting');
+  }
+
+  /** A nonempty typed draft mutes the microphone and tells the server at once; regular polls repeat it. */
+  setComposing(value: boolean) {
+    if (value === this.composing) return;
+    this.composing = value;
+    this.applyMute();
+    if (!this.polling()) return;
+    void this.request('poll', this.activity(this.activeSincePoll), { signal: this.segment.signal }).catch(() => {});
+  }
+
+  /**
+   * Sends one typed answer. Its id is minted here and retried unchanged while the server is unreachable or busy,
+   * so a lost reply never creates a second turn. Resolves once the server saved it.
+   */
+  async submitText(text: string): Promise<SubmitTextReply> {
+    const id = crypto.randomUUID();
+    const giveUpAt = Date.now() + SUBMIT_GIVE_UP_MS;
+    let delay = 1000;
+    for (;;) {
+      if (this.ending) throw new Error(NOT_LIVE);
+      try {
+        const reply = await this.request('submitText', { id, text }) as SubmitTextReply;
+        // Saved even if the attempt is closing; only a live page shows the snapshot.
+        if (!this.ending) this.callbacks.snapshot(reply.snapshot as unknown as S);
+        return reply;
+      } catch (error) {
+        if (this.ending) throw new Error(NOT_LIVE);
+        const retryable = error instanceof SessionUnanswered || (error instanceof SessionRequestError && error.status === 503);
+        if (!retryable) throw new Error(error instanceof SessionRequestError ? error.message : SUBMIT_UNSENT);
+        if (Date.now() + delay >= giveUpAt) throw new Error(SUBMIT_UNSENT);
+        await this.wait(delay);
+        delay = Math.min(delay * 2, 5000);
+      }
+    }
+  }
+
+  /** Waits, rejecting once the attempt closes. */
+  private wait(ms: number) {
+    const signal = this.controller.signal;
+    return new Promise<void>((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(new Error(NOT_LIVE)); };
+      const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, ms);
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+    });
+  }
   async playAudio() { await this.context?.resume(); await this.audio.play(); }
 
   private async fail(message: string) {
@@ -491,6 +552,8 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   }
 
   private silence() {
+    // The draft itself lives in the host; a closed attempt has nothing to protect.
+    this.composing = false;
     this.mute(true);
     this.controller.abort();
     this.segment.abort();

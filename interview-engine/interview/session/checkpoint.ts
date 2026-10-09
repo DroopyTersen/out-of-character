@@ -27,6 +27,8 @@ export type Segment = {
   network?: NetworkRecord[];
   /** Bounded silence judgments and any continuation reminders, never exposed in the public snapshot. */
   silence?: SilenceRecord[];
+  /** Typed answers the provider rejected on this connection; each one paused the attempt for a reconnect. */
+  typedErrors?: { id: string; at: number }[];
 };
 export type PauseRecord = { epoch: number; reason: SessionPause['reason']; pausedAt: number; resumedAt: number | null; endedAt: number | null };
 /** What a lost owner needs to finish the attempt. In-flight paid work is not kept. */

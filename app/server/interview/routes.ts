@@ -1,6 +1,6 @@
 import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
-import { activitySchema, CAPABILITY, narrativeRequestSchema, resumeSchema, startSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
+import { activitySchema, CAPABILITY, narrativeRequestSchema, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
 import { routeDebriefs, workerDebriefs, type DebriefGates } from './debriefs';
 import { BodyError, boundedJson } from '../http';
 import { liveAvailable, simulatorJson } from '../simulator/api';
@@ -92,7 +92,7 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
       if (!parsed.success) return simulatorJson({ error: 'Invalid transcript.' }, 400);
       return await gates.narrative(parsed.data, request.signal);
     }
-    const match = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume)$/);
+    const match = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume|submitText)$/);
     if (!match || !UUID.test(match[1]!)) return simulatorJson({ error: 'Unknown interview route.' }, 404);
     const [, id, action] = match as unknown as [string, string, string];
     if (action === 'report' && !gates.available()) return simulatorJson({ error: 'Final reviews are currently unavailable.' }, 503);
@@ -102,6 +102,17 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
       if (!activity.success) return simulatorJson({ error: 'Invalid activity report.' }, 400);
       body = JSON.stringify(activity.data);
     }
+    // A ready may carry the browser's current activity; one without a body still connects.
+    if (action === 'ready' && request.body) {
+      const activity = readySchema.safeParse(await boundedJson(request, 384));
+      if (!activity.success) return simulatorJson({ error: 'Invalid activity report.' }, 400);
+      if (activity.data) body = JSON.stringify(activity.data);
+    }
+    if (action === 'submitText') {
+      const answer = submitTextSchema.safeParse(await boundedJson(request, SUBMIT_TEXT_BODY_LIMIT));
+      if (!answer.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
+      body = JSON.stringify(answer.data);
+    }
     if (action === 'resume') {
       // Each resume creates a paid voice session; a flapping network must not loop creation.
       if (!gates.available()) return simulatorJson({ error: 'Live interviews is currently unavailable. End this attempt to keep what was captured.' }, 503);
@@ -110,7 +121,7 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
       if (!resume.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
       body = JSON.stringify(resume.data);
     }
-    // Poll, end and pause pass the kill switch so running attempts can still close.
+    // Poll, ready, end, pause and typed answers pass the kill switch so running attempts can continue and still close.
     return forward(id, action, body, action === 'report' ? request.signal : undefined);
   } catch (error) {
     return simulatorJson({ error: error instanceof BodyError ? error.message : 'The interview connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);

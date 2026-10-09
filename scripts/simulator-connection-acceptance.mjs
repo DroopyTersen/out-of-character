@@ -96,7 +96,9 @@ try {
       }
       if (action === 'poll') {
         const activity = route.request().postDataJSON();
-        if (typeof activity?.active !== 'boolean' || typeof activity?.audio !== 'boolean') return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Invalid activity report.' }) });
+        // Sequenced reports carry a clock-sized sequence and, optionally, whether a typed draft is open.
+        const extrasValid = (activity?.composing === undefined || typeof activity.composing === 'boolean') && (activity?.sequence === undefined || Number.isSafeInteger(activity.sequence));
+        if (typeof activity?.active !== 'boolean' || typeof activity?.audio !== 'boolean' || !extrasValid) return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Invalid activity report.' }) });
         activityPolls.push(activity);
       }
       const value = snapshot(id, automaticEnded ? 'ended' : automaticEnding ? 'ending' : 'live');

@@ -46,6 +46,12 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Silence check**: after four seconds without transcript growth from either side, the server's live timer asks Jev who should speak next. Microphone and playback levels do not gate this check. A strong continue judgment sends one conditional reminder; waiting, uncertainty, new transcript text or a changed session prevents it. Each unchanged exchange is checked once, with no retry and at most 120 checks per attempt. Decisions, receipts and the next observed speech stay in the private connection archive. Interview feedback is judged separately from new project facts in the producer's existing Jev request, so a new preference can wake Sol without another call.
 
+**Typed answer**: a participant answer sent as text with `submitText` instead of spoken. It is participant evidence like speech and reaches the transcript, coverage, resume context, archive and narrative. The browser mints its id and retries with the same id until the server replies; the server acknowledges it only after a checkpoint holding it is saved, then forwards it once to the voice session.
+
+**Typed passage**: the transcript passage a typed answer becomes, with id `typed-<id>` and the participant speaker. It is frozen when appended, so later speech starts a new passage. Its provider event uses the same `typed-` id, which is how a provider rejection of it is recognized.
+
+**Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled and the silence check does not run; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
+
 **Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
 
 **Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior.

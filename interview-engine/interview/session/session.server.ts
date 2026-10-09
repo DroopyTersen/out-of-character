@@ -2,7 +2,7 @@ import type { EngineEvent } from '../../providers/diagnostics.server';
 import { callFailure } from '../../providers/diagnostics.server';
 import { LiveSessionGone, transcriptEvent } from '../../providers/gptLive.server';
 import type { Providers, WebSocketLike } from '../../providers/providers.server';
-import { activitySchema, CAPABILITY, resumeSchema, startSchema } from '../../shared/protocol';
+import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, submitTextSchema, type Activity, type SubmitTextInput, type SubmitTextReply } from '../../shared/protocol';
 import { NETWORK_SAMPLES } from '../../shared/network';
 import type { InterviewEvaluation, SessionPause, SessionWarning } from '../../shared/snapshot';
 import type { InterviewLimits } from '../../shared/spec';
@@ -22,7 +22,7 @@ import { FencedError, type Archive, type Background, type InterviewArchiveRow, t
 import { interviewerBrief, interviewOpening } from '../voice/brief.server';
 import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, PublicSnapshot, Segment, SessionSnapshot } from './checkpoint';
 import { appendTranscript, settledTranscript } from './transcript';
-import { conversationSoFar, NO_EXTERNAL_TASK, resumeInstruction } from './voice.prompt';
+import { conversationSoFar, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue } from './voice.prompt';
 import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 
 /** Canonical participant readings and topic coverage. */
@@ -162,6 +162,14 @@ export class SessionActor {
   private digests: Promise<[string, string]> | undefined;
   private wakeAt: number | null = null;
   private fenced = false;
+  /** The browser holds a typed draft: silence nudges wait. Reported by sequenced activity; never stored. */
+  private composing = false;
+  /** Typed answers whose required checkpoint is still being written, by passage id; a retry shares the operation. */
+  private typedPending = new Map<string, Promise<Reply>>();
+  /** Typed turns the current provider session has not heard; a resume rebuilds them from the transcript instead. */
+  private typedUnforwarded = new Set<string>();
+  /** Every checkpoint write and deletion, in issue order. Each link builds its checkpoint when it runs. */
+  private storage: Promise<void> = Promise.resolve();
 
   private constructor(options: SessionOptions) {
     this.spec = resolveInterview(options.plan, options.config, options.context);
@@ -228,21 +236,23 @@ export class SessionActor {
       return reply({ error: 'This interview session was interrupted. Start a new attempt.' }, 410);
     }
     if (action === 'report') return { status: 200, body: null, report: true };
+    // A terminal snapshot is not an acceptance receipt.
+    // A retry of a turn already in the transcript is still acknowledged after the end; a new one is not.
+    if (action === 'submitText' && (this.state.status === 'ended' || this.state.status === 'interrupted')) return this.submitText(body);
     // Terminal reads must not refresh a lease, heartbeat, or live state.
     if (this.state.status === 'ended' || this.state.status === 'interrupted') return { status: 200, body: this.publicSnapshot(), terminal: true };
     this.lastSeen = this.now();
+    if (action === 'submitText') return this.submitText(body);
     if (action === 'poll' && body) {
       const parsed = activitySchema.safeParse(parse(body));
       if (!parsed.success) return reply({ error: INVALID }, 400);
-      const activity = parsed.data;
-      if (activity.sequence == null || activity.sequence > this.activitySequence) {
-        const now = this.now();
-        if (activity.sequence != null) this.activitySequence = activity.sequence;
-        if (activity.active || activity.audio) this.lastActivity = now;
-        if (activity.audio) this.lastAudio = now;
-        const segment = this.segment;
-        if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: now, ...activity.network });
-      }
+      this.applyActivity(parsed.data, this.now());
+    }
+    // The browser's current activity rides on ready, so a draft opened while reconnecting protects the resumed session.
+    if (action === 'ready' && body) {
+      const parsed = readySchema.safeParse(parse(body));
+      if (!parsed.success) return reply({ error: INVALID }, 400);
+      if (parsed.data) this.applyActivity(parsed.data, this.now());
     }
     // A best-effort report from a browser that lost its media; the server never depends on it.
     if (action === 'pause') this.background.track(this.pause('browser'));
@@ -262,6 +272,84 @@ export class SessionActor {
     this.checkLifetime();
     if (action === 'poll' && this.state.status === 'live') this.checkSilence(this.now());
     return reply(this.publicSnapshot());
+  }
+
+  /** A poll's or ready's activity report. A stale sequenced report is dropped; only sequenced reports change composing. */
+  private applyActivity(activity: Activity, now: number) {
+    if (activity.sequence != null && activity.sequence <= this.activitySequence) return;
+    if (activity.sequence != null) this.activitySequence = activity.sequence;
+    if (activity.active || activity.audio) this.lastActivity = now;
+    if (activity.audio) this.lastAudio = now;
+    const segment = this.segment;
+    if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: now, ...activity.network });
+    if (activity.sequence != null && activity.composing !== undefined) this.setComposing(activity.composing, now);
+  }
+
+  /** Opening a draft cancels a pending silence judgment; closing it starts a fresh four-second interval. */
+  private setComposing(value: boolean, now: number) {
+    if (value === this.composing) return;
+    this.composing = value;
+    if (value) {
+      // A judgment aborted by typing may be reconsidered; a completed one keeps its once-per-exchange bound.
+      if (this.silenceCheck) this.silenceCheckedRevision = -1;
+      this.silenceAbort?.abort();
+    } else this.lastSpeech = now;
+  }
+
+  /**
+   * One typed participant answer. Validation, deduplication and the append happen before the first await; the reply
+   * waits for a checkpoint holding the turn, and the answer is then forwarded once to the same provider session.
+   */
+  private submitText(body: string | undefined): Promise<Reply> | Reply {
+    const parsed = submitTextSchema.safeParse(parse(body));
+    if (!parsed.success) return reply({ error: INVALID }, 400);
+    const input = parsed.data;
+    const snapshot = this.state!;
+    const id = `typed-${input.id}`;
+    const existing = snapshot.transcript.find(entry => entry.id === id);
+    if (existing) {
+      if (existing.text !== input.text) return reply({ error: 'This answer was already sent with different text.' }, 409);
+      // A retry never trusts memory: the required save runs again unless it is still in flight.
+      const pending = this.typedPending.get(id);
+      if (pending) return pending;
+      if (this.fenced) return reply({ error: 'The interview is not live.' }, 409);
+      // After the end the turn is in the transcript, the final archive and the grade record; there is no checkpoint to save.
+      if (snapshot.status === 'ending' || snapshot.status === 'ended' || snapshot.status === 'interrupted') return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
+      return this.acceptTyped(input);
+    }
+    if (this.fenced || snapshot.status !== 'live') return reply({ error: 'The interview is not live.' }, 409);
+    if (snapshot.transcript.length + 1 > TRANSCRIPT_LIMIT.entries || transcriptCharacters(snapshot.transcript) + input.text.length > TRANSCRIPT_LIMIT.characters) {
+      return reply({ error: 'The transcript is full.' }, 409);
+    }
+    const now = this.now();
+    const segment = this.segment!;
+    // A point on the speech timeline, never before anything already said.
+    const at = Math.max(snapshot.transcript.reduce((max, entry) => Math.max(max, entry.endMs), 0), segment.offsetMs + (now - segment.startedAt));
+    const passage: Passage = { id, speaker: 'participant', text: input.text, startMs: at, endMs: at };
+    const next = [...snapshot.transcript, passage];
+    // Frozen: later speech starts a new passage instead of extending the typed one.
+    this.judgedPassages.add(id);
+    this.typedUnforwarded.add(id);
+    this.committed(next, passage, now);
+    const pending = this.acceptTyped(input).finally(() => this.typedPending.delete(id));
+    this.typedPending.set(id, pending);
+    return pending;
+  }
+
+  /** Acknowledges a typed answer once a checkpoint holding it is saved, forwarding it to the live provider session once. */
+  private async acceptTyped(input: SubmitTextInput): Promise<Reply> {
+    try { await this.requiredCheckpoint(); }
+    catch (error) {
+      if (error instanceof FencedError) throw error;
+      return reply({ error: 'Your answer could not be saved. Try again.' }, 503);
+    }
+    // A session that is not live learns the answer from the resume context instead. A failed send is rebuilt the same way.
+    const id = `typed-${input.id}`;
+    if (this.typedUnforwarded.has(id) && this.state?.status === 'live' && this.segment && !this.fenced) {
+      this.typedUnforwarded.delete(id);
+      this.send({ type: 'session.thinking.append', event_id: id, delegation_id: null, content: typedAnswerCue(input.text) });
+    }
+    return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
   }
 
   /** What the browser sees, or null before the attempt has started here. */
@@ -332,11 +420,35 @@ export class SessionActor {
   private async clearStore() {
     if (this.fenced) throw new FencedError();
     this.wakeAt = null;
-    try { await this.store.clear(); }
-    catch (error) {
-      if (error instanceof FencedError) this.fence();
-      throw error;
-    }
+    // Ordered behind any checkpoint write still in flight, so a late write cannot restore what this removes.
+    await this.ordered(async () => {
+      if (this.fenced) throw new FencedError();
+      try { await this.store.clear(); }
+      catch (error) {
+        if (error instanceof FencedError) this.fence();
+        throw error;
+      }
+    });
+  }
+
+  /** Runs a checkpoint write or deletion after every earlier one. Its failure is the caller's; the chain continues. */
+  private ordered(write: () => Promise<void>): Promise<void> {
+    const link = this.storage.then(write);
+    this.storage = link.catch(() => {});
+    return link;
+  }
+
+  /** Saves a checkpoint built when its turn in the chain comes, and propagates any failure. */
+  private requiredCheckpoint(): Promise<void> {
+    return this.ordered(async () => {
+      const snapshot = this.state!;
+      const checkpoint: Checkpoint = structuredClone({
+        definition: this.definition, savedAt: this.now(), snapshot: { ...snapshot, interview: this.interview }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
+        segments: this.segments, pauses: this.pauses, grades: this.grades, gradeCalls: this.gradeCalls,
+        ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
+      });
+      await this.save({ checkpoint });
+    });
   }
 
   /** A newer owner holds the attempt: drop the voice socket, stop the clock and paid work, and write nothing more. */
@@ -498,20 +610,7 @@ export class SessionActor {
       if (next.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(next) > TRANSCRIPT_LIMIT.characters) return;
       const changed = next.find(entry => !snapshot.transcript.includes(entry));
       if (!changed) return;
-      const now = this.now();
-      this.passageUpdatedAt.set(changed.id, now);
-      this.lastActivity = this.lastSpeech = now;
-      this.silenceAbort?.abort();
-      const reminder = segment.silence?.findLast(item => item.outcome === 'sent' && !item.nextSpeech);
-      if (reminder) reminder.nextSpeech = { at: now, passageId: changed.id, speaker: changed.speaker };
-      if (delta.type !== 'session.input_transcript.delta' && segment.greeting && segment.greeting.repliedAt == null) {
-        segment.greeting.repliedAt = now;
-        if (snapshot.message === UNRESPONSIVE) snapshot.message = null;
-      }
-      snapshot.transcript = next;
-      snapshot.revision++;
-      this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null, now);
-      if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries * .9 || transcriptCharacters(snapshot.transcript) >= TRANSCRIPT_LIMIT.characters * .9) this.capacityDeadline ??= now + 30_000;
+      this.committed(next, changed, this.now());
       return;
     }
     if (snapshot.status === 'ending' || snapshot.status === 'paused') return;
@@ -534,6 +633,13 @@ export class SessionActor {
     }
     if (event.type === 'error') {
       const error = event.error as { client_event_id?: unknown } | undefined;
+      // A typed answer is already saved; a rejected delivery is recovered by reconnecting with it in the resume context.
+      if (typeof error?.client_event_id === 'string' && error.client_event_id.startsWith('typed-')) {
+        (segment.typedErrors ??= []).push({ id: error.client_event_id, at: this.now() });
+        snapshot.message = 'Your answer is saved. Reconnect to continue.';
+        this.background.track(this.pause('provider'));
+        return;
+      }
       const reminder = segment.silence?.find(item => item.id === error?.client_event_id);
       if (reminder) { reminder.outcome = 'rejected'; return; }
       // A declined optional note need not interrupt an otherwise-working interview.
@@ -543,6 +649,24 @@ export class SessionActor {
       }
       snapshot.message = 'The voice service reported a problem. You can end this attempt and try again.';
     }
+  }
+
+  /** Speech and typed answers alike: the transcript grew by `changed` on the current segment. */
+  private committed(next: Passage[], changed: Passage, now: number) {
+    const snapshot = this.state!, segment = this.segment!;
+    this.passageUpdatedAt.set(changed.id, now);
+    this.lastActivity = this.lastSpeech = now;
+    this.silenceAbort?.abort();
+    const reminder = segment.silence?.findLast(item => item.outcome === 'sent' && !item.nextSpeech);
+    if (reminder) reminder.nextSpeech = { at: now, passageId: changed.id, speaker: changed.speaker };
+    if (changed.speaker === 'interviewer' && segment.greeting && segment.greeting.repliedAt == null) {
+      segment.greeting.repliedAt = now;
+      if (snapshot.message === UNRESPONSIVE) snapshot.message = null;
+    }
+    snapshot.transcript = next;
+    snapshot.revision++;
+    this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null, now);
+    if (snapshot.transcript.length >= TRANSCRIPT_LIMIT.entries * .9 || transcriptCharacters(snapshot.transcript) >= TRANSCRIPT_LIMIT.characters * .9) this.capacityDeadline ??= now + 30_000;
   }
 
   private tick() {
@@ -568,7 +692,7 @@ export class SessionActor {
   /** Transcript inactivity triggers the check; Jev decides whose turn it is. Audio levels are irrelevant. */
   private checkSilence(now: number) {
     const snapshot = this.state!, segment = this.segment;
-    if (snapshot.status !== 'live' || this.silenceCheck || segment?.greeting?.repliedAt == null || this.silenceCheckedRevision === snapshot.revision || now - this.lastSpeech < SILENCE_MS) return;
+    if (snapshot.status !== 'live' || this.composing || this.silenceCheck || segment?.greeting?.repliedAt == null || this.silenceCheckedRevision === snapshot.revision || now - this.lastSpeech < SILENCE_MS) return;
     if (!snapshot.transcript.some(entry => entry.speaker === 'participant') || this.segments.reduce((n, item) => n + (item.silence?.length ?? 0), 0) >= MAX_SILENCE_CHECKS) return;
     const transcript = snapshot.transcript.slice(-8);
     const record: SilenceRecord = { id: `silence-${crypto.randomUUID()}`, version: SILENCE_VERSION, revision: snapshot.revision,
@@ -586,7 +710,7 @@ export class SessionActor {
       const result = await this.paid.evaluateSilence({ transcript, judge: this.providers.judge.model, signal });
       Object.assign(record, result);
       signal.throwIfAborted();
-      if (this.fenced || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision) record.outcome = 'stale';
+      if (this.fenced || this.composing || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision) record.outcome = 'stale';
       else if (result.probability < this.providers.judge.thresholds.silenceContinue) record.outcome = 'wait';
       else {
         record.outcome = 'sent';
@@ -794,6 +918,8 @@ export class SessionActor {
     snapshot.status = 'live';
     snapshot.pause = null;
     snapshot.warning = null;
+    // The rebuilt conversation already holds every typed turn.
+    this.typedUnforwarded.clear();
     snapshot.message = null;
     this.connectingSince = undefined;
     this.lastActivity = this.lastAudio = now;
@@ -920,7 +1046,8 @@ export class SessionActor {
     if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
     this.lease!.closed = !outstanding.length;
     await this.persistLease(outstanding);
-    await this.save({ checkpoint: null });
+    // Behind any typed answer's write, whether or not it succeeded.
+    await this.ordered(() => this.save({ checkpoint: null }));
     await this.setWake(this.now() + (this.lease!.closed ? 300_000 : 15_000));
     if (this.reachedLive) {
       this.interview!.summary = { status: snapshot.transcript.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
@@ -932,12 +1059,7 @@ export class SessionActor {
   private async saveCheckpoint() {
     const snapshot = this.state;
     if (!snapshot || !this.reachedLive || this.finishing) return;
-    const checkpoint: Checkpoint = structuredClone({
-      definition: this.definition, savedAt: this.now(), snapshot: { ...snapshot, interview: this.interview }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
-      segments: this.segments, pauses: this.pauses, grades: this.grades, gradeCalls: this.gradeCalls,
-      ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
-    });
-    try { await this.save({ checkpoint }); }
+    try { await this.requiredCheckpoint(); }
     catch (error) {
       if (error instanceof FencedError) throw error;
       this.report({ type: 'session', event: 'checkpoint.failed', id: snapshot.id });

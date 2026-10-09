@@ -241,3 +241,31 @@
   .interview-controls { gap: 10px; }
   .interview-readings h2 { font-size: 16px; }
 }
+.interview-composer { margin-top: 18px; padding: 14px 16px 10px; border: 1px solid #285269; border-radius: 4px; background: #0a2533; }
+.interview-composer textarea { display: block; width: 100%; min-height: 72px; resize: vertical; padding: 10px 12px; border: 1px solid #285269; border-radius: 3px; background: #061e2a; color: #eaf4fc; font: inherit; font-size: 15px; line-height: 1.5; }
+.interview-composer textarea::placeholder { color: #7ca4ba; }
+.interview-composer textarea:focus-visible { outline: 2px solid #44efcd; outline-offset: 1px; border-color: #44efcd; }
+.interview-composer textarea:disabled { opacity: .6; }
+.interview-composer-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.interview-composer-status { flex: 1; min-width: 0; margin: 0; color: #f4b25d; font-size: 13px; line-height: 1.4; }
+.interview-composer-status[data-error] { color: #ffc0c2; }
+.interview-composer-row button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 14px; border-radius: 4px; font-size: 14px; }
+.interview-composer-row .quiet-button { color: #a4c8dd; }
+.interview-composer-send { border: 1px solid #44efcd; background: transparent; color: #44efcd; }
+.interview-composer-row button:disabled { opacity: .45; }
+.interview-composer.compact { padding: 10px 12px 6px; }
+.interview-composer.compact textarea { min-height: 56px; }
+@media (max-width: 800px) {
+  /* The composer sits with the transcript: after it when open, otherwise directly under Sam. */
+  .interview-primary { display: flex; flex-direction: column; }
+  .interview-primary > .interview-live-transcript { order: 1; }
+  .interview-primary > .interview-composer { order: 2; }
+  .interview-primary > .interview-background { order: 3; }
+}
+@media (max-width: 560px) {
+  .interview-composer { margin-top: 12px; padding: 10px 12px 6px; }
+  .interview-composer textarea { font-size: 16px; }
+  .interview-composer-row { flex-wrap: wrap; gap: 4px 8px; }
+  .interview-composer-status { flex-basis: 100%; }
+  .interview-composer-row .quiet-button { margin-left: auto; }
+}

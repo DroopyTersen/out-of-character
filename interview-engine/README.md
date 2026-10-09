@@ -22,6 +22,10 @@ Sol alone edits the map. The first call needs participant speech. New informatio
 
 Sam receives a short thread note only when the lead or its wording changes, or a named alternative becomes unavailable. Map notes go when their content changes. Both use `session.thinking.append`; they are optional context, not instructions to speak. They are sent immediately, without another delivery timer. This intentionally changes production v22's held-note behavior; unit tests and archived replay cannot establish live interruption quality.
 
+A participant may type an answer instead of speaking. After its required save, the actor forwards it once to the same voice session as `session.thinking.append`, with `event_id: typed-<id>`, `delegation_id: null`, and content from `typedAnswerCue` in `interview/session/voice.prompt.ts`. Unlike a note, it asks Sam to respond. If the voice session changed or paused before the save completed, the answer reaches Sam through the resume context instead. The passage is frozen, so later speech starts a new passage rather than extending it. A provider `error` naming a `typed-` event pauses the attempt through the ordinary provider pause, with the message “Your answer is saved. Reconnect to continue.” When the last participant passage is typed, the resume instruction tells Sam it is a completed answer, not speech that may have been cut off.
+
+`composing` is set only by sequenced poll and `ready` reports. The browser keeps its microphone track disabled while composing (`track.enabled = !muted && !composing && !autoMuted`), so clearing or sending restores the participant's own mute choice. While the actor holds `composing`, the silence check does not run, and entering composition aborts a check already in flight. Leaving composition starts a fresh four-second silence interval. Idle and duration limits, coverage, producer work and Sam's own replies continue; an utterance already underway is not cancelled.
+
 A shared 400-call cap includes failed and interrupted producer calls. Sol, Jev and research deadlines are 50 seconds, 3 seconds and 90 seconds. Research is limited to three calls; ordinary notes to 100. A replacement voice session can receive its existing context beyond the ordinary note cap. Checkpoints retain the map, append-only input log, audit records and transcript cursor; transient ranking is re-read after a restart. Historical trait records remain readable for archived interviews.
 
 ## Layout and import rules
@@ -183,9 +187,10 @@ The voice model composes the opening from that same accepted title, goals, guida
 The browser and the session exchange these actions (`shared/protocol.ts`):
 
 ```ts
-export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume'] as const;
+export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume', 'submitText'] as const;
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;   // the bearer secret returned by start
-// startSchema { id, planId, voiceId, sdp }, resumeSchema { sdp }, activitySchema (the ready/poll body)
+// startSchema { id, planId, voiceId, sdp }, resumeSchema { sdp }, activitySchema (the poll body; readySchema: optional, the ready body)
+// submitTextSchema { id, text }, TYPED_TEXT_LIMIT = 2000, SUBMIT_TEXT_BODY_LIMIT = 16 KiB, SubmitTextReply { acceptedId, snapshot }
 ```
 
 On the server, a host turns each request into a `Command` and returns the `Reply`:
@@ -200,13 +205,36 @@ type Reply = { status: number; body: unknown; terminal?: true; report?: true };
 On the client, `LiveConnection` (`client/liveConnection.ts`) sends its requests through a `ProtocolTransport`:
 
 ```ts
-export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end';
+export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end' | 'submitText';
 export type RequestOptions = { attempt: Attempt; timeoutMs: number; keepalive?: boolean; signal?: AbortSignal };   // Attempt = { id, capability }
 export type ProtocolTransport = { request(action: ProtocolAction, body: unknown, options: RequestOptions): Promise<unknown> };
 
 export function pollTransport(baseUrl: string): ProtocolTransport;   // HTTP POSTs to <baseUrl>/<action>
 export function socketTransport(baseUrl: string): ProtocolTransport; // one WebSocket per attempt at <baseUrl>/<id>/socket
 ```
+
+A poll carries an activity report. A sequenced report (one with a `sequence`) may also carry `composing`, whether the browser holds an unsent typed draft; the draft itself never travels. `ready` may carry the browser's current activity report, which the actor applies before the attempt goes live, so a composer opened during a reconnect is still protected. Only sequenced reports change `composing`, and a report whose sequence is not greater than the last one seen is dropped. The client numbers reports `Math.max(previous + 1, Date.now())`, so a reloaded page never repeats a number the server has already seen.
+
+`submitText` sends one typed participant answer. The body is `{ id, text }`: `id` is a UUID, and `text` is nonblank and at most `TYPED_TEXT_LIMIT` (2,000) characters. The text is kept exactly as typed; it is trimmed only to reject a blank answer. The host bounds the request body at `SUBMIT_TEXT_BODY_LIMIT` (16 KiB, including JSON escaping). The replies are:
+
+| Status | When |
+| --- | --- |
+| 200 | `{ acceptedId, snapshot }`, after a checkpoint holding the answer has been saved |
+| 400 | The body is not a valid `{ id, text }` |
+| 409 | The interview is not live (“The interview is not live.”), the transcript is full, or the id was already sent with different text |
+| 413 | The body is larger than `SUBMIT_TEXT_BODY_LIMIT` |
+| 503 | The required save failed (“Your answer could not be saved. Try again.”) |
+
+The actor appends the answer as an immutable participant passage with id `typed-<id>`, then waits for a checkpoint holding it before it replies. A 200 means the answer was saved, not that the interviewer has spoken. A retry with the same id and text returns the same receipt without adding or forwarding the answer twice; a retry whose earlier save failed runs the save again. New answers are accepted only while the attempt is live, and a generic snapshot is never a receipt.
+
+`LiveConnection` exposes the two calls a host's composer needs:
+
+```ts
+connection.setComposing(value: boolean): void;            // a nonempty draft: mutes the microphone and reports at once
+connection.submitText(text: string): Promise<SubmitTextReply>; // resolves once the answer is saved
+```
+
+`submitText` mints the id and retries the same id while the server is unanswered or replies 503, backing off for up to 30 seconds. Other failures reject with the server's message. The host keeps the draft until the promise resolves and clears it only then. A host forwards the command as it forwards the others: bound the body at `SUBMIT_TEXT_BODY_LIMIT` and pass it to `actor.handle`, which parses it with `submitTextSchema`.
 
 Two transports exist. The browser uses `pollTransport`. `socketTransport` (`client/socketTransport.ts`) is opt-in: a host enables it with `INTERVIEW_SOCKET_ENABLED=true`. It sends the same requests over one WebSocket per attempt and correlates each reply by id. When the socket closes, whatever was waiting fails with `SessionUnanswered`, and the next request reconnects for the same attempt. Keepalive requests still go over HTTP. The errors are the poll transport's.
 

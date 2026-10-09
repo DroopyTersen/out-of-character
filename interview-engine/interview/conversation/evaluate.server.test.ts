@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test';
 import type { Experimental_EvaluationModel, Experimental_EvaluationQuestion } from 'ai';
+import { createJevJudge } from '../../providers/judge.server';
+import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
+import { foundryProviders } from '../../providers/providers.server';
+import { testFoundry } from '../../providers/testFoundry.server';
 import type { Passage } from '../../shared/transcript';
 import { dialogueState, evaluateInterview, readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
 import { interviewQuestions, type JudgedSpec } from './rubric.prompt';
@@ -63,17 +67,55 @@ test('Jev sees participant and the spec’s interviewer, and the grade runs on t
   expect(dialogueState(passages).dialogue.map(row => row[1])).toEqual(['interviewer', 'participant', 'interviewer', 'participant']);
   expect(dialogueState(passages, 'sam').dialogue.map(row => row[1])).toEqual(['sam', 'participant', 'sam', 'participant']);
   const calls: unknown[] = [];
-  const judge: Experimental_EvaluationModel = {
+  const model: Experimental_EvaluationModel = {
     specificationVersion: 'v4', provider: 'test', modelId: 'jev-test', supportedQuestionTypes: ['choice', 'score', 'boolean'],
     async doEvaluate(options) {
       calls.push(options.state);
       return { answers: answersFor(options.questions as Record<string, Experimental_EvaluationQuestion>), warnings: [], response: { modelId: 'jev-test' } };
     },
   };
+  const judge = { model, thresholds: { silenceContinue: .85, coverageExplored: .85 } };
   const result = await evaluateInterview({ spec, passages, revision: 4 }, { judge });
   expect(calls).toEqual([dialogueState(passages, 'riley')]);
   expect(result).toMatchObject({ revision: 4, model: 'jev-test', readings: { specificity: { value: null } } });
   expect(result.objectives.every(item => item.level === 'not-yet')).toBe(true);
   await expect(evaluateInterview({ spec, passages: [], revision: 1 }, judge)).rejects.toThrow('Transcript is outside the interview limit.');
   await expect(evaluateInterview({ spec, passages: [passages[1]!, passages[1]!], revision: 1 }, judge)).rejects.toThrow('Transcript passage IDs must be unique.');
+});
+
+test('host-selected judges apply their coverage calibration without changing raw probabilities or evidence rules', async () => {
+  // Only paid HTTP is replaced; both provider adapters, the SDK and the grade reader run normally.
+  const answers = answersFor(interviewQuestions(spec, passages));
+  answers['reading:specificity'] = { type: 'score', score: 2, probabilities: { 0: 0, 1: 0, 2: 1, 3: 0, 4: 0 } };
+  answers['reading:specificity:evidence'] = { type: 'choice', choice: 'none', probabilities: { none: 1, p2: 0, p4: 0 } };
+  answers['objective:scope'] = { type: 'choice', choice: 'explored', probabilities: { 'not-yet': 0, touched: .25, explored: .75, 'set-aside': 0 } };
+  answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2', probabilities: { none: 0, p2: 1, p4: 0 } };
+  answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { 'not-yet': 0, touched: .1, explored: .9, 'set-aside': 0 } };
+  answers['objective:role:evidence'] = { type: 'choice', choice: 'p4', probabilities: { none: 0, p2: 0, p4: 1 } };
+  const request: Fetch = async url => {
+    if (String(url).includes('typesafe.ai')) return Response.json({ model: 'jev-1.13.0', answers: {
+      ...answers, 'reading:specificity:observable': { type: 'noul', noul: .02 },
+    } });
+    return Response.json({ model: 'gpt-6-luna', usage: { input_tokens: 100, output_tokens: 0 }, answers: [
+      { name: 'reading:specificity:observable', type: 'predicate', probability: .02 },
+      { name: 'reading:specificity', type: 'score', score: 2, confidence: 1,
+        probabilities: criteria.map((label, value) => ({ label: String(value), value, probability: value === 2 ? 1 : 0 })) },
+      ...Object.entries(answers).filter(([, answer]) => answer.type === 'choice').map(([name, answer]) => {
+        if (answer.type !== 'choice') throw new Error('Expected choice');
+        const options = name.endsWith(':evidence') ? ['none', 'p2', 'p4'] : ['not-yet', 'touched', 'explored', 'set-aside'];
+        return { name, type: 'choice', choice: answer.choice, confidence: 1,
+          probabilities: options.map(value => ({ value, probability: answer.probabilities?.[value] ?? (answer.choice === value ? 1 : 0) })) };
+      }),
+    ] });
+  };
+  const jev = createJevJudge({ apiKey: 'fixture', fetch: request as typeof fetch });
+  const decisions = createDecisionJudge({ apiKey: 'fixture', fetch: request });
+  for (const [judge, expected] of [[jev, 'touched'], [decisions, 'explored']] as const) {
+    const providers = foundryProviders({ ...testFoundry, judge });
+    const result = await evaluateInterview({ spec, passages, revision: 1 }, providers);
+    expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([
+      ['scope', expected, 'p2'], ['role', 'not-yet', null],
+    ]);
+    expect(result.answers['objective:scope']).toMatchObject({ probabilities: { explored: .75 } });
+  }
 });

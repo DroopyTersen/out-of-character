@@ -234,7 +234,7 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.turnTimeout)]);
     try {
-      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, judge: this.options.providers.judge, signal, atMs: this.elapsed(now) });
+      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, judge: this.options.providers.judge.model, signal, atMs: this.elapsed(now) });
       if (scope.aborted) return;
       signal.throwIfAborted();
       if (Date.now() - record.startedAt >= LIMITS.turnTimeout) { record.outcome = 'timeout'; return; }

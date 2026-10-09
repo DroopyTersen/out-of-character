@@ -1,8 +1,8 @@
-import type { Experimental_EvaluationModel, LanguageModel, TelemetryOptions } from 'ai';
+import type { LanguageModel, TelemetryOptions } from 'ai';
 import type { EngineEvent } from './diagnostics.server';
 import { foundryProvider, type FoundryConfig } from './foundry.server';
 import { gptLiveProvider } from './gptLive.server';
-import { judgeModel } from './judge.server';
+import { createJevJudge, type Judge } from './judge.server';
 import { structuredWith, type StructuredRequest } from './structured.server';
 import type { SocketOpener, VoiceProvider } from './voice.server';
 
@@ -20,7 +20,7 @@ export type Providers = {
   language: { agent: LanguageModel; fast: LanguageModel };
   /** Sol's structured call to the agent model, with the prompt caching the deployment supports. */
   structured: StructuredRequest;
-  judge: Experimental_EvaluationModel;
+  judge: Judge;
   telemetry?: TelemetryOptions;
   log?: (event: EngineEvent) => void;
 };
@@ -34,13 +34,13 @@ export type FoundryPlatform = {
   telemetry?: TelemetryOptions;
 };
 
-export function foundryProviders(config: FoundryConfig & { typesafeKey?: string }, platform: FoundryPlatform = {}): Providers {
+export function foundryProviders(config: FoundryConfig & { judge?: Judge }, platform: FoundryPlatform = {}): Providers {
   const language = foundryProvider(config, platform.fetch);
   return {
     voice: gptLiveProvider(config, { fetch: platform.fetch, socket: platform.socket ?? (() => null) }),
     language: { agent: language.responses(config.agentModel), fast: language.responses(config.fastModel) },
     structured: structuredWith(config, platform.fetch ?? fetch),
-    judge: judgeModel({ apiKey: config.typesafeKey, fetch: platform.fetch }),
+    judge: config.judge ?? createJevJudge({ fetch: platform.fetch }),
     ...(platform.telemetry ? { telemetry: platform.telemetry } : {}),
   };
 }

@@ -17,6 +17,7 @@ import { answerSocket, socketContext, type SocketContext } from '../app/server/i
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
 import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
+import { createJevJudge } from '../interview-engine/providers/judge.server';
 import { draftDebrief } from '../interview-engine/setup/draft.server';
 import { startSchema } from '../interview-engine/shared/protocol';
 
@@ -49,7 +50,8 @@ const upgradingFetch = (async (input: string | URL | Request, init?: RequestInit
   upgraded.set(response, socket);
   return response;
 }) as typeof fetch;
-const providers = foundryProviders({ ...foundry, typesafeKey }, { fetch: upgradingFetch, socket: response => upgraded.get(response) ?? null });
+const providers = foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: typesafeKey, fetch: upgradingFetch }) },
+  { fetch: upgradingFetch, socket: response => upgraded.get(response) ?? null });
 
 const rows = memoryArchive();
 const archive: Archive = {

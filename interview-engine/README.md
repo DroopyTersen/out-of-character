@@ -1,6 +1,6 @@
 # Interview engine
 
-The interview engine runs a spoken interview and turns its transcript into a written narrative. Sam asks the questions over a realtime voice model. Sol keeps the conversation map. Jev reads coverage and grades the result. Luna looks up public background.
+The interview engine runs a spoken interview and turns its transcript into a written narrative. Sam asks the questions over a realtime voice model. Sol keeps the conversation map. The host's judge reads coverage and grades the result. Luna looks up public background.
 
 The engine is one folder that knows nothing about the app around it. A host gives it three things:
 
@@ -96,7 +96,7 @@ export type Providers = {
   voice: VoiceProvider;                                  // Sam: the realtime voice model
   language: { agent: LanguageModel; fast: LanguageModel }; // Sol, Luna and the narrative
   structured: StructuredRequest;                          // Sol's strict-JSON call to the agent model
-  judge: Experimental_EvaluationModel;                    // Jev: readings, ranking, the final grade
+  judge: Judge;                                          // model + calibrated thresholds
   telemetry?: TelemetryOptions;                           // AI SDK telemetry
   log?: (event: EngineEvent) => void;                     // transcripts, timings, provider failures
 };
@@ -108,22 +108,37 @@ export type VoiceProvider = {
 };
 ```
 
-`foundryProviders` builds every provider from a single Azure AI Foundry resource and a TypeSafe key:
+`foundryProviders` builds the voice and language clients from one Azure AI Foundry resource. The host supplies its judge with credentials already bound:
 
 ```ts
 export type FoundryConfig = { resourceName: string; apiKey: string; agentModel: string; fastModel: string; liveModel: string };
 export type FoundryPlatform = { fetch?: typeof fetch; socket?: SocketOpener; telemetry?: TelemetryOptions };
 export type SocketOpener = (response: Response) => WebSocketLike | null;
+export type Judge = {
+  model: Experimental_EvaluationModel;
+  thresholds: { silenceContinue: number; coverageExplored: number };
+};
 
-export function foundryProviders(config: FoundryConfig & { typesafeKey?: string }, platform?: FoundryPlatform): Providers;
+export function foundryProviders(config: FoundryConfig & { judge?: Judge }, platform?: FoundryPlatform): Providers;
 ```
+
+```ts
+import { createDecisionJudge } from './providers/decisionJudge.server';
+import { createJevJudge } from './providers/judge.server';
+
+const judge = createDecisionJudge({ apiKey: openaiKey });
+// To use Jev: createJevJudge({ apiKey: typesafeKey })
+const providers = foundryProviders({ ...foundry, judge }, platform);
+```
+
+The factories bind the measured defaults: Decisions uses 0.70 for silence continuation and 0.50 for explored coverage; Jev uses 0.85 for both. The engine applies those thresholds to the returned probabilities and retains its participant-evidence, observability and boundary rules. Questions, turn ranking and session behavior use the same model contract. Each factory accepts an optional `fetch` for the host's HTTP transport.
 
 The voice control channel is a WebSocket upgrade, and each platform completes the upgrade differently. `FoundryPlatform` takes those differences as arguments:
 
 - **Cloudflare:** `fetch` already performs the upgrade. The `socket` opener only calls `accept()` on `response.webSocket`.
 - **Bun:** `fetch` does not upgrade. The reference host's `fetch` opens a `WebSocket` instead, and its `socket` opener collects that socket from the stand-in response.
 
-The TypeSafe key is read the first time Jev is called. A host that only writes narratives can leave it out.
+Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper supplies the default Jev client, whose key is only needed if judging is actually called. The repository's Cloudflare and Bun hosts currently inject `createJevJudge` explicitly.
 
 ## Writing a spec
 
@@ -326,8 +341,8 @@ The steps below use the host app as the example. They follow the plan in the des
    - A `Background` for fire-and-forget work.
    - An `Archive` that upserts `InterviewArchiveRow`.
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
-4. **Build providers.** Call `foundryProviders(config, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
-5. **Own an actor per attempt.** Call `SessionActor.restore({ spec, providers, foundry, typesafeKey, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
+4. **Build providers.** Choose `createDecisionJudge({ apiKey })` or `createJevJudge({ apiKey })`, then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
+5. **Own an actor per attempt.** Call `SessionActor.restore({ spec, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
 6. **Serve the report.** Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `actor.settleNarrative`.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.
 

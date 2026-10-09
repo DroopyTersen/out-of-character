@@ -1,6 +1,6 @@
-import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationModel, type Experimental_EvaluationQuestion } from 'ai';
+import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationQuestion } from 'ai';
 import type { Providers } from '../../providers/providers.server';
-import { evidenceBatches } from '../../providers/judge.server';
+import { evidenceBatches, type Judge } from '../../providers/judge.server';
 import { COVERAGE_LEVELS, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../shared/snapshot';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage, type Speaker } from '../../shared/transcript';
 import { emptyReadings } from './coverage';
@@ -15,8 +15,8 @@ export type EvaluationInput = {
   revision: number;
   signal?: AbortSignal;
 };
-/** Jev and its telemetry, or Jev alone. */
-export type EvaluationJudge = Pick<Providers, 'judge' | 'telemetry'> | Experimental_EvaluationModel;
+/** The calibrated judge, optionally with provider telemetry. */
+export type EvaluationJudge = Pick<Providers, 'judge' | 'telemetry'> | Judge;
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
 
@@ -46,28 +46,28 @@ function evidence(answers: InterviewAnswers, key: string, participant: Passage[]
     const probability = answer.probabilities?.[answer.choice] ?? 0;
     if (!selected || probability > selected.probability) selected = { id: answer.choice, probability };
   });
-  // The chosen ID must still resolve to a real participant passage. Jev never supplies quotation text.
+  // The chosen ID must still resolve to a real participant passage. The judge never supplies quotation text.
   if (!selected) return null;
   const passage = findEvidence(participant, (selected as { id: string }).id);
   return passage && !isBackchannel(passage.text) ? passage : null;
 }
 
-function coverage(answers: InterviewAnswers, objectiveId: string, participant: Passage[]): InterviewObjectiveReading {
+function coverage(answers: InterviewAnswers, objectiveId: string, participant: Passage[], exploredThreshold: number): InterviewObjectiveReading {
   const answer = choice(answers, `objective:${objectiveId}`, [...COVERAGE_LEVELS]);
   const levels = answer.probabilities
     ? Object.fromEntries(COVERAGE_LEVELS.map(level => [level, validProbability(answer.probabilities![level] ?? NaN) ? answer.probabilities![level]! : 0])) as Record<CoverageLevel, number>
     : null;
   const passage = evidence(answers, `objective:${objectiveId}:evidence`, participant);
   let level = answer.choice as CoverageLevel;
-  // Credit needs high confidence. Respect a supported boundary at even odds instead of inviting another probe.
+  // Credit uses the judge's calibrated confidence. A supported boundary still wins at even odds.
   if (level !== 'not-yet' && !passage) level = 'not-yet';
-  if (level === 'explored' && (levels?.explored ?? 0) < .85) level = 'touched';
+  if (level === 'explored' && (levels?.explored ?? 0) < exploredThreshold) level = 'touched';
   if (level === 'set-aside' && (levels?.['set-aside'] ?? 0) < .5) level = 'touched';
   return { id: objectiveId, level, levels, probability: levels?.explored ?? null, achieved: level === 'explored', evidence: level === 'not-yet' ? null : passage };
 }
 
-/** Turns Jev's answers into readings and coverage. Only a participant passage can be evidence. */
-export function readInterviewAnswers<const S extends JudgedSpec>(spec: S, passages: Passage[], answers: InterviewAnswers): Pick<InterviewEvaluation<S['readings'][number]['id']>, 'readings' | 'objectives'> {
+/** Turns the judge's answers into readings and coverage. Only a participant passage can be evidence. */
+export function readInterviewAnswers<const S extends JudgedSpec>(spec: S, passages: Passage[], answers: InterviewAnswers, exploredThreshold = .85): Pick<InterviewEvaluation<S['readings'][number]['id']>, 'readings' | 'objectives'> {
   const participant = passages.filter(passage => passage.speaker === 'participant');
   const readings = emptyReadings<S['readings'], Speaker>(spec.readings);
   for (const reading of spec.readings) {
@@ -76,7 +76,7 @@ export function readInterviewAnswers<const S extends JudgedSpec>(spec: S, passag
     const passage = evidence(answers, `reading:${reading.id}:evidence`, participant);
     if (observed && passage) readings[reading.id as S['readings'][number]['id']] = { value: value.score, distribution: value.probabilities ?? null, evidence: passage };
   }
-  return { readings, objectives: judgedObjectives(spec).map(objective => coverage(answers, objective.id, participant)) };
+  return { readings, objectives: judgedObjectives(spec).map(objective => coverage(answers, objective.id, participant, exploredThreshold)) };
 }
 
 function validate(passages: Passage[]) {
@@ -89,18 +89,18 @@ export function dialogueState(passages: Pick<Passage, 'id' | 'speaker' | 'text'>
   return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: passages.map(({ id, speaker, text }) => [id, speaker === 'participant' ? 'participant' : interviewer, text]) };
 }
 
-/** The final grade: Jev reads the whole transcript once for every reading and objective. */
-export async function evaluateInterview<const S extends JudgedSpec>(input: EvaluationInput & { spec: S }, judge: EvaluationJudge) {
+/** The final grade: the injected judge reads the whole transcript for every reading and objective. */
+export async function evaluateInterview<const S extends JudgedSpec>(input: EvaluationInput & { spec: S }, supplied: EvaluationJudge) {
   validate(input.passages);
   const started = performance.now();
   const { passages } = input;
-  const { model, telemetry } = typeof judge === 'object' && 'judge' in judge ? { model: judge.judge, telemetry: judge.telemetry } : { model: judge, telemetry: undefined };
+  const { judge, telemetry } = 'judge' in supplied ? supplied : { judge: supplied, telemetry: undefined };
   const result = await experimental_evaluate({
-    model, state: dialogueState(passages, interviewerToken(input.spec)), questions: interviewQuestions(input.spec, passages),
+    model: judge.model, state: dialogueState(passages, interviewerToken(input.spec)), questions: interviewQuestions(input.spec, passages),
     abortSignal: input.signal, maxRetries: 0, ...(telemetry ? { telemetry } : {}),
   });
   return {
-    ...readInterviewAnswers(input.spec, passages, result.answers),
+    ...readInterviewAnswers(input.spec, passages, result.answers, judge.thresholds.coverageExplored),
     revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };

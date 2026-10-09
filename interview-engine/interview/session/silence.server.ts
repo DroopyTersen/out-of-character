@@ -5,7 +5,6 @@ import type { WireEntry, WireSpeaker } from '../wire';
 
 export const SILENCE_VERSION = 'interview-silence-v2';
 export const SILENCE_MS = 4000;
-export const SILENCE_CONTINUE = .85;
 export const MAX_SILENCE_CHECKS = 120;
 
 /** Private diagnostics. quietMs is transcript inactivity in v2; v1 measured audio. A receipt does not establish that Sam spoke. */

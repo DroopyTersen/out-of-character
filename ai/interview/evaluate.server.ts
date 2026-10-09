@@ -1,6 +1,6 @@
 // The app's door to the engine's final grade: the closeout spec, Jev built from the key, and the practice simulator's speaker names.
 import * as engine from '../../interview-engine/interview/conversation/evaluate.server';
-import { judgeModel } from '../../interview-engine/providers/judge.server';
+import { createJevJudge } from '../../interview-engine/providers/judge.server';
 import type { Evidence, Passage } from '../../interview-engine/shared/transcript';
 import { spec } from '../../interviews/project-closeout/spec';
 import type { InterviewEvaluation, InterviewObjectiveReading } from '../../core/interview';
@@ -36,6 +36,6 @@ export const dialogueState = (entries: TranscriptEntry[]) => engine.dialogueStat
 export async function evaluateInterview(input: Input) {
   if (input.scenarioId !== spec.id || !spec.interviewer.voices.some(item => item.id === input.clientId)) throw new Error('Unknown interview setup.');
   if (!input.apiKey.trim()) throw new Error('Interview judging is not configured.');
-  const result = await engine.evaluateInterview({ spec, passages: passages(input.transcript), revision: input.revision, signal: input.signal }, judgeModel({ apiKey: input.apiKey }));
+  const result = await engine.evaluateInterview({ spec, passages: passages(input.transcript), revision: input.revision, signal: input.signal }, createJevJudge({ apiKey: input.apiKey }));
   return { ...result, ...entryNames(result) };
 }

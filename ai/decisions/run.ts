@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { experimental_evaluate as evaluate } from 'ai';
-import { judgeModel } from '../../interview-engine/providers/judge.server';
+import { judgeModel } from '../../interview-engine/providers/jevJudge.server';
 import { hash, interpret, type EvalCase } from './cases';
 import { decisionsModel, DecisionFailure, singletons, type Fetch, type Format } from '../../interview-engine/providers/decisionJudge.server';
 

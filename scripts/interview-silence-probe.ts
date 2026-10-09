@@ -1,6 +1,6 @@
 // Paid semantic replay only: no voice session, audio, database writes or deployments.
 import { evaluateSilence, SILENCE_VERSION } from '../interview-engine/interview/session/silence.server';
-import { createJevJudge } from '../interview-engine/providers/judge.server';
+import { createJevJudge } from '../interview-engine/providers/jevJudge.server';
 import type { Passage } from '../interview-engine/shared/transcript';
 import { archivedTranscriptSchema } from '../core/interview-transcript';
 

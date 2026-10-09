@@ -1,5 +1,5 @@
 import { archivedTranscriptSchema } from '../core/interview-transcript.ts';
-import { createJevJudge } from '../interview-engine/providers/judge.server.ts';
+import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { createHash } from 'node:crypto';

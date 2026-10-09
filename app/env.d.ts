@@ -1,5 +1,6 @@
 interface Env {
   TYPESAFE_API_KEY?: string;
+  OPENAI_API_KEY?: string;
   AZURE_OPENAI_API_INSTANCE_NAME?: string;
   AZURE_OPENAI_API_KEY?: string;
   AZURE_OPENAI_AGENT_MODEL?: string;

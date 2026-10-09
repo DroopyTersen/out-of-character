@@ -99,6 +99,7 @@ The host builds ready model clients and passes them in. The engine never sees a 
 export type Providers = {
   voice: VoiceProvider;                                  // Sam: the realtime voice model
   language: { agent: LanguageModel; fast: LanguageModel }; // Sol, Luna and the narrative
+  webSearch: Tool;                                        // Luna's research: the fast model's deployment's search tool
   structured: StructuredRequest;                          // Sol's strict-JSON call to the agent model
   judge: Judge;                                          // model + calibrated thresholds
   telemetry?: TelemetryOptions;                           // AI SDK telemetry
@@ -112,7 +113,7 @@ export type VoiceProvider = {
 };
 ```
 
-`foundryProviders` builds the voice and language clients from one Azure AI Foundry resource. The host supplies its judge with credentials already bound:
+`foundryProviders` builds the voice and language clients and the search tool from one Azure AI Foundry resource. The host supplies its judge with credentials already bound. A host with its own model registry can build `Providers` directly instead: any AI SDK language models, that provider's `tools.webSearch(...)` (the lookup and the fast model must share a deployment), and `structuredWith(config, fetch)` for Sol.
 
 ```ts
 export type FoundryConfig = { resourceName: string; apiKey: string; agentModel: string; fastModel: string; liveModel: string };
@@ -128,10 +129,9 @@ export function foundryProviders(config: FoundryConfig & { judge?: Judge }, plat
 
 ```ts
 import { createDecisionJudge } from './providers/decisionJudge.server';
-import { createJevJudge } from './providers/judge.server';
 
 const judge = createDecisionJudge({ apiKey: openaiKey });
-// To use Jev: createJevJudge({ apiKey: typesafeKey })
+// Jev stays available for evaluation: createJevJudge({ apiKey: typesafeKey }) from './providers/jevJudge.server'
 const providers = foundryProviders({ ...foundry, judge }, platform);
 ```
 
@@ -142,7 +142,7 @@ The voice control channel is a WebSocket upgrade, and each platform completes th
 - **Cloudflare:** `fetch` already performs the upgrade. The `socket` opener only calls `accept()` on `response.webSocket`.
 - **Bun:** `fetch` does not upgrade. The reference host's `fetch` opens a `WebSocket` instead, and its `socket` opener collects that socket from the stand-in response.
 
-Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper supplies the default Jev client, whose key is only needed if judging is actually called. The repository's Cloudflare and Bun hosts currently inject `createJevJudge` explicitly.
+Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper then supplies an unconfigured judge whose only behavior is to fail a judging call with a clear message. The repository's Cloudflare and Bun hosts inject `createDecisionJudge` with `OPENAI_API_KEY`; `providers/jevJudge.server.ts` is the only file that imports `@ai-sdk/typesafe-ai`, so a host that never copies it needs no TypeSafe dependency.
 
 ## Approved input
 
@@ -349,14 +349,14 @@ bun run check          # everything: typecheck, check:engine, bun test, build, b
 
 The steps below use the host app as the example. They follow the plan in the design documents; none of this exists in the host app yet.
 
-1. **Copy the folder.** Copy `interview-engine/` to the host as `app/debrief/engine/`, and add any of the four packages the host lacks. Per the design, the host app is missing only `@ai-sdk/typesafe-ai`. The copy check above is the evidence that this compiles.
+1. **Copy the folder.** Copy `interview-engine/` to the host as `app/debrief/engine/`, and add any of the four packages the host lacks. A host that judges with Decisions can leave `providers/jevJudge.server.ts` behind and skip `@ai-sdk/typesafe-ai`; `ai` must be new enough to export `experimental_evaluate`. The copy check above is the evidence that this compiles.
 2. **Supply approved input.** Pass the approved `InterviewPlan`, runtime `InterviewConfig`, and explicit `InterviewContext` if available. Keep browser labels and host business identity outside the engine.
 3. **Implement the seams.**
    - A `SessionStore` over the host's database. The design calls for an attempts row with a `segment` column and guarded writes that throw `FencedError` when the segment has moved on.
    - A `Background` for fire-and-forget work.
    - An `Archive` that upserts `InterviewArchiveRow`.
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
-4. **Build providers.** Choose `createDecisionJudge({ apiKey })` or `createJevJudge({ apiKey })`, then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
+4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
 5. **Own an actor per attempt.** Call `SessionActor.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
 6. **Serve the report.** Read report format and context from `actor.definition`; pass only these and the canonical transcript. Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `actor.settleNarrative`.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.

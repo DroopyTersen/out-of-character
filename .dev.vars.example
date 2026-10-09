@@ -1,3 +1,6 @@
+# Decisions API judge for the interview.
+OPENAI_API_KEY=
+# Jev for the practice simulator and the evaluation arms.
 TYPESAFE_API_KEY=
 AZURE_OPENAI_API_INSTANCE_NAME=
 AZURE_OPENAI_API_KEY=

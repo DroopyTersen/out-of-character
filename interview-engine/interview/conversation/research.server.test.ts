@@ -12,8 +12,10 @@ const transcript = [
 ];
 const input = { signal: new AbortController().signal };
 /** The lookup over the fast model, with the substituted HTTP bound into the model as the providers bind it. */
-const lookup = (value: Omit<Parameters<typeof lookupInterviewBackground>[0], 'model'>, request: typeof fetch) =>
-  lookupInterviewBackground({ ...value, model: foundryProvider(fixtureFoundry, request).responses(fixtureFoundry.fastModel) });
+const lookup = (value: Omit<Parameters<typeof lookupInterviewBackground>[0], 'model' | 'webSearch'>, request: typeof fetch) => {
+  const provider = foundryProvider(fixtureFoundry, request);
+  return lookupInterviewBackground({ ...value, model: provider.responses(fixtureFoundry.fastModel), webSearch: provider.tools.webSearch({ searchContextSize: 'low' }) });
+};
 const response = (output: unknown[]) => Response.json({
   id: 'resp-fixture', created_at: 1, model: 'gpt-6-luna', output,
   usage: { input_tokens: 100, output_tokens: 80, total_tokens: 180 },

@@ -3,7 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { foundryConfig, foundryConfigured, type FoundryConfig } from '../../../ai/foundry.server';
 import { SessionActor, type Background, type Checkpoint, type Lease, type SessionOptions, type SessionStore } from '../../../interview-engine/interview/interview.server';
 import { foundryProviders, type Providers } from '../../../interview-engine/providers/providers.server';
-import { createJevJudge } from '../../../interview-engine/providers/judge.server';
+import { createDecisionJudge } from '../../../interview-engine/providers/decisionJudge.server';
 import { startSchema } from '../../../interview-engine/shared/protocol';
 import { LIVE_MODEL } from '../simulator/live.server';
 import { d1Archive } from './archiveD1.server';
@@ -109,7 +109,7 @@ export class InterviewObject extends DurableObject<Env> {
     const { ctx, env, overrides } = this;
     // Unconfigured, the paid calls fail, but owned attempts can still be read and closed.
     const foundry: FoundryConfig = foundryConfigured(env) ? foundryConfig(env) : { resourceName: '', apiKey: '', agentModel: '', fastModel: '', liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL };
-    const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: env.TYPESAFE_API_KEY }) }, { socket: acceptSocket });
+    const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { socket: acceptSocket });
     const background = durableBackground(ctx);
     const actor = await SessionActor.restore({
       plan: spec.plan, config: spec.config, context: spec.context, providers, store: durableStore(ctx.storage), background,

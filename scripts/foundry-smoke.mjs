@@ -1,4 +1,4 @@
-import { createJevJudge } from '../interview-engine/providers/judge.server.ts';
+import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { foundryConfig } from '../ai/foundry.server.ts';

@@ -3,7 +3,7 @@ import { foundryProviders } from '../../../interview-engine/providers/providers.
 import { activitySchema, CAPABILITY, narrativeRequestSchema, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
 import { routeDebriefs, workerDebriefs, type DebriefGates } from './debriefs';
 import { BodyError, boundedJson } from '../http';
-import { liveAvailable, simulatorJson } from '../simulator/api';
+import { simulatorJson } from '../simulator/api';
 import { importedNarrative, narrateWith } from './narrative';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -26,6 +26,9 @@ export type InterviewGates = {
   debriefs?: DebriefGates;
 };
 
+/** Whether paid interviews may start: the practice kill switches, Foundry for voice and language, and the Decisions API key for judging. */
+export const interviewAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.OPENAI_API_KEY;
+
 /** Whether this deployment accepts the socket transport. Off unless `INTERVIEW_SOCKET_ENABLED` is "true". */
 export const socketsEnabled = (env: Env) => (env as Env & { INTERVIEW_SOCKET_ENABLED?: string }).INTERVIEW_SOCKET_ENABLED === 'true';
 const attemptObject = (env: Env, id: string) => env.INTERVIEW_SESSIONS.get(env.INTERVIEW_SESSIONS.idFromName(id));
@@ -40,7 +43,7 @@ const NARRATIVE_BODY_LIMIT = 256 * 1024;
 export function workerGates(env: Env): InterviewGates {
   const debriefs = workerDebriefs(env);
   return {
-    available: () => liveAvailable(env),
+    available: () => interviewAvailable(env),
     limit: async (key, kind = 'session') => (await (kind === 'narrative' ? env.RATE_JUDGE : env.RATE_SIMULATOR).limit({ key })).success,
     session: (id, command) => attemptObject(env, id).fetch(command),
     narrative: (input, signal) => foundryConfigured(env)

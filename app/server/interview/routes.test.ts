@@ -13,7 +13,7 @@ function fixture() {
   const simulator: Request[] = [];
   const namespace = (into: Request[]) => ({ idFromName: (value: string) => value, get: () => ({ fetch: async (request: Request) => { into.push(request); return Response.json({ accepted: true }); } }) });
   const env = {
-    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', ...fixtureFoundryEnv, TYPESAFE_API_KEY: 'not-a-real-key',
+    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', ...fixtureFoundryEnv, OPENAI_API_KEY: 'not-a-real-key',
     RATE_SIMULATOR: { limit: async () => ({ success: true }) },
     INTERVIEW_SESSIONS: namespace(calls), SIMULATOR_SESSIONS: namespace(simulator), SIMULATOR_ARCHIVE: archiveDatabase().d1,
   } as unknown as Env;

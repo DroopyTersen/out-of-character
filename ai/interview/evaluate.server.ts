@@ -1,6 +1,6 @@
 // The closeout evaluator binds the host's plan and injected decision model.
 import * as engine from '../../interview-engine/interview/conversation/evaluate.server';
-import { createJevJudge } from '../../interview-engine/providers/judge.server';
+import { createDecisionJudge } from '../../interview-engine/providers/decisionJudge.server';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { spec } from '../../interviews/project-closeout/spec';
 
@@ -21,5 +21,5 @@ export const dialogueState = (entries: Passage[]) => engine.dialogueState(entrie
 export async function evaluateInterview(input: Input) {
   if (input.planId !== spec.id || !spec.interviewer.voices.some(item => item.id === input.voiceId)) throw new Error('Unknown interview setup.');
   if (!input.apiKey.trim()) throw new Error('Interview judging is not configured.');
-  return engine.evaluateInterview({ spec, passages: input.transcript, revision: input.revision, signal: input.signal }, createJevJudge({ apiKey: input.apiKey }));
+  return engine.evaluateInterview({ spec, passages: input.transcript, revision: input.revision, signal: input.signal }, createDecisionJudge({ apiKey: input.apiKey }));
 }

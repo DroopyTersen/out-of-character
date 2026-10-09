@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Experimental_EvaluationModel, Experimental_EvaluationQuestion } from 'ai';
-import { createJevJudge } from '../../providers/judge.server';
+import { createJevJudge } from '../../providers/jevJudge.server';
 import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
 import { foundryProviders } from '../../providers/providers.server';
 import { testFoundry } from '../../providers/testFoundry.server';

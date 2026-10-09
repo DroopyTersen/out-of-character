@@ -1,7 +1,8 @@
 import { resolveInterview } from '../definition.server';
 import { expect, test } from 'bun:test';
 import { unpaidProviders } from '../../providers/testFoundry.server';
-import { createJevJudge, type Judge } from '../../providers/judge.server';
+import type { Judge } from '../../providers/judge.server';
+import { createJevJudge } from '../../providers/jevJudge.server';
 import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
 import { evaluateSilence } from './silence.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';

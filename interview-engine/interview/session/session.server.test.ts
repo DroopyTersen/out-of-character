@@ -1039,3 +1039,70 @@ test('the resume cue treats a typed last answer as complete and keeps the cut-of
   expect(spoken).toContain('may have been cut off');
   expect(typedAnswerCue('A "quoted" answer.')).toBe('The participant typed this answer instead of speaking: "A "quoted" answer.". Respond to it now as if they had said it aloud.');
 });
+
+const notes = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('note-'));
+/** A live conversation whose producer writes Sam a map note on its next map call. */
+async function noted() {
+  const f = fixture();
+  f.options.services!.evaluateTurn = async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 1 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} });
+  f.options.services!.generateMap = async input => ({
+    map: { ...input.previous, participant: { vantage: 'Tech lead on the claims portal', preferences: [] } },
+    update: { vantage: 'Tech lead on the claims portal', preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
+    changes: { added: [], changed: ['participant'], dropped: [], kept: [] }, research: null, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+  });
+  const { actor, socket } = await conversation(f);
+  f.at(8000);
+  say(socket, 'output', 'ack', 'And what was your part?', 8000);
+  // Once past the map floor, successive ticks read the turn, call Sol and write the note.
+  const produce = async () => {
+    for (let round = 0; round < 4; round++) {
+      (actor as unknown as { tick(): void }).tick();
+      await f.background.settle();
+    }
+  };
+  return { ...f, actor, socket, produce };
+}
+
+test('producer notes wait while a draft is open and reach Sam just before the typed answer', async () => {
+  const f = await noted();
+  await f.send(f.actor, 'poll', composing(1, true));
+  f.at(30_000);
+  await f.produce();
+  expect(notes(f.socket)).toHaveLength(0);
+  const id = crypto.randomUUID();
+  expect((await f.send(f.actor, 'submitText', typed(id, 'I led the build.'))).status).toBe(200);
+  expect(notes(f.socket)).toHaveLength(1);
+  const order = f.socket.sent.map(event => String(event.event_id));
+  expect(order.indexOf(String(notes(f.socket)[0]!.event_id))).toBeLessThan(order.indexOf(`typed-${id}`));
+  await f.send(f.actor, 'end');
+});
+
+test('closing a draft without sending releases the held notes; a closed session never hears them', async () => {
+  const f = await noted();
+  await f.send(f.actor, 'poll', composing(1, true));
+  f.at(30_000);
+  await f.produce();
+  expect(notes(f.socket)).toHaveLength(0);
+  await f.send(f.actor, 'poll', composing(10, false));
+  expect(notes(f.socket)).toHaveLength(1);
+  // Later notes go straight through once the draft is closed.
+  const g = await noted();
+  await g.send(g.actor, 'poll', composing(1, true));
+  g.at(30_000);
+  await g.produce();
+  expect(notes(g.socket)).toHaveLength(0);
+  await g.send(g.actor, 'pause');
+  g.at(40_000);
+  await g.send(g.actor, 'resume', JSON.stringify({ sdp: attempt.sdp }));
+  await g.send(g.actor, 'ready', composing(10, true));
+  const resumed = g.voice.sockets.get('provider-2')!;
+  await g.send(g.actor, 'poll', composing(11, false));
+  await f.send(f.actor, 'end');
+  await g.send(g.actor, 'end');
+  await g.background.settle();
+  // The producer restates its notes to the resumed session itself; the one held for the closed session is dropped.
+  const written = g.archive.rows.get(attempt.id)!.producerLog.flatMap(record => record.source === 'note' ? [record.delivery.eventId] : []);
+  expect(written.length).toBeGreaterThanOrEqual(2);
+  expect(notes(g.socket)).toHaveLength(0);
+  expect(notes(resumed).map(event => event.event_id)).toEqual(written.slice(1));
+});

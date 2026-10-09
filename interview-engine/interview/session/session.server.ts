@@ -168,6 +168,8 @@ export class SessionActor {
   private typedPending = new Map<string, Promise<Reply>>();
   /** Typed turns the current provider session has not heard; a resume rebuilds them from the transcript instead. */
   private typedUnforwarded = new Set<string>();
+  /** Producer notes that arrived while a draft was open. Sam speaks on a note; they wait for the typed answer or the draft's close. */
+  private heldNotes: { segment: Segment; event: Record<string, unknown> }[] = [];
   /** Every checkpoint write and deletion, in issue order. Each link builds its checkpoint when it runs. */
   private storage: Promise<void> = Promise.resolve();
 
@@ -293,7 +295,25 @@ export class SessionActor {
       // A judgment aborted by typing may be reconsidered; a completed one keeps its once-per-exchange bound.
       if (this.silenceCheck) this.silenceCheckedRevision = -1;
       this.silenceAbort?.abort();
-    } else this.lastSpeech = now;
+    } else {
+      this.lastSpeech = now;
+      this.releaseNotes();
+    }
+  }
+
+  /** The producer's channel to Sam. While a draft is open a note is held, so Sam does not talk over the participant's typing. */
+  private sendNote(event: Record<string, unknown>): boolean {
+    if (!this.composing || !this.segment || this.state?.status !== 'live') return this.send(event);
+    if (!this.socket || this.socket.readyState !== 1) return false;
+    this.heldNotes.push({ segment: this.segment, event });
+    return true;
+  }
+
+  /** Held notes go to the session they were written for, in order; a session that has since closed never hears them. */
+  private releaseNotes() {
+    const held = this.heldNotes;
+    this.heldNotes = [];
+    for (const { segment, event } of held) if (segment === this.segment) this.send(event);
   }
 
   /**
@@ -347,6 +367,8 @@ export class SessionActor {
     const id = `typed-${input.id}`;
     if (this.typedUnforwarded.has(id) && this.state?.status === 'live' && this.segment && !this.fenced) {
       this.typedUnforwarded.delete(id);
+      // Context first, so Sam answers the typed turn knowing what the producer learned meanwhile.
+      this.releaseNotes();
       this.send({ type: 'session.thinking.append', event_id: id, delegation_id: null, content: typedAnswerCue(input.text) });
     }
     return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
@@ -517,7 +539,7 @@ export class SessionActor {
     this.producer = new InterviewProducer({
       spec: this.spec, attemptId: snapshot.id, startedAt: snapshot.startedAt,
       providers: this.providers, services: this.paid,
-      settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: event => this.send(event), waitUntil: work => this.background.track(work),
+      settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: event => this.sendNote(event), waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
     });
   }

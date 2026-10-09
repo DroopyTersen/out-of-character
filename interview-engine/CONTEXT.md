@@ -50,7 +50,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Typed passage**: the transcript passage a typed answer becomes, with id `typed-<id>` and the participant speaker. It is frozen when appended, so later speech starts a new passage. Its provider event uses the same `typed-` id, which is how a provider rejection of it is recognized.
 
-**Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled and the silence check does not run; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
+**Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled, the silence check does not run, and producer notes to Sam are held until the typed answer is forwarded or composition ends; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
 
 **Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
 

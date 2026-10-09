@@ -35,7 +35,7 @@ describe('project closeout interview contracts', () => {
     expect(interviewers[0]!.behavior).toBe(interviewers[1]!.behavior);
     for (const interviewer of interviewers) {
       expect(interviewerBrief(interviewer.id)).toContain('You are Sam');
-      expect(interviewOpening(interviewer.id)).toMatch(/project/i);
+      expect(interviewOpening(interviewer.id)).toContain('Sam');
     }
   });
 

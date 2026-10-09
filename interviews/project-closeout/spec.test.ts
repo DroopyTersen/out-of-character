@@ -42,7 +42,7 @@ test('the closeout catalog carries the six expanded objectives as universal topi
   expect(seed).toContain('- setup-technical - Technical fit with the client:');
   expect(setup.objectives.at(-1)!.criterion).toContain('set it aside');
   // The version pins what an attempt started under; content changes bump it.
-  expect(spec.version).toBe('project-closeout-v3');
+  expect(spec.version).toBe('project-closeout-v4');
   // No role branches or scripted angles: every objective is a bare id, label and criterion.
   for (const objective of spec.topics.flatMap(topic => topic.objectives)) expect(['criterion', 'creditRule', 'explored', 'id', 'label']).toEqual(expect.arrayContaining(Object.keys(objective)));
   for (const id of ['project-purpose', 'project-outcome', 'client-needs', 'setup-alignment', 'setup-quality', 'setup-technical']) expect(Object.keys(spec.topics.flatMap(topic => topic.objectives).find(item => item.id === id)!).sort()).toEqual(['criterion', 'id', 'label']);

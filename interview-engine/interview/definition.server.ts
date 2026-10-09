@@ -41,30 +41,29 @@ export function resolveInterview(input: InterviewPlan, supplied: InterviewConfig
   const plan = interviewPlanSchema.parse(input);
   const config = interviewConfigSchema.parse(supplied);
   const background = context ? interviewContextSchema.parse(context) : undefined;
-  const { name } = config.interviewer;
   const sourceRule = 'Only the participant establishes their experience. Supplied background helps interpret names and circumstances, but it is not something the participant said or confirmed. Do not use it to infer their responsibilities, complete their account, or grant coverage. Distinguish firsthand knowledge, attributed accounts, inference and public research.';
   return {
     id: plan.id, version: plan.version, plan, config, ...(background ? { context: background } : {}), limits: config.limits,
     interviewer: {
       ...config.interviewer,
-      role: `conducting an interview about ${plan.title}`,
-      opening: `Hi, I’m ${name}. We’re here to talk about ${plan.title}. To start, what was your own part in it?`,
+      role: 'conducting an interview with one participant',
       orientation: [
+        `Interview type or purpose: ${plan.title}. This is a plan label, not the identity of a project, organization or event.`,
         `Learning goals: ${plan.goals}`,
-        'Discover the participant’s actual responsibilities, including multiple or changing roles. Let their experience guide the conversation. Never re-ask what they have already answered. Keep it a conversation, not a questionnaire.',
+        'First orient the participant: introduce yourself, explain the purpose and ground the subject before asking for their role or lessons. Use explicitly supplied names and circumstances; ask for missing context instead of assuming it. If they ask what the interview is about, explain plainly and clarify the missing subject rather than repeating the plan label. Discover their actual responsibilities, including multiple or changing roles. Let their experience guide the conversation. Never re-ask what they have already answered. Keep it a conversation, not a questionnaire.',
         ...(plan.guidance ? [`Approved interviewing guidance: ${plan.guidance}`] : []),
         ...(background ? [`Supplied background, not participant evidence: ${JSON.stringify(background)}`] : []),
       ],
       boundaries: [sourceRule, 'Respect uncertainty and explicit boundaries immediately. Do not press the same point in other words. A short, precise answer may be complete. Do not invent events, causes, names or outcomes, or claim shared experiences.'],
       techniques: {
-        grounding: { name: 'Ground the conversation', means: 'Establish what happened and the participant’s own part before exploring details.', when: 'At the start or when a name or responsibility is unclear.', how: 'One open question, using what they have already said.' },
+        grounding: { name: 'Ground the conversation', means: 'Establish the concrete subject and relevant people or organizations, then the participant’s own part, before exploring details.', when: 'After the opening preamble or when the subject, a name or a responsibility is unclear.', how: 'One open question about the first missing piece, using supplied context and what they have already said.' },
         lesson: { name: 'Find the useful lesson', means: 'A concrete action and its consequence may already be the lesson. Follow up only on a useful missing part.', when: 'A story leaves a concrete uncertainty about what to repeat or change.', how: 'Ask one grounded question without inventing a problem or demanding a hypothetical.' },
       },
     },
     framing: {
       occasion: `an interview about ${plan.title}`, topic: 'topic', purpose: plan.goals,
       setting: [sourceRule, `Approved topic tree (parents supply learning intent; only leaves are assessed): ${JSON.stringify(plan.topics)}`, 'For conditional topics, establish relevance from the participant’s own account. Unknown relevance is not failure or not applicable. A parent condition applies to every descendant. Do not pursue a branch that does not apply.', background ? `Supplied context: ${JSON.stringify(background)}` : '', plan.guidance ? `Approved interviewing guidance: ${plan.guidance}` : ''].filter(Boolean).join('\n\n'),
-      defaultThread: 'The participant’s actual responsibilities and vantage, until established by their own account; job titles and supplied background alone do not establish what they did.',
+      defaultThread: 'Ground the concrete situation relevant to the approved goals and guidance: what it was, who was involved, and the participant’s own experience. Clarify the first missing piece; a plan label is not a project or organization name. Supplied context can identify the subject, but only the participant establishes their responsibilities and vantage. This thread is a default, not a reason to interrupt a richer story.',
       terms: 'A topic is one specific thing the approved plan seeks to learn. Parent topics organize the conversation; coverage is assessed only for leaves.',
       party: sourceRule,
     },

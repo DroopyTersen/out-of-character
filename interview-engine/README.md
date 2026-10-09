@@ -176,6 +176,8 @@ The actor exposes a copied `definition` and persists it in checkpoints. On resto
 
 The shipped closeout and win/loss templates assemble their existing learning criteria, organizer guidance and report layouts into this input. `resolveInterview` compiles it for lower-level replay and evaluation tools; hosts starting sessions pass the plain input directly.
 
+The voice model composes the opening from that same accepted title, goals, guidance and context. It introduces itself, explains the purpose, names the subject when supplied, and asks for the first missing grounding detail. The title describes the interview type; it is never substituted for an unknown project or organization name. The opening has a short preamble before the usual concise follow-ups. No separate model call delays startup, and Sol starts its evidence-based map after participant speech using the approved plan as its seed.
+
 ## Protocol
 
 The browser and the session exchange these actions (`shared/protocol.ts`):

@@ -117,6 +117,28 @@ async function conversation(f: ReturnType<typeof fixture>) {
   return { actor, socket, started };
 }
 
+test('the initial voice brief receives the accepted purpose and context, without report instructions', async () => {
+  const f = fixture();
+  f.options.plan.title = 'Delivery retrospective';
+  f.options.plan.goals = 'Learn what helped delivery and what to improve.';
+  f.options.plan.guidance = 'Begin with what was built and who it was for.';
+  f.options.plan.report.format = 'REPORT_LAYOUT_ONLY';
+  f.options.context = { background: 'Project Atlas was completed for Harbor Labs.', participant: { name: 'Jordan' } };
+  const actor = await f.restore();
+  f.options.plan.goals = 'REPLACEMENT_GOALS';
+  f.options.context.background = 'REPLACEMENT_CONTEXT';
+  await f.send(actor, 'start', start);
+  await f.send(actor, 'ready');
+  const brief = f.voice.created[0]!.instructions;
+  for (const accepted of ['Riley', 'Delivery retrospective', 'Learn what helped delivery and what to improve.', 'Begin with what was built and who it was for.', 'Project Atlas was completed for Harbor Labs.', 'Jordan']) expect(brief).toContain(accepted);
+  for (const excluded of ['REPORT_LAYOUT_ONLY', 'REPLACEMENT_GOALS', 'REPLACEMENT_CONTEXT']) expect(brief).not.toContain(excluded);
+  const opening = f.voice.sockets.get('provider-1')!.sent.find(event => event.event_id === 'opening')!;
+  expect(opening.type).toBe('session.instructions.append');
+  expect(opening.content).toContain('Riley');
+  expect(opening.content).not.toContain('Project Atlas'); // Full context belongs in the initial brief, not the bounded append.
+  await f.send(actor, 'end');
+});
+
 test('a start, a conversation and an end produce the protocol’s snapshots, a closed lease and the final archive row', async () => {
   const f = fixture();
   const { actor, socket, started } = await conversation(f);
@@ -127,7 +149,7 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   expect(f.voice.created[0]!.voice).toBe('cedar');
   expect(f.voice.created[0]!.instructions).toContain('Recent project');
   expect(f.voice.created[0]!.instructions).toContain('Learn what was built.');
-  expect(socket.sent[0]).toMatchObject({ type: 'session.instructions.append', event_id: 'opening', content: expect.stringContaining('Recent project') });
+  expect(socket.sent[0]).toMatchObject({ type: 'session.instructions.append', event_id: 'opening', content: expect.stringContaining('Riley') });
   expect(f.record.lease).toEqual({ capability, providerId: 'provider-1', deadline: EPOCH + 3_600_000, closed: false });
   expect(f.record.wakeAt).toBe(EPOCH + 30_000);
 

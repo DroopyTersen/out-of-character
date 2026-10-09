@@ -2,7 +2,7 @@
 // A second, independent spec: it shares no content with project-closeout and depends on nothing in the host.
 
 export const SALES_WIN_LOSS_ID = 'sales-win-loss';
-export const SALES_WIN_LOSS_VERSION = 'sales-win-loss-v2';
+export const SALES_WIN_LOSS_VERSION = 'sales-win-loss-v3';
 export const salesInterviewerName = 'Sam';
 export const salesVoices = [
   { id: 'sam-meridian', voice: 'meridian', label: 'Meridian', presentation: 'Male', image: '/interview/sam-male.png' },

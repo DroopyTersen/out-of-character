@@ -1,5 +1,5 @@
 import type { Passage } from '../../interview-engine/shared/transcript';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Send, Volume2 } from 'lucide-react';
 import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewEvaluation, type InterviewReadingId, type InterviewSummaryContent } from '../../core/interview';
 import type { Client, FeedbackStatus } from '../../core/simulator/types';
@@ -77,8 +77,40 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
   </section>;
 }
 
-function InterviewTranscript({ entries }: { entries: Passage[] }) {
-  return <div className="sim-transcript interview-transcript">{entries.length ? entries.map(entry => <article key={entry.id} data-speaker={entry.speaker}><header><strong>{entry.speaker === 'participant' ? 'You' : INTERVIEWER_NAME}</strong><time>{formatTime(entry.startMs / 1000)}</time></header><p>{entry.text}</p></article>) : <p className="sim-muted">The conversation will appear here.</p>}</div>;
+function InterviewTranscript({ entries, scroller, onScroll }: { entries: Passage[]; scroller?: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
+  return <div className="sim-transcript interview-transcript" ref={scroller} onScroll={onScroll}>{entries.length ? entries.map(entry => <article key={entry.id} data-speaker={entry.speaker}><header><strong>{entry.speaker === 'participant' ? 'You' : INTERVIEWER_NAME}</strong><time>{formatTime(entry.startMs / 1000)}</time></header><p>{entry.text}</p></article>) : <p className="sim-muted">The conversation will appear here.</p>}</div>;
+}
+
+/**
+ * Keeps a scroll container at its newest content while the reader is already near the bottom. Scrolling up to read
+ * earlier passages releases it until they return near the bottom.
+ */
+function useStickToBottom(signature: string) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const pinned = useRef(true);
+  const onScroll = useCallback(() => {
+    const node = scroller.current;
+    if (node) pinned.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+  }, []);
+  useLayoutEffect(() => {
+    const node = scroller.current;
+    if (node && pinned.current) node.scrollTop = node.scrollHeight;
+  }, [signature]);
+  useEffect(() => {
+    // The panel changes height when typing mode starts or ends; stay on the newest passage through that.
+    const node = scroller.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => { if (pinned.current) node.scrollTop = node.scrollHeight; });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return { scroller, onScroll };
+}
+
+function LiveTranscript({ entries }: { entries: Passage[] }) {
+  const last = entries.at(-1);
+  const { scroller, onScroll } = useStickToBottom(`${entries.length}:${last?.id ?? ''}:${last?.text.length ?? 0}`);
+  return <InterviewTranscript entries={entries} scroller={scroller} onScroll={onScroll} />;
 }
 
 function InterviewReadings({ evaluation, status }: { evaluation: InterviewEvaluation | null | undefined; status: FeedbackStatus }) {
@@ -158,9 +190,19 @@ export function InterviewComposer({ disabled, onComposing, onSubmit, onDraft, co
   useEffect(() => () => reportComposing.current(false), []);
   useEffect(() => { onDraft?.(draft); }, [draft, onDraft]);
   const canSend = draft.trim() !== '' && !disabled && pending == null;
+  const root = useRef<HTMLDivElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  // The textarea is disabled while sending, which drops focus; give it back so the next answer can follow.
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (pending != null || !refocus.current) return;
+    refocus.current = false;
+    textarea.current?.focus();
+  }, [pending]);
   async function send() {
     if (!canSend) return;
     const text = draft;
+    refocus.current = !!root.current?.contains(document.activeElement);
     setPending(text);
     setError(null);
     try {
@@ -173,16 +215,21 @@ export function InterviewComposer({ disabled, onComposing, onSubmit, onDraft, co
     }
   }
   const status = pending != null ? 'Sending…' : error ?? (composing ? 'Mic paused while typing.' : '');
-  return <div className={`interview-composer${compact ? ' compact' : ''}`}>
-    <textarea value={draft} placeholder="Type an answer or add a detail…" maxLength={TYPED_TEXT_LIMIT} aria-label="Typed answer" aria-describedby="interview-composer-status" disabled={pending != null}
+  return <div className={`interview-composer${compact ? ' compact' : ''}`} ref={root}>
+    <textarea ref={textarea} value={draft} placeholder="Type an answer or add a detail…" maxLength={TYPED_TEXT_LIMIT} aria-label="Typed answer" aria-describedby="interview-composer-status interview-composer-hint" enterKeyHint="send" disabled={pending != null}
       onChange={event => { setDraft(event.target.value); setError(null); }}
       onKeyDown={event => {
-        if (event.nativeEvent.isComposing) return;
-        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void send(); }
+        // Enter (and Ctrl/Cmd+Enter) sends; Shift+Enter is a new line; an IME composition keeps its own Enter.
+        if (event.nativeEvent.isComposing || event.key !== 'Enter' || event.shiftKey) return;
+        event.preventDefault();
+        void send();
       }} />
     <div className="interview-composer-row">
-      <p className="interview-composer-status" id="interview-composer-status" role="status" data-error={error != null && pending == null ? '' : undefined}>{status}</p>
-      <button type="button" className="quiet-button" onClick={() => { setDraft(''); setError(null); }} disabled={!draft || pending != null}>Clear</button>
+      <div className="interview-composer-note">
+        <p className="interview-composer-status" id="interview-composer-status" role="status" data-error={error != null && pending == null ? '' : undefined}>{status}</p>
+        {!status && <p className="interview-composer-hint" id="interview-composer-hint">Enter to send · Shift+Enter for a new line</p>}
+      </div>
+      <button type="button" className="quiet-button" onClick={() => { textarea.current?.focus(); setDraft(''); setError(null); }} disabled={!draft || pending != null}>Clear</button>
       <button type="button" className="interview-composer-send" onClick={() => { void send(); }} disabled={!canSend}><Send size={16} aria-hidden="true" />Send</button>
     </div>
   </div>;
@@ -198,7 +245,46 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
 }) {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const draft = useRef('');
-  const trackDraft = useCallback((value: string) => { draft.current = value; }, []);
+  const [hasDraft, setHasDraft] = useState(false);
+  const trackDraft = useCallback((value: string) => { draft.current = value; setHasDraft(value !== ''); }, []);
+  // Typing mode: focus entered the composer, or a draft exists. Focus anywhere in the primary column (the transcript,
+  // the compact Sam controls) keeps it, so reading back or toggling the mic does not collapse the layout.
+  const [typingFocus, setTypingFocus] = useState(false);
+  const typing = typingFocus || hasDraft;
+  const [typingTranscriptHidden, setTypingTranscriptHidden] = useState(false);
+  const showTranscript = typing ? !typingTranscriptHidden : transcriptOpen;
+  const primary = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    // Fit the typing layout between the primary column's top and the bottom of the viewport. If the page was scrolled
+    // past the column (or the column starts low), bring it to a usable top once, before any typing happens.
+    const node = primary.current;
+    if (!typing || !node) return;
+    const fit = () => {
+      const top = node.getBoundingClientRect().top;
+      // On phones the session bar sticks to the top; start below it.
+      const bar = node.closest('.interview-conversation')?.querySelector<HTMLElement>('.interview-session-bar');
+      const floor = bar && getComputedStyle(bar).position === 'sticky' ? bar.getBoundingClientRect().bottom + 8 : 12;
+      const fitted = Math.round(Math.min(Math.max(top, floor), window.innerHeight * .4));
+      node.style.setProperty('--typing-top', `${fitted}px`);
+      if (Math.abs(top - fitted) > 1) window.scrollBy(0, top - fitted);
+      // The page cannot always scroll that far (short pages, column near the end): shrink the column so it still
+      // fits the viewport where it actually landed.
+      const settled = node.getBoundingClientRect().top;
+      if (settled > fitted + 1) node.style.setProperty('--typing-top', `${Math.round(settled)}px`);
+      else if (settled < fitted - 1) node.style.setProperty('--typing-top', `${Math.round(2 * fitted - settled)}px`);
+    };
+    fit();
+    // A resized window (or a phone keyboard changing the viewport) refits the column.
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [typing]);
+  const focusComposer = () => primary.current?.querySelector<HTMLTextAreaElement>('.interview-composer textarea')?.focus();
+  const toggleTranscript = () => typing ? setTypingTranscriptHidden(value => !value) : setTranscriptOpen(value => !value);
+  const closeTranscript = () => {
+    if (typing) { setTypingTranscriptHidden(true); focusComposer(); return; }
+    setTranscriptOpen(false);
+    transcriptButton.current?.focus();
+  };
   // Ending never submits a draft; it asks before discarding one.
   const end = () => { if (draft.current && !window.confirm('Discard your unsent typed answer and end the interview?')) return; onEnd(); };
   const transcriptButton = useRef<HTMLButtonElement>(null);
@@ -215,12 +301,15 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
     {phase === 'paused' ? <ConnectionPaused snapshot={snapshot} link={link} noun="interview" endLabel="End & get summary" onResume={onResume} onEnd={end} /> : phase === 'live' && <ConnectionUnstable link={link} />}
     {warning && <div className="sim-session-warning" role="status"><div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong><p>{warning.kind === 'idle' ? `The interview will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before the interview ends automatically.`}</p></div>{warning.kind === 'idle' && <button onClick={onContinue}>Continue interview</button>}</div>}
     <div className="interview-live-grid">
-      <div className="interview-primary">
-        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'participant' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
-          <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
+      <div className="interview-primary" ref={primary} data-mode={typing ? 'typing' : 'voice'} data-transcript={showTranscript ? 'open' : 'closed'}
+        onFocus={event => { if ((event.target as Element).closest('.interview-composer')) setTypingFocus(true); }}
+        onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTypingFocus(false); }}>
+        {/* While typing, pressing the compact strip keeps focus where it is so the layout does not shift under the pointer. */}
+        <div className="interview-sam-stage sim-panel" onMouseDown={event => { if (typing) event.preventDefault(); }}><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'participant' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
+          <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''} title={typing ? micOff ? 'Mic off' : 'Mic on' : undefined}>{micOff ? <MicOff size={18} aria-hidden="true" /> : <Mic size={18} aria-hidden="true" />}<span className="interview-control-label">{micOff ? 'Mic off' : 'Mic on'}</span></button><button ref={transcriptButton} onClick={toggleTranscript} aria-expanded={showTranscript} aria-controls="interview-live-transcript" title={typing ? 'Transcript' : undefined}><FileText size={18} aria-hidden="true" /><span className="interview-control-label">Transcript</span></button><button onClick={onAudio} disabled={phase === 'ending'} title={typing ? 'Audio' : undefined}><Volume2 size={18} aria-hidden="true" /><span className="interview-control-label">Audio</span></button></div>
         </div>
         {onComposing && onSubmitText && <InterviewComposer disabled={phase !== 'live' || automaticFinish} onComposing={onComposing} onSubmit={onSubmitText} onDraft={trackDraft} />}
-        {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}
+        {showTranscript && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={closeTranscript}>{typing ? 'Hide' : 'Close'}</button></header><LiveTranscript entries={snapshot?.transcript ?? []} /></section>}
         <InterviewBackgroundLive notes={snapshot?.background} />
       </div>
       <div className="interview-observations"><InterviewReadings evaluation={snapshot?.evaluation} status={phase === 'ending' && snapshot?.evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} /><InterviewTopics evaluation={snapshot?.evaluation} /></div>

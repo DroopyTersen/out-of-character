@@ -62,11 +62,11 @@ const archive: Archive = {
 };
 
 // Approved debriefs live in this process; the templates are always served.
+const debriefStore = memoryDebriefStore();
 const debriefs: DebriefGates = {
-  store: memoryDebriefStore(), catalog: specCatalog(memoryDebriefStore()),
+  store: debriefStore, catalog: specCatalog(debriefStore),
   draft: (input, signal) => draftDebrief({ description: input.description, interviewer: { name: input.base.interviewer.name }, model: providers.language.agent, signal }),
 };
-debriefs.catalog = specCatalog(debriefs.store);
 
 /**
  * One hosted session per attempt id, opened on first use under the debrief its start names (the first template for

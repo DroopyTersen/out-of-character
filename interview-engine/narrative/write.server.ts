@@ -13,13 +13,12 @@ import { narrativeInstructions } from './narrative.prompt';
 export function writeNarrative(input: NarrativeInput, providers: Pick<Providers, 'language' | 'telemetry'>, signal?: AbortSignal): NarrativeRun {
   const approved = narrativeRequestSchema.parse(input);
   if (!approved.transcript.some(passage => passage.speaker === 'participant' && passage.text.trim())) throw new Error('Interview summary unavailable.');
-  const schema = narrativeDocumentSchema;
   let settle!: (narrative: Narrative) => void;
   const result = new Promise<Narrative>(resolve => { settle = resolve; });
   const output = streamText({
     model: providers.language.agent,
     providerOptions: { openai: { reasoningEffort: 'medium', forceReasoning: true, store: false } },
-    output: Output.object({ schema }),
+    output: Output.object({ schema: narrativeDocumentSchema }),
     system: narrativeInstructions,
     prompt: JSON.stringify(approved),
     maxOutputTokens: 12_000, maxRetries: 0, abortSignal: signal,
@@ -29,7 +28,7 @@ export function writeNarrative(input: NarrativeInput, providers: Pick<Providers,
     onEnd: event => {
       const usage = { inputTokens: event.totalUsage.inputTokens ?? null, outputTokens: event.totalUsage.outputTokens ?? null,
         reasoningTokens: event.totalUsage.outputTokenDetails.reasoningTokens ?? null, cachedTokens: event.totalUsage.inputTokenDetails.cacheReadTokens ?? null };
-      const parsed = schema.safeParse(event.output);
+      const parsed = narrativeDocumentSchema.safeParse(event.output);
       settle(event.finishReason === 'stop' && parsed.success
         ? { document: parsed.data, failure: null, usage }
         : { document: null, failure: 'invalid', usage });

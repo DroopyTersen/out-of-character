@@ -3,9 +3,9 @@ import type { ReportState } from '../../../core/simulator/report';
 import type { SessionActor } from '../../../interview-engine/interview/interview.server';
 import type { NarrativeInput, NarrativeState } from '../../../interview-engine/narrative/narrative.server';
 import { NarrativeRunner, within } from '../../../interview-engine/narrative/narrativeRun.server';
-import { simulatorJson } from '../simulator/api';
 import { narrativeRunner, participantSpoke, type Narrate } from './narrative';
 import { NARRATIVE_VERSION } from '../../../interview-engine/shared/narrative';
+import { jsonResponse } from '../http';
 
 export type HostedNarrative = {
   narrate: Narrate;
@@ -43,9 +43,9 @@ export class HostedSession {
     if (reply.terminal) {
       // Terminal reads carry the narrative's state; a poll waits briefly for a running narrative to settle.
       const report = action === 'poll' && this.narrative ? reportState(await this.narrative.read()) : this.reportState();
-      return simulatorJson({ ...reply.body as object, report });
+      return jsonResponse({ ...reply.body as object, report });
     }
-    return simulatorJson(reply.body, reply.status);
+    return jsonResponse(reply.body, reply.status);
   }
 
   private reportState(): ReportState<InterviewSummaryContent> {
@@ -58,11 +58,11 @@ export class HostedSession {
     const closing = this.actor.closing;
     if (closing) {
       try { await within(closing, 40_000); }
-      catch { return simulatorJson({ error: 'The conversation is still closing.' }, 409); }
+      catch { return jsonResponse({ error: 'The conversation is still closing.' }, 409); }
     }
     const snapshot = this.actor.snapshot();
-    if (!snapshot || !['ended', 'interrupted'].includes(snapshot.status)) return simulatorJson({ error: 'End the conversation before requesting its report.' }, 409);
-    if (this.reportState().status === 'ineligible') return simulatorJson({ error: 'There is not enough scored conversation to review.' }, 422);
+    if (!snapshot || !['ended', 'interrupted'].includes(snapshot.status)) return jsonResponse({ error: 'End the conversation before requesting its report.' }, 409);
+    if (this.reportState().status === 'ineligible') return jsonResponse({ error: 'There is not enough scored conversation to review.' }, 422);
     if (!this.narrative) {
       const { narrate, model, track } = this.options;
       const input = { transcript: snapshot.transcript, format: this.format, ...(this.context ? { context: this.context } : {}) };

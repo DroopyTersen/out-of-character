@@ -15,7 +15,7 @@ export type InterviewSummary = { status: 'pending' | 'ready' | 'unavailable'; te
 export type InterviewSummaryContent = z.infer<typeof interviewSummarySchema>;
 export type InterviewSession = { evaluation: InterviewEvaluation | null; summary: InterviewSummary | null; background?: InterviewBackground[] };
 
-export { asksToEnd, finishesTurn, isBackchannel, spokenWords, yieldsTurn } from '../interview-engine/interview/conversation/turns';
+export { isBackchannel, yieldsTurn } from '../interview-engine/interview/conversation/turns';
 export { COVERAGE_LEVEL_LABELS, coverageConfidence, mergeCoverage } from '../interview-engine/interview/conversation/coverage';
 
 export const emptyInterviewReadings = (): InterviewEvaluation['readings'] => emptyReadings<typeof interviewReadings, Speaker>(interviewReadings);

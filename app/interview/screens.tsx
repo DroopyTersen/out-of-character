@@ -22,7 +22,7 @@ const portraits: Record<InterviewVoiceId, string> = {
   'sam-gleam': interviewVoices[1].image,
 };
 
-export function samClient(voiceId: InterviewVoiceId): Client {
+function samClient(voiceId: InterviewVoiceId): Client {
   return {
     id: voiceId,
     name: INTERVIEWER_NAME,
@@ -175,7 +175,7 @@ function InterviewBackgroundLive({ notes }: { notes: InterviewBackground[] | und
  * An optional typed answer alongside the voice conversation. A nonempty draft pauses the microphone until it is sent
  * or cleared; a failed send keeps the draft. `onDraft` lets the page ask before discarding it.
  */
-export function InterviewComposer({ disabled, onComposing, onSubmit, onDraft, compact = false }: {
+function InterviewComposer({ disabled, onComposing, onSubmit, onDraft, compact = false }: {
   disabled: boolean; onComposing: (value: boolean) => void; onSubmit: (text: string) => Promise<unknown>;
   onDraft?: (draft: string) => void; compact?: boolean;
 }) {

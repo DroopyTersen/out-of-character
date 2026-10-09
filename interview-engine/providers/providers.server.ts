@@ -1,5 +1,4 @@
 import type { LanguageModel, TelemetryOptions, Tool } from 'ai';
-import type { EngineEvent } from './diagnostics.server';
 import { foundryProvider, type FoundryConfig } from './foundry.server';
 import { gptLiveProvider } from './gptLive.server';
 import { unconfiguredJudge, type Judge } from './judge.server';
@@ -24,8 +23,8 @@ export type Providers = {
   /** Sol's structured call to the agent model, with the prompt caching the deployment supports. */
   structured: StructuredRequest;
   judge: Judge;
+  /** Provider telemetry for the SDK calls that accept it; a host adds it beside the providers it builds. */
   telemetry?: TelemetryOptions;
-  log?: (event: EngineEvent) => void;
 };
 
 /** The deployment a language model names, for diagnostics records. */
@@ -34,7 +33,6 @@ export const modelName = (model: LanguageModel) => typeof model === 'string' ? m
 export type FoundryPlatform = {
   fetch?: typeof fetch;
   socket?: SocketOpener;
-  telemetry?: TelemetryOptions;
 };
 
 export function foundryProviders(config: FoundryConfig & { judge?: Judge }, platform: FoundryPlatform = {}): Providers {
@@ -45,6 +43,5 @@ export function foundryProviders(config: FoundryConfig & { judge?: Judge }, plat
     webSearch: language.tools.webSearch({ searchContextSize: 'low' }),
     structured: structuredWith(config, platform.fetch ?? fetch),
     judge: config.judge ?? unconfiguredJudge(),
-    ...(platform.telemetry ? { telemetry: platform.telemetry } : {}),
   };
 }

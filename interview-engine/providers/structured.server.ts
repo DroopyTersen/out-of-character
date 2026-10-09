@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { foundryUrl, type FoundryConfig } from './foundry.server';
 
-// A copy of ai/simulator/sol.server.ts: the simulator keeps its own so it does not depend on the engine.
-// The error class names are unchanged so diagnostics records read the same after the interview moves here.
+// Grew from ai/simulator/sol.server.ts, which the simulator keeps so it does not depend on the engine. The error class
+// names are unchanged so diagnostics records read the same.
 
 /** What one structured response reported. The shape of the simulator's `DirectorUsage`. */
 export type ModelUsage = { inputTokens: number | null; outputTokens: number | null; cachedTokens?: number | null; cacheWriteTokens?: number; reasoningTokens?: number };
@@ -34,30 +34,31 @@ const responseSchema = z.object({
 
 /** An input message. `cache` ends a reusable prefix there with an explicit breakpoint; at most four may be written per request. */
 export type SolMessage = { role: 'developer' | 'user'; text: string; cache?: boolean };
-type SolContext = { context: unknown } | { messages: SolMessage[]; cacheKey: string | null };
-type SolRequest = {
+/** A structured call to the agent model with the resource and credentials already bound: what the Providers carry. */
+export type StructuredInput = {
   signal: AbortSignal; instructions: string; name: string; schema: z.ZodType; effort?: 'low' | 'medium'; maxOutputTokens?: number;
   /** The JSON schema sent, when it should differ from `schema`'s, such as without string lengths. */
   jsonSchema?: Record<string, unknown>;
+  messages: SolMessage[];
+  /** Null sends no cache options, for deployments that reject them. */
+  cacheKey: string | null;
 };
-/** A structured call to the agent model with the resource and credentials already bound: what the Providers carry. */
-export type StructuredInput = SolRequest & SolContext;
 export type StructuredResult = { value: unknown; model: string; usage: ModelUsage };
 export type StructuredRequest = (input: StructuredInput) => Promise<StructuredResult>;
 
 /**
  * One strict-JSON Sol response. The caller validates the parsed value against the dialogue it supplied.
- * With messages and a cache key, only the marked prefixes are cached (explicit mode); a null key sends no cache options.
+ * With a cache key, only the marked prefixes are cached (explicit mode).
  */
 export async function requestSol(input: { foundry: FoundryConfig } & StructuredInput, request: (url: string, options: RequestInit) => Promise<Response> = fetch): Promise<StructuredResult> {
   const effort = input.effort ?? 'low';
-  const cache = 'messages' in input && input.cacheKey != null;
-  const body = 'messages' in input ? {
+  const cache = input.cacheKey != null;
+  const body = {
     input: input.messages.map(item => ({ type: 'message', role: item.role, content: [{
       type: 'input_text', text: item.text, ...(cache && item.cache ? { prompt_cache_breakpoint: { mode: 'explicit' } } : {}),
     }] })),
     ...(cache ? { prompt_cache_options: { mode: 'explicit' }, prompt_cache_key: input.cacheKey } : {}),
-  } : { input: JSON.stringify(input.context) };
+  };
   const response = await request(foundryUrl(input.foundry, '/responses'), {
     method: 'POST', signal: input.signal,
     headers: { 'api-key': input.foundry.apiKey, 'Content-Type': 'application/json' },

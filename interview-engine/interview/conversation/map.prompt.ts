@@ -53,10 +53,9 @@ export function mapInstructions(spec: MappedSpec): string {
 
 /** Static and cached: the spec's purpose and setting, and its topics with what "explored" means for each. */
 export function mapSeed(spec: MappedSpec): string {
-  const criteria = new Map(spec.topics.flatMap(topic => topic.objectives.map(item => [item.id, item.criterion])));
   return [
     `PURPOSE\n${spec.framing.purpose}`,
     `SETTING\n${spec.framing.setting}`,
-    `${spec.framing.topic.toUpperCase()}S (id - label: what explored means)\n${spec.topics.map(topic => `${topic.label}\n${topic.objectives.map(item => `- ${item.id} - ${item.label}: ${criteria.get(item.id)}`).join('\n')}`).join('\n')}`,
+    `${spec.framing.topic.toUpperCase()}S (id - label: what explored means)\n${spec.topics.map(topic => `${topic.label}\n${topic.objectives.map(item => `- ${item.id} - ${item.label}: ${item.criterion}`).join('\n')}`).join('\n')}`,
   ].join('\n\n');
 }

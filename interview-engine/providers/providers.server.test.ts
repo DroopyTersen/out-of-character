@@ -29,11 +29,6 @@ test('the host injects a calibrated judge without constructing a network session
   expect(providers.judge.model).toMatchObject({ provider: 'openai.decisions', modelId: 'gpt-6-luna' });
 });
 
-test('telemetry passes through to the providers', () => {
-  const telemetry = { isEnabled: true, functionId: 'interview' };
-  expect(foundryProviders(testFoundry, { telemetry }).telemetry).toBe(telemetry);
-});
-
 test('without a judge the providers build, and only a judging call fails', async () => {
   const providers = foundryProviders(testFoundry);
   expect(providers.judge.model).toMatchObject({ modelId: 'unconfigured' });
@@ -59,8 +54,8 @@ test('the structured call reaches the agent deployment on the resource with its 
   });
   const result = await providers.structured({
     signal: new AbortController().signal, instructions: 'Answer with ok.', name: 'probe', schema: z.object({ ok: z.boolean() }),
-    context: [{ role: 'user', content: 'Go.' }],
-  } as Parameters<typeof providers.structured>[0]);
+    messages: [{ role: 'user', text: 'Go.' }], cacheKey: null,
+  });
   expect(result).toMatchObject({ value: { ok: true }, model: 'agent-deployment' });
   expect(requests).toHaveLength(1);
   expect(requests[0]!.url).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');

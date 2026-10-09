@@ -9,7 +9,7 @@ import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type Memory
 import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
 import { testFraming, testTechniques } from '../conversation/testSpec';
 import { FencedError } from '../seams.server';
-import type { PublicSnapshot } from './checkpoint';
+import type { InterviewSnapshot as PublicSnapshot } from '../../shared/snapshot';
 import { SessionActor, type SessionOptions, type SessionServices } from './session.server';
 import { resumeInstruction, typedAnswerCue } from './voice.prompt';
 
@@ -299,6 +299,27 @@ test('a provider drop pauses a live conversation, and a resume continues it with
   expect(body(await f.send(actor, 'ready')).status).toBe('live');
   await f.send(actor, 'end');
   await f.background.settle();
+});
+
+test('a closed browser link holds a live conversation for the browser to resume, and a fenced close writes nothing', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  f.at(5000);
+  await actor.close('hold');
+  await f.background.settle();
+  expect(socket.readyState).toBe(3);
+  expect(f.record.checkpoint!.snapshot).toMatchObject({ status: 'paused', pause: { reason: 'browser', pausedAt: EPOCH + 5000 } });
+  const held = structuredClone(f.record.checkpoint);
+  await actor.close('fenced');
+  await actor.close('hold');
+  expect(f.record.checkpoint).toEqual(held);
+  const replacement = fixture({ record: f.record, voice: f.voice, archive: f.archive });
+  replacement.at(6000);
+  const resumed = await replacement.restore();
+  expect(await replacement.send(resumed, 'resume', JSON.stringify({ sdp: attempt.sdp })).then(r => r.status)).toBe(200);
+  expect(body(await replacement.send(resumed, 'ready')).status).toBe('live');
+  await replacement.send(resumed, 'end');
+  await replacement.background.settle();
 });
 
 // Resource lifecycle: a provider session is paid for from creation, so none may be opened for an attempt that is

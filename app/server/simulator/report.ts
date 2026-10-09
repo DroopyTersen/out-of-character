@@ -1,7 +1,7 @@
 import { createTextStreamResponse } from 'ai';
 import { type REPORT_PROVENANCE, type ReportResult } from '../../../ai/simulator/report.server';
 import { idleReport, REPORT_MAX_STARTS, REPORT_DEADLINE_MS, type CoachingReport, type ReportFailure, type ReportState } from '../../../core/simulator/report';
-import { simulatorJson } from './api';
+import { jsonResponse } from '../http';
 
 export type ReportAttempt = { startedAt: number; endedAt: number; failure: ReportFailure | null; usage: ReportResult['usage'] };
 export type SettledReport<T> = { report: T | null; attempts: ReportAttempt[] };
@@ -25,10 +25,10 @@ export class SessionReport<T = CoachingReport> {
   }
 
   start(request: Request): Response {
-    if (this.state.status === 'running') return simulatorJson({ error: 'Your report is already being prepared.' }, 409);
-    if (this.state.status === 'completed') return simulatorJson(this.state.report);
-    if (this.state.starts >= REPORT_MAX_STARTS) return simulatorJson({ error: 'The report retry has already been used.' }, 409);
-    if (request.signal.aborted) return simulatorJson({ error: 'The report request was cancelled.' }, 400);
+    if (this.state.status === 'running') return jsonResponse({ error: 'Your report is already being prepared.' }, 409);
+    if (this.state.status === 'completed') return jsonResponse(this.state.report);
+    if (this.state.starts >= REPORT_MAX_STARTS) return jsonResponse({ error: 'The report retry has already been used.' }, 409);
+    if (request.signal.aborted) return jsonResponse({ error: 'The report request was cancelled.' }, 400);
     const start = this.state.starts + 1, startedAt = Date.now();
     this.state = { status: 'running', starts: start, report: null, failure: null };
     let resolve!: () => void;
@@ -58,7 +58,7 @@ export class SessionReport<T = CoachingReport> {
       reader = this.generate(controller.signal, finish).getReader();
     } catch {
       finish({ report: null, failure: 'provider', usage: null });
-      return simulatorJson({ error: 'The report could not be started.' }, 502);
+      return jsonResponse({ error: 'The report could not be started.' }, 502);
     }
     const stream = new ReadableStream<string>({
       async pull(output) {

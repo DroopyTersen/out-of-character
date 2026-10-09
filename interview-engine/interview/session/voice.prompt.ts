@@ -6,7 +6,10 @@ import type { Passage } from '../../shared/transcript';
 export const NO_EXTERNAL_TASK = 'No external task is available or necessary in this conversation. Continue in your assigned role using the information you actually have. Make no claims about work being done outside this conversation.';
 
 /** Realtime context headroom for the rebuilt memory; the oldest passages are dropped first. */
-export const RESUME_SEED_CHARACTERS = 40_000;
+const RESUME_SEED_CHARACTERS = 40_000;
+/** A typed answer's transcript id, which the voice session's delivery events carry back. */
+export const typedItemId = (id: string) => `typed-${id}`;
+export const isTypedItem = (id: string) => id.startsWith('typed-');
 const other = 'the participant';
 const capitalized = (text: string) => text[0]!.toUpperCase() + text.slice(1);
 
@@ -48,7 +51,7 @@ export function resumeInstruction(interviewerName: string, transcript: Passage[]
     own ? `The last thing you said was ${quote(own)}.` : '',
     theirs ? `The last thing ${other} said was ${quote(theirs)}.` : '',
     spoken.at(-1)?.speaker === 'participant'
-      ? spoken.at(-1)!.id.startsWith('typed-')
+      ? isTypedItem(spoken.at(-1)!.id)
         ? `${capitalized(other)} typed that last answer rather than speaking it, and it is complete. Respond to it now, then listen.`
         : `${capitalized(other)} was speaking when the call dropped and may have been cut off. Invite them to finish their thought, briefly echoing their last words, then listen.`
       : 'If your last question is still unanswered, ask it again briefly in fresh words; otherwise continue naturally from the last exchange. Then listen.',

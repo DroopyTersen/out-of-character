@@ -1,6 +1,9 @@
 import { createTextStreamResponse } from 'ai';
 import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState } from './narrative.server';
 import type { NarrativeAttempt } from '../shared/narrative';
+import { within } from '../shared/timing';
+
+export { within };
 
 export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
 export type { NarrativeAttempt } from '../shared/narrative';
@@ -144,10 +147,3 @@ export class NarrativeRunner {
   }
 }
 
-/** Rejects when `promise` has not settled within `ms`. */
-export async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  try {
-    return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Operation timed out.')), ms); })]);
-  } finally { clearTimeout(timer!); }
-}

@@ -24,7 +24,7 @@ export const producerServices = { generateMap, evaluateTurn, lookupInterviewBack
 type Options = {
   spec: MappedSpec;
   attemptId: string; startedAt: number;
-  providers: Omit<Providers, 'voice' | 'telemetry' | 'log'>;
+  providers: Omit<Providers, 'voice' | 'telemetry'>;
   services: typeof producerServices;
   /** Settled passages in order, stopping at the first still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];

@@ -1,6 +1,7 @@
 import type { Passage } from '../shared/transcript';
 import type { ProducerLogRecord, ProducerSummary } from './conversation/records';
-import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus, PublicSnapshot } from './session/checkpoint';
+import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus } from './session/checkpoint';
+import type { InterviewSnapshot } from '../shared/snapshot';
 import type { NarrativeProvenance } from '../shared/narrative';
 
 export type { Checkpoint, Lease } from './session/checkpoint';
@@ -34,7 +35,6 @@ export type SessionStore = {
 export type Background = { track(work: Promise<unknown>): void };
 /** Upserts the attempt's archive row by id. Best effort: a failed write is logged, never retried. */
 export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
-export type Seams = { store: SessionStore; background: Background; archive: Archive };
 
 /**
  * One archived attempt. A partial row is written every 30 seconds while live; the final row once the attempt ends,
@@ -48,7 +48,7 @@ export type InterviewArchiveRow = {
   state: 'partial' | 'final';
   capturedAt: number;
   /** The public snapshot as the browser saw it at `capturedAt`. */
-  snapshot: PublicSnapshot;
+  snapshot: InterviewSnapshot;
   transcript: Passage[];
   narrative: NarrativeStatus | null;
   /** Sol, Jev and Luna calls with timings, then the coverage grades. The host trims it to its byte budget. */

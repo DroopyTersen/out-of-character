@@ -5,7 +5,7 @@ import { SessionActor, type Background, type Checkpoint, type Lease, type Sessio
 import { foundryProviders, type Providers } from '../../../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../../../interview-engine/providers/decisionJudge.server';
 import { startSchema } from '../../../interview-engine/shared/protocol';
-import { LIVE_MODEL } from '../simulator/live.server';
+import { cloudflareSocket, LIVE_MODEL } from '../simulator/live.server';
 import { d1Archive } from './archiveD1.server';
 import { HostedSession } from './hosted';
 import { templates, workerDebriefs, type HostedSpec, type SpecCatalog } from './debriefs';
@@ -38,14 +38,6 @@ export function durableStore(storage: DurableObjectStorage): SessionStore {
 
 export const durableBackground = (ctx: Pick<DurableObjectState, 'waitUntil'>): Background => ({ track: work => ctx.waitUntil(work) });
 
-/** The Cloudflare upgrade: the socket arrives on the response and must be accepted before use. */
-const acceptSocket = (response: Response) => {
-  const socket = response.webSocket;
-  if (!socket) return null;
-  socket.accept();
-  return socket;
-};
-
 /** Cloudflare's side of a WebSocket upgrade: the accepted server socket, and the 101 that hands the other end over. */
 const acceptUpgrade = () => {
   const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
@@ -62,7 +54,7 @@ export type InterviewObjectOverrides = {
 };
 
 /** The complete accepted definition is pinned before any voice session opens. */
-export const SPEC_KEY = 'spec';
+const SPEC_KEY = 'spec';
 type SpecIdentity = Pick<HostedSpec, 'id' | 'version'>;
 type PinnedSpec = InterviewDefinition | SpecIdentity;
 
@@ -109,7 +101,7 @@ export class InterviewObject extends DurableObject<Env> {
     const { ctx, env, overrides } = this;
     // Unconfigured, the paid calls fail, but owned attempts can still be read and closed.
     const foundry: FoundryConfig = foundryConfigured(env) ? foundryConfig(env) : { resourceName: '', apiKey: '', agentModel: '', fastModel: '', liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL };
-    const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { socket: acceptSocket });
+    const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { socket: cloudflareSocket });
     const background = durableBackground(ctx);
     const actor = await SessionActor.restore({
       plan: spec.plan, config: spec.config, context: spec.context, providers, store: durableStore(ctx.storage), background,
@@ -139,7 +131,7 @@ export class InterviewObject extends DurableObject<Env> {
           return this.session;
         }
       }
-      return this.session ??= await this.open(this.catalog.templates[0] ?? templates[0]!);
+      return this.session ??= await this.open(this.catalog.templates[0]!);
     });
     this.turn = next.catch(() => undefined);
     return next;

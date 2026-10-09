@@ -1,7 +1,7 @@
 import { experimental_evaluate, type Experimental_EvaluationModel, type Experimental_EvaluationQuestion } from 'ai';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../shared/transcript';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
-import { dialogueState, type InterviewAnswers } from './evaluate.server';
+import { booleanProbability as probability, choice, dialogueState, type InterviewAnswers } from './evaluate.server';
 import type { ConversationMap, MapThread } from './map';
 import { THREAD_STATES, threadKey, type ThreadState, type TurnReading } from './ranking';
 import { isBackchannel, yieldsTurn } from './turns';
@@ -109,26 +109,15 @@ export function turnQuestions(map: ConversationMap, turn: TranscriptEntry[]): Re
   return questions;
 }
 
-const probability = (answers: InterviewAnswers, id: string) => {
-  const answer = answers[id];
-  if (answer?.type !== 'boolean' || !Number.isFinite(answer.probability) || answer.probability < 0 || answer.probability > 1) throw new Error(`Invalid ranking judgment: ${id}`);
-  return answer.probability;
-};
-const choice = <T extends string>(answers: InterviewAnswers, id: string, options: readonly T[]) => {
-  const answer = answers[id];
-  if (answer?.type !== 'choice' || !options.includes(answer.choice as T)) throw new Error(`Invalid ranking selection: ${id}`);
-  return answer.choice as T;
-};
-
 export function readTurnAnswers(map: ConversationMap, answers: InterviewAnswers, passageId: string, atMs: number): TurnReading {
   const threads = map.threads.filter(thread => thread.status === 'open');
   const open = threads.map(thread => thread.id);
-  const focus = open.length ? choice(answers, 'focus', ['none', ...open]) : 'none';
+  const focus = open.length ? choice(answers, 'focus', ['none', ...open]).choice : 'none';
   return {
     passageId, atMs, focus: focus === 'none' ? null : focus, novel: probability(answers, 'new'), feedback: probability(answers, 'feedback'),
     keys: Object.fromEntries(threads.map(thread => [thread.id, threadKey(thread)])),
     natural: Object.fromEntries(open.map(id => [id, probability(answers, `natural:${id}`)])),
-    states: Object.fromEntries(open.map(id => [id, choice(answers, `state:${id}`, THREAD_STATES)])),
+    states: Object.fromEntries(open.map(id => [id, choice(answers, `state:${id}`, THREAD_STATES).choice])),
   };
 }
 

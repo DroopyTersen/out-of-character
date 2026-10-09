@@ -1,19 +1,18 @@
 import { z } from 'zod';
-import { interviewContextSchema, interviewPlanSchema, type InterviewContext, type InterviewPlan, type InterviewTopic } from '../shared/plan';
+import { id, interviewContextSchema, interviewPlanSchema, text, type InterviewContext, type InterviewPlan, type InterviewTopic } from '../shared/plan';
+import type { InterviewLimits } from '../shared/spec';
 
 import type { BriefedSpec } from './voice/brief.server';
 import type { JudgedSpec } from './conversation/rubric.prompt';
 import type { MappedSpec } from './conversation/map.prompt';
 
 /** Host runtime choices, separate from the organizer's approved content. */
-const text = z.string().trim().min(1);
-const id = text.regex(/^[A-Za-z0-9_-]+$/, 'Use letters, numbers, underscores or hyphens for IDs.');
 export const interviewConfigSchema = z.object({
   interviewer: z.object({ name: text, persona: text, voices: z.array(z.object({ id, voice: text, label: text, presentation: text, image: text })).min(1)
     .refine(voices => new Set(voices.map(voice => voice.id)).size === voices.length, 'Voice IDs must be unique.') }),
   readings: z.array(z.object({ id, label: text, description: text, rubric: z.object({ task: text, criteria: z.array(text).length(5) }) }))
     .refine(readings => new Set(readings.map(reading => reading.id)).size === readings.length, 'Reading IDs must be unique.'),
-  limits: z.object({ durationSeconds: z.number().int().positive(), idleWarningMs: z.number().int().positive(), idleTimeoutMs: z.number().int().positive(), pauseHoldMs: z.number().int().nonnegative(), maxResumes: z.number().int().nonnegative() })
+  limits: (z.object({ durationSeconds: z.number().int().positive(), idleWarningMs: z.number().int().positive(), idleTimeoutMs: z.number().int().positive(), pauseHoldMs: z.number().int().nonnegative(), maxResumes: z.number().int().nonnegative() }) satisfies z.ZodType<InterviewLimits>)
     .refine(limits => limits.idleWarningMs < limits.idleTimeoutMs, 'The idle warning must precede the timeout.').optional(),
 });
 export type InterviewConfig = z.infer<typeof interviewConfigSchema>;
@@ -26,7 +25,7 @@ export type ResolvedInterview = BriefedSpec & Omit<JudgedSpec, 'topics'> & Omit<
 };
 
 /** Leaves retain their identity. Parent intent and conditions remain attached to their descendants. */
-export function coverageTopics(topics: InterviewTopic[], parents: InterviewTopic[] = []): { id: string; label: string; criterion: string; appliesWhen?: string }[] {
+function coverageTopics(topics: InterviewTopic[], parents: InterviewTopic[] = []): { id: string; label: string; criterion: string; appliesWhen?: string }[] {
   return topics.flatMap(topic => {
     if (topic.topics?.length) return coverageTopics(topic.topics, [...parents, topic]);
     const conditions = [...parents, topic].flatMap(item => item.appliesWhen ? [item.appliesWhen] : []);

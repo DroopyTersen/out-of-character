@@ -3,7 +3,7 @@ import { actorBrief, getClient, getScenario } from '../../../ai/simulator/scenar
 import { gptLiveProvider, LIVE_MODEL } from '../../../interview-engine/providers/gptLive.server';
 
 export { LIVE_MODEL, LiveSessionGone, transcriptEvent } from '../../../interview-engine/providers/gptLive.server';
-export const NO_EXTERNAL_TASK = 'No external task is available or necessary in this conversation. Continue in your assigned role using the information you actually have. Make no claims about work being done outside this conversation.';
+export { NO_EXTERNAL_TASK } from '../../../interview-engine/interview/session/voice.prompt';
 
 /** A resumed session appends the rebuilt conversation after the unchanged actor brief. */
 export function liveConfiguration(scenarioId: string, clientId: string, context?: string) {
@@ -16,7 +16,7 @@ export function liveConfiguration(scenarioId: string, clientId: string, context?
 }
 
 /** The Cloudflare upgrade: the socket arrives on the response and must be accepted before use. */
-const cloudflareSocket = (response: Response) => {
+export const cloudflareSocket = (response: Response) => {
   const socket = response.webSocket;
   if (!socket) return null;
   socket.accept();

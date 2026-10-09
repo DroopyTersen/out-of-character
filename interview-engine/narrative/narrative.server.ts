@@ -11,8 +11,7 @@ export type Narrative =
 /** One writing attempt: text as it is written, and how it ended. `result` settles once, after or alongside the stream. */
 export type NarrativeRun = { stream: ReadableStream<string>; result: Promise<Narrative> };
 /** The entire writing input: participant transcript, requested format and explicit supplied context. */
-export type ReportInput = NarrativeRequest;
-export type NarrativeInput = ReportInput;
+export type NarrativeInput = NarrativeRequest;
 
 export type NarrativeState = { starts: number } & (
   | { status: 'idle' | 'running'; document: null; failure: null }

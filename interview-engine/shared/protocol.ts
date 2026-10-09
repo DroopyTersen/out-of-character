@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from './transcript';
+import { interviewContextSchema, reportFormatSchema } from './plan';
 
-// The browser's commands, as the HTTP poll protocol carries them. The field names are the practice simulator's
-// (scenarioId is the spec's id, clientId the voice's) until the browser moves to the renamed protocol.
+// Interview commands shared by HTTP and socket transports.
 
 const uuid = z.string().uuid();
 const quietDuration = z.number().int().min(0).max(60_000).nullable().optional();
@@ -18,7 +18,7 @@ export type Activity = z.infer<typeof activitySchema>;
 // The provider does not filter frontend events; deny data channels so the interviewer's context stays private.
 export const offerSchema = z.string().min(20).max(60_000).startsWith('v=0').refine(sdp => !/^m=(?!audio )/m.test(sdp), 'Only audio media is allowed.');
 /** The spec and voice are checked against the session's spec by the session. */
-export const startSchema = z.object({ id: uuid, scenarioId: z.string(), clientId: z.string(), sdp: offerSchema }).strict();
+export const startSchema = z.object({ id: uuid, planId: z.string(), voiceId: z.string(), sdp: offerSchema }).strict();
 export type StartInput = z.infer<typeof startSchema>;
 export const resumeSchema = z.object({ sdp: offerSchema }).strict();
 /** The capability the browser minted for the attempt, on every command. */
@@ -30,10 +30,13 @@ const passageSchema = z.object({
   id: z.string().min(1).max(100), speaker: z.enum(['participant', 'interviewer']), text: z.string().max(TRANSCRIPT_LIMIT.characters),
   startMs: z.number().min(0), endMs: z.number().min(0),
 }).strict();
-/** An imported transcript for the narrative route: the spec whose template writes it, and its passages within the evaluator's bound. */
+/** Phase 2 is independent of live sessions, plans, conversation maps and coverage judgments. */
 export const narrativeRequestSchema = z.object({
-  specId: z.string().min(1).max(100),
-  passages: z.array(passageSchema).max(TRANSCRIPT_LIMIT.entries).refine(passages => transcriptCharacters(passages) <= TRANSCRIPT_LIMIT.characters, 'The transcript is too long.'),
+  transcript: z.array(passageSchema).max(TRANSCRIPT_LIMIT.entries)
+    .refine(passages => transcriptCharacters(passages) <= TRANSCRIPT_LIMIT.characters, 'The transcript is too long.')
+    .refine(passages => new Set(passages.map(passage => passage.id)).size === passages.length, 'Passage IDs must be unique.'),
+  format: reportFormatSchema,
+  context: interviewContextSchema.optional(),
 }).strict();
 export type NarrativeRequest = z.infer<typeof narrativeRequestSchema>;
 

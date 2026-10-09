@@ -3,7 +3,6 @@ import { NarrativeRunner, type SettledNarrative } from '../../../interview-engin
 import { writeNarrative } from '../../../interview-engine/narrative/write.server';
 import type { Providers } from '../../../interview-engine/providers/providers.server';
 import type { NarrativeRequest } from '../../../interview-engine/shared/protocol';
-import type { InterviewSpec } from '../../../interview-engine/shared/spec';
 import type { Passage } from '../../../interview-engine/shared/transcript';
 import { simulatorJson } from '../simulator/api';
 
@@ -19,19 +18,18 @@ export const participantSpoke = (passages: readonly Passage[]) => passages.some(
  * The host's narrative for one transcript: one run plus one retry under the runner's deadline. The live attempt's
  * report and an imported transcript's narrative are both served by this.
  */
-export function narrativeRunner(template: NarrativeInput['template'], passages: Passage[], narrate: Narrate, onSettled?: (narrative: SettledNarrative) => void, track?: (work: Promise<unknown>) => void) {
-  return new NarrativeRunner(signal => narrate({ template, passages }, signal), { ...(onSettled ? { onSettled } : {}), ...(track ? { track } : {}) });
+export function narrativeRunner(input: NarrativeInput, narrate: Narrate, onSettled?: (narrative: SettledNarrative) => void, track?: (work: Promise<unknown>) => void) {
+  const frozen = structuredClone(input);
+  return new NarrativeRunner(signal => narrate(frozen, signal), { ...(onSettled ? { onSettled } : {}), ...(track ? { track } : {}) });
 }
 
 /**
  * An imported transcript's narrative, streamed back and not stored. No attempt is involved: the transcript arrives
- * in the request, the spec is one the host's catalog resolves, and nothing could rejoin the run, so it ends with the request.
+ * with its format and explicit context. Nothing could rejoin the run, so it ends with the request.
  */
-export async function importedNarrative(input: NarrativeRequest, resolve: (id: string) => Promise<Pick<InterviewSpec, 'id' | 'narrative'> | null>, narrate: Narrate, signal: AbortSignal): Promise<Response> {
-  const spec = await resolve(input.specId);
-  if (!spec) return simulatorJson({ error: 'Unknown interview.' }, 404);
-  if (!participantSpoke(input.passages)) return simulatorJson({ error: 'There is not enough conversation to write about.' }, 422);
-  const runner = narrativeRunner(spec.narrative as NarrativeInput['template'], input.passages, narrate);
+export async function importedNarrative(input: NarrativeRequest, narrate: Narrate, signal: AbortSignal): Promise<Response> {
+  if (!participantSpoke(input.transcript)) return simulatorJson({ error: 'There is not enough conversation to write about.' }, 422);
+  const runner = narrativeRunner(input, narrate);
   signal.addEventListener('abort', () => runner.cancel(), { once: true });
   return runner.attach(signal);
 }

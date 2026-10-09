@@ -13,7 +13,7 @@ import { socketPair } from '../../../interview-engine/client/testSocket';
 
 const { InterviewObject } = await import('./durableObject');
 
-export const interviewAttempt = { ...attempt, scenarioId: 'project-closeout', clientId: 'sam-cedar' };
+export const interviewAttempt = { id: attempt.id, sdp: attempt.sdp, planId: 'project-closeout', voiceId: 'sam-cedar' };
 const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 
 /** A narrative run that writes `text` as its JSON document at once and completes. */
@@ -74,7 +74,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
   const voice = {
     create: async (input: { voice: string; instructions: string }) => {
       const id = latest = ++creations === 1 ? provider : `${provider}-${creations}`;
-      const context = input.instructions.slice(interviewerBrief(spec, interviewAttempt.clientId).length).trim();
+      const context = input.instructions.slice(interviewerBrief(spec, interviewAttempt.voiceId).length).trim();
       created.push(context ? { context } : {});
       socketFor(id);
       return { id, sdp: 'v=0\r\nanswer' };

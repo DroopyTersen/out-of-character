@@ -19,17 +19,17 @@ const rows = [];
 const failures: { fixtureId: string; error: string }[] = [];
 for (const fixture of fixtures) {
   try {
-    const input = { scenarioId: INTERVIEW_SCENARIO_ID, clientId: 'sam-cedar', transcript: fixture.transcript,
+    const input = { planId: INTERVIEW_SCENARIO_ID, voiceId: 'sam-cedar', transcript: fixture.transcript,
       revision: fixture.transcript.length, apiKey, signal: AbortSignal.timeout(30_000) };
     const participant = await evaluateInterview(input);
     const heard = participant.objectives.filter(item => item.achieved).map(item => item.id);
     const checks = [
       ...fixture.expected.heard.map(id => ({ name: `heard:${id}`, passed: heard.includes(id) })),
       ...fixture.expected.unheard.map(id => ({ name: `unheard:${id}`, passed: !heard.includes(id) })),
-      ...(fixture.expected.highReadings?.map(id => ({ name: `high:${id}`, passed: (participant.readings[id].value ?? -1) >= 2.5 })) ?? []),
-      ...(fixture.expected.lowReadings?.map(id => ({ name: `low:${id}`, passed: (participant.readings[id].value ?? 5) < 2 })) ?? []),
-      ...(fixture.expected.blankReadings?.map(id => ({ name: `blank:${id}`, passed: participant.readings[id].value == null })) ?? []),
-      ...participant.objectives.filter(item => item.achieved).map(item => ({ name: `source:${item.id}`, passed: item.evidence?.speaker === 'trainee' && fixture.transcript.some(entry => entry.id === item.evidence?.entryId && entry.text === item.evidence.text) })),
+      ...(fixture.expected.highReadings?.map(id => ({ name: `high:${id}`, passed: (participant.readings[id]!.value ?? -1) >= 2.5 })) ?? []),
+      ...(fixture.expected.lowReadings?.map(id => ({ name: `low:${id}`, passed: (participant.readings[id]!.value ?? 5) < 2 })) ?? []),
+      ...(fixture.expected.blankReadings?.map(id => ({ name: `blank:${id}`, passed: participant.readings[id]!.value == null })) ?? []),
+      ...participant.objectives.filter(item => item.achieved).map(item => ({ name: `source:${item.id}`, passed: item.evidence?.speaker === 'participant' && fixture.transcript.some(entry => entry.id === item.evidence?.entryId && entry.text === item.evidence.text) })),
     ];
     rows.push({ fixtureId: fixture.id, participant, checks });
     console.log(`${fixture.id}: ${checks.filter(item => item.passed).length}/${checks.length} checks; participant ${participant.durationMs}ms`);

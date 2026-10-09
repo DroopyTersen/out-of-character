@@ -1,7 +1,7 @@
 export type Speaker = 'participant' | 'interviewer';
 /** One passage of speech. Times are milliseconds on the attempt's conversation clock. */
 export type Passage = { id: string; speaker: Speaker; text: string; startMs: number; endMs: number };
-/** A quoted passage supporting a reading. Generic in the speaker while the running code still uses the practice simulator's names. */
+/** A quoted passage supporting a reading. The default speaker type is the canonical interview role. */
 export type Evidence<S extends string = Speaker> = { entryId: string; speaker: S; text: string };
 
 /** Evaluator input bound. A live session stops accepting speech beyond it so final grading stays valid. */

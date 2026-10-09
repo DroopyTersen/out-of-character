@@ -1,5 +1,5 @@
 import type { TopicGroup } from '../../shared/spec';
-import type { WireSpeaker as Speaker } from '../wire';
+import type { Speaker } from '../../shared/transcript';
 
 /**
  * Sol's conversation map: a loose graph of what the participant has said and the open gaps worth pulling on.
@@ -155,11 +155,11 @@ export function applyMapUpdate(previous: ConversationMap, input: MapUpdate, pass
     }
     const speaker = entity.passageId == null ? undefined : speakers.get(entity.passageId);
     if (entity.passageId != null && !speaker) defects.push({ kind: 'passage', id: entity.id, detail: entity.passageId });
-    if (entity.source === 'participant' && speaker !== 'trainee') defects.push({ kind: 'passage', id: entity.id, detail: 'participant fact without a participant passage' });
+    if (entity.source === 'participant' && speaker !== 'participant') defects.push({ kind: 'passage', id: entity.id, detail: 'participant fact without a participant passage' });
     if (entity.source !== 'participant' && entity.passageId != null) defects.push({ kind: 'passage', id: entity.id, detail: `${entity.source} fact citing a passage` });
   }
   for (const preference of update.preferences ?? []) {
-    if (speakers.get(preference.passageId) !== 'trainee') defects.push({ kind: 'passage', id: PARTICIPANT_ID, detail: `preference citing ${preference.passageId}, not a participant passage` });
+    if (speakers.get(preference.passageId) !== 'participant') defects.push({ kind: 'passage', id: PARTICIPANT_ID, detail: `preference citing ${preference.passageId}, not a participant passage` });
   }
   if (defects.length) return { ok: false, defects };
 

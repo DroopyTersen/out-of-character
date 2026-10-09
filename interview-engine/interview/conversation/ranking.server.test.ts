@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { judgeModel } from '../../providers/judge.server';
-import type { WireEntry as TranscriptEntry } from '../wire';
+import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapThread } from './map';
 import { threadKey } from './ranking';
 import { yieldsTurn } from './turns';
@@ -17,32 +17,32 @@ const map: ConversationMap = {
   threads: [thread('t1'), thread('t2', { status: 'done', reason: 'Answered.' }), thread('t3')],
 };
 const transcript: TranscriptEntry[] = [
-  { id: 'p1', speaker: 'client', text: 'What did it do?', startMs: 0, endMs: 1000 },
-  { id: 'p2', speaker: 'trainee', text: 'It planned routes for field crews.', startMs: 1500, endMs: 4000 },
-  { id: 'p3', speaker: 'trainee', text: 'Mm.', startMs: 4100, endMs: 4300 },
+  { id: 'p1', speaker: 'interviewer', text: 'What did it do?', startMs: 0, endMs: 1000 },
+  { id: 'p2', speaker: 'participant', text: 'It planned routes for field crews.', startMs: 1500, endMs: 4000 },
+  { id: 'p3', speaker: 'participant', text: 'Mm.', startMs: 4100, endMs: 4300 },
 ];
 
 test('the latest turn is the participant passages since Sam last said more than a backchannel, without backchannels', () => {
   expect(latestTurn(transcript).map(entry => entry.id)).toEqual(['p2']);
   expect(latestTurn(transcript.slice(0, 1))).toEqual([]);
   const split: TranscriptEntry[] = [
-    ...transcript, { id: 'p4', speaker: 'client', text: 'Mm-hm.', startMs: 4400, endMs: 4700 }, { id: 'p5', speaker: 'trainee', text: 'Mostly for the bids team.', startMs: 4800, endMs: 6000 },
+    ...transcript, { id: 'p4', speaker: 'interviewer', text: 'Mm-hm.', startMs: 4400, endMs: 4700 }, { id: 'p5', speaker: 'participant', text: 'Mostly for the bids team.', startMs: 4800, endMs: 6000 },
   ];
   expect(latestTurn(split).map(entry => entry.id)).toEqual(['p2', 'p5']);
-  expect(latestTurn([...split, { id: 'p6', speaker: 'client', text: 'Right.', startMs: 6100, endMs: 6300 }]).map(entry => entry.id)).toEqual(['p2', 'p5']);
-  expect(latestTurn([...split, { id: 'p6', speaker: 'client', text: 'Who were they?', startMs: 6100, endMs: 7000 }])).toEqual([]);
+  expect(latestTurn([...split, { id: 'p6', speaker: 'interviewer', text: 'Right.', startMs: 6100, endMs: 6300 }]).map(entry => entry.id)).toEqual(['p2', 'p5']);
+  expect(latestTurn([...split, { id: 'p6', speaker: 'interviewer', text: 'Who were they?', startMs: 6100, endMs: 7000 }])).toEqual([]);
 });
 
 test('short confirmations after Sam speaks are kept, while acknowledgments within the participant’s turn are omitted', () => {
-  const asked: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'Did the bids team use it daily?', startMs: 4400, endMs: 6000 }];
-  const reply = (text: string, before = asked): TranscriptEntry[] => [...before, { id: 'p5', speaker: 'trainee', text, startMs: 6100, endMs: 6400 }];
+  const asked: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'interviewer', text: 'Did the bids team use it daily?', startMs: 4400, endMs: 6000 }];
+  const reply = (text: string, before = asked): TranscriptEntry[] => [...before, { id: 'p5', speaker: 'participant', text, startMs: 6100, endMs: 6400 }];
   for (const text of ['Yes.', 'No.', 'Sure!', 'Yeah', 'Uh-huh.']) expect(latestTurn(reply(text)).map(entry => entry.id)).toEqual(['p5']);
   expect(latestTurn(reply('Mm.'))).toEqual([]);
   expect(latestTurn(reply('Okay.'))).toEqual([]);
-  const stated: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 }];
+  const stated: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'interviewer', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 }];
   expect(latestTurn(reply('Yes.', stated)).map(entry => entry.id)).toEqual(['p5']);
   // A yes that follows the participant's own passage is not a reply to Sam.
-  expect(latestTurn([...reply('It ran every morning.'), { id: 'p6', speaker: 'trainee', text: 'Yeah.', startMs: 6500, endMs: 6700 }]).map(entry => entry.id)).toEqual(['p5']);
+  expect(latestTurn([...reply('It ran every morning.'), { id: 'p6', speaker: 'participant', text: 'Yeah.', startMs: 6500, endMs: 6700 }]).map(entry => entry.id)).toEqual(['p5']);
 });
 
 test('Sam yields hand the floor back; questions and full replies take a turn', () => {
@@ -52,26 +52,26 @@ test('Sam yields hand the floor back; questions and full replies take a turn', (
 
 test('a participant who resumes after a Sam yield is still on the same turn', () => {
   const cut: TranscriptEntry[] = [
-    ...transcript.slice(0, 2), { id: 'p3', speaker: 'client', text: 'Oh,', startMs: 4100, endMs: 4300 },
-    { id: 'p4', speaker: 'trainee', text: 'and the bids team ran it every morning.', startMs: 4400, endMs: 6000 },
+    ...transcript.slice(0, 2), { id: 'p3', speaker: 'interviewer', text: 'Oh,', startMs: 4100, endMs: 4300 },
+    { id: 'p4', speaker: 'participant', text: 'and the bids team ran it every morning.', startMs: 4400, endMs: 6000 },
   ];
   expect(latestTurn(cut).map(entry => entry.id)).toEqual(['p2', 'p4']);
   expect(latestTurn(cut.slice(0, 3)).map(entry => entry.id)).toEqual(['p2']);
-  const asked: TranscriptEntry[] = [...cut, { id: 'p5', speaker: 'client', text: 'Who asked for that?', startMs: 6100, endMs: 7000 }, { id: 'p6', speaker: 'trainee', text: 'The bids lead.', startMs: 7200, endMs: 8000 }];
+  const asked: TranscriptEntry[] = [...cut, { id: 'p5', speaker: 'interviewer', text: 'Who asked for that?', startMs: 6100, endMs: 7000 }, { id: 'p6', speaker: 'participant', text: 'The bids lead.', startMs: 7200, endMs: 8000 }];
   expect(latestTurn(asked).map(entry => entry.id)).toEqual(['p6']);
 });
 
 test('the turn is read up to the participant’s last words, after Sam has started to reply', () => {
-  const replied: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'client', text: 'Who used it most?', startMs: 4400, endMs: 6000 }];
+  const replied: TranscriptEntry[] = [...transcript, { id: 'p4', speaker: 'interviewer', text: 'Who used it most?', startMs: 4400, endMs: 6000 }];
   expect(upToParticipant(replied).map(entry => entry.id)).toEqual(['p1', 'p2']);
   expect(latestTurn(upToParticipant(replied)).map(entry => entry.id)).toEqual(['p2']);
   expect(upToParticipant(transcript.slice(0, 1))).toEqual([]);
 });
 
 test('a short reply can confirm a declarative guess without a question mark', () => {
-  const guess: TranscriptEntry = { id: 'p4', speaker: 'client', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 };
+  const guess: TranscriptEntry = { id: 'p4', speaker: 'interviewer', text: 'So the bids team used it daily.', startMs: 4400, endMs: 6000 };
   for (const text of ['Yes.', 'No.', 'Right.', 'Uh-huh.']) {
-    const answer: TranscriptEntry = { id: 'p5', speaker: 'trainee', text, startMs: 6100, endMs: 6400 };
+    const answer: TranscriptEntry = { id: 'p5', speaker: 'participant', text, startMs: 6100, endMs: 6400 };
     expect(latestTurn([...transcript, guess, answer]).map(entry => entry.id)).toEqual(['p5']);
   }
 });

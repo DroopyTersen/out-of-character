@@ -46,8 +46,8 @@ test('a leak is a mention of the notes or the templates’ own wording', () => {
 
 test('a run is unusable unless it finished cleanly, both measured replies exist and the participant was heard', () => {
   const heard = [
-    { speaker: 'trainee', text: 'Near the end there was a launch approval step. We waited three weeks for V.P.N. access. Priya took over the pipeline.' },
-    { speaker: 'trainee', text: 'Honestly, that part was pretty routine.' },
+    { speaker: 'participant', text: 'Near the end there was a launch approval step. We waited three weeks for V.P.N. access. Priya took over the pipeline.' },
+    { speaker: 'participant', text: 'Honestly, that part was pretty routine.' },
   ];
   const report = { finalized: true, errors: [], deadAir: [], segments: [{ text: 'Who signed off?' }, { text: 'Fair enough. What about Priya?' }], transcript: heard };
   expect(unusable(report)).toBeNull();

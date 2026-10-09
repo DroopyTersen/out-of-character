@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ModelUsage, SolMessage, StructuredRequest } from '../../providers/structured.server';
 import type { InterviewBackground, InterviewObjectiveReading } from '../../shared/snapshot';
-import type { WireEntry } from '../wire';
+import type { Passage } from '../../shared/transcript';
 import { RESEARCH_KINDS, type ResearchRequest } from './records';
 import {
   applyMapUpdate, EDGE_KINDS, ENTITY_KINDS, ENTITY_SOURCES, MAP_LIMITS, mapTopicIds, renderMapForSol, THREAD_STATUSES,
@@ -10,7 +10,7 @@ import {
 import { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 
 export { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
-type TranscriptEntry = WireEntry;
+type TranscriptEntry = Passage;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
 export const MAP_PROMPT_VERSION = 'sol-map-v17';
 export const MAP_EFFORT = 'low';
@@ -76,7 +76,7 @@ export const emptyMapLog = (): MapLog => ({ blocks: [], logged: {} });
 
 const minutes = (ms: number) => (Math.max(0, ms) / 60_000).toFixed(1);
 const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim();
-const speakerName = (spec: MappedSpec, entry: Pick<TranscriptEntry, 'speaker'>) => entry.speaker === 'trainee' ? 'participant' : spec.interviewer.name;
+const speakerName = (spec: MappedSpec, entry: Pick<TranscriptEntry, 'speaker'>) => entry.speaker === 'participant' ? 'participant' : spec.interviewer.name;
 
 /** Passages are logged in order, so one still being transcribed holds back everything after it until it settles. */
 export function settledPrefix(transcript: TranscriptEntry[], settled: (entry: TranscriptEntry) => boolean): TranscriptEntry[] {
@@ -117,7 +117,7 @@ export function researchLogEvent(target: InterviewBackground['target'], facts: I
 
 /** The volatile state, never cached: everything here may change between calls. */
 export type MapTail = {
-  coverage: Pick<InterviewObjectiveReading, 'id' | 'level'>[];
+  coverage: Pick<InterviewObjectiveReading, 'id' | 'level' | 'applicability'>[];
   /** Jev's per-thread state for the latest participant turn, by thread ID. */
   signals?: { threadId: string; state: string }[];
   reasons: string[];
@@ -129,7 +129,7 @@ export type MapTail = {
 
 export function renderMapTail(spec: MappedSpec, previous: ConversationMap, tail: MapTail): string {
   const first = !previous.entities.length && !previous.threads.length && !previous.participant.vantage;
-  const coverage = new Map(tail.coverage.map(item => [item.id, item.level]));
+  const coverage = new Map(tail.coverage.map(item => [item.id, item.applicability ? `${item.level}; applicability: ${item.applicability}` : item.level]));
   return [
     `PREVIOUS MAP${first ? ' (empty: this is your first call)' : ''}\n${renderMapForSol(previous)}`,
     `COVERAGE (Jev's readings; fallible)\n${mapTopicIds(spec).map(id => `- ${id}: ${coverage.get(id) ?? 'not-yet'}`).join('\n')}`,

@@ -33,7 +33,7 @@ export function pollTransport(baseUrl: string): ProtocolTransport {
         throw error;
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok || !result) throw new SessionRequestError(result?.error || 'The simulator connection is unavailable.', response.status);
+      if (!response.ok || !result) throw new SessionRequestError(result?.error || 'The interview connection is unavailable.', response.status);
       return result;
     },
   };

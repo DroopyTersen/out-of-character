@@ -1,6 +1,6 @@
 import type * as engine from '../interview-engine/shared/snapshot';
 import type { InterviewBackground } from '../interview-engine/shared/snapshot';
-import type { Speaker } from './simulator/types';
+import type { Speaker } from '../interview-engine/shared/transcript';
 import type { z } from 'zod';
 import { interviewReadings, type InterviewReadingId, type interviewSummarySchema } from '../interviews/project-closeout/public';
 import { emptyReadings } from '../interview-engine/interview/conversation/coverage';

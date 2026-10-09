@@ -7,7 +7,7 @@ import { interviewAttempt, objectFixture } from '../interview/durableObjectFixtu
 afterEach(() => setSystemTime());
 type Options = { values?: Map<string, unknown>; archive?: ReturnType<typeof archiveDatabase>; provider?: string };
 type Fixture = Awaited<ReturnType<typeof objectFixture>> | Awaited<ReturnType<typeof fixture>>;
-type Host = { host: string; open: (options: Options) => Promise<Fixture>; input: typeof attempt; row: (f: Fixture) => Record<string, any> | null };
+type Host = { host: string; open: (options: Options) => Promise<Fixture>; input: typeof attempt | typeof interviewAttempt; row: (f: Fixture) => Record<string, any> | null };
 const hosts: Host[] = [
   { host: 'practice', open: (options: Options) => fixture(options), input: attempt, row: (f: Fixture) => f.row() },
   { host: 'interview', open: (options: Options) => objectFixture(options), input: interviewAttempt, row: (f: Fixture) => f.interviewRow() },

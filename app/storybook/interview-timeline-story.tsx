@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { producerLatency, type ProducerLogRecord } from '../../interview-engine/interview/conversation/records';
 import { parseTimelineExport, producerTimeline, TIMELINE_LANES, type TimelineLane } from '../../core/interview-timeline';
-import type { TranscriptEntry } from '../../core/simulator/types';
+import type { Passage } from '../../interview-engine/shared/transcript';
 import { formatTime } from '../simulator/conversation';
 import { transcript } from './interview-stories';
 import '../simulator/simulator.css';
@@ -36,7 +36,7 @@ const records: ProducerLogRecord[] = [
 
 export function InterviewTimelineStory() {
   const [lanes, setLanes] = useState<TimelineLane[]>(TIMELINE_LANES.filter(lane => lane !== 'traits' && lane !== 'grade'));
-  const [source, setSource] = useState<{ name: string; startedAt: number; transcript: TranscriptEntry[]; records: ProducerLogRecord[]; skipped: number }>({ name: 'Synthetic interview', startedAt, transcript, records, skipped: 0 });
+  const [source, setSource] = useState<{ name: string; startedAt: number; transcript: Passage[]; records: ProducerLogRecord[]; skipped: number }>({ name: 'Synthetic interview', startedAt, transcript, records, skipped: 0 });
   const [error, setError] = useState<string | null>(null);
   const rows = useMemo(() => producerTimeline(source), [source]);
   const latency = producerLatency(source.records);

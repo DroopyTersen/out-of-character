@@ -1,16 +1,14 @@
 import type { InterviewSummaryContent } from '../../../core/interview';
 import type { ReportState } from '../../../core/simulator/report';
 import type { SessionActor } from '../../../interview-engine/interview/interview.server';
-import { toPassage } from '../../../interview-engine/interview/wire';
 import type { NarrativeInput, NarrativeState } from '../../../interview-engine/narrative/narrative.server';
 import { NarrativeRunner, within } from '../../../interview-engine/narrative/narrativeRun.server';
 import { simulatorJson } from '../simulator/api';
 import { narrativeRunner, participantSpoke, type Narrate } from './narrative';
+import { NARRATIVE_VERSION } from '../../../interview-engine/shared/narrative';
 
 export type HostedNarrative = {
   narrate: Narrate;
-  /** The spec's narrative: its template, and the version stored with what it wrote. */
-  template: NarrativeInput['template'] & { version: string };
   /** The agent model recorded with the narrative. */
   model: string;
   /** Keeps a narrative running after its request has gone, so a reloaded page can rejoin it. */
@@ -28,7 +26,14 @@ const reportState = ({ status, starts, document, failure }: NarrativeState) => (
 export class HostedSession {
   private narrative: NarrativeRunner | undefined;
 
-  constructor(readonly actor: SessionActor, private readonly options: HostedNarrative) {}
+  private readonly format: NarrativeInput['format'];
+  private readonly context: NarrativeInput['context'];
+
+  constructor(readonly actor: SessionActor, private readonly options: HostedNarrative) {
+    const definition = actor.definition;
+    this.format = definition.plan.report;
+    this.context = definition.context;
+  }
 
   async fetch(request: Request): Promise<Response> {
     const action = new URL(request.url).pathname.slice(1);
@@ -45,7 +50,7 @@ export class HostedSession {
 
   private reportState(): ReportState<InterviewSummaryContent> {
     const snapshot = this.actor.snapshot();
-    if (!snapshot || !participantSpoke(snapshot.transcript.map(toPassage))) return { status: 'ineligible', starts: 0, report: null, failure: null };
+    if (!snapshot || !participantSpoke(snapshot.transcript)) return { status: 'ineligible', starts: 0, report: null, failure: null };
     return this.narrative ? reportState(this.narrative.state()) : { status: 'idle', starts: 0, report: null, failure: null };
   }
 
@@ -59,10 +64,11 @@ export class HostedSession {
     if (!snapshot || !['ended', 'interrupted'].includes(snapshot.status)) return simulatorJson({ error: 'End the conversation before requesting its report.' }, 409);
     if (this.reportState().status === 'ineligible') return simulatorJson({ error: 'There is not enough scored conversation to review.' }, 422);
     if (!this.narrative) {
-      const { narrate, template, model, track } = this.options;
-      this.narrative = narrativeRunner(template, structuredClone(snapshot.transcript).map(toPassage), narrate, ({ document, attempts }) => {
+      const { narrate, model, track } = this.options;
+      const input = { transcript: snapshot.transcript, format: this.format, ...(this.context ? { context: this.context } : {}) };
+      this.narrative = narrativeRunner(input, narrate, ({ document, attempts }) => {
         this.actor.settleNarrative(document ? { status: 'ready', text: document.text } : { status: 'unavailable', text: null },
-          { model, version: template.version, attempts });
+          { model, version: NARRATIVE_VERSION, attempts });
       }, track);
     }
     return this.narrative.attach(request.signal);

@@ -1,11 +1,9 @@
+import type { ResolvedInterview } from '../../../interview-engine/interview/definition.server';
 import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
 import { approveDebrief, approvedId } from '../../../interview-engine/setup/approve.server';
-import { approvedDebriefSchema, templateDraft, type ApprovedDebrief, type DebriefDraft } from '../../../interview-engine/setup/debrief';
+import { approvedDebriefSchema, debriefDraftSchema, templateDraft, type ApprovedDebrief, type DebriefDraft } from '../../../interview-engine/setup/debrief';
 import { draftDebrief, type DraftResult } from '../../../interview-engine/setup/draft.server';
-import type { SessionSpec } from '../../../interview-engine/interview/interview.server';
-import type { NarrativeDocument } from '../../../interview-engine/narrative/narrative.server';
-import type { InterviewSpec, NarrativeTemplate } from '../../../interview-engine/shared/spec';
 import { spec as projectCloseout } from '../../../interviews/project-closeout/spec';
 import { spec as salesWinLoss } from '../../../interviews/sales-win-loss/spec';
 import { z } from 'zod';
@@ -13,7 +11,7 @@ import { BodyError, boundedJson } from '../http';
 import { simulatorJson } from '../simulator/api';
 
 /** A spec this host can run: briefed, judged and mapped for the session, with a narrative that writes a text document. */
-export type HostedSpec = InterviewSpec & SessionSpec & { narrative: NarrativeTemplate<NarrativeDocument> };
+export type HostedSpec = ResolvedInterview;
 
 /** The debriefs a host ships as code: each is a template an organizer can run as is, edit, or base an ad hoc debrief on. */
 export const templates: readonly HostedSpec[] = [projectCloseout, salesWinLoss];
@@ -97,7 +95,7 @@ export function workerDebriefs(env: Env): DebriefGates {
 }
 
 const draftRequestSchema = z.object({ description: z.string().trim().min(20).max(8000), base: z.string().optional() }).strict();
-const approveRequestSchema = approvedDebriefSchema.partial({ id: true });
+const approveRequestSchema = debriefDraftSchema.safeExtend({ id: approvedDebriefSchema.shape.id.optional(), base: approvedDebriefSchema.shape.base });
 const resolveRequestSchema = z.object({ id: z.string().min(1).max(100), version: z.string().min(1).max(200).optional() }).strict();
 const SETUP_BODY_LIMIT = 256 * 1024;
 
@@ -114,7 +112,7 @@ const describe = (spec: HostedSpec, base: string, draft: DebriefDraft) => ({ id:
  * Same origin and the host's paid-service gates apply; no attempt capability does, since there is no attempt yet.
  */
 export async function routeDebriefs(request: Request, url: URL, gates: DebriefGates | undefined, paid: { available(): boolean; limit(key: string): Promise<boolean> }): Promise<Response> {
-  if (!gates) return simulatorJson({ error: 'Unknown simulator route.' }, 404);
+  if (!gates) return simulatorJson({ error: 'Unknown interview route.' }, 404);
   if (request.method !== 'POST') return simulatorJson({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('Origin') !== url.origin) return simulatorJson({ error: 'Same-origin requests are required.' }, 403);
   const { catalog, store } = gates;
@@ -146,14 +144,14 @@ export async function routeDebriefs(request: Request, url: URL, gates: DebriefGa
       }
       case '/api/interview/debriefs/resolve': {
         const parsed = resolveRequestSchema.safeParse(await boundedJson(request, 4096));
-        if (!parsed.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
+        if (!parsed.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
         const spec = await catalog.resolve(parsed.data.id, parsed.data.version);
         if (!spec) return simulatorJson({ error: 'Unknown debrief.' }, 404);
         const stored = catalog.templates.includes(spec) ? null : await store.get(parsed.data.id, parsed.data.version);
         return simulatorJson(describe(spec, stored?.base ?? spec.id, stored ? recordDraft(stored.record) : templateDraft(spec)));
       }
       default:
-        return simulatorJson({ error: 'Unknown simulator route.' }, 404);
+        return simulatorJson({ error: 'Unknown interview route.' }, 404);
     }
   } catch (error) {
     if (error instanceof BodyError) return simulatorJson({ error: error.message }, error.status);

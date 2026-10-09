@@ -1,3 +1,4 @@
+import { createJevJudge } from '../interview-engine/providers/judge.server.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { foundryConfig } from '../ai/foundry.server.ts';
@@ -18,15 +19,16 @@ import { captureLiveClip } from './lib/live-voice-clip.mjs';
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to verify the configured providers.');
 const foundry = foundryConfig(process.env);
 if (!process.env.TYPESAFE_API_KEY) throw new Error('TypeSafe is not configured.');
-const providers = foundryProviders({ ...foundry, typesafeKey: process.env.TYPESAFE_API_KEY });
+const providers = foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) });
 const output = process.env.ACCEPTANCE_OUTPUT || 'output/foundry-smoke';
 await mkdir(output, { recursive: true, mode: 0o700 });
 const transcript = [
-  { id: 'p1', speaker: 'client', text: 'What did you deliver, and how did it help?', startMs: 0, endMs: 2000 },
-  { id: 'p2', speaker: 'trainee', text: 'We built a routing portal with OpenStreetMap. I led the API work. Testing a sample payload with the vendor before coding caught a date format mismatch.', startMs: 2100, endMs: 11000 },
-  { id: 'p3', speaker: 'client', text: 'What changed after that discovery?', startMs: 12000, endMs: 14000 },
-  { id: 'p4', speaker: 'trainee', text: 'We agreed the format first and avoided rework. Next time I would include sample payload testing in the estimate.', startMs: 15000, endMs: 21000 },
+  { id: 'p1', speaker: 'interviewer', text: 'What did you deliver, and how did it help?', startMs: 0, endMs: 2000 },
+  { id: 'p2', speaker: 'participant', text: 'We built a routing portal with OpenStreetMap. I led the API work. Testing a sample payload with the vendor before coding caught a date format mismatch.', startMs: 2100, endMs: 11000 },
+  { id: 'p3', speaker: 'interviewer', text: 'What changed after that discovery?', startMs: 12000, endMs: 14000 },
+  { id: 'p4', speaker: 'participant', text: 'We agreed the format first and avoided rework. Next time I would include sample payload testing in the estimate.', startMs: 15000, endMs: 21000 },
 ];
+const practiceTranscript = transcript.map(passage => ({ ...passage, speaker: passage.speaker === 'participant' ? 'trainee' : 'client' }));
 const signal = () => AbortSignal.timeout(90_000);
 // Jev reads the turn against Sol's map; with no map it still reads whether the turn is new.
 let map = emptyMap();
@@ -40,7 +42,7 @@ const consume = async generate => {
 const checks = {
   scene: async () => ({ text: await generateScene({ characterId: characters[0].id, history: [], foundry, signal: signal() }) }),
   director: async () => generateDirector({ audience: 'trainee', reason: { condition: 'objective:decision', selected: true },
-    scenarioId: 'proposal', clientId: 'morgan', transcript, objectives: [], history: [], foundry, signal: signal() }),
+    scenarioId: 'proposal', clientId: 'morgan', transcript: practiceTranscript, objectives: [], history: [], foundry, signal: signal() }),
   map: async () => {
     const result = await generateMap({ foundry, signal: signal(), attemptId: `smoke-${crypto.randomUUID()}`,
       blocks: appendMapLog(emptyMapLog(), transcript).blocks, previous: emptyMap(), passages: transcript,
@@ -60,11 +62,11 @@ const checks = {
   summary: () => consume(finish => summarizeInterview({ transcript, foundry, signal: signal() }, finish)),
   report: () => consume(finish => generateReport({ foundry, signal: signal(), interventions: [], snapshot: {
     id: 'synthetic-foundry-smoke', scenarioId: 'proposal', clientId: 'morgan', status: 'ended', startedAt: Date.now() - 120_000,
-    limitSeconds: 3600, warning: null, revision: 1, transcript, evaluation: null, coaching: null,
+    limitSeconds: 3600, warning: null, revision: 1, transcript: practiceTranscript, evaluation: null, coaching: null,
     feedbackStatus: 'waiting', message: null, finalization: 'confirmed', usageSeconds: 21,
   } }, finish)),
   jev: async () => {
-    const result = await evaluateInterview({ scenarioId: 'project-closeout', clientId: 'sam-cedar', transcript, revision: 1,
+    const result = await evaluateInterview({ planId: 'project-closeout', voiceId: 'sam-cedar', transcript, revision: 1,
       apiKey: process.env.TYPESAFE_API_KEY, signal: signal() });
     if (!result.model.includes('jev')) throw new Error('Expected Jev evaluation.');
     return { model: result.model, durationMs: result.durationMs };

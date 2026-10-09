@@ -1,4 +1,4 @@
-// The project closeout interview's browser-safe content; spec.ts assembles it with the narrative prompt.
+// Browser labels and choices; spec.ts supplies the approved plan and host runtime configuration.
 import { z } from 'zod';
 
 export const INTERVIEW_SCENARIO_ID = 'project-closeout';

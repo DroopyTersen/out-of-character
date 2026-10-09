@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLoaderData } from 'react-router';
 import type { Route } from './+types/interview';
-import { INTERVIEW_SCENARIO_ID, interviewVoices, interviewSummarySchema } from '../../core/interview';
-import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewVoiceId } from '../interview/screens';
-import { toInterviewSnapshot } from '../interview/snapshot';
+import { INTERVIEW_SCENARIO_ID, interviewVoices, interviewSummarySchema, type InterviewSummaryContent } from '../../core/interview';
+import { InterviewConversation, InterviewSetup, InterviewSummaryScreen, type InterviewSnapshot, type InterviewVoiceId } from '../interview/screens';
 import { INTERVIEW_SESSIONS, useSimulator } from '../simulator/use-simulator';
 import { useStreamedReport } from '../simulator/use-report';
 import { liveAvailable } from '../server/simulator/api';
@@ -21,14 +20,13 @@ export default function Interview() {
   const { enabled } = useLoaderData<typeof loader>();
   const [voiceId, setVoiceId] = useState<InterviewVoiceId>(interviewVoices[0].id);
   const [now, setNow] = useState(Date.now());
-  const report = useStreamedReport(interviewSummarySchema, draft => !!draft?.text);
-  const session = useSimulator(report, { kind: 'interview', sessions: INTERVIEW_SESSIONS, onReattach: ({ clientId }) => {
+  const report = useStreamedReport<InterviewSummaryContent, InterviewSnapshot>(interviewSummarySchema, draft => !!draft?.text);
+  const session = useSimulator<InterviewSnapshot>(report, { kind: 'interview', sessions: INTERVIEW_SESSIONS, onReattach: ({ clientId }) => {
     const voice = interviewVoices.find(item => item.id === clientId);
     if (voice) setVoiceId(voice.id);
   } });
-  const live = useMemo(() => session.snapshot && toInterviewSnapshot(session.snapshot), [session.snapshot]);
-  const reported = report.view.snapshot ?? session.snapshot;
-  const debrief = useMemo(() => reported && toInterviewSnapshot(reported), [reported]);
+  const live = session.snapshot;
+  const debrief = report.view.snapshot ?? session.snapshot;
   const main = useRef<HTMLElement>(null);
   const screen = session.phase === 'selection' || session.phase === 'debrief' ? session.phase : 'conversation';
   const shownScreen = useRef(screen);

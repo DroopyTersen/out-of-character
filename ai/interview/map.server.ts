@@ -2,7 +2,7 @@
 // probes and scripts keep their imports and signatures until Phase 5.
 import * as engine from '../../interview-engine/interview/conversation/map.server';
 import type { ConversationMap } from '../../interview-engine/interview/conversation/map';
-import type { WireEntry } from '../../interview-engine/interview/wire';
+import type { Passage } from '../../interview-engine/shared/transcript';
 import { spec } from '../../interviews/project-closeout/spec';
 
 export {
@@ -14,7 +14,7 @@ export const mapInstructions = engine.mapInstructions(spec);
 export const mapSeed = () => engine.mapSeed(spec);
 export const mapOutputSchema = engine.mapOutputSchema(spec);
 export const mapWireSchema = engine.mapWireSchema(spec);
-export const appendMapLog = (log: engine.MapLog, settled: WireEntry[], events?: engine.MapLogEvent[]) => engine.appendMapLog(spec, log, settled, events);
+export const appendMapLog = (log: engine.MapLog, settled: Passage[], events?: engine.MapLogEvent[]) => engine.appendMapLog(spec, log, settled, events);
 export const renderMapTail = (previous: ConversationMap, tail: engine.MapTail) => engine.renderMapTail(spec, previous, tail);
 export const mapMessages = (blocks: string[], tail: string) => engine.mapMessages(spec, blocks, tail);
 export const generateMap = (input: Omit<Parameters<typeof engine.generateMap>[0], 'spec'>) => engine.generateMap({ ...input, spec });

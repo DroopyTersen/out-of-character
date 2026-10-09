@@ -1,6 +1,6 @@
 import type { Passage } from '../shared/transcript';
 import type { ProducerLogRecord, ProducerSummary } from './conversation/records';
-import type { Checkpoint, ConnectionLog, Lease, PublicSnapshot } from './session/checkpoint';
+import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus, PublicSnapshot } from './session/checkpoint';
 import type { NarrativeProvenance } from '../shared/narrative';
 
 export type { Checkpoint, Lease } from './session/checkpoint';
@@ -50,6 +50,7 @@ export type InterviewArchiveRow = {
   /** The public snapshot as the browser saw it at `capturedAt`. */
   snapshot: PublicSnapshot;
   transcript: Passage[];
+  narrative: NarrativeStatus | null;
   /** Sol, Jev and Luna calls with timings, then the coverage grades. The host trims it to its byte budget. */
   producerLog: ProducerLogRecord[];
   provenance: {

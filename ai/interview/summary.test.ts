@@ -5,8 +5,8 @@ import { summarizeInterview, type SummaryInput, type SummaryResult } from './sum
 
 // The engine's writeNarrative is tested in interview-engine/narrative. This covers the app's adapter around it.
 const input: SummaryInput = { foundry: fixtureFoundry, signal: new AbortController().signal, transcript: [
-  { id: 'p1', speaker: 'client', text: 'Was access the problem?', startMs: 0, endMs: 900 },
-  { id: 'p2', speaker: 'trainee', text: 'Jen helped us fix access.', startMs: 1000, endMs: 2500 },
+  { id: 'p1', speaker: 'interviewer', text: 'Was access the problem?', startMs: 0, endMs: 900 },
+  { id: 'p2', speaker: 'participant', text: 'Jen helped us fix access.', startMs: 1000, endMs: 2500 },
 ] };
 const summary = { text: 'The participant credited Jen with resolving an access issue.' };
 const event = (value: unknown) => new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`);
@@ -31,9 +31,9 @@ test('the closeout summary uses Sol, the spec narrative prompt and source labels
   expect(results).toEqual([{ report: summary, failure: null, usage: { inputTokens: 100, outputTokens: 80, reasoningTokens: 30, cachedTokens: 0 } }]);
   expect(JSON.parse(text)).toEqual(summary);
   expect(body.model).toBe(fixtureFoundry.agentModel);
-  expect(body.input.find((item: { role: string }) => item.role === 'developer').content).toBe(spec.narrative.system);
+  expect(body.input.find((item: { role: string }) => item.role === 'developer').content).toBe((await import('../../interview-engine/narrative/narrative.prompt')).narrativeInstructions);
   const prompt = body.input.find((item: { role: string }) => item.role === 'user').content[0].text;
-  expect(JSON.parse(prompt).transcript).toEqual([{ speaker: 'INTERVIEWER', text: 'Was access the problem?' }, { speaker: 'PARTICIPANT', text: 'Jen helped us fix access.' }]);
+  expect(JSON.parse(prompt)).toEqual({ transcript: input.transcript, format: spec.plan.report });
 });
 
 test('provider failures reach finish as report-less results, and silence spends no request', async () => {

@@ -22,15 +22,15 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Interview phase**: the live conversation that produces a transcript, coverage and readings. Lives in `interview/`.
 
-**Narrative phase**: writing a document from a transcript and a `NarrativeTemplate`. Needs only a language model. Lives in `narrative/`.
+**Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives in `narrative/`.
 
 **Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in `setup/`; the live actor never sees setup concerns.
 
-**Approved debrief**: the spec `approveDebrief` builds from a base template and an approved record: the template's cast, persona, boundaries, techniques, readings and limits under the record's role, opening, orientation, framing and topics, with the generic topic-sectioned narrative. Its id is the record's (by default the title's slug); its version is the id plus a digest of the record and the base's id and version, so an attempt's archive row names exactly what it ran under.
+**Approved debrief**: readable learning goals, recursive topics, optional interviewing guidance and report requirements. Approval validates this content and produces a version. Runtime voices, persona, reading rubrics and limits come from the host; prompt construction belongs to the engine.
 
-**Catalog**: the host's lookup from a spec id (and optionally a version) to a runnable spec: the shipped templates by id, then stored approvals, re-approved against their base template. The attempt object pins the id and version it started under and resolves the same spec on restore; a start that names a spec the catalog cannot resolve is rejected.
+**Catalog**: the host lookup used when a new attempt starts. The host pins the full accepted plan, configuration and context before opening the voice session. Checkpoints preserve these inputs, so later owners do not depend on a mutable catalog.
 
-**Server-only spec fields**: the parts of an `InterviewSpec` the browser never sees: each objective's `criterion` (and optional `creditRule` and `explored`), each reading's `rubric`, the interviewer's `role`, `persona`, `orientation`, `boundaries`, `opening` and `techniques`, and the spec's `framing`. A spec's public file stays label-only; its `*.prompt.ts` files hold this text.
+**Accepted definition**: `InterviewPlan`, `InterviewConfig`, and optional `InterviewContext`. Context is explicit background, not participant evidence. The engine parses and copies these values and compiles its internal brief, framing and judging criteria.
 
 **Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/conversation/rubric.prompt.ts`).
 
@@ -38,7 +38,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Framing**: what kind of interview a spec is, in the words Sol's map and Jev's grade use (`InterviewFraming`): the occasion, the name for one topic, the purpose and setting that open Sol's seed, the thread Sol keeps open by default, what the spec's terms mean, and whose words count toward a topic.
 
-**Techniques**: the spec's two entries in Sam's numbered interviewing guide. `grounding` opens the guide (how to anchor the conversation); `lesson` turns a story into something the reader can act on. The other techniques belong to the engine.
+**Techniques**: the engine’s conversational guide, including grounding and finding useful lessons. Organizers supply guidance in the plan rather than writing technique prompt fragments.
 
 **Brief**: Sam's instructions for one voice: the spec's persona, orientation and boundaries around the engine's own turn-taking, technique and note-handling guidance.
 
@@ -48,7 +48,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
 
-**Narrative run**: one attempt at writing the narrative: the text as it streams and a `Narrative` result that settles once. `writeNarrative` starts one from a `NarrativeInput` (the template and the passages); `NarrativeRunner` allows a report two runs under a deadline and keeps the settled text.
+**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior.
 
 **Rejoin**: a request that attaches to a narrative run already in progress. `NarrativeRunner.attach` replays what has been written so far and then streams the rest live; a request that drops only detaches, and the run continues until it settles, is cancelled or reaches its deadline. Once settled, a request gets the stored document instead. An imported transcript's run cannot be rejoined, so it is cancelled when its request drops.
 
@@ -56,9 +56,9 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 ## Hosts
 
-**Hosted session**: one attempt as a host serves it (`HostedSession`, in `app/server/interview/hosted.ts`): it turns each request into a `Command` for the actor, answers in the practice simulator's reply shapes, and runs the narrative when the actor asks for the report. Both of this repository's hosts use it.
+**Hosted session**: the host wrapper around one actor. It returns canonical interview snapshots and adds report state separately. Reports use the actor’s frozen format and explicit context with the final transcript; they receive no map or coverage.
 
-**Narrative route**: `POST /api/interview/narratives`, which writes the narrative of an imported transcript (a spec id and its passages) with no attempt involved. The narrative streams back and is not stored.
+**Narrative route**: `POST /api/interview/narratives`, an independent report from `{ transcript, format, context? }`. No catalog or live attempt is involved. The narrative streams back and is not stored.
 
 **Socket path**: `GET /api/interview/sessions/:id/socket`, the attempt's WebSocket upgrade. A host accepts it only when `INTERVIEW_SOCKET_ENABLED` is "true", and answers each socket command by building the matching HTTP request and passing it through the same routes.
 
@@ -70,3 +70,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 - **Sol**: the producer with the notepad; keeps the conversation map of what has been said and what is still open, and writes Sam's notes.
 - **Jev**: the producer's instincts; a judge model that reads coverage, readings and which thread to follow, and gives the final grade.
 - **Luna**: the research assistant; looks up public background on organizations, products and terms the participant mentions.
+
+**Topic**: one recursive node with `id`, `label`, `learn`, optional `appliesWhen` and optional child `topics`. Only leaves are assessed. Parent learning intent scopes children, and parent conditions apply to descendants.
+
+**Applicability**: whether a conditional leaf applies to this participant, based on participant evidence. `unknown` differs from `not-applicable`, coverage depth, and a participant’s refusal or uncertainty.

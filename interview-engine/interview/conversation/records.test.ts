@@ -1,16 +1,16 @@
 import { expect, test } from 'bun:test';
 import type { CoverageLevel, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
-import type { WireSpeaker } from '../wire';
+import type { Speaker } from '../../shared/transcript';
 import { fitRecords, gradeObjectives, type GradeRecord, type MapRecord, type ProducerLogRecord } from './records';
 import { testSpec } from './testSpec';
 
-type InterviewObjectiveReading = Reading<WireSpeaker>;
+type InterviewObjectiveReading = Reading<Speaker>;
 const interviewTopics = testSpec.topics;
 
 const reading = (id: string, level: CoverageLevel, entryId: string | null, levels: Partial<Record<CoverageLevel, number>> | null = null): InterviewObjectiveReading => ({
   id, level, achieved: level === 'explored', probability: levels?.explored ?? null,
   levels: levels ? { 'not-yet': 0, touched: 0, explored: 0, 'set-aside': 0, ...levels } : null,
-  evidence: entryId ? { entryId, speaker: 'trainee', text: `Private passage ${entryId}.` } : null,
+  evidence: entryId ? { entryId, speaker: 'participant', text: `Private passage ${entryId}.` } : null,
 });
 
 test('grade diagnostics distinguish a retained judgment from the new grade and preserve its odds without passage text', () => {

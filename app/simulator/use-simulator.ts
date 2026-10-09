@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
-import { LiveConnection, stableLink, type Attempt, type Link } from '../../interview-engine/client/liveConnection';
+import { LiveConnection, stableLink, type Attempt, type ConnectionSnapshot, type Link } from '../../interview-engine/client/liveConnection';
+import type { StartInput } from '../../interview-engine/shared/protocol';
 import { silentLevels } from '../../interview-engine/client/audioLevels';
 import { pollTarget, pollTransport } from '../../interview-engine/client/transport';
 import type { ReportActions } from './use-report';
@@ -49,14 +50,14 @@ const savedAttempts = {
  * `kind` separates the practice and interview pages' saved attempts; `sessions` is where new attempts start;
  * `onReattach` restores a reloaded page's choice.
  */
-export function useSimulator(report: ReportActions, { kind, sessions = SIMULATOR_SESSIONS, onReattach }: { kind: 'practice' | 'interview'; sessions?: SessionRoutes; onReattach?: (choice: AttemptChoice) => void }) {
+export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(report: ReportActions, { kind, sessions = SIMULATOR_SESSIONS, onReattach }: { kind: 'practice' | 'interview'; sessions?: SessionRoutes; onReattach?: (choice: AttemptChoice) => void }) {
   const [phase, setPhase] = useState<SimulatorPhase>('selection');
-  const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<S | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [levels, setLevels] = useState(silentLevels);
   const [link, setLink] = useState<Link>(stableLink);
-  const connection = useRef<LiveConnection<SessionSnapshot> | null>(null);
+  const connection = useRef<LiveConnection<S> | null>(null);
   const generation = useRef(0);
   // Connection callbacks outlive renders; submit with the endpoint prepared at Start.
   const reportActions = useRef(report);
@@ -99,7 +100,15 @@ export function useSimulator(report: ReportActions, { kind, sessions = SIMULATOR
     const beginReport = () => reportActions.current.begin(live.attempt.id);
     // A rejoined attempt stays on the routes it started on.
     const route = saved?.route ?? sessions;
-    const live = new LiveConnection<SessionSnapshot>(pollTransport(route), {
+    const transport = pollTransport(route);
+    const live = new LiveConnection<S>({ request: (action, body, options) => {
+      // The practice simulator shares media handling but owns its scenario/client API.
+      if (route === SIMULATOR_SESSIONS && action === 'start') {
+        const { planId, voiceId, ...rest } = body as StartInput;
+        body = { ...rest, scenarioId: planId, clientId: voiceId };
+      }
+      return transport.request(action, body, options);
+    } }, {
       snapshot: value => {
         if (!active()) return;
         // A rejoined attempt had already started.

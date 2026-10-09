@@ -186,7 +186,7 @@ page.on('response', async response => {
       const grew = growth.get(entry.id) ?? [];
       if (grew.at(-1)?.length !== entry.text.length) growth.set(entry.id, [...grew, { at: Date.now(), length: entry.text.length, endMs: entry.endMs }]);
     }
-    const sam = transcript.filter(entry => entry.speaker === 'client').map(entry => entry.text).join(' ');
+    const sam = transcript.filter(entry => entry.speaker === 'interviewer').map(entry => entry.text).join(' ');
     if (sam !== lastSamText) { lastSamText = sam; lastSamChangeAt = Date.now(); }
   } catch { /* A non-JSON response is not a snapshot. */ }
 });
@@ -198,7 +198,7 @@ const until = async (check, timeoutMs) => {
 };
 /** Sam has taken a substantive turn in passages first seen at or after `since`, and has been quiet for a moment. */
 async function samDone(since) {
-  const said = transcript.filter(entry => entry.speaker === 'client' && seen.get(entry.id) >= since).map(entry => entry.text).join(' ');
+  const said = transcript.filter(entry => entry.speaker === 'interviewer' && seen.get(entry.id) >= since).map(entry => entry.text).join(' ');
   if (!said.trim() || yieldsTurn(said)) return false;
   const last = (await audit()).sam.at(-1);
   return Date.now() - Math.max(last?.end ?? 0, lastSamChangeAt) >= SAM_DONE_MS;
@@ -212,7 +212,7 @@ async function samTakesTurn(since, end) {
   }
   return true;
 }
-const conversation = () => transcript.slice(-30).map(entry => `${entry.speaker === 'client' ? 'Sam' : 'Jordan'}: ${entry.text.trim()}`).join('\n');
+const conversation = () => transcript.slice(-30).map(entry => `${entry.speaker === 'interviewer' ? 'Sam' : 'Jordan'}: ${entry.text.trim()}`).join('\n');
 
 const startedAt = Date.now();
 try {
@@ -285,7 +285,7 @@ const analysis = report.lines.map((line, index) => {
 });
 const pauses = analysis.flatMap(item => item.pauses);
 // Participant passages first seen outside every answer and its transcript lag: words the noise or Sam's audio made up.
-const phantoms = report.transcript.filter(entry => entry.speaker === 'trainee' && entry.seenAt != null && entry.text.trim()
+const phantoms = report.transcript.filter(entry => entry.speaker === 'participant' && entry.seenAt != null && entry.text.trim()
   && !report.lines.some(line => entry.seenAt >= line.start && entry.seenAt <= line.end + 3000 || line.hello && entry.seenAt >= line.hello.start && entry.seenAt <= line.hello.end + 3000)).map(entry => entry.text);
 const times = analysis.map(item => item.questionMs).filter(value => value != null).sort((a, b) => a - b);
 report.analysis = analysis;

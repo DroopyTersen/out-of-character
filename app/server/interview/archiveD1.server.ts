@@ -23,7 +23,7 @@ export function d1Archive(db: D1Database, host: ArchiveHost): Archive {
   return {
     write: row => writeInterviewArchive(db, {
       specId: row.specId, specVersion: row.specVersion, state: row.state, capturedAt: row.capturedAt,
-      snapshot: row.snapshot,
+      snapshot: row.snapshot, narrative: row.narrative,
       provenance: archiveProvenance(row, host), interventions: row.producerLog,
     }),
   };

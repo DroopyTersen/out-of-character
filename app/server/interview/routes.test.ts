@@ -20,7 +20,7 @@ function fixture() {
   const request = (path: string, body?: unknown, headers: Record<string, string> = {}) => new Request(`https://practice.example/api/interview/${path}`, {
     method: 'POST', headers: { Origin: 'https://practice.example', Authorization: capability, 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined,
   });
-  const start = { id, scenarioId: 'project-closeout', clientId: 'sam-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
+  const start = { id, planId: 'project-closeout', voiceId: 'sam-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
   return { env, calls, simulator, request, start };
 }
 
@@ -67,7 +67,7 @@ const passages = [
   { id: 'p1', speaker: 'interviewer', text: 'What did you deliver?', startMs: 0, endMs: 900 },
   { id: 'p2', speaker: 'participant', text: 'We shipped the permit intake portal.', startMs: 1000, endMs: 2500 },
 ];
-const narrativeBody = { specId: 'project-closeout', passages };
+const narrativeBody = { transcript: passages, format: { audience: 'Project team', format: 'A Markdown account of the useful lessons.' } };
 const sse = (events: unknown[]) => new Response(new ReadableStream({ start(controller) {
   for (const value of events) controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`));
   controller.close();
@@ -88,10 +88,10 @@ test('an imported transcript passes the interview gates and needs participant sp
   expect((await handleInterview(f.request('narratives', narrativeBody, { Authorization: '' }), f.env))!.status).toBe(401);
   expect((await handleInterview(f.request('narratives', narrativeBody), { ...f.env, SIMULATOR_ENABLED: 'false' }))!.status).toBe(503);
   expect((await handleInterview(f.request('narratives', { ...narrativeBody, extra: true }), f.env))!.status).toBe(400);
-  expect((await handleInterview(f.request('narratives', { ...narrativeBody, passages: [{ ...passages[0], speaker: 'trainee' }] }), f.env))!.status).toBe(400);
-  expect((await handleInterview(f.request('narratives', { ...narrativeBody, passages: [{ ...passages[1], text: 'x'.repeat(300_000) }] }), f.env))!.status).toBe(413);
-  expect((await handleInterview(f.request('narratives', { ...narrativeBody, specId: 'no-such-debrief' }), f.env))!.status).toBe(404);
-  const empty = await handleInterview(f.request('narratives', { ...narrativeBody, passages: passages.slice(0, 1) }), f.env);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, transcript: [{ ...passages[0], speaker: 'trainee' }] }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, transcript: [{ ...passages[1], text: 'x'.repeat(300_000) }] }), f.env))!.status).toBe(413);
+  expect((await handleInterview(f.request('narratives', { ...narrativeBody, map: { inferred: true } }), f.env))!.status).toBe(400);
+  const empty = await handleInterview(f.request('narratives', { ...narrativeBody, transcript: passages.slice(0, 1) }), f.env);
   expect(empty!.status).toBe(422);
   expect(await empty!.json() as unknown).toEqual({ error: 'There is not enough conversation to write about.' });
   expect(keys.every(key => key === 'narrative:local')).toBe(true);
@@ -112,12 +112,12 @@ test('an imported transcript streams its narrative from the language provider, w
   const response = await routeInterview(f.request('narratives', narrativeBody), {
     available: () => true, limit: async () => true,
     session: async () => { throw new Error('No attempt is involved.'); },
-    narrative: (input, signal) => importedNarrative(input, async id => id === spec.id ? spec : null, narrateWith(providers), signal),
+    narrative: (input, signal) => importedNarrative(input, narrateWith(providers), signal),
   });
   expect(response!.status).toBe(200);
   expect(response!.headers.get('Content-Type')).toContain('text/plain');
   expect(JSON.parse(await response!.text())).toEqual(document);
-  expect(JSON.parse(prompt).transcript).toEqual([{ speaker: 'INTERVIEWER', text: 'What did you deliver?' }, { speaker: 'PARTICIPANT', text: 'We shipped the permit intake portal.' }]);
+  expect(JSON.parse(prompt)).toEqual(narrativeBody);
 });
 
 test('the socket upgrade reaches the attempt object only when the deployment opts in', async () => {

@@ -100,7 +100,7 @@ page.on('response', async response => {
     const snapshot = body.snapshot || body;
     if (!snapshot?.status) { if (!response.ok()) report.errors.push(`Session request failed (${response.status()}).`); return; }
     snapshots.push({ source: action, status: snapshot.status, finalization: snapshot.finalization, transcript: snapshot.transcript?.map(({ speaker, text, startMs, endMs }) => ({ speaker, text, startMs, endMs })) || [], summary: snapshot.interview?.summary || null, reportState: snapshot.report?.status || null, reportText: snapshot.report?.status === 'completed' ? snapshot.report.report.text : null });
-    const clientText = snapshot.transcript?.filter(entry => entry.speaker === 'client').map(entry => entry.text).join(' ') || '';
+    const clientText = snapshot.transcript?.filter(entry => entry.speaker === 'interviewer').map(entry => entry.text).join(' ') || '';
     if (clientText !== lastClientText) {
       lastClientText = clientText;
       lastClientChangeAt = Date.now();
@@ -133,7 +133,7 @@ try {
   await page.getByRole('button', { name: 'Start interview' }).click();
   startedAt = Date.now();
   if (!await waitUntil(() => snapshots.some(item => item.status === 'live'), 20_000)) throw new Error('Interview did not become live.');
-  report.opening = await waitUntil(() => snapshots.some(item => item.transcript.some(entry => entry.speaker === 'client')) || false, Math.max(0, 30_000 - (Date.now() - startedAt)));
+  report.opening = await waitUntil(() => snapshots.some(item => item.transcript.some(entry => entry.speaker === 'interviewer')) || false, Math.max(0, 30_000 - (Date.now() - startedAt)));
   if (report.opening) {
     const settled = await waitUntil(() => Date.now() - firstClientAt >= 5_000 && Date.now() - lastClientChangeAt >= 1_800, Math.max(0, 30_000 - (Date.now() - startedAt)));
     report.openingText = lastClientText.trim();
@@ -160,11 +160,11 @@ try {
   // The same synthetic audio checks whether a silent opening can still respond to input.
   await page.evaluate(() => window.__interviewAudit.playFixture());
   report.fixturePlayed = true;
-  if (!await waitUntil(() => snapshots.some(item => item.transcript.some(entry => entry.speaker === 'trainee' && entry.text.trim())), Math.max(0, 60_000 - (Date.now() - startedAt)))) throw new Error('Participant audio was not transcribed.');
+  if (!await waitUntil(() => snapshots.some(item => item.transcript.some(entry => entry.speaker === 'participant' && entry.text.trim())), Math.max(0, 60_000 - (Date.now() - startedAt)))) throw new Error('Participant audio was not transcribed.');
   report.reply = await waitUntil(async () => {
     const transcript = snapshots.at(-1)?.transcript || [];
-    const participantEnd = Math.max(...transcript.filter(entry => entry.speaker === 'trainee').map(entry => entry.endMs));
-    return transcript.some(entry => entry.speaker === 'client' && entry.endMs > participantEnd && entry.text.trim() && !isBackchannel(entry.text)) && Date.now() - lastClientChangeAt >= 1800
+    const participantEnd = Math.max(...transcript.filter(entry => entry.speaker === 'participant').map(entry => entry.endMs));
+    return transcript.some(entry => entry.speaker === 'interviewer' && entry.endMs > participantEnd && entry.text.trim() && !isBackchannel(entry.text)) && Date.now() - lastClientChangeAt >= 1800
       && await page.evaluate(() => Boolean(window.__interviewAudit.firstReplyAudioAt));
   }, Math.max(0, 60_000 - (Date.now() - startedAt)));
   if (!report.reply) throw new Error('No audible Sam reply after the participant answer.');
@@ -210,7 +210,7 @@ finally {
   await browser.close();
 }
 
-const participantHeard = snapshots.some(item => item.transcript.some(entry => entry.speaker === 'trainee' && entry.text.trim()));
+const participantHeard = snapshots.some(item => item.transcript.some(entry => entry.speaker === 'participant' && entry.text.trim()));
 const passed = report.opening && report.audiblePeak > 0.005 && participantHeard && report.reply && report.finalization === 'confirmed' && report.reportStream?.status === 200 && report.summaryPollConfirmed && report.summary?.status === 'completed' && Boolean(report.summary.text?.trim()) && report.resources?.microphone === 'ended' && report.resources?.peer === 'closed' && !report.errors.length;
 console.log(JSON.stringify({ output, passed, opening: report.openingText, audiblePeak: report.audiblePeak, fixturePlayed: report.fixturePlayed, reply: report.reply, firstAudibleAfterFixtureMs: report.firstAudibleAfterFixtureMs, samAudibleDuringFixture: report.samAudibleDuringFixture, finalization: report.finalization, summaryStatus: report.summary?.status || null, resources: report.resources, errors: report.errors }));
 if (!passed) process.exitCode = 1;

@@ -119,3 +119,21 @@ test('host-selected judges apply their coverage calibration without changing raw
     expect(result.answers['objective:scope']).toMatchObject({ probabilities: { explored: .75 } });
   }
 });
+
+test('conditional relevance needs participant evidence and is distinct from coverage depth', () => {
+  const conditional: JudgedSpec = { ...spec, readings: [], topics: [{ objectives: [{ id: 'handoff', label: 'Handoff', criterion: 'Describe the access handoff.', appliesWhen: 'The participant handled access.' }] }] };
+  const answers: InterviewAnswers = {
+    'objective:handoff': { type: 'choice', choice: 'explored', probabilities: { explored: .99 } },
+    'objective:handoff:evidence': { type: 'choice', choice: 'p2', probabilities: { p2: .99 } },
+    'objective:handoff:applicability': { type: 'choice', choice: 'applicable', probabilities: { applicable: .95 } },
+    'objective:handoff:applicability-evidence': { type: 'choice', choice: 'p2', probabilities: { p2: .99 } },
+  };
+  const read = () => readInterviewAnswers(conditional, passages, answers).objectives[0]!;
+  expect(read()).toMatchObject({ applicability: 'applicable', level: 'explored', achieved: true, applicabilityEvidence: { entryId: 'p2', speaker: 'participant' } });
+  answers['objective:handoff:applicability'] = { type: 'choice', choice: 'not-applicable', probabilities: { 'not-applicable': .95 } };
+  expect(read()).toMatchObject({ applicability: 'not-applicable', level: 'not-yet', achieved: false, evidence: null, applicabilityEvidence: { entryId: 'p2' } });
+  answers['objective:handoff:applicability-evidence'] = { type: 'choice', choice: 'none' };
+  expect(read()).toMatchObject({ applicability: 'unknown', achieved: false, applicabilityEvidence: null });
+  answers['objective:handoff:applicability-evidence'] = { type: 'choice', choice: 'p4' }; // A bare acknowledgment does not establish relevance.
+  expect(read()).toMatchObject({ applicability: 'unknown', achieved: false, applicabilityEvidence: null });
+});

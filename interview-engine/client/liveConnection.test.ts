@@ -266,7 +266,7 @@ test('leaving mid-conversation holds the attempt instead of ending it', async ()
 });
 
 test('a reloaded page whose attempt is gone reports it once and ends nothing', async () => {
-  server.override = () => ({ status: 410, body: { error: 'This practice session was interrupted. Start a new attempt.' } });
+  server.override = () => ({ status: 410, body: { error: 'This interview session was interrupted. Start a new attempt.' } });
   const { connection, errors } = await reattached();
   await connection.reattach();
   await advance(20_000);

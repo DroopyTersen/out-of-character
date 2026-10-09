@@ -1,3 +1,4 @@
+import { resolveInterview } from '../definition.server';
 import { expect, test } from 'bun:test';
 import { unpaidProviders } from '../../providers/testFoundry.server';
 import { createJevJudge, type Judge } from '../../providers/judge.server';
@@ -8,26 +9,23 @@ import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
 import { testFraming, testTechniques } from '../conversation/testSpec';
 import { FencedError } from '../seams.server';
 import type { PublicSnapshot } from './checkpoint';
-import { SessionActor, type SessionOptions, type SessionServices, type SessionSpec } from './session.server';
+import { SessionActor, type SessionOptions, type SessionServices } from './session.server';
 
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the
 // network is substituted; timing, the lease, checkpoints, fencing and the archive are real.
 
 const criteria = ['zero', 'one', 'two', 'three', 'four'] as const;
 const topics = [{ id: 'project', label: 'The project', objectives: [{ id: 'scope', label: 'Scope', criterion: 'Names what was built.' }] }];
-const spec: SessionSpec = {
-  id: 'fixture-interview', version: 'fixture-v1',
-  interviewer: {
-    name: 'Riley', role: 'interviewing someone about a recent project', persona: 'Curious and direct.', opening: 'Hi, I’m Riley. What did you build?',
-    orientation: ['ORIENTATION'], boundaries: ['BOUNDARY'], techniques: testTechniques,
-    voices: [{ id: 'riley-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/riley.png' }],
-  },
-  framing: testFraming,
-  readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria } }],
-  topics,
-};
+const spec = resolveInterview({
+  id: 'fixture-interview', version: 'fixture-v1', title: 'Recent project', goals: 'Learn what was built.',
+  topics: [{ id: 'project', label: 'Project', learn: 'Understand the project.', topics: [{ id: 'scope', label: 'Scope', learn: 'Names what was built.' }] }],
+  report: { audience: 'The delivery team', format: 'A Markdown account of what was learned.' },
+}, {
+  interviewer: { name: 'Riley', persona: 'Curious and direct.', voices: [{ id: 'riley-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/riley.png' }] },
+  readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria: [...criteria] } }],
+});
 const capability = `Bearer ${'a'.repeat(64)}`;
-const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', scenarioId: spec.id, clientId: 'riley-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
+const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', planId: spec.id, voiceId: 'riley-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
 const start = JSON.stringify(attempt);
 const quietPoll = JSON.stringify({ active: false, audio: false, outputQuietMs: 60_000 });
 const EPOCH = 1_800_000_000_000;
@@ -78,16 +76,16 @@ function fixture({ record = memoryRecord(), voice = fakeVoice(), archive = memor
   const background = inlineBackground();
   const providers = unpaidProviders(voice.voice);
   const options: SessionOptions = {
-    spec, providers, store, background, archive, lazyWake,
+    plan: structuredClone(spec.plan), config: structuredClone(spec.config), providers, store, background, archive, lazyWake,
     now: () => clock, log: event => events.push(event),
     services: {
       ...services,
       evaluate: async input => {
         graded.push(input.transcript.map(entry => entry.id));
-        const passage = input.transcript.find(entry => entry.speaker === 'trainee')!;
+        const passage = input.transcript.find(entry => entry.speaker === 'participant')!;
         return {
           revision: input.revision, model: 'fixture', durationMs: 1, readings: {},
-          objectives: [{ id: 'scope', level: 'explored', achieved: true, probability: .9, levels: null, evidence: { entryId: passage.id, speaker: 'trainee', text: passage.text } }],
+          objectives: [{ id: 'scope', level: 'explored', achieved: true, probability: .9, levels: null, evidence: { entryId: passage.id, speaker: 'participant', text: passage.text } }],
         };
       },
     },
@@ -124,24 +122,25 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   const { actor, socket, started } = await conversation(f);
   const first = started.body as { sdp: string; snapshot: PublicSnapshot };
   expect(first.sdp).toBe('v=0\r\nanswer');
-  expect(first.snapshot).toMatchObject({ id: attempt.id, scenarioId: spec.id, clientId: 'riley-cedar', status: 'connecting', startedAt: EPOCH, limitSeconds: 3600, revision: 0, transcript: [], evaluation: null, coaching: null, feedbackStatus: 'waiting', finalization: 'pending', usageSeconds: null, interview: { evaluation: null, summary: null, background: [] } });
-  expect(Object.keys(first.snapshot)).toEqual(['id', 'scenarioId', 'clientId', 'status', 'startedAt', 'limitSeconds', 'warning', 'revision', 'transcript', 'evaluation', 'coaching', 'feedbackStatus', 'message', 'finalization', 'usageSeconds', 'interview']);
+  expect(first.snapshot).toMatchObject({ id: attempt.id, planId: spec.id, voiceId: 'riley-cedar', status: 'connecting', startedAt: EPOCH, limitSeconds: 3600, revision: 0, transcript: [], evaluation: null, feedbackStatus: 'waiting', finalization: 'pending', usageSeconds: null, background: [] });
+  for (const legacy of ['scenarioId', 'clientId', 'coaching', 'interview']) expect(first.snapshot).not.toHaveProperty(legacy);
   expect(f.voice.created[0]!.voice).toBe('cedar');
-  expect(f.voice.created[0]!.instructions).toStartWith('You are Riley, interviewing someone about a recent project.');
-  expect(socket.sent[0]).toMatchObject({ type: 'session.instructions.append', event_id: 'opening', content: 'Speak now in English: “Hi, I’m Riley. What did you build?” Then listen. Do not wait for the participant to speak first.' });
+  expect(f.voice.created[0]!.instructions).toContain('Recent project');
+  expect(f.voice.created[0]!.instructions).toContain('Learn what was built.');
+  expect(socket.sent[0]).toMatchObject({ type: 'session.instructions.append', event_id: 'opening', content: expect.stringContaining('Recent project') });
   expect(f.record.lease).toEqual({ capability, providerId: 'provider-1', deadline: EPOCH + 3_600_000, closed: false });
   expect(f.record.wakeAt).toBe(EPOCH + 30_000);
 
   const live = body(await f.send(actor, 'poll', quietPoll));
   expect(live.status).toBe('live');
   expect(live.revision).toBe(2);
-  expect(live.transcript.map(entry => [entry.speaker, entry.text])).toEqual([['client', 'Hi, I’m Riley. What did you build?'], ['trainee', 'A claims portal for the adjusters.']]);
+  expect(live.transcript.map(entry => [entry.speaker, entry.text])).toEqual([['interviewer', 'Hi, I’m Riley. What did you build?'], ['participant', 'A claims portal for the adjusters.']]);
 
   f.at(10_000);
   const ending = await f.send(actor, 'end');
   expect(body(ending).status).toBe('ended');
-  expect(body(ending)).toMatchObject({ finalization: 'confirmed', usageSeconds: 12, feedbackStatus: 'current', interview: { summary: { status: 'pending', text: null } } });
-  expect(body(ending).interview.evaluation!.objectives[0]).toMatchObject({ id: 'scope', level: 'explored', evidence: { speaker: 'trainee' } });
+  expect(body(ending)).toMatchObject({ finalization: 'confirmed', usageSeconds: 12, feedbackStatus: 'current' });
+  expect(body(ending).evaluation!.objectives[0]).toMatchObject({ id: 'scope', level: 'explored', evidence: { speaker: 'participant' } });
   expect(f.record.lease).toEqual({ capability, deadline: EPOCH + 3_600_000, closed: true });
   expect(f.record.checkpoint).toBeUndefined();
   expect(f.record.wakeAt).toBe(EPOCH + 10_000 + 300_000);
@@ -166,7 +165,7 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   // The narrative settles later; its status and provenance rewrite the final row.
   actor.settleNarrative({ status: 'ready', text: 'A summary.' }, { model: 'fixture', version: 'v1', attempts: [] });
   await f.background.settle();
-  expect(f.archive.rows.get(attempt.id)!.snapshot.interview.summary).toEqual({ status: 'ready', text: 'A summary.' });
+  expect(f.archive.rows.get(attempt.id)!.narrative).toEqual({ status: 'ready', text: 'A summary.' });
   expect(f.archive.rows.get(attempt.id)!.provenance.narrative).toBeDefined();
 
   // The wake after closure clears the attempt.
@@ -179,8 +178,8 @@ test('the capability is checked before anything else, and an end before start le
   const f = fixture();
   const actor = await f.restore();
   expect(await f.send(actor, 'poll', undefined, 'Bearer nope')).toEqual({ status: 401, body: { error: 'Session capability is required.' } });
-  expect(await f.send(actor, 'poll')).toEqual({ status: 404, body: { error: 'This practice session was not found.' } });
-  expect(await f.send(actor, 'start', JSON.stringify({ ...attempt, scenarioId: 'other' }))).toEqual({ status: 400, body: { error: 'Invalid simulator request.' } });
+  expect(await f.send(actor, 'poll')).toEqual({ status: 404, body: { error: 'This interview session was not found.' } });
+  expect(await f.send(actor, 'start', JSON.stringify({ ...attempt, planId: 'other' }))).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
   expect(await f.send(actor, 'end')).toEqual({ status: 200, body: { ended: true } });
   expect(f.record.lease).toEqual({ capability, deadline: EPOCH, closed: true });
   expect(f.record.wakeAt).toBe(EPOCH + 60_000);
@@ -256,7 +255,7 @@ test('without timers, a command first runs the wake that has come due', async ()
   // The page never reported ready and went quiet for longer than the contact grace.
   f.at(40_000);
   const reply = body(await f.send(actor, 'poll', quietPoll));
-  expect(reply.message).toBe('Practice ended after losing contact with this page.');
+  expect(reply.message).toBe('Interview ended after losing contact with this page.');
   await f.background.settle();
   expect(actor.snapshot()!.status).toBe('ended');
   expect(f.archive.rows.size).toBe(0);
@@ -551,7 +550,7 @@ test('transcript inactivity gets one Jev check per unchanged exchange and a priv
     await f.send(f.actor, 'end');
     await f.background.settle();
     const checks = f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence;
-    expect(checks).toMatchObject([{ id, version: 'interview-silence-v2', outcome: 'sent', probability: .97, quietMs: 4000, acknowledgedAt: EPOCH + 8000, nextSpeech: { speaker: 'client', passageId: 'p4' } }]);
+    expect(checks).toMatchObject([{ id, version: 'interview-silence-v2', outcome: 'sent', probability: .97, quietMs: 4000, acknowledgedAt: EPOCH + 8000, nextSpeech: { speaker: 'interviewer', passageId: 'p4' } }]);
   } finally { await f.send(f.actor, 'end'); }
 });
 
@@ -698,4 +697,35 @@ test('a failed silence check is recorded once; it never fails the interview or r
     expect(checks).toMatchObject([{ outcome: 'error', failure: { name: 'Error' } }]);
     expect(JSON.stringify(checks)).not.toContain('provider body');
   } finally { await f.send(f.actor, 'end'); }
+});
+
+
+test.each([false, true])('resume preserves the accepted definition when the original context exists=%s', async hasContext => {
+  const original = fixture();
+  if (hasContext) original.options.context = { participant: { name: 'Priya' }, background: 'Atlas is the project name.' };
+  const { actor } = await conversation(original);
+  const accepted = actor.definition;
+  original.options.plan.goals = 'CHANGED GOALS';
+  original.options.plan.report.format = 'CHANGED REPORT';
+  original.options.context = { participant: { name: 'Someone else' }, background: 'CHANGED BACKGROUND' };
+  await original.send(actor, 'pause');
+  await original.background.settle();
+  await actor.close('fenced');
+  const replacement = fixture({ record: original.record, voice: original.voice, archive: original.archive });
+  replacement.options.plan.goals = 'NEW CALLER GOALS';
+  replacement.options.context = { participant: { name: 'New caller' } };
+  replacement.at(5000);
+  const resumed = await replacement.restore();
+  expect(resumed.definition).toEqual(accepted);
+  const copy = resumed.definition;
+  copy.plan.goals = 'MUTATED COPY';
+  expect(resumed.definition.plan.goals).toBe('Learn what was built.');
+  expect((await replacement.send(resumed, 'resume', JSON.stringify({ sdp: attempt.sdp }))).status).toBe(200);
+  const instructions = original.voice.created.at(-1)!.instructions;
+  expect(instructions).toContain('Learn what was built.');
+  expect(instructions).not.toContain('CHANGED');
+  expect(instructions).not.toContain('NEW CALLER');
+  expect(instructions.includes('Atlas')).toBe(hasContext);
+  await replacement.send(resumed, 'end');
+  await replacement.background.settle();
 });

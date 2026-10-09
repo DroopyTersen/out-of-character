@@ -1,5 +1,4 @@
-import type { NarrativeTemplate } from '../shared/spec';
-import type { Passage } from '../shared/transcript';
+import type { NarrativeRequest } from '../shared/protocol';
 import type { NarrativeFailure, NarrativeUsage } from '../shared/narrative';
 
 export type { NarrativeFailure, NarrativeUsage } from '../shared/narrative';
@@ -11,8 +10,9 @@ export type Narrative =
   | { document: null; failure: NarrativeFailure; usage: NarrativeUsage | null };
 /** One writing attempt: text as it is written, and how it ended. `result` settles once, after or alongside the stream. */
 export type NarrativeRun = { stream: ReadableStream<string>; result: Promise<Narrative> };
-/** What the narrative is written from: the spec's template and the finished transcript. */
-export type NarrativeInput = { template: Pick<NarrativeTemplate<NarrativeDocument>, 'system' | 'schema'>; passages: Passage[] };
+/** The entire writing input: participant transcript, requested format and explicit supplied context. */
+export type ReportInput = NarrativeRequest;
+export type NarrativeInput = ReportInput;
 
 export type NarrativeState = { starts: number } & (
   | { status: 'idle' | 'running'; document: null; failure: null }

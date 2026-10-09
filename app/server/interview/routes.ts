@@ -44,7 +44,7 @@ export function workerGates(env: Env): InterviewGates {
     limit: async (key, kind = 'session') => (await (kind === 'narrative' ? env.RATE_JUDGE : env.RATE_SIMULATOR).limit({ key })).success,
     session: (id, command) => attemptObject(env, id).fetch(command),
     narrative: (input, signal) => foundryConfigured(env)
-      ? importedNarrative(input, id => debriefs.catalog.resolve(id), narrateWith(foundryProviders(foundryConfig(env))), signal)
+      ? importedNarrative(input, narrateWith(foundryProviders(foundryConfig(env))), signal)
       : simulatorJson({ error: 'Narratives are currently unavailable.' }, 503),
     debriefs,
     ...(socketsEnabled(env) ? { socket: (id: string, upgrade: Request) => attemptObject(env, id).fetch(upgrade) } : {}),
@@ -66,7 +66,7 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
   const socket = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/socket$/);
   if (socket) {
     // The browser cannot set headers on a WebSocket, so each command carries its capability instead.
-    if (!gates.socket || !UUID.test(socket[1]!)) return simulatorJson({ error: 'Unknown simulator route.' }, 404);
+    if (!gates.socket || !UUID.test(socket[1]!)) return simulatorJson({ error: 'Unknown interview route.' }, 404);
     if (request.method !== 'GET') return simulatorJson({ error: 'Method not allowed.' }, 405);
     if (request.headers.get('Origin') !== url.origin) return simulatorJson({ error: 'Same-origin requests are required.' }, 403);
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return simulatorJson({ error: 'Expected a WebSocket upgrade.' }, 426);
@@ -79,10 +79,10 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
     gates.session(id, new Request(`https://session/${action}`, { method: 'POST', headers: request.headers, body, ...(signal ? { signal } : {}) }));
   try {
     if (url.pathname === '/api/interview/sessions') {
-      if (!gates.available()) return simulatorJson({ error: 'Live practice is currently unavailable. You can explore the workshop.' }, 503);
-      if (!(await gates.limit(request.headers.get('CF-Connecting-IP') || 'local'))) return simulatorJson({ error: 'Please wait a minute before starting another practice.' }, 429);
+      if (!gates.available()) return simulatorJson({ error: 'Live interviews is currently unavailable. You can explore the workshop.' }, 503);
+      if (!(await gates.limit(request.headers.get('CF-Connecting-IP') || 'local'))) return simulatorJson({ error: 'Please wait a minute before starting another interview.' }, 429);
       const parsed = startSchema.safeParse(await boundedJson(request, 64 * 1024));
-      if (!parsed.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
+      if (!parsed.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
       return forward(parsed.data.id, 'start', JSON.stringify(parsed.data));
     }
     if (url.pathname === '/api/interview/narratives') {
@@ -93,7 +93,7 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
       return await gates.narrative(parsed.data, request.signal);
     }
     const match = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume)$/);
-    if (!match || !UUID.test(match[1]!)) return simulatorJson({ error: 'Unknown simulator route.' }, 404);
+    if (!match || !UUID.test(match[1]!)) return simulatorJson({ error: 'Unknown interview route.' }, 404);
     const [, id, action] = match as unknown as [string, string, string];
     if (action === 'report' && !gates.available()) return simulatorJson({ error: 'Final reviews are currently unavailable.' }, 503);
     let body: string | undefined;
@@ -104,15 +104,15 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
     }
     if (action === 'resume') {
       // Each resume creates a paid voice session; a flapping network must not loop creation.
-      if (!gates.available()) return simulatorJson({ error: 'Live practice is currently unavailable. End this attempt to keep what was captured.' }, 503);
+      if (!gates.available()) return simulatorJson({ error: 'Live interviews is currently unavailable. End this attempt to keep what was captured.' }, 503);
       if (!(await gates.limit(`resume:${id}`))) return simulatorJson({ error: 'Please wait a minute before reconnecting again.' }, 429);
       const resume = resumeSchema.safeParse(await boundedJson(request, 64 * 1024));
-      if (!resume.success) return simulatorJson({ error: 'Invalid simulator request.' }, 400);
+      if (!resume.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
       body = JSON.stringify(resume.data);
     }
     // Poll, end and pause pass the kill switch so running attempts can still close.
     return forward(id, action, body, action === 'report' ? request.signal : undefined);
   } catch (error) {
-    return simulatorJson({ error: error instanceof BodyError ? error.message : 'The simulator connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);
+    return simulatorJson({ error: error instanceof BodyError ? error.message : 'The interview connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);
   }
 }

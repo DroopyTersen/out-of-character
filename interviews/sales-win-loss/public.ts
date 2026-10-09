@@ -1,8 +1,8 @@
-// The sales win/loss interview's browser-safe content; spec.ts assembles it with the server-only brief, framing, criteria and narrative prompt.
+// Browser labels and choices; spec.ts supplies the approved plan and host runtime configuration.
 // A second, independent spec: it shares no content with project-closeout and depends on nothing in the host.
 
 export const SALES_WIN_LOSS_ID = 'sales-win-loss';
-export const SALES_WIN_LOSS_VERSION = 'sales-win-loss-v1';
+export const SALES_WIN_LOSS_VERSION = 'sales-win-loss-v2';
 export const salesInterviewerName = 'Sam';
 export const salesVoices = [
   { id: 'sam-meridian', voice: 'meridian', label: 'Meridian', presentation: 'Male', image: '/interview/sam-male.png' },

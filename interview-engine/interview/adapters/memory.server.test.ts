@@ -7,7 +7,7 @@ const lease = { capability: 'Bearer x', deadline: 1000, closed: false };
 const checkpoint = (savedAt: number) => ({ savedAt, epoch: 1 }) as unknown as Checkpoint;
 const row = (state: 'partial' | 'final', capturedAt: number, summary: 'pending' | 'ready' | null = null) => ({
   id: 'a1', state, capturedAt,
-  snapshot: { interview: { evaluation: null, summary: summary && { status: summary, text: null }, background: [] } },
+  narrative: summary && { status: summary, text: null },
 }) as unknown as InterviewArchiveRow;
 
 describe('memoryStore', () => {

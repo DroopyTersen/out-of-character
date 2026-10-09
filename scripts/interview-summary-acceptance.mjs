@@ -38,12 +38,11 @@ try {
           close() { this.connectionState = 'closed'; audit.peerClosed = true; }
         };
         audit.snapshot = {
-          id: '', scenarioId: 'project-closeout', clientId: 'sam-cedar', status: 'connecting',
+          id: '', planId: 'project-closeout', voiceId: 'sam-cedar', status: 'connecting',
           startedAt: Date.now(), limitSeconds: 3600, warning: null, revision: 1,
-          transcript: mode === 'silent' ? [] : [{ id: 'p1', speaker: 'trainee', text: 'Jen helped us resolve the access delay.', startMs: 100, endMs: 1200 }],
-          evaluation: null, coaching: null, feedbackStatus: 'current', message: null,
+          transcript: mode === 'silent' ? [] : [{ id: 'p1', speaker: 'participant', text: 'Jen helped us resolve the access delay.', startMs: 100, endMs: 1200 }],
+          evaluation: null, background: [], pause: null, feedbackStatus: 'current', message: null,
           finalization: 'confirmed', usageSeconds: 2,
-          interview: { evaluation: null, summary: { status: 'pending', text: null } },
         };
         window.fetch = async (url, options = {}) => {
           if (!String(url).includes('/api/interview/sessions')) return originalFetch(url, options);

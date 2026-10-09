@@ -13,7 +13,7 @@ test('the real Jev adapter preserves a silence probability and rejects malformed
           probabilities: { continue: probability, wait: 1 - probability, finished: 0 } } } });
     }, { preconnect: fetch.preconnect });
     const work = evaluateSilence({ judge: judgeModel({ apiKey: 'fixture', fetch: request }),
-      transcript: [{ id: 'p1', speaker: 'client', text: 'Who used it?', startMs: 0, endMs: 1000 }] });
+      transcript: [{ id: 'p1', speaker: 'interviewer', text: 'Who used it?', startMs: 0, endMs: 1000 }] });
     if (probability > 1) await expect(work).rejects.toThrow();
     else expect(await work).toMatchObject({ probability, model: 'jev-1.13.0' });
     expect(calls).toBe(1);

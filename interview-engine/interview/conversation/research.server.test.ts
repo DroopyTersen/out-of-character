@@ -7,8 +7,8 @@ import { lookupInterviewBackground, normalizeResearchName, researchKey, validate
 const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
 
 const transcript = [
-  { id: 's1', speaker: 'client' as const, text: 'Did Acme Field Systems cause the delay?', startMs: 0, endMs: 1000 },
-  { id: 'p1', speaker: 'trainee' as const, text: 'We connected sites at Acme—Field Systems, but the handoff was private.', startMs: 1000, endMs: 4000 },
+  { id: 's1', speaker: 'interviewer' as const, text: 'Did Acme Field Systems cause the delay?', startMs: 0, endMs: 1000 },
+  { id: 'p1', speaker: 'participant' as const, text: 'We connected sites at Acme—Field Systems, but the handoff was private.', startMs: 1000, endMs: 4000 },
 ];
 const input = { signal: new AbortController().signal };
 /** The lookup over the fast model, with the substituted HTTP bound into the model as the providers bind it. */

@@ -1,3 +1,4 @@
+import { createJevJudge } from '../interview-engine/providers/judge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { generateText, Output } from 'ai';
@@ -10,7 +11,7 @@ import { interviewers, interviewOpening } from '../ai/interview/scenario.server.
 import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
-import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
+import { appendTranscript, settledTranscript } from '../interview-engine/interview/session/transcript.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
 // speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the
@@ -103,7 +104,7 @@ const inputMs = () => Date.now() - inputStartedAt;
 const startedAt = Date.now();
 const producer = new InterviewProducer({
   // Short: Sol's cache key, which includes it, is capped at 64 characters.
-  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec, providers: foundryProviders({ ...foundry, typesafeKey: process.env.TYPESAFE_API_KEY }), services: producerServices,
+  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec, providers: foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) }), services: producerServices,
   settled: prefix, coverage: () => coverage, send,
 });
 const producerTimer = setInterval(() => producer.tick(), 100);
@@ -116,7 +117,7 @@ function play(text, kind) {
     samSince = '';
   });
 }
-const conversation = () => report.transcript.slice(-40).map(entry => `${entry.speaker === 'client' ? 'Sam' : 'Jordan'}: ${entry.text.trim()}`).join('\n');
+const conversation = () => report.transcript.slice(-40).map(entry => `${entry.speaker === 'interviewer' ? 'Sam' : 'Jordan'}: ${entry.text.trim()}`).join('\n');
 async function reply() {
   generating = true;
   const minutes = inputMs() / 60_000;
@@ -155,7 +156,7 @@ async function reply() {
 function grade() {
   if (grading || closing) return;
   const transcript = [...report.transcript];
-  grading = evaluateInterview({ scenarioId: INTERVIEW_SCENARIO_ID, clientId: interviewerId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) })
+  grading = evaluateInterview({ planId: INTERVIEW_SCENARIO_ID, voiceId: interviewerId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) })
     .then(graded => { if (!closing) coverage = mergeCoverage(coverage, graded.objectives); }, error => report.errors.push(`Grading failed (${error.name}).`))
     .finally(() => { grading = null; });
 }
@@ -204,7 +205,7 @@ await new Promise(resolve => {
       pace();
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       if (value.type === 'session.output_transcript.delta') { lastOutput = Date.now(); samSince += value.delta; }
-      const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
+      const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
       const changed = next.find(entry => !report.transcript.includes(entry));
       report.transcript = next;
       if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null); }

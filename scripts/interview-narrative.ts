@@ -1,9 +1,11 @@
+import { NARRATIVE_VERSION } from '../interview-engine/shared/narrative';
 /**
  * Writes an interview narrative for a transcript file, outside any attempt: `writeNarrative` against Foundry.
  *
  *   bun --env-file=.dev.vars scripts/interview-narrative.ts <transcript.json> [--spec <id>] [--out <result.json>]
  *
- * The file holds the passages as a JSON array, `{ specId, passages }`, an archive row the reference host wrote to
+ * The file can hold { transcript, format, context? } directly, independent of the catalog.
+ * For historical inputs it holds the passages as a JSON array, `{ specId, passages }`, an archive row the reference host wrote to
  * INTERVIEW_ARCHIVE_DIR (`{ specId, transcript }`), or a D1 interview row (`{ scenario_id, transcript_json }`).
  * Speakers may be `participant`/`interviewer` or the wire's `trainee`/`client`. `--spec` picks the interview when the
  * file does not name one; the default is the project closeout. The text streams to stdout as it is written; the
@@ -11,7 +13,8 @@
  */
 import { z } from 'zod';
 import { foundryConfig } from '../ai/foundry.server';
-import { toPassage } from '../interview-engine/interview/wire';
+import { archivedTranscriptSchema as passagesSchema } from '../core/interview-transcript';
+import { narrativeRequestSchema } from '../interview-engine/shared/protocol';
 import type { NarrativeInput } from '../interview-engine/narrative/narrative.server';
 import { writeNarrative } from '../interview-engine/narrative/write.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
@@ -37,11 +40,6 @@ export function parseArgs(args: string[]) {
   return { file, specId, out };
 }
 
-const passageSchema = z.object({
-  id: z.string(), speaker: z.enum(['participant', 'interviewer', 'trainee', 'client']), text: z.string(), startMs: z.number(), endMs: z.number(),
-});
-const passagesSchema = z.array(passageSchema).transform(items => items.map(item =>
-  item.speaker === 'trainee' || item.speaker === 'client' ? toPassage({ ...item, speaker: item.speaker }) : { ...item, speaker: item.speaker }) as Passage[]);
 const fileSchema = z.union([
   passagesSchema.transform(passages => ({ passages, specId: undefined as string | undefined })),
   z.object({ specId: z.string().optional(), passages: passagesSchema }).transform(value => ({ passages: value.passages, specId: value.specId })),
@@ -62,16 +60,23 @@ export function readTranscript(value: unknown, specId?: string) {
   return { spec, passages: parsed.data.passages };
 }
 
+/** New callers supply the independent report input. Historical files can select a shipped default format. */
+export function readReport(value: unknown, specId?: string): NarrativeInput {
+  if (value && typeof value === 'object' && 'format' in value) return narrativeRequestSchema.parse(value);
+  const { spec, passages } = readTranscript(value, specId);
+  return narrativeRequestSchema.parse({ transcript: passages, format: spec.plan.report });
+}
+
 async function main() {
   const { file, specId, out } = parseArgs(Bun.argv.slice(2));
-  const { spec, passages } = readTranscript(await Bun.file(file).json(), specId);
+  const input = readReport(await Bun.file(file).json(), specId);
   const foundry = foundryConfig(process.env);
   // Only the language model is called; the voice and judge providers are built but never used.
   const providers = foundryProviders(foundry);
-  const run = writeNarrative({ template: spec.narrative as NarrativeInput['template'], passages }, providers, AbortSignal.timeout(120_000));
+  const run = writeNarrative(input, providers, AbortSignal.timeout(120_000));
   for await (const chunk of run.stream) process.stdout.write(chunk);
   process.stdout.write('\n');
-  const result = { specId: spec.id, version: spec.narrative.version, model: foundry.agentModel, ...await run.result };
+  const result = { version: NARRATIVE_VERSION, model: foundry.agentModel, ...await run.result };
   const json = JSON.stringify(result, null, 2);
   if (out) await Bun.write(out, json + '\n');
   else process.stdout.write(json + '\n');

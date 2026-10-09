@@ -1,7 +1,8 @@
+import type { Passage } from '../../interview-engine/shared/transcript';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Volume2 } from 'lucide-react';
 import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewEvaluation, type InterviewReadingId, type InterviewSummaryContent } from '../../core/interview';
-import type { Client, FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
+import type { Client, FeedbackStatus } from '../../core/simulator/types';
 import type { InterviewSnapshot as EngineSnapshot } from '../../interview-engine/shared/snapshot';
 import type { AudioLevels } from '../../interview-engine/client/audioLevels';
 import { ConnectionPaused, ConnectionUnstable, formatTime, type ConversationPhase } from '../simulator/conversation';
@@ -9,8 +10,8 @@ import { stableLink, type Link } from '../../interview-engine/client/liveConnect
 import { VoiceDisplay } from '../simulator/voice-display';
 import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 
-/** The engine's snapshot, over today's transcript entries until the runtime is renamed. */
-export type InterviewSnapshot = EngineSnapshot<TranscriptEntry, InterviewReadingId>;
+/** The current interview uses the engine's canonical transcript and snapshot. */
+export type InterviewSnapshot = EngineSnapshot<InterviewReadingId>;
 export type InterviewVoiceId = typeof interviewVoices[number]['id'];
 
 const SummaryMarkdown = lazy(() => import('./summary-markdown.client'));
@@ -75,8 +76,8 @@ export function InterviewSetup({ voiceId, onVoice, onStart, enabled = true, erro
   </section>;
 }
 
-function InterviewTranscript({ entries }: { entries: TranscriptEntry[] }) {
-  return <div className="sim-transcript interview-transcript">{entries.length ? entries.map(entry => <article key={entry.id} data-speaker={entry.speaker}><header><strong>{entry.speaker === 'trainee' ? 'You' : INTERVIEWER_NAME}</strong><time>{formatTime(entry.startMs / 1000)}</time></header><p>{entry.text}</p></article>) : <p className="sim-muted">The conversation will appear here.</p>}</div>;
+function InterviewTranscript({ entries }: { entries: Passage[] }) {
+  return <div className="sim-transcript interview-transcript">{entries.length ? entries.map(entry => <article key={entry.id} data-speaker={entry.speaker}><header><strong>{entry.speaker === 'participant' ? 'You' : INTERVIEWER_NAME}</strong><time>{formatTime(entry.startMs / 1000)}</time></header><p>{entry.text}</p></article>) : <p className="sim-muted">The conversation will appear here.</p>}</div>;
 }
 
 function InterviewReadings({ evaluation, status }: { evaluation: InterviewEvaluation | null | undefined; status: FeedbackStatus }) {
@@ -158,7 +159,7 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
     {warning && <div className="sim-session-warning" role="status"><div><strong>{warning.kind === 'idle' ? 'Still there?' : automaticFinish ? 'Finishing this conversation' : warning.kind === 'limit' ? 'Approaching the one-hour limit' : 'This conversation is nearly full'}</strong><p>{warning.kind === 'idle' ? `The interview will end in ${formatTime(remaining)} without activity.` : automaticFinish ? 'Your mic is off while the current reply finishes.' : `Please wrap up in ${formatTime(remaining)} before the interview ends automatically.`}</p></div>{warning.kind === 'idle' && <button onClick={onContinue}>Continue interview</button>}</div>}
     <div className="interview-live-grid">
       <div className="interview-primary">
-        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'trainee' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
+        <div className="interview-sam-stage sim-panel"><div className="interview-sam-heading"><h2>Sam</h2><p>A thoughtful friend with good questions.</p></div><VoiceDisplay client={samClient(voiceId)} levels={levels} phase={phase} muted={micOff} compact relationship="interviewer" /><div className="interview-caption">{caption ? <><small>{caption.speaker === 'participant' ? 'You' : 'Sam'}</small><p>{caption.text}</p></> : <p className="sim-muted">{phase === 'connecting' ? 'Opening your voice connection…' : phase === 'ending' ? 'Preparing your summary…' : phase === 'paused' ? 'Paused until the connection returns.' : 'Sam is ready when you are.'}</p>}</div>
           <div className="interview-controls" role="group" aria-label="Interview controls"><button onClick={onMute} disabled={phase !== 'live' || automaticFinish} aria-pressed={micOff} className={micOff ? 'muted' : ''}>{micOff ? <MicOff size={18} /> : <Mic size={18} />}{micOff ? 'Mic off' : 'Mic on'}</button><button ref={transcriptButton} onClick={() => setTranscriptOpen(value => !value)} aria-expanded={transcriptOpen} aria-controls="interview-live-transcript"><FileText size={18} />Transcript</button><button onClick={onAudio} disabled={phase === 'ending'}><Volume2 size={18} />Audio</button></div>
         </div>
         {transcriptOpen && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={() => { setTranscriptOpen(false); transcriptButton.current?.focus(); }}>Close</button></header><InterviewTranscript entries={snapshot?.transcript ?? []} /></section>}
@@ -176,7 +177,7 @@ const summaryTitles: Record<ReportStage, string> = {
 };
 
 export function InterviewSummaryScreen({ snapshot, report, onRetrySummary, onCheckSummary, onReset, error }: {
-  snapshot: InterviewSnapshot | null; report: StreamedReportView<InterviewSummaryContent>;
+  snapshot: InterviewSnapshot | null; report: StreamedReportView<InterviewSummaryContent, InterviewSnapshot>;
   onRetrySummary: () => void; onCheckSummary: () => void; onReset: () => void; error?: string | null;
 }) {
   const writing = report.stage === 'compiling' || report.stage === 'writing';

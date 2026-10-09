@@ -1,4 +1,4 @@
-import type { WireEntry } from '../wire';
+import type { Passage } from '../../shared/transcript';
 
 // What the session tells the voice model itself, beside the interviewer's brief: a resumed connection's memory and
 // cue, and the answer to a delegation Sam must not make.
@@ -11,8 +11,8 @@ const other = 'the participant';
 const capitalized = (text: string) => text[0]!.toUpperCase() + text.slice(1);
 
 /** A resumed voice session starts empty; this rebuilds the interviewer's memory from the saved transcript. */
-export function conversationSoFar(interviewerName: string, transcript: WireEntry[]): string {
-  const lines = transcript.filter(entry => entry.text.trim()).map(entry => `${entry.speaker === 'trainee' ? capitalized(other) : `You (${interviewerName})`}: ${entry.text.trim()}`);
+export function conversationSoFar(interviewerName: string, transcript: Passage[]): string {
+  const lines = transcript.filter(entry => entry.text.trim()).map(entry => `${entry.speaker === 'participant' ? capitalized(other) : `You (${interviewerName})`}: ${entry.text.trim()}`);
   const kept: string[] = [];
   let size = 0;
   for (let index = lines.length - 1; index >= 0; index--) {
@@ -29,20 +29,20 @@ export function conversationSoFar(interviewerName: string, transcript: WireEntry
 }
 
 /** Sent instead of the opening once a resumed connection is ready. */
-export function resumeInstruction(interviewerName: string, transcript: WireEntry[], pausedMs: number): string {
+export function resumeInstruction(interviewerName: string, transcript: Passage[], pausedMs: number): string {
   const spoken = transcript.filter(entry => entry.text.trim());
-  const quote = (entry: WireEntry) => {
+  const quote = (entry: Passage) => {
     const text = entry.text.trim();
     return text.length > 300 ? `“…${text.slice(-300)}”` : `“${text}”`;
   };
-  const own = spoken.findLast(entry => entry.speaker === 'client'), theirs = spoken.findLast(entry => entry.speaker === 'trainee');
+  const own = spoken.findLast(entry => entry.speaker === 'interviewer'), theirs = spoken.findLast(entry => entry.speaker === 'participant');
   const away = pausedMs < 90_000 ? 'a moment' : `about ${Math.round(pausedMs / 60_000)} minutes`;
   return [
     `Speak now in English as ${interviewerName}. The call dropped for ${away} and has just reconnected. This is the same conversation, not a new one.`,
     'Acknowledge the drop in one short, natural sentence in character. Do not greet them again, re-introduce yourself, restate the purpose, or summarize the conversation.',
     own ? `The last thing you said was ${quote(own)}.` : '',
     theirs ? `The last thing ${other} said was ${quote(theirs)}.` : '',
-    spoken.at(-1)?.speaker === 'trainee'
+    spoken.at(-1)?.speaker === 'participant'
       ? `${capitalized(other)} was speaking when the call dropped and may have been cut off. Invite them to finish their thought, briefly echoing their last words, then listen.`
       : 'If your last question is still unanswered, ask it again briefly in fresh words; otherwise continue naturally from the last exchange. Then listen.',
     'Do not re-ask anything already answered in the conversation so far.',

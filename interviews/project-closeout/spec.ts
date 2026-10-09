@@ -1,27 +1,22 @@
-import { validateSpec } from '../../interview-engine/shared/spec';
-import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../core/simulator/types';
-import { boundaries, opening, orientation, persona, role, techniques } from './brief.prompt';
-import { framing } from './framing.prompt';
-import { narrativeSystem } from './narrative.prompt';
+import { resolveInterview } from '../../interview-engine/interview/definition.server';
+import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../interview-engine/shared/timing';
+import { orientation, persona } from './brief.prompt';
+import { report } from './report';
 import { readingRubrics, topicCriteria, topicRules } from './rubric.prompt';
-import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewReadings, interviewSummarySchema, interviewTopics, interviewVoices } from './public';
+import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewReadings, interviewTopics, interviewVoices } from './public';
 
-/** The project closeout interview. Server code reads it whole, with the interviewer's brief, the framing, Jev's criteria and the narrative prompt; browser code imports ./public so they stay out of the bundle. */
-export const spec = validateSpec({
-  id: INTERVIEW_SCENARIO_ID,
-  // Bumped when the topics or criteria change: an attempt pins the version it started under, and the catalog serves
-  // only the current version of a shipped template, so a live attempt from before a bump cannot restore after it.
-  version: 'project-closeout-v2',
-  interviewer: { name: INTERVIEWER_NAME, voices: interviewVoices, role, persona, opening, orientation, boundaries, techniques },
-  framing,
-  topics: interviewTopics.map(topic => ({ ...topic, objectives: topic.objectives.map(objective => ({ ...objective, criterion: topicCriteria[objective.id], ...topicRules[objective.id] })) })),
-  readings: interviewReadings.map(reading => ({ ...reading, rubric: readingRubrics[reading.id] })),
-  limits: {
-    durationSeconds: SESSION_LIMIT_SECONDS,
-    idleWarningMs: SESSION_IDLE_WARNING_MS,
-    idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
-    pauseHoldMs: SESSION_PAUSE_HOLD_MS,
-    maxResumes: SESSION_MAX_RESUMES,
-  },
-  narrative: { id: 'project-closeout-summary', version: 'interview-summary-v1', system: narrativeSystem, schema: interviewSummarySchema },
+/** The approved plan is plain data; the engine owns prompt construction. */
+export const spec = resolveInterview({
+  id: INTERVIEW_SCENARIO_ID, version: 'project-closeout-v4', title: 'Project closeout', goals: 'Learn what the delivery team should repeat, change, or prepare for with this client. Capture concrete lessons about decisions, consequences, tradeoffs, and useful practices.',
+  guidance: orientation.join('\n\n'),
+  topics: interviewTopics.map(topic => ({ id: topic.id, label: topic.label, learn: `Understand ${topic.label.toLowerCase()} from the participant’s experience.`,
+    topics: topic.objectives.map(objective => ({ id: objective.id, label: objective.label,
+      learn: [topicCriteria[objective.id], topicRules[objective.id]?.creditRule, topicRules[objective.id]?.explored].filter(Boolean).join(' '),
+    })),
+  })),
+  report,
+}, {
+  interviewer: { name: INTERVIEWER_NAME, voices: [...interviewVoices], persona },
+  readings: interviewReadings.map(reading => ({ ...reading, rubric: { ...readingRubrics[reading.id], criteria: [...readingRubrics[reading.id].criteria] } })),
+  limits: { durationSeconds: SESSION_LIMIT_SECONDS, idleWarningMs: SESSION_IDLE_WARNING_MS, idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS, pauseHoldMs: SESSION_PAUSE_HOLD_MS, maxResumes: SESSION_MAX_RESUMES },
 });

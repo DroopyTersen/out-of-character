@@ -3,7 +3,7 @@ import { DirectorHttpError, DirectorOutputError } from '../../providers/structur
 import { unpaidProviders } from '../../providers/testFoundry.server';
 import type { InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import type { PauseSpan } from '../../shared/timing';
-import type { WireEntry as TranscriptEntry, WireSpeaker } from '../wire';
+import type { Passage as TranscriptEntry, Speaker } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from './map';
 import { MapOutputError } from './map.server';
 import { NOTE_HEADERS } from './notes';
@@ -13,7 +13,7 @@ import { threadKey, type TurnReading } from './ranking';
 import { PRODUCER_LIMITS, type ProducerLogRecord, type ResearchRequest } from './records';
 import { testSpec } from './testSpec';
 
-type InterviewObjectiveReading = Reading<WireSpeaker>;
+type InterviewObjectiveReading = Reading<Speaker>;
 const fixtureProviders = unpaidProviders({} as never, { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' });
 type Options = ConstructorParameters<typeof engine.InterviewProducer>[0];
 /** The producer with the test spec, as the session constructs it with its own. */
@@ -61,8 +61,8 @@ const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done =
 function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?: boolean } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = empty ? [] : [
-    { id: 'p1', speaker: 'client', text: 'What did the team build?', startMs: 0, endMs: 1000 },
-    { id: 'p2', speaker: 'trainee', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
+    { id: 'p1', speaker: 'interviewer', text: 'What did the team build?', startMs: 0, endMs: 1000 },
+    { id: 'p2', speaker: 'participant', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
   let connected: boolean | 'throw' = true;
   let coverage: InterviewObjectiveReading[] = [];
@@ -81,11 +81,11 @@ function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?:
       },
     },
   });
-  const say = (speaker: 'client' | 'trainee', text: string) => {
+  const say = (speaker: 'interviewer' | 'participant', text: string) => {
     const entry: TranscriptEntry = { id: `p${transcript.length + 1}`, speaker, text, startMs: Date.now() - epoch, endMs: Date.now() - epoch + 1000 };
     const previous = transcript.at(-1)?.id ?? null;
     transcript = [...transcript, entry];
-    if (speaker === 'trainee') producer.transcriptChanged(entry, previous);
+    if (speaker === 'participant') producer.transcriptChanged(entry, previous);
     return entry;
   };
   const grow = (id: string, text: string) => {
@@ -93,9 +93,9 @@ function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?:
     return transcript.find(entry => entry.id === id)!;
   };
   /** Sam starts speaking, as the live transcript reports each of Sam's deltas. */
-  const sam = (text = 'Tell me more?') => { const previous = transcript.at(-1)?.id ?? null; const entry = say('client', text); producer.transcriptChanged(entry, previous); return entry; };
+  const sam = (text = 'Tell me more?') => { const previous = transcript.at(-1)?.id ?? null; const entry = say('interviewer', text); producer.transcriptChanged(entry, previous); return entry; };
   /** Sam asks, the participant answers, and the tick reads the new turn. */
-  const turn = async (ms: number, text = 'It took a while to get right.') => { at(ms); say('client', 'Tell me more?'); say('trainee', text); await step(); };
+  const turn = async (ms: number, text = 'It took a while to get right.') => { at(ms); say('interviewer', 'Tell me more?'); say('participant', text); await step(); };
   const at = (ms: number) => setSystemTime(epoch + ms);
   const step = async (ms?: number) => { if (ms != null) at(ms); producer.tick(Date.now()); await flush(); };
   const of = <S extends ProducerLogRecord['source']>(source: S) => producer.records.filter(item => item.source === source) as Extract<ProducerLogRecord, { source: S }>[];
@@ -114,7 +114,7 @@ test('Sol calls on the minute only when participant text is unlogged, and a wake
   await f.step(20_000);
   expect(f.calls.map).toHaveLength(0);
 
-  f.at(59_000); f.say('client', 'And then?'); f.say('trainee', 'Then we rebuilt the offline cache.');
+  f.at(59_000); f.say('interviewer', 'And then?'); f.say('participant', 'Then we rebuilt the offline cache.');
   await f.step();
   await f.step(60_000);
   expect(f.calls.map).toHaveLength(1);
@@ -126,7 +126,7 @@ test('Sol calls on the minute only when participant text is unlogged, and a wake
   await f.step(121_000);
   expect(f.calls.map).toHaveLength(1);
 
-  f.at(125_000); f.say('trainee', 'We also tested it with field crews.');
+  f.at(125_000); f.say('participant', 'We also tested it with field crews.');
   await f.step();
   expect(f.calls.map).toHaveLength(2);
   expect(f.calls.map[1]!.tail.reasons).toEqual([MINUTE]);
@@ -400,7 +400,7 @@ test('all paid producer calls share a cap that survives a restart', async () => 
   const f = fixture({ generateMap: async () => { throw new Error('temporarily unavailable'); } });
   // Distinct answers are observable inputs, not a fabricated internal counter.
   for (let i = 0; i < PRODUCER_LIMITS.calls; i++) {
-    f.say('client', 'What happened next?'); f.say('trainee', `The team completed part ${i}.`);
+    f.say('interviewer', 'What happened next?'); f.say('participant', `The team completed part ${i}.`);
     f.producer.tick(epoch);
     await f.producer.settle();
   }

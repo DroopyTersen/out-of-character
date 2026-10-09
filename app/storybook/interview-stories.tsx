@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { emptyInterviewReadings, interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummaryContent } from '../../core/interview';
-import type { FeedbackStatus, TranscriptEntry } from '../../core/simulator/types';
+import type { FeedbackStatus } from '../../interview-engine/shared/snapshot';
+import type { Passage } from '../../interview-engine/shared/transcript';
 import { illustrativeLevels } from './simulator-voice-story';
 import { streamedReportView } from '../simulator/use-report';
 import type { ReportState } from '../../core/simulator/report';
@@ -11,15 +12,15 @@ import { stableLink, type Link } from '../../interview-engine/client/liveConnect
 import '../simulator/simulator.css';
 import '../interview/interview.css';
 
-export const transcript: TranscriptEntry[] = [
-  { id: 's1', speaker: 'client', text: 'What was the project about? Start wherever it makes sense to you.', startMs: 0, endMs: 5300 },
-  { id: 'u1', speaker: 'trainee', text: 'We built a small inspection prototype so field teams could capture notes in one place. I was the technical lead.', startMs: 5400, endMs: 14300 },
-  { id: 's2', speaker: 'client', text: 'What part of that work felt most important to you?', startMs: 14600, endMs: 19000 },
-  { id: 'u2', speaker: 'trainee', text: 'The useful part was watching two inspectors try it. They kept returning to the offline question, so I made sure we described offline use as something to validate, not a finished feature.', startMs: 19300, endMs: 31600 },
-  { id: 's3', speaker: 'client', text: 'Was there a moment when the team had to change course?', startMs: 32000, endMs: 36000 },
-  { id: 'u3', speaker: 'trainee', text: 'Yes. Access to sample records arrived late. We used a smaller synthetic set for the demo and said so plainly. That kept the meeting useful without pretending we had tested the real integration.', startMs: 36400, endMs: 50100 },
-  { id: 's4', speaker: 'client', text: 'What would you carry into the next project?', startMs: 50600, endMs: 54800 },
-  { id: 'u4', speaker: 'trainee', text: 'I would ask for representative records and access earlier. I am glad we were direct with the client about what the prototype had and had not proven.', startMs: 55200, endMs: 64200 },
+export const transcript: Passage[] = [
+  { id: 's1', speaker: 'interviewer', text: 'What was the project about? Start wherever it makes sense to you.', startMs: 0, endMs: 5300 },
+  { id: 'u1', speaker: 'participant', text: 'We built a small inspection prototype so field teams could capture notes in one place. I was the technical lead.', startMs: 5400, endMs: 14300 },
+  { id: 's2', speaker: 'interviewer', text: 'What part of that work felt most important to you?', startMs: 14600, endMs: 19000 },
+  { id: 'u2', speaker: 'participant', text: 'The useful part was watching two inspectors try it. They kept returning to the offline question, so I made sure we described offline use as something to validate, not a finished feature.', startMs: 19300, endMs: 31600 },
+  { id: 's3', speaker: 'interviewer', text: 'Was there a moment when the team had to change course?', startMs: 32000, endMs: 36000 },
+  { id: 'u3', speaker: 'participant', text: 'Yes. Access to sample records arrived late. We used a smaller synthetic set for the demo and said so plainly. That kept the meeting useful without pretending we had tested the real integration.', startMs: 36400, endMs: 50100 },
+  { id: 's4', speaker: 'interviewer', text: 'What would you carry into the next project?', startMs: 50600, endMs: 54800 },
+  { id: 'u4', speaker: 'participant', text: 'I would ask for representative records and access earlier. I am glad we were direct with the client about what the prototype had and had not proven.', startMs: 55200, endMs: 64200 },
 ];
 
 const summaryText = `The interviewee described a **field-inspection prototype** intended to give inspectors one place to capture notes. They served as technical lead.
@@ -73,7 +74,7 @@ The interview did not establish how the client later decided to proceed.`;
 
 function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, count = transcript.length): InterviewSnapshot {
   const entries = transcript.slice(0, count);
-  const evidenceByObjective: Record<string, TranscriptEntry> = {
+  const evidenceByObjective: Record<string, Passage> = {
     'project-delivery': transcript[1]!,
     'project-role': transcript[1]!,
     'project-reflection': transcript[3]!,
@@ -85,9 +86,9 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, count = tra
     revision: entries.length,
     readings: {
       ...emptyInterviewReadings(),
-      engagement: has('u2') ? { value: 3.3, distribution: null, evidence: { entryId: 'u2', speaker: 'trainee', text: transcript[3]!.text } } : { value: null, distribution: null, evidence: null },
-      openness: has('u3') ? { value: 2.8, distribution: null, evidence: { entryId: 'u3', speaker: 'trainee', text: transcript[5]!.text } } : { value: null, distribution: null, evidence: null },
-      specificity: has('u3') ? { value: 3.5, distribution: null, evidence: { entryId: 'u3', speaker: 'trainee', text: transcript[5]!.text } } : has('u1') ? { value: 2.3, distribution: null, evidence: { entryId: 'u1', speaker: 'trainee', text: transcript[1]!.text } } : { value: null, distribution: null, evidence: null },
+      engagement: has('u2') ? { value: 3.3, distribution: null, evidence: { entryId: 'u2', speaker: 'participant', text: transcript[3]!.text } } : { value: null, distribution: null, evidence: null },
+      openness: has('u3') ? { value: 2.8, distribution: null, evidence: { entryId: 'u3', speaker: 'participant', text: transcript[5]!.text } } : { value: null, distribution: null, evidence: null },
+      specificity: has('u3') ? { value: 3.5, distribution: null, evidence: { entryId: 'u3', speaker: 'participant', text: transcript[5]!.text } } : has('u1') ? { value: 2.3, distribution: null, evidence: { entryId: 'u1', speaker: 'participant', text: transcript[1]!.text } } : { value: null, distribution: null, evidence: null },
     },
     objectives: interviewTopics.flatMap(topic => topic.objectives.map(objective => {
       const entry = evidenceByObjective[objective.id];
@@ -101,7 +102,7 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, count = tra
     model: 'workshop-fixture', durationMs: 0,
   };
   return {
-    id: 'anonymous-workshop-interview', specId: 'project-closeout', voiceId: 'sam-cedar', status,
+    id: 'anonymous-workshop-interview', planId: 'project-closeout', voiceId: 'sam-cedar', status,
     startedAt: Date.now() - 50_000, limitSeconds: 3600, warning: null, pause: null,
     revision: entries.length, transcript: entries, feedbackStatus: feedback, message: null, background: [],
     finalization: status === 'ended' ? 'confirmed' : 'pending', usageSeconds: status === 'ended' ? 50 : null,
@@ -154,10 +155,10 @@ const callStates = {
   ending: { label: 'Ending', phase: 'ending', link: stableLink },
 } satisfies Record<string, { label: string; phase: ConversationPhase; link: Link }>;
 
-const researchTranscript: TranscriptEntry[] = [
-  { id: 'sam-1', speaker: 'client', text: 'What were you building on this project?', startMs: 0, endMs: 3300 },
-  { id: 'you-1', speaker: 'trainee', text: 'A field mapping prototype that used OpenStreetMap. We wanted to see how inspectors could record what they found across several sites.', startMs: 3800, endMs: 12800 },
-  { id: 'sam-2', speaker: 'client', text: 'What did the inspectors notice when they tried it?', startMs: 13500, endMs: 17100 },
+const researchTranscript: Passage[] = [
+  { id: 'sam-1', speaker: 'interviewer', text: 'What were you building on this project?', startMs: 0, endMs: 3300 },
+  { id: 'you-1', speaker: 'participant', text: 'A field mapping prototype that used OpenStreetMap. We wanted to see how inspectors could record what they found across several sites.', startMs: 3800, endMs: 12800 },
+  { id: 'sam-2', speaker: 'interviewer', text: 'What did the inspectors notice when they tried it?', startMs: 13500, endMs: 17100 },
 ];
 
 // Manually authored synthetic delivery; this is not a recorded model or search result.
@@ -206,6 +207,6 @@ export function InterviewSummaryStory() {
     : status === 'unavailable' ? { status: 'failed', starts: 1, report: null, failure: 'provider' }
       : { status: 'running', starts: 1, report: null, failure: null };
   const draft = status === 'writing' ? { text: summaryText.slice(0, length) } : undefined;
-  const report = streamedReportView({ state, draft }, !!draft?.text);
+  const report = streamedReportView<InterviewSummaryContent, InterviewSnapshot>({ state, draft }, !!draft?.text);
   return <><div className="workshop-controls"><label>Summary<select value={status} onChange={event => { setPlaying(false); setStatus(event.target.value as typeof status); setLength(240); }}><option value="ready">Ready</option><option value="pending">Preparing</option><option value="writing">Writing</option><option value="unavailable">Unavailable</option></select></label><button onClick={replay}>Replay stream</button><label>Transcript<select value={transcriptCount} onChange={event => setTranscriptCount(Number(event.target.value))}><option value="0">Empty</option><option value="8">Available</option></select></label>{notice && <span role="status">{notice}</span>}</div><InterviewSummaryScreen snapshot={fixture('ended', 'current', transcriptCount)} report={report} onRetrySummary={replay} onCheckSummary={() => setNotice('Debugger example: no live request.')} onReset={() => setNotice('Workshop preview: no live interview was started.')} /></>;
 }

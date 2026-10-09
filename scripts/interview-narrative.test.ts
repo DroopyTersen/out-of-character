@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Passage } from '../interview-engine/shared/transcript';
-import { parseArgs, readTranscript } from './interview-narrative';
+import { parseArgs, readReport, readTranscript } from './interview-narrative';
 
 const passages: Passage[] = [
   { id: 'p1', speaker: 'interviewer', text: 'What did you deliver?', startMs: 0, endMs: 900 },
@@ -24,4 +24,11 @@ test('passages, a request body, an archive row and a D1 row all read as the same
   expect(() => readTranscript({ specId: 'missing', passages })).toThrow('Unknown interview');
   expect(() => readTranscript({ transcript_json: '[]' })).toThrow('not a transcript');
   expect(() => readTranscript([{ ...passages[0], speaker: 'narrator' }])).toThrow('not a transcript');
+});
+
+
+test('an explicit report format and context need no catalog or interview identity', () => {
+  const input = { transcript: passages, format: { audience: 'Project team', format: 'Use Findings and Lessons headings.' }, context: { background: 'Atlas is the project name.' } };
+  expect(readReport(input)).toEqual(input);
+  expect(() => readReport({ ...input, coverage: [] })).toThrow();
 });

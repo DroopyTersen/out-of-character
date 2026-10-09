@@ -6,12 +6,12 @@ import { NO_EXTERNAL_TASK } from '../simulator/live.server';
 // The engine's session sends the voice model the same resume and delegation text the practice simulator's session sent
 // for the interview. Those texts are frozen as digests from the practice simulator before its interview dispatch was removed (Phase 5).
 const transcript = [
-  { id: 'p1', speaker: 'client' as const, text: 'What did the team deliver?', startMs: 0, endMs: 900 },
-  { id: 'p2', speaker: 'trainee' as const, text: 'A claims portal. '.repeat(30), startMs: 1000, endMs: 4000 },
-  { id: 'p3', speaker: 'client' as const, text: '  ', startMs: 4100, endMs: 4200 },
-  { id: 'p4', speaker: 'trainee' as const, text: 'And the access requests took weeks.', startMs: 4300, endMs: 6000 },
+  { id: 'p1', speaker: 'interviewer' as const, text: 'What did the team deliver?', startMs: 0, endMs: 900 },
+  { id: 'p2', speaker: 'participant' as const, text: 'A claims portal. '.repeat(30), startMs: 1000, endMs: 4000 },
+  { id: 'p3', speaker: 'interviewer' as const, text: '  ', startMs: 4100, endMs: 4200 },
+  { id: 'p4', speaker: 'participant' as const, text: 'And the access requests took weeks.', startMs: 4300, endMs: 6000 },
 ];
-const long = Array.from({ length: 400 }, (_, index) => ({ id: `q${index}`, speaker: index % 2 ? 'trainee' as const : 'client' as const, text: `Passage ${index} `.repeat(20), startMs: index * 1000, endMs: index * 1000 + 900 }));
+const long = Array.from({ length: 400 }, (_, index) => ({ id: `q${index}`, speaker: index % 2 ? 'participant' as const : 'interviewer' as const, text: `Passage ${index} `.repeat(20), startMs: index * 1000, endMs: index * 1000 + 900 }));
 const frozen: Record<string, string> = {
   'conversation short': '74d1627e919bb010aab59aad6468de39558c3580f7b3fd76274450f528a93729',
   'resume short 5000': 'e793701ef36c871974f671d91f39292f40ca09e58c1d22373c59a17d65189b0b',

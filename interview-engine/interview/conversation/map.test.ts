@@ -2,8 +2,8 @@ import { expect, test } from 'bun:test';
 import { applyMapUpdate, emptyMap, PARTICIPANT_ID, renderMapForSol, type ConversationMap, type MapEntity, type MapThread, type MapUpdate } from './map';
 
 const passages = [
-  { id: 'p1', speaker: 'client' as const }, { id: 'p2', speaker: 'trainee' as const },
-  { id: 'p3', speaker: 'client' as const }, { id: 'p4', speaker: 'trainee' as const },
+  { id: 'p1', speaker: 'interviewer' as const }, { id: 'p2', speaker: 'participant' as const },
+  { id: 'p3', speaker: 'interviewer' as const }, { id: 'p4', speaker: 'participant' as const },
 ];
 const entity = (id: string, changes: Partial<MapEntity> = {}): MapEntity => ({ id, kind: 'product', label: `Entity ${id}`, detail: 'Per the participant.', source: 'participant', passageId: 'p2', ...changes });
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({

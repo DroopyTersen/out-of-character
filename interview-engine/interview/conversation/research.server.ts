@@ -2,7 +2,7 @@ import { azure } from '@ai-sdk/azure';
 import { generateText, Output, type LanguageModel } from 'ai';
 import { z } from 'zod';
 import type { InterviewBackground } from '../../shared/snapshot';
-import type { WireEntry as TranscriptEntry } from '../wire';
+import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import type { ResearchKind, ResearchRequest } from './records';
 
 /** Only kind, name and clue ever leave the session; Sol chooses the public identity clue. */
@@ -27,7 +27,7 @@ export function normalizeResearchName(value: string): string {
 export function validateResearchRequest(request: ResearchRequest, transcript: TranscriptEntry[]):
   { ok: true; request: ResearchRequest } | { ok: false; reason: string } {
   const name = normalizeResearchName(request.name);
-  const spoken = transcript.filter(entry => entry.speaker === 'trainee' && ` ${normalizeResearchName(entry.text)} `.includes(` ${name} `));
+  const spoken = transcript.filter(entry => entry.speaker === 'participant' && ` ${normalizeResearchName(entry.text)} `.includes(` ${name} `));
   if (!name || !spoken.length) return { ok: false, reason: 'name_unspoken' };
   return { ok: true, request: { ...request, name: request.name.trim(), clue: request.clue?.trim() || null, passageIds: spoken.map(entry => entry.id) } };
 }

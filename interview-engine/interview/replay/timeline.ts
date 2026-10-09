@@ -2,7 +2,7 @@ import { COVERAGE_LEVELS } from '../../shared/snapshot';
 import type { TopicGroup } from '../../shared/spec';
 import { COVERAGE_LEVEL_LABELS } from '../conversation/coverage';
 import type { GradeObjective, ProducerLogRecord } from '../conversation/records';
-import type { WireEntry as TranscriptEntry } from '../wire';
+import type { Passage as TranscriptEntry } from '../../shared/transcript';
 
 export const TIMELINE_LANES = ['dialogue', 'map', 'turn', 'traits', 'note', 'research', 'grade', 'delegation'] as const;
 export type TimelineLane = typeof TIMELINE_LANES[number];
@@ -29,8 +29,8 @@ export function interviewTurnGaps(transcript: TranscriptEntry[]) {
   let sam = '';
   for (const entry of [...transcript].sort((a, b) => a.startMs - b.startMs)) {
     const extendsSpeech = !last || entry.endMs > last.endMs;
-    if (entry.speaker === 'trainee') {
-      if (last?.speaker === 'client' && entry.startMs - last.endMs >= 8000) {
+    if (entry.speaker === 'participant') {
+      if (last?.speaker === 'interviewer' && entry.startMs - last.endMs >= 8000) {
         gaps.push({ afterPassageId: last.id, beforePassageId: entry.id, gapMs: entry.startMs - last.endMs, sam, questionMark: sam.includes('?') });
       }
       if (extendsSpeech) sam = '';
@@ -52,7 +52,7 @@ export function producerTimeline({ startedAt, transcript, records, topics = [] }
   const labels = new Map<string, string>(topics.flatMap(topic => topic.objectives.map(item => [item.id, item.label])));
   const at = (time: number) => time - startedAt;
   const rows: TimelineRow[] = transcript.map(entry => ({
-    id: entry.id, lane: 'dialogue', atMs: entry.startMs, title: `${entry.speaker === 'trainee' ? 'Participant' : 'Sam'} · ${entry.id}`,
+    id: entry.id, lane: 'dialogue', atMs: entry.startMs, title: `${entry.speaker === 'participant' ? 'Participant' : 'Sam'} · ${entry.id}`,
     detail: entry.text, outcome: null, latencyMs: null, parts: [],
   }));
   let graded = new Map<string, GradeObjective>();

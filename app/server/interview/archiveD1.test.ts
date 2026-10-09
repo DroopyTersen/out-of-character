@@ -26,17 +26,16 @@ const connection = { segments: [{ epoch: 1, offsetMs: 0, startedAt: 1000, endedA
 type RowSpec = { id: string; version: string; voiceId: string; attemptId: string };
 const closeoutRow: RowSpec = { id: spec.id, version: spec.version, voiceId: 'sam-cedar', attemptId: 'interview-1' };
 function archiveRow(state: 'partial' | 'final', capturedAt: number, summary: 'pending' | 'ready' = 'pending', narrative?: InterviewArchiveRow['provenance']['narrative'], under: RowSpec = closeoutRow): InterviewArchiveRow {
-  const transcript = [{ id: 'p1', speaker: 'trainee' as const, text: 'Jen helped us fix the access issue.', startMs: 100, endMs: 900 }];
+  const transcript = [{ id: 'p1', speaker: 'participant' as const, text: 'Jen helped us fix the access issue.', startMs: 100, endMs: 900 }];
   return {
     id: under.attemptId, specId: under.id, specVersion: under.version, voiceId: under.voiceId, state, capturedAt,
     snapshot: {
-      id: under.attemptId, scenarioId: under.id, clientId: under.voiceId, status: state === 'final' ? 'ended' : 'live', startedAt: 1000,
-      limitSeconds: 3600, warning: null, revision: 1, transcript, evaluation: null, coaching: null, feedbackStatus: 'current',
+      id: under.attemptId, planId: under.id, voiceId: under.voiceId, status: state === 'final' ? 'ended' : 'live', startedAt: 1000,
+      limitSeconds: 3600, warning: null, revision: 1, transcript, evaluation: null, pause: null, background: [], feedbackStatus: 'current',
       message: null, finalization: state === 'final' ? 'confirmed' : 'pending', usageSeconds: null,
-      interview: { evaluation: null, summary: { status: summary, text: summary === 'ready' ? 'Summary.' : null }, background: [] },
     },
     transcript: [{ id: 'p1', speaker: 'participant', text: 'Jen helped us fix the access issue.', startMs: 100, endMs: 900 }],
-    producerLog: [],
+    producerLog: [], narrative: { status: summary, text: summary === 'ready' ? 'Summary.' : null },
     provenance: { voice: 'cedar', rubricVersion: 'interview-r1', actorDigest: 'actor-digest', openingDigest: 'opening-digest', producer: null, connection, ...(narrative ? { narrative } : {}) },
   } as InterviewArchiveRow;
 }
@@ -54,7 +53,7 @@ test('rows land in interview_attempts with the archive upsert rules', async () =
   const archive = d1Archive(f.db, host);
   await archive.write(archiveRow('partial', 2000));
   expect(f.row()).toMatchObject({ archive_state: 'partial', spec_id: spec.id, spec_version: spec.version, summary_status: 'pending', interviewer_id: 'sam-cedar' });
-  expect(JSON.parse(f.row()!.transcript_json)[0].speaker).toBe('trainee');
+  expect(JSON.parse(f.row()!.transcript_json)[0].speaker).toBe('participant');
   await archive.write(archiveRow('final', 3000, 'ready'));
   await archive.write(archiveRow('partial', 4000));
   await archive.write(archiveRow('final', 5000, 'pending'));

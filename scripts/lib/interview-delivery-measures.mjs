@@ -50,7 +50,7 @@ export function unusable(report) {
   if (report.errors.length) return 'errors';
   if (report.deadAir?.length) return 'dead air';
   if (!report.segments[0]?.text || !report.segments[1]?.text) return 'a measured reply is missing';
-  const participant = report.transcript.filter(entry => entry.speaker === 'trainee').map(entry => entry.text).join(' ');
+  const participant = report.transcript.filter(entry => entry.speaker === 'participant').map(entry => entry.text).join(' ');
   if (!HEARD.every(pattern => pattern.test(participant))) return 'the participant was not heard';
   return null;
 }

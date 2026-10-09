@@ -54,7 +54,7 @@ test('the catalog serves templates by id and rebuilds approved debriefs on their
   const spec = (await catalog.resolve(id))!;
   expect(spec.version).toBe(version);
   expect(spec.topics.map(topic => topic.id)).toEqual(['relationship', 'future']);
-  expect(spec.interviewer.voices).toBe(projectCloseout.interviewer.voices);
+  expect(spec.interviewer.voices).toEqual(projectCloseout.interviewer.voices);
   expect(await catalog.resolve(id, version)).toMatchObject({ id, version });
   expect(await catalog.resolve(id, 'quarterly-vendor-review-000000000000')).toBeNull();
   // Approving an edit adds a version; the first stays resolvable, and the latest is the default.
@@ -100,7 +100,7 @@ test('setup routes: templates as drafts, drafts from a description, approval, an
   const resolved = await (await setup(gates, '/resolve', { id: identity.id })).json() as { id: string; version: string; base: string; draft: unknown };
   expect(resolved).toEqual({ id: identity.id, version: identity.version, base: projectCloseout.id, draft: vendorReview });
   const template = await (await setup(gates, '/resolve', { id: salesWinLoss.id })).json() as { id: string; base: string; draft: { title: string } };
-  expect(template).toMatchObject({ id: salesWinLoss.id, base: salesWinLoss.id, draft: { title: 'Sales Win Loss' } });
+  expect(template).toMatchObject({ id: salesWinLoss.id, base: salesWinLoss.id, draft: { title: 'Sales win/loss' } });
   expect((await setup(gates, '/elsewhere')).status).toBe(404);
 });
 

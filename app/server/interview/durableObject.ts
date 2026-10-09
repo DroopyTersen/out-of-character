@@ -1,3 +1,4 @@
+import { resolveInterview, type InterviewDefinition } from '../../../interview-engine/interview/definition.server';
 import { DurableObject } from 'cloudflare:workers';
 import { foundryConfig, foundryConfigured, type FoundryConfig } from '../../../ai/foundry.server';
 import { SessionActor, type Background, type Checkpoint, type Lease, type SessionOptions, type SessionStore } from '../../../interview-engine/interview/interview.server';
@@ -60,9 +61,10 @@ export type InterviewObjectOverrides = {
   catalog?: SpecCatalog;
 };
 
-/** The storage key under which an attempt records the spec it started under: id and version, resolved again on every restore. */
+/** The complete accepted definition is pinned before any voice session opens. */
 export const SPEC_KEY = 'spec';
 type SpecIdentity = Pick<HostedSpec, 'id' | 'version'>;
+type PinnedSpec = InterviewDefinition | SpecIdentity;
 
 /**
  * One interview attempt. The engine's SessionActor owns everything; this object adapts storage, alarms, background
@@ -75,9 +77,6 @@ type SpecIdentity = Pick<HostedSpec, 'id' | 'version'>;
  */
 export class InterviewObject extends DurableObject<Env> {
   private session?: HostedSession;
-
-  /** The id of the spec `session` runs under. */
-  private specId?: string;
 
   /** Whether storage records the spec; once it does, the session never changes. */
   private pinned = false;
@@ -96,10 +95,10 @@ export class InterviewObject extends DurableObject<Env> {
     this.upgrade = overrides.upgrade ?? acceptUpgrade;
     this.catalog = overrides.catalog ?? workerDebriefs(env).catalog;
     ctx.blockConcurrencyWhile(async () => {
-      const stored = await ctx.storage.get<SpecIdentity>(SPEC_KEY);
+      const stored = await ctx.storage.get<PinnedSpec>(SPEC_KEY);
       if (!stored) return;
-      const spec = await this.catalog.resolve(stored.id, stored.version);
-      if (!spec) throw new Error(`The attempt's debrief ${stored.id} ${stored.version} is no longer served.`);
+      const spec = 'plan' in stored ? resolveInterview(stored.plan, stored.config, stored.context) : await this.catalog.resolve(stored.id, stored.version);
+      if (!spec) throw new Error('The attempt’s original debrief is no longer served.');
       this.session = await this.open(spec);
       this.pinned = true;
     });
@@ -113,17 +112,16 @@ export class InterviewObject extends DurableObject<Env> {
     const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: env.TYPESAFE_API_KEY }) }, { socket: acceptSocket });
     const background = durableBackground(ctx);
     const actor = await SessionActor.restore({
-      spec, providers, store: durableStore(ctx.storage), background,
+      plan: spec.plan, config: spec.config, context: spec.context, providers, store: durableStore(ctx.storage), background,
       archive: d1Archive(env.SIMULATOR_ARCHIVE, { model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null }),
       log: event => { if (event.type === 'session') console.warn('Interview session', event); },
       ...(overrides.services ? { services: overrides.services } : {}),
     });
-    this.specId = spec.id;
-    return new HostedSession(actor, { narrate: overrides.narrate ?? narrateWith(providers), template: spec.narrative, model: foundry.agentModel, track: background.track });
+    return new HostedSession(actor, { narrate: overrides.narrate ?? narrateWith(providers), model: foundry.agentModel, track: background.track });
   }
 
   /**
-   * The session a command runs under. A start that names a served debrief pins it: storage records the identity and,
+   * The session a command runs under. A start that names a served debrief pins it: storage records the full definition and,
    * if an earlier command opened the default session, that session is fenced and the attempt is restored from the
    * same storage under the named spec, so a held end still counts. Everything else runs under the current session.
    */
@@ -132,10 +130,10 @@ export class InterviewObject extends DurableObject<Env> {
       if (this.pinned && this.session) return this.session;
       if (new URL(command.url).pathname === '/start') {
         const parsed = startSchema.safeParse(await command.clone().json().catch(() => null));
-        const named = parsed.success ? await this.catalog.resolve(parsed.data.scenarioId) : null;
+        const named = parsed.success ? await this.catalog.resolve(parsed.data.planId) : null;
         if (named) {
-          await this.ctx.storage.put(SPEC_KEY, { id: named.id, version: named.version } satisfies SpecIdentity);
-          if (this.session && this.specId !== named.id) { await this.session.actor.close('fenced'); this.session = undefined; }
+          await this.ctx.storage.put(SPEC_KEY, { plan: named.plan, config: named.config, ...(named.context ? { context: named.context } : {}) } satisfies InterviewDefinition);
+          if (this.session) { await this.session.actor.close('fenced'); this.session = undefined; }
           this.session ??= await this.open(named);
           this.pinned = true;
           return this.session;

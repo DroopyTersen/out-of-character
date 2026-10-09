@@ -11,7 +11,8 @@ import { yieldsTurn } from '../core/interview';
 import type { ConversationMap } from '../interview-engine/interview/conversation/map';
 import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../interview-engine/interview/conversation/notes';
 import { emptyRanking, observeMap, observeTurn, RANKING, type Pick, type TurnReading } from '../interview-engine/interview/conversation/ranking';
-import type { TranscriptEntry } from '../core/simulator/types';
+import { archivedTranscriptSchema } from '../core/interview-transcript';
+import type { Passage as TranscriptEntry } from '../interview-engine/shared/transcript';
 
 const [path, reportPath, ...flags] = Bun.argv.slice(2);
 const flag = (name: string) => flags.find(item => item.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -26,7 +27,7 @@ const judge = judgeModel({ apiKey });
 const raw = await Bun.file(path).json();
 const row = (Array.isArray(raw) ? (raw[0]?.results?.[0] ?? raw[0]) : raw) as Record<string, unknown>;
 const json = (field: unknown) => typeof field === 'string' ? JSON.parse(field) : field;
-const transcript = json(row.transcript_json ?? row.transcript) as TranscriptEntry[];
+const transcript = archivedTranscriptSchema.parse(json(row.transcript_json ?? row.transcript));
 if (!Array.isArray(transcript) || !transcript.length) throw new Error('Expected an interview row with transcript_json.');
 type SolRow = { call: number; atMs: number; latencyMs: number; outcome: string };
 const report = await Bun.file(reportPath).json() as { cadence: number; rows: SolRow[]; maps: { call: number; map: ConversationMap }[] };
@@ -40,10 +41,10 @@ transcript.forEach((entry, index) => visibleAt.push(Math.max(index ? visibleAt[i
 const end = Math.max(...report.rows.map(item => item.atMs)) + report.cadence;
 // A participant turn ends where Sam takes a turn rather than a backchannel or a yield, as latestTurn reads it.
 const samRepliesAfter = (index: number) => {
-  for (const entry of transcript.slice(index + 1)) { if (entry.speaker === 'trainee') return false; if (!yieldsTurn(entry.text)) return true; }
+  for (const entry of transcript.slice(index + 1)) { if (entry.speaker === 'participant') return false; if (!yieldsTurn(entry.text)) return true; }
   return true;
 };
-const turns = transcript.flatMap((entry, index) => entry.speaker === 'trainee' && samRepliesAfter(index) && visibleAt[index]! <= end
+const turns = transcript.flatMap((entry, index) => entry.speaker === 'participant' && samRepliesAfter(index) && visibleAt[index]! <= end
   ? [{ index, atMs: visibleAt[index]! }] : []);
 
 type Row = {

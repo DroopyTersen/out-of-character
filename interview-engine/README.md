@@ -4,7 +4,7 @@ The interview engine runs a spoken interview and turns its transcript into a wri
 
 The engine is one folder that knows nothing about the app around it. A host gives it three things:
 
-- an interview spec
+- an approved plan, explicit context and runtime configuration
 - ready-made model clients (the providers)
 - three small adapters over its own platform (the seams)
 
@@ -28,12 +28,12 @@ A shared 400-call cap includes failed and interrupted producer calls. Sol, Jev a
 
 | Folder | What it holds | May import |
 | --- | --- | --- |
-| `shared/` | Types, zod schemas and constants that are safe in a browser: the spec, the protocol, transcripts, snapshots, timing | `zod` only |
+| `shared/` | Types, zod schemas and constants that are safe in a browser: the plan, the protocol, transcripts, snapshots, timing | `zod` only |
 | `client/` | The browser side: `LiveConnection`, the transport, audio levels | `shared/` |
 | `providers/` | How the engine talks to models: voice, language, judge, and `foundryProviders` | `shared/`, the AI SDK |
 | `interview/` | The Interview phase: the session actor, the seams, the conversation (Sol, Jev, Luna) and Sam's brief | `shared/`, `providers/` |
 | `narrative/` | The Narrative phase: writing a document from a transcript | `shared/`, `providers/` |
-| `setup/` | Debrief setup: drafting and approving the topics an attempt runs under | `shared/`, `providers/` |
+| `setup/` | Debrief setup: drafting and approving the topics an attempt runs under | `shared/`, `providers/`, `interview/` |
 
 Rules:
 
@@ -140,57 +140,43 @@ The voice control channel is a WebSocket upgrade, and each platform completes th
 
 Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper supplies the default Jev client, whose key is only needed if judging is actually called. The repository's Cloudflare and Bun hosts currently inject `createJevJudge` explicitly.
 
-## Writing a spec
+## Approved input
 
-A spec is plain data, checked by `validateSpec` in `shared/spec.ts`. Each spec lives in its own folder under `interviews/`, split so that the browser never receives the judging text:
-
-| File | Contents | Imported by |
-| --- | --- | --- |
-| `public.ts` | Id, version, interviewer name, voices, topic and objective labels, readings, limits | Browser and server |
-| `brief.prompt.ts` | Sam's `persona`, `role`, `orientation`, `boundaries`, `opening`, and two `techniques` | Server |
-| `framing.prompt.ts` | The `InterviewFraming`: what kind of interview this is, in the words Sol and Jev use | Server |
-| `rubric.prompt.ts` | Each objective's `criterion` (plus an optional `creditRule` or `explored`), and each reading's `rubric` | Server |
-| `narrative.prompt.ts` | The `NarrativeTemplate`: a system prompt and a zod schema | Server |
-| `spec.ts` | Joins the files above with `validateSpec` | Server |
-
-`interviews/sales-win-loss/` is the worked example: a buyer's debrief after a B2B purchase decision. Its `spec.ts` is the whole assembly:
+The organizer supplies readable content. The host supplies runtime choices and any explicit background. `SessionActor.restore` validates and copies these inputs; the engine builds voice, producer and judging prompts.
 
 ```ts
-export const spec = validateSpec({
-  id: SALES_WIN_LOSS_ID,
-  version: SALES_WIN_LOSS_VERSION,
-  interviewer: { name: salesInterviewerName, voices: salesVoices, role, persona, opening, orientation, boundaries, techniques },
-  framing,
-  topics: salesTopics.map(topic => ({ ...topic, objectives: topic.objectives.map(objective => ({ ...objective, criterion: salesCriteria[objective.id], ...salesRules[objective.id] })) })),
-  readings: salesReadings.map(reading => ({ ...reading, rubric: salesRubrics[reading.id] })),
-  limits: salesLimits,
-  narrative: { id: 'sales-win-loss-debrief', version: salesNarrativeVersion, system: salesNarrativeSystem, schema: salesNarrativeSchema },
-});
+const plan = {
+  id: 'handoff-review', version: 'approved-1', title: 'Customer handoff review',
+  goals: 'Learn what made customer handoffs effective or difficult and what to change next time.',
+  topics: [{
+    id: 'handoff', label: 'Customer handoff', learn: 'Understand the handoff to the customer.',
+    appliesWhen: 'The participant personally handled a customer handoff.',
+    topics: [{ id: 'access', label: 'Access', learn: 'Describe access problems and their effect.' }],
+  }],
+  guidance: 'Follow the participant’s actual responsibilities, including changes during the project.',
+  report: { audience: 'Delivery leads', format: 'A Markdown account with Findings and Lessons headings.' },
+};
+const context = { background: 'Atlas is the project name.', participant: { name: 'Jordan' } };
+const config = {
+  interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [
+    { id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/sam.png' },
+  ] },
+  readings: [], // Optional participant readings; each configured reading has a task and five score criteria.
+};
+const actor = await SessionActor.restore({ plan, config, context, providers, store, background, archive });
 ```
 
-What each server-only piece feeds:
+`InterviewPlan`, `InterviewTopic`, `InterviewContext` and their schemas live in `shared/plan.ts`; runtime configuration and compilation live in `interview/definition.server.ts`. Goals express learning intent in prose. Context holds situation and participant background; both context fields are optional. Report requirements contain an audience and format in prose. No business-system identifiers are required.
 
-- **The brief:** `role` completes "You are Sam, …". `opening` is Sam's first line. `orientation` and `boundaries` are the ground rules. The two techniques bracket the engine's own interviewing guide: `grounding` comes first ("Anchor on the decision") and `lesson` comes eleventh ("Rewind the decision"). Turn-taking, note handling and the other techniques belong to the engine.
-- **The framing** (`InterviewFraming`):
-  - `occasion` completes "an AI voice interviewer in …".
-  - `topic` names a single topic ("debrief topic").
-  - `purpose` and `setting` open Sol's seed.
-  - `defaultThread` is the thread Sol keeps open from the first call ("The outcome, by default").
-  - `terms` tells Jev what "the vendor" and "competitors" mean.
-  - `party` says whose words count toward a topic.
-- **The rubric:** every objective needs a `criterion`. A `creditRule` narrows whose words count. In the sales spec, `vendor-team` credits only the vendor's people. Every reading needs a `task` and five criteria, one for each point on Jev's 0–4 scale.
+Every topic uses the same recursive shape: `id`, `label`, `learn`, optional `appliesWhen`, optional child `topics`. IDs are unique throughout the tree and use letters, numbers, underscores or hyphens. Only leaves receive independent coverage readings. Ancestor learning intent scopes the leaves, and ancestor conditions apply to the whole subtree. A parent is an organizing group; its children provide the assessments a host can roll up.
 
-The engine checks a spec through its types, so a spec missing any of these does not compile:
+Conditional leaves carry `applicability: applicable | not-applicable | unknown` and supporting participant evidence, separately from depth (`not-yet`, `touched`, `explored`, `set-aside`). Unconditional leaves omit applicability. Unknown relevance earns no coverage and is not a failure. A relevant topic can still be set aside because the participant declines or cannot answer. Supplied context cannot establish the participant’s experience or grant coverage.
 
-```ts
-type SessionSpec = Pick<InterviewSpec, 'id' | 'version' | 'limits'> & BriefedSpec & JudgedSpec & MappedSpec;
-```
+The actor exposes a copied `definition` and persists it in checkpoints. On restore, accepted plan, configuration and context take precedence over replacement caller inputs, including an originally absent context. The Cloudflare host also stores the complete accepted definition before opening a voice session, covering restarts before the first checkpoint. A new attempt resolves its plan once; later catalog edits or removal cannot alter it.
 
-- `BriefedSpec` (`interview/voice/brief.server.ts`) needs the brief.
-- `JudgedSpec` (`interview/conversation/rubric.prompt.ts`) needs the criteria, the rubrics, and `framing.topic`, `terms` and `party`.
-- `MappedSpec` (`interview/conversation/map.prompt.ts`) needs the rest of the framing.
+The shipped closeout and win/loss templates assemble their existing learning criteria, organizer guidance and report layouts into this input. `resolveInterview` compiles it for lower-level replay and evaluation tools; hosts starting sessions pass the plain input directly.
 
-`interviews/sales-win-loss/spec.test.ts` shows the smoke tests worth copying. Each rendered prompt is non-empty, mentions the spec's own topics, and carries no wording from another interview. `interviews/project-closeout/prompts.test.ts` freezes the closeout prompts byte for byte against `fixtures/`.
+The voice model composes the opening from that same accepted title, goals, guidance and context. It introduces itself, explains the purpose, names the subject when supplied, and asks for the first missing grounding detail. The title describes the interview type; it is never substituted for an unknown project or organization name. The opening has a short preamble before the usual concise follow-ups. No separate model call delays startup, and Sol starts its evidence-based map after participant speech using the approved plan as its seed.
 
 ## Protocol
 
@@ -199,7 +185,7 @@ The browser and the session exchange these actions (`shared/protocol.ts`):
 ```ts
 export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume'] as const;
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;   // the bearer secret returned by start
-// startSchema { id, scenarioId, clientId, sdp }, resumeSchema { sdp }, activitySchema (the ready/poll body)
+// startSchema { id, planId, voiceId, sdp }, resumeSchema { sdp }, activitySchema (the ready/poll body)
 ```
 
 On the server, a host turns each request into a `Command` and returns the `Reply`:
@@ -231,11 +217,14 @@ Each socket message is one command, `{ id, action, capability, body? }`, where `
 The Narrative phase turns a transcript into a document. It needs only a language model.
 
 ```ts
-export type NarrativeInput = { template: Pick<NarrativeTemplate<NarrativeDocument>, 'system' | 'schema'>; passages: Passage[] };
+export type NarrativeInput = { transcript: Passage[]; format: ReportFormat; context?: InterviewContext };
+export type NarrativeDocument = { text: string }; // Markdown, without a required findings structure
 export type NarrativeRun = { stream: ReadableStream<string>; result: Promise<Narrative> };
 
 export function writeNarrative(input: NarrativeInput, providers: Pick<Providers, 'language' | 'telemetry'>, signal?: AbortSignal): NarrativeRun;
 ```
+
+`writeNarrative` accepts exactly transcript, report format and optional explicit context. Its strict schema rejects extra fields such as maps, inferred participant state or coverage. The engine owns the evidence rules and output envelope; the format controls Markdown organization without forcing headings to mirror the topics. Supplied background is labeled separately from participant findings.
 
 `writeNarrative` streams the text as it is written. `result` settles exactly once, with the document and its usage, or with a failure (`provider`, `invalid`, `cancelled` or `timeout`). It throws if the participant said nothing.
 
@@ -251,17 +240,15 @@ The runner allows two starts at most (`NARRATIVE_MAX_STARTS`), with a 120-second
 
 ## Debrief setup
 
-A spec file is one way to define a debrief. `setup/` is the other: an organizer picks a template and edits its topics, or describes the debrief in words and edits what the model drafts. Both paths end in the same record, and the live actor only ever sees the approved spec.
+An organizer can edit a template’s approved content, or ask `draftDebrief` to propose a plan from a description. The draft has the same goals, recursive topics, optional guidance and report requirements as the accepted plan, without `id` and `version`.
 
 ```ts
-export type DebriefDraft = { title: string; role: string; opening: string; orientation: string[]; framing: Omit<InterviewFraming, 'topic'>; topics: DebriefTopic[] };
-
-export function templateDraft(spec: InterviewSpec): DebriefDraft;                       // a template's topics as an editable draft
-export function draftDebrief(input: { description: string; interviewer: { name: string }; model: LanguageModel; signal?; telemetry? }): Promise<{ draft: DebriefDraft; model: string; usage }>;
-export function approveDebrief<S extends InterviewSpec>(base: S, record: DebriefDraft & { id?: string; base?: string }): Promise<ApprovedSpec<S>>;
+type DebriefDraft = Omit<InterviewPlan, 'id' | 'version'>;
+const draft = templateDraft(template);
+const approved = await approveDebrief(template, { ...draft, id: 'my-review' });
 ```
 
-`approveDebrief` builds a runnable spec: the base template's cast, persona, boundaries, techniques, readings and limits under the record's brief, framing and topics, with the engine's topic-sectioned narrative. Its id comes from the title (or the record's `id`) and its version is a digest of the record and the base, so the same approval always yields the same version and any edit yields a new one. Starting, resume, grading, the narrative and the archive all use that id and version; a host resolves them through a catalog of templates and stored approvals.
+Approval validates the content and builds a version from its digest plus the base template identity. The base supplies voices, persona, participant reading rubrics and limits; the engine supplies prompt construction. Approval does not replace the requested report format with a topic-sectioned report. Business authorization and the approval workflow remain host responsibilities.
 
 ## How this repository hosts it
 
@@ -278,12 +265,12 @@ type InterviewGates = {
 };
 ```
 
-**Narrative route.** `POST /api/interview/narratives` writes the narrative for a transcript that did not come from a live attempt. The body is `{ specId, passages }` (`narrativeRequestSchema` in `shared/protocol.ts`, at most 256 KiB), behind the same origin, capability, kill-switch and limiter gates as the session routes. The reply streams the narrative's JSON text, as the report route does, and nothing is stored. An unknown spec answers 404, and a transcript in which the participant said nothing answers 422.
+**Narrative route.** `POST /api/interview/narratives` writes the narrative for a transcript that did not come from a live attempt. The body is `{ transcript, format, context? }` (`narrativeRequestSchema` in `shared/protocol.ts`, at most 256 KiB), behind the same origin, capability, kill-switch and limiter gates as the session routes. The reply streams the narrative's JSON text, as the report route does, and nothing is stored. No catalog or live attempt is needed. A transcript in which the participant said nothing answers 422.
 
 **Hosted session.** `HostedSession` wraps a `SessionActor`:
 
 - It turns the request into a `Command` and sends it to `actor.handle`.
-- It answers with the practice simulator's reply shapes, so the browser does not change.
+- It returns the canonical `InterviewSnapshot`: `planId`, `voiceId`, `transcript`, `evaluation`, `background` and lifecycle fields. Transcript and evidence speakers are `participant` and `interviewer`. There is no coaching field or nested interview wrapper; the host adds report state separately.
 - On a `report` reply, it runs `writeNarrative` over the ended transcript through a `NarrativeRunner`, the same runner the narrative route uses (`app/server/interview/narrative.ts`). A second report request rejoins the running narrative.
 
 **Cloudflare** (`app/server/interview/durableObject.ts`, routed from `app/workers/app.ts`):
@@ -315,7 +302,7 @@ It shows how little a host needs to write.
 bun --env-file=.dev.vars scripts/interview-narrative.ts transcript.json [--spec sales-win-loss] [--out result.json]
 ```
 
-The file can be a passages array, `{ specId, passages }`, an archive row from `INTERVIEW_ARCHIVE_DIR`, or a D1 interview row. The text streams to stdout; the result, with its failure and usage, goes to `--out` or follows on stdout.
+The file can directly contain `{ transcript, format, context? }` without a catalog. For historical imports, a shipped default report format can be selected from a passages array, `{ specId, passages }`, an archive row from `INTERVIEW_ARCHIVE_DIR`, or a D1 interview row. The text streams to stdout; the result, with its failure and usage, goes to `--out` or follows on stdout.
 
 ## Checks
 
@@ -335,15 +322,21 @@ bun run check          # everything: typecheck, check:engine, bun test, build, b
 The steps below use the host app as the example. They follow the plan in the design documents; none of this exists in the host app yet.
 
 1. **Copy the folder.** Copy `interview-engine/` to the host as `app/debrief/engine/`, and add any of the four packages the host lacks. Per the design, the host app is missing only `@ai-sdk/typesafe-ai`. The copy check above is the evidence that this compiles.
-2. **Write a spec.** Add a folder like `interviews/sales-win-loss/`, with a `public.ts` for the screens and `*.prompt.ts` files for the server.
+2. **Supply approved input.** Pass the approved `InterviewPlan`, runtime `InterviewConfig`, and explicit `InterviewContext` if available. Keep browser labels and host business identity outside the engine.
 3. **Implement the seams.**
    - A `SessionStore` over the host's database. The design calls for an attempts row with a `segment` column and guarded writes that throw `FencedError` when the segment has moved on.
    - A `Background` for fire-and-forget work.
    - An `Archive` that upserts `InterviewArchiveRow`.
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
 4. **Build providers.** Choose `createDecisionJudge({ apiKey })` or `createJevJudge({ apiKey })`, then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
-5. **Own an actor per attempt.** Call `SessionActor.restore({ spec, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
-6. **Serve the report.** Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `actor.settleNarrative`.
+5. **Own an actor per attempt.** Call `SessionActor.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
+6. **Serve the report.** Read report format and context from `actor.definition`; pass only these and the canonical transcript. Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `actor.settleNarrative`.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.
 
 Identity, the right to start, archive reads and the screens stay with the host. The engine checks only the capability.
+
+## Contract cutover
+
+This changes the previous start fields, snapshot shape and setup record shape. Update a host and its browser together. Old archived transcript exports remain readable through this repository’s host import adapter. Active attempts from before this contract change must finish before a deployment switches their owner; old identity-only pins cannot reconstruct a removed template version. No deployment or database migration is part of this change. New attempts pin their complete accepted definition and resume without catalog reconstruction.
+
+The synthetic provider regression is `bun --env-file=.dev.vars scripts/interview-contract-probe.ts --paid`: four bounded judgments check unresolved relevance, non-applicability, relevant coverage and inherited parent scope; one report checks that an interviewer premise and background hypothesis stay separate from findings. Its generated report still requires semantic review. Local browser acceptance uses stubbed session and provider boundaries and does not prove a hosted voice integration.

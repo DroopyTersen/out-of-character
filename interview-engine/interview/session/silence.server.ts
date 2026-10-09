@@ -1,7 +1,7 @@
 import { experimental_evaluate, type Experimental_EvaluationModel } from 'ai';
 import type { CallFailure } from '../../providers/diagnostics.server';
 import type { ModelUsage } from '../../providers/structured.server';
-import type { WireEntry, WireSpeaker } from '../wire';
+import type { Passage, Speaker } from '../../shared/transcript';
 
 export const SILENCE_VERSION = 'interview-silence-v2';
 export const SILENCE_MS = 4000;
@@ -13,14 +13,14 @@ export type SilenceRecord = {
   outcome: 'pending' | 'wait' | 'sent' | 'stale' | 'error' | 'timeout' | 'aborted' | 'rejected';
   completedAt?: number; probability?: number; model?: string; usage?: ModelUsage; failure?: CallFailure;
   acknowledgedAt?: number;
-  nextSpeech?: { at: number; passageId: string; speaker: WireSpeaker };
+  nextSpeech?: { at: number; passageId: string; speaker: Speaker };
 };
 
 /** Code times transcript inactivity; Jev judges whether the recent exchange leaves the next turn with the interviewer. */
-export async function evaluateSilence(input: { transcript: WireEntry[]; judge: Experimental_EvaluationModel; signal?: AbortSignal }) {
+export async function evaluateSilence(input: { transcript: Passage[]; judge: Experimental_EvaluationModel; signal?: AbortSignal }) {
   const result = await experimental_evaluate({
     model: input.judge,
-    state: { recentDialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker: speaker === 'trainee' ? 'participant' : 'interviewer', text })) },
+    state: { recentDialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker: speaker === 'participant' ? 'participant' : 'interviewer', text })) },
     questions: {
       continue: {
         type: 'choice',

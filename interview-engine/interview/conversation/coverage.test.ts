@@ -55,3 +55,11 @@ test('empty readings name every reading of the spec, unread', () => {
   expect(emptyReadings([{ id: 'engagement', label: 'Engagement', description: 'd' }, { id: 'specificity', label: 'Specificity', description: 'd' }]))
     .toEqual({ engagement: { value: null, distribution: null, evidence: null }, specificity: { value: null, distribution: null, evidence: null } });
 });
+
+test('a changed applicability decision releases old coverage or a set-aside boundary', () => {
+  const evidence = { entryId: 'p1', speaker: 'participant' as const, text: 'I handled access.' };
+  const previous = [{ id: 'access', level: 'set-aside' as const, achieved: false, probability: .1, levels: null, evidence, applicability: 'not-applicable' as const }];
+  const current = [{ id: 'access', level: 'touched' as const, achieved: false, probability: .1, levels: null, evidence, applicability: 'applicable' as const }];
+  expect(mergeCoverage(previous, current)[0]).toMatchObject({ level: 'touched', applicability: 'applicable' });
+  expect(mergeCoverage(current, [{ ...current[0]!, applicability: 'unknown', level: 'not-yet', evidence: null }])[0]).toMatchObject({ applicability: 'unknown', level: 'not-yet', evidence: null });
+});

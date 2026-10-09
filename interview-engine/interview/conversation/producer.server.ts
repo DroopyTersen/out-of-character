@@ -3,7 +3,7 @@ import { callFailure } from '../../providers/diagnostics.server';
 import { DirectorOutputError, type ModelUsage } from '../../providers/structured.server';
 import type { InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import { activeElapsed, type PauseSpan } from '../../shared/timing';
-import type { WireEntry as TranscriptEntry, WireSpeaker } from '../wire';
+import type { Passage as TranscriptEntry, Speaker } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapChanges } from './map';
 import {
   appendMapLog, emptyMapLog, generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
@@ -19,7 +19,7 @@ import {
 import { lookupInterviewBackground, researchKey, validateResearchRequest } from './research.server';
 import { isBackchannel, yieldsTurn } from './turns';
 
-type InterviewObjectiveReading = Reading<WireSpeaker>;
+type InterviewObjectiveReading = Reading<Speaker>;
 export const producerServices = { generateMap, evaluateTurn, lookupInterviewBackground };
 type Options = {
   spec: MappedSpec;
@@ -208,7 +208,7 @@ export class InterviewProducer {
     let boundary = this.readThrough;
     for (let end = this.readThrough; end <= transcript.length; end++) {
       const next = transcript[end];
-      if (next && (next.speaker !== 'client' || yieldsTurn(next.text))) continue;
+      if (next && (next.speaker !== 'interviewer' || yieldsTurn(next.text))) continue;
       const candidate = upToParticipant(transcript.slice(0, end));
       const turn = latestTurn(candidate);
       if (!turn.length || turnKey(turn) === this.readTurnKey) continue;
@@ -250,7 +250,7 @@ export class InterviewProducer {
       // Sol may have landed a different map while Jev read. The next tick reads against that map.
       if (record.mapId !== (this.mapRecord?.id ?? null)) return;
       this.ranking = observeTurn(this.ranking, this.map, reading, latestTurn(settled)[0]!.id);
-      if ((reading.novel >= RANKING.novel || (reading.feedback ?? 0) >= RANKING.novel) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'trainee')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
+      if ((reading.novel >= RANKING.novel || (reading.feedback ?? 0) >= RANKING.novel) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'participant')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
       if (scope.aborted) return;
@@ -342,7 +342,7 @@ export class InterviewProducer {
 
   /** Marks the next substantive Sam passage; it does not claim Sam acted on the note. */
   transcriptChanged(entry: TranscriptEntry, previousId: string | null, now = Date.now()) {
-    if (!this.alive || entry.speaker !== 'client' || !entry.text.trim() || isBackchannel(entry.text)) return;
+    if (!this.alive || entry.speaker !== 'interviewer' || !entry.text.trim() || isBackchannel(entry.text)) return;
     for (const record of this.records) {
       if (record.source === 'note' && record.outcome === 'sent' && record.sentAt <= now && record.delivery.afterPassageId !== entry.id && record.nextSamTurnAt == null) {
         record.nextSamTurnAt = now;

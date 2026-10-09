@@ -54,7 +54,7 @@ export function socketTransport(baseUrl: string, options: SocketTransportOptions
       pending.delete(reply.id!);
       const body = reply.body as { error?: string } | null;
       if (reply.status >= 200 && reply.status < 300 && body) waiting.resolve(body);
-      else waiting.reject(new SessionRequestError(body?.error || 'The simulator connection is unavailable.', reply.status));
+      else waiting.reject(new SessionRequestError(body?.error || 'The interview connection is unavailable.', reply.status));
     });
     socket.addEventListener('close', () => {
       for (const waiting of pending.values()) waiting.reject(unreachable());

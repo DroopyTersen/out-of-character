@@ -50,7 +50,7 @@ test('an HTTP error reply is a SessionRequestError with its status, as on the po
   const ended = await transport.request('end', undefined, options).catch((error: Error) => error);
   expect(ended).toBeInstanceOf(SessionRequestError);
   expect(ended).toMatchObject({ message: 'Session capability is invalid.', status: 403 });
-  expect(await transport.request('pause', undefined, options).catch((error: Error) => error)).toMatchObject({ message: 'The simulator connection is unavailable.', status: 409 });
+  expect(await transport.request('pause', undefined, options).catch((error: Error) => error)).toMatchObject({ message: 'The interview connection is unavailable.', status: 409 });
 });
 
 test('no reply in time, or a socket that never opens, is SessionUnanswered', async () => {

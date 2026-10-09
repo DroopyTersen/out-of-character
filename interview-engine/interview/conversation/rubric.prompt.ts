@@ -4,7 +4,7 @@ import type { CoverageLevel } from '../../shared/snapshot';
 import type { InterviewFraming, Objective, Reading, ReadingRubric } from '../../shared/spec';
 import type { Passage } from '../../shared/transcript';
 
-export const INTERVIEW_RUBRIC_VERSION = 'interview-rubric-v8';
+export const INTERVIEW_RUBRIC_VERSION = 'interview-rubric-v9';
 
 /**
  * The part of a spec Jev's final grade reads: the interviewer's name, the framing's words, every reading's rubric and
@@ -54,10 +54,18 @@ export function interviewQuestions(spec: JudgedSpec, passages: Passage[]): Recor
     evidenceQuestions(spec, questions, `reading:${reading.id}:evidence`, reading.rubric.task, participant, true);
   }
   for (const objective of judgedObjectives(spec)) {
+    if (objective.appliesWhen) {
+      const condition = `All these conditions must hold for this topic to apply: ${objective.appliesWhen}`;
+      questions[`objective:${objective.id}:applicability`] = {
+        type: 'choice', instructions: { task: `Does this topic apply to this participant? ${condition} Judge actual responsibilities and circumstances established by the participant. A job title, interviewer premise, silence or lack of detail does not establish relevance or irrelevance.`, sourceRule },
+        criteria: { applicable: 'Participant evidence establishes that every condition holds.', 'not-applicable': 'Participant evidence establishes that at least one condition does not hold.', unknown: 'The participant has not established whether all conditions hold.' },
+      };
+      evidenceQuestions(spec, questions, `objective:${objective.id}:applicability-evidence`, condition, participant);
+    }
     questions[`objective:${objective.id}`] = {
       type: 'choice',
       instructions: {
-        task: `How far has the participant covered this ${spec.framing.topic}? ${objective.criterion} ${objective.creditRule ?? ''}`.trim(),
+        task: `How far has the participant covered this ${spec.framing.topic}? ${objective.criterion} ${objective.creditRule ?? ''} ${objective.appliesWhen ? `Only relevant when: ${objective.appliesWhen}` : ''}`.trim(),
         party: spec.framing.party,
         depth: `Judge the whole dialogue, including earlier passages. Explored means the stated topic criterion is answered, not that ${name} has exhausted every follow-up or obtained a complete story. A concise concrete fact can answer it. ${name} mentioning the topic, offering an example, or paraphrasing does not cover it; neither does a vague agreement or “mm.”`,
         limits: 'A qualifier about hearsay, unknown motives, or an unrelated detail does not erase facts the participant did supply. Set aside applies when they cannot or will not address this topic itself, not just when part of their answer is uncertain.',

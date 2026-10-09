@@ -62,7 +62,7 @@ export function inlineBackground(): InlineBackground {
 
 export type MemoryArchive = Archive & { readonly rows: Map<string, InterviewArchiveRow>; readonly writes: InterviewArchiveRow[] };
 
-const narrative = (row: InterviewArchiveRow) => row.snapshot.interview.summary?.status ?? null;
+const narrative = (row: InterviewArchiveRow) => row.narrative?.status ?? null;
 
 /** Keeps rows by id with the archive's upsert rules: a partial row never replaces a final one, nor an older row a newer one. */
 export function memoryArchive(): MemoryArchive {

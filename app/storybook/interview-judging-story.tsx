@@ -15,7 +15,7 @@ type Recording = {
 const recorded = recordings as unknown as Recording;
 
 function ParticipantEvidence({ evidence }: { evidence: { entryId: string; speaker: string; text: string } | null }) {
-  return evidence?.speaker === 'trainee'
+  return evidence?.speaker === 'participant'
     ? <blockquote className="sim-evidence"><span>Participant · {evidence.entryId}</span><p>“{evidence.text}”</p></blockquote>
     : <p className="sim-muted">No participant passage cited.</p>;
 }
@@ -42,7 +42,7 @@ export function InterviewJudgingStory() {
           <h2 className="sim-lab-column-title">Conversation evidence</h2>
           <div className="sim-transcript">{fixture.transcript.map(entry =>
             <article key={entry.id} data-speaker={entry.speaker}>
-              <header><strong>{entry.speaker === 'trainee' ? 'Participant' : 'Sam'}</strong><time>{formatTime(entry.startMs / 1000)}</time></header>
+              <header><strong>{entry.speaker === 'participant' ? 'Participant' : 'Sam'}</strong><time>{formatTime(entry.startMs / 1000)}</time></header>
               <p>{entry.text}</p>
             </article>
           )}</div>

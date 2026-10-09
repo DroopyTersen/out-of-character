@@ -1,86 +1,63 @@
 import { expect, test } from 'bun:test';
-import { z } from 'zod';
-import { testFraming, testTechniques } from '../interview/conversation/testSpec';
-import { validateSpec, type InterviewSpec } from '../shared/spec';
+import { resolveInterview } from '../interview/definition.server';
 import { approveDebrief, debriefVersion } from './approve.server';
 import { debriefDraftSchema, slug, templateDraft, type DebriefDraft } from './debrief';
-import { DEBRIEF_NARRATIVE_VERSION, debriefNarrativeSystem } from './narrative.prompt';
 
-/** For tests: a complete template the way a host ships one, under a stable id and version. */
-function template(id: string, voices: InterviewSpec['interviewer']['voices']): InterviewSpec {
-  return validateSpec({
-    id, version: `${id}-v1`,
-    interviewer: {
-      name: 'Sam', voices, role: `interviewing someone about ${id.replace(/-/g, ' ')}`, persona: 'Curious and direct.', opening: 'Hi, I’m Sam. What did you work on?',
-      orientation: ['ORIENTATION'], boundaries: ['BOUNDARY'], techniques: testTechniques,
-    },
-    framing: testFraming,
-    topics: [{ id: 'project', label: 'The project', objectives: [{ id: 'project-delivery', label: 'Deliverables', criterion: 'Names what was built.' }] }],
-    readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria: ['zero', 'one', 'two', 'three', 'four'] } }],
-    narrative: { id: `${id}-narrative`, version: 'fixture-narrative-v1', system: 'FIXTURE NARRATIVE', schema: z.object({ text: z.string() }) },
-  });
-}
-const projectCloseout = template('project-closeout', [{ id: 'sam-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/sam-cedar.png' }]);
-const salesWinLoss = template('sales-win-loss', [{ id: 'sam-meridian', voice: 'meridian', label: 'Meridian', presentation: 'Female', image: '/sam-meridian.png' }]);
-
-/** An ad hoc debrief as an organizer might approve it: a quarterly review of one vendor relationship. */
+/** Plain organizer content, also used at the real SDK HTTP boundary. */
 export const vendorReview: DebriefDraft = {
   title: 'Quarterly Vendor Review',
-  role: 'interviewing someone about a vendor relationship they managed this quarter',
-  opening: 'Hi, I’m Sam. This is a debrief about the vendor relationship you managed this quarter. What was your part in it?',
-  orientation: ['The debrief is for the team deciding whether to renew. Learn early what the participant actually owned in the relationship, so later questions fit what they did. Never re-ask what has been answered.'],
-  framing: {
-    occasion: 'a real quarterly vendor review', purpose: 'The review decides whether to renew; a useful find is an unstated consequence, tradeoff or practice.',
-    setting: 'Sam talks with the person who managed the relationship and knows nothing beyond what they say and public research.',
-    defaultThread: 'What the participant owned and who else was involved, until known.', terms: 'A topic is one area the review covers.', party: 'Only the participant’s own words count toward a topic.',
-  },
+  goals: 'Learn what the vendor delivered, where the relationship helped or hindered delivery, and whether to renew.',
+  guidance: 'Learn what the participant actually owned in the relationship.',
+  report: { audience: 'The team deciding whether to renew', format: 'A Markdown recommendation supported by the participant’s account, with unresolved questions.' },
   topics: [
-    { id: 'relationship', label: 'The relationship', objectives: [
-      { id: 'relationship-scope', label: 'What the vendor delivered', criterion: 'The participant names what the vendor delivered this quarter and their own role in it. A product name alone is insufficient.' },
-      { id: 'relationship-friction', label: 'Friction', criterion: 'The participant describes a concrete point of friction and its effect. A general complaint without an effect is insufficient.' },
+    { id: 'relationship', label: 'The relationship', learn: 'Understand delivery and friction.', topics: [
+      { id: 'relationship-scope', label: 'What the vendor delivered', learn: 'Names what the vendor delivered and their own part in it.' },
+      { id: 'relationship-friction', label: 'Friction', learn: 'Describes a concrete point of friction and its effect.' },
     ] },
-    { id: 'future', label: 'Looking ahead', objectives: [
-      { id: 'future-opportunity', label: 'Future opportunities', criterion: 'The participant names something the relationship could do next and why it matters.' },
+    { id: 'future', label: 'Looking ahead', learn: 'Understand future value.', topics: [
+      { id: 'future-opportunity', label: 'Future opportunities', learn: 'Names what the relationship could do next and why it matters.' },
     ] },
   ],
 };
+const base = resolveInterview({ ...vendorReview, id: 'vendor-review', version: 'v1' }, {
+  interviewer: { name: 'Sam', persona: 'Curious and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/cedar.png' }] },
+  readings: [],
+});
 
-test('a template’s draft round-trips: approving it unchanged keeps its brief, framing and topics, under a stable version', async () => {
-  const draft = templateDraft(projectCloseout);
+test('approval preserves editable learning content and report format under a stable content version', async () => {
+  const draft = templateDraft(base);
   expect(debriefDraftSchema.safeParse(draft).success).toBe(true);
-  expect(draft.topics.map(topic => topic.id)).toEqual(projectCloseout.topics.map(topic => topic.id));
-  const spec = await approveDebrief(projectCloseout, { ...draft, id: 'closeout-copy' });
-  expect(spec.id).toBe('closeout-copy');
-  expect(spec.version).toMatch(/^closeout-copy-[0-9a-f]{12}$/);
-  expect(spec.interviewer).toMatchObject({ name: projectCloseout.interviewer.name, voices: projectCloseout.interviewer.voices, persona: projectCloseout.interviewer.persona, role: projectCloseout.interviewer.role, opening: projectCloseout.interviewer.opening });
-  expect(spec.framing).toEqual({ ...testFraming, topic: 'debrief topic' });
-  expect(spec.topics.flatMap(topic => topic.objectives.map(objective => [objective.id, objective.criterion]))).toEqual(projectCloseout.topics.flatMap(topic => topic.objectives.map(objective => [objective.id, objective.criterion])));
-  expect(spec.readings).toBe(projectCloseout.readings);
-  expect((await approveDebrief(projectCloseout, { ...draft, id: 'closeout-copy' })).version).toBe(spec.version);
+  const spec = await approveDebrief(base, { ...draft, id: 'copy' });
+  expect(spec.plan).toEqual({ ...vendorReview, id: 'copy', version: spec.version });
+  expect(spec.config).toEqual(base.config);
+  expect(spec.version).toMatch(/^copy-[0-9a-f]{12}$/);
+  expect((await approveDebrief(base, { ...draft, id: 'copy' })).version).toBe(spec.version);
+  expect(await debriefVersion({ ...draft, id: 'copy', base: base.id }, base)).toBe(spec.version);
+  expect((await approveDebrief(base, { ...draft, id: 'copy', goals: 'Learn whether to change vendors.' })).version).not.toBe(spec.version);
+  expect((await approveDebrief(base, { ...draft, id: 'copy', report: { ...draft.report, audience: 'Procurement' } })).version).not.toBe(spec.version);
 });
 
-test('an ad hoc debrief gets its id from its title, its cast from the base, and a version that changes with any edit or a new base', async () => {
-  const spec = await approveDebrief(projectCloseout, vendorReview);
-  expect(spec.id).toBe('quarterly-vendor-review');
-  expect(spec.interviewer.voices).toBe(projectCloseout.interviewer.voices);
-  expect(spec.interviewer.role).toBe(vendorReview.role);
-  expect(spec.topics.map(topic => topic.id)).toEqual(['relationship', 'future']);
-  expect(spec.narrative.version).toBe(DEBRIEF_NARRATIVE_VERSION);
-  expect(spec.narrative.system).toContain('## Looking ahead');
-  expect(spec.narrative.schema.safeParse({ text: 'Summary.' }).success).toBe(true);
-  const edited = await approveDebrief(projectCloseout, { ...vendorReview, topics: [vendorReview.topics[0]!] });
-  expect(edited.version).not.toBe(spec.version);
-  const rebased = await approveDebrief(salesWinLoss, vendorReview);
-  expect(rebased.version).not.toBe(spec.version);
-  expect(rebased.interviewer.voices).toBe(salesWinLoss.interviewer.voices);
-  expect(await debriefVersion({ ...vendorReview, id: 'quarterly-vendor-review', base: projectCloseout.id }, projectCloseout)).toBe(spec.version);
-});
-
-test('approval rejects records the engine could not run', async () => {
-  await expect(approveDebrief(projectCloseout, { ...vendorReview, topics: [] })).rejects.toThrow('Invalid debrief');
-  await expect(approveDebrief(projectCloseout, { ...vendorReview, topics: [vendorReview.topics[0]!, vendorReview.topics[0]!] })).rejects.toThrow('unique');
-  await expect(approveDebrief(projectCloseout, { ...vendorReview, title: 'Quarterly Vendor Review', id: 'Not A Slug' })).rejects.toThrow('Invalid debrief');
-  await expect(approveDebrief(projectCloseout, { ...vendorReview, base: salesWinLoss.id })).rejects.toThrow(`based on ${salesWinLoss.id}`);
+test('approval rejects empty plans and duplicate identities across nesting levels', async () => {
+  await expect(approveDebrief(base, { ...vendorReview, topics: [] })).rejects.toThrow();
+  await expect(approveDebrief(base, { ...vendorReview, topics: [{ id: 'same', label: 'Parent', learn: 'Intent', topics: [{ id: 'same', label: 'Child', learn: 'Detail' }] }] })).rejects.toThrow('unique');
+  await expect(approveDebrief(base, { ...vendorReview, base: 'unknown' })).rejects.toThrow('based on unknown');
   expect(slug('  Q3 Vendor Review: Acme & Co. ')).toBe('q3-vendor-review-acme-co');
-  expect(debriefNarrativeSystem(vendorReview)).toContain('untrusted data');
+});
+
+test('recursive grouping produces only leaf assessments and inherits parent conditions', () => {
+  const spec = resolveInterview({ ...base.plan, topics: [{ id: 'delivery', label: 'Delivery', learn: 'Understand team delivery.', appliesWhen: 'The participant worked on delivery.', topics: [
+    { id: 'handoff', label: 'Handoff', learn: 'Learn how handoff worked.', topics: [{ id: 'handoff-access', label: 'Access', learn: 'Describe access handoff.', appliesWhen: 'They handled access.' }] },
+    { id: 'release', label: 'Release', learn: 'Describe release responsibility.' },
+  ] }] }, base.config);
+  expect(spec.topics.flatMap(group => group.objectives)).toEqual([
+    { id: 'handoff-access', label: 'Access', criterion: 'Describe access handoff. Parent learning intent (context for this topic, not additional coverage requirements): Delivery: Understand team delivery. / Handoff: Learn how handoff worked.', appliesWhen: 'The participant worked on delivery.\nAND\nThey handled access.' },
+    { id: 'release', label: 'Release', criterion: 'Describe release responsibility. Parent learning intent (context for this topic, not additional coverage requirements): Delivery: Understand team delivery.', appliesWhen: 'The participant worked on delivery.' },
+  ]);
+  expect(spec.plan.topics[0]?.topics?.[0]?.learn).toBe('Learn how handoff worked.');
+});
+
+
+test('topic IDs cannot collide with generated judgment keys', () => {
+  expect(() => resolveInterview({ ...base.plan, topics: [{ id: 'handoff:evidence', label: 'Handoff', learn: 'Describe handoff.' }] }, base.config)).toThrow('IDs');
+  expect(() => resolveInterview(base.plan, { ...base.config, readings: [{ id: 'detail:evidence', label: 'Detail', description: 'Detail', rubric: { task: 'How concrete?', criteria: ['0', '1', '2', '3', '4'] } }] })).toThrow('IDs');
 });

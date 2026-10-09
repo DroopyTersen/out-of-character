@@ -5,7 +5,8 @@ import { interviewQuestions } from '../../interview-engine/interview/conversatio
 import { latestTurn, turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/ranking.server';
 import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/conversation/ranking';
 import type { ConversationMap } from '../../interview-engine/interview/conversation/map';
-import { toPassage, type WireEntry } from '../../interview-engine/interview/wire';
+import type { Passage } from '../../interview-engine/shared/transcript';
+import { archivedTranscriptSchema } from '../../core/interview-transcript';
 import { spec } from '../../interviews/project-closeout/spec';
 import { interviewFixtures } from '../interview/fixtures';
 import syntheticSilence from './silence-fixtures.json';
@@ -15,11 +16,11 @@ export type Check = { name: string; path: string[]; op: 'eq' | 'gte' | 'lt' | 'i
 export type EvalCase = {
   id: string; lane: 'silence' | 'turn' | 'grade'; split: 'development' | 'validation'; source: string;
   state: Request['state']; questions: Record<string, Experimental_EvaluationQuestion>; deadlineMs: number;
-  checks: Check[]; transcript: WireEntry[]; map?: ConversationMap; atMs?: number; mapId?: string | null;
+  checks: Check[]; transcript: Passage[]; map?: ConversationMap; atMs?: number; mapId?: string | null;
 };
 export const hash = (value: unknown) => new Bun.CryptoHasher('sha256').update(JSON.stringify(value)).digest('hex');
 
-async function silenceRequest(transcript: WireEntry[]): Promise<Request> {
+async function silenceRequest(transcript: Passage[]): Promise<Request> {
   let captured: Request | undefined;
   const stop = new Error('capture');
   const model: Model = { specificationVersion: 'v4', provider: 'capture', modelId: 'capture', supportedQuestionTypes: ['choice', 'boolean', 'score'],
@@ -30,21 +31,24 @@ async function silenceRequest(transcript: WireEntry[]): Promise<Request> {
 }
 
 export async function prepareCases(directory: string): Promise<EvalCase[]> {
-  const real = await Bun.file(`${directory}/real-silence-cases.json`).json() as { cases: { id: string; transcript: WireEntry[]; sourceAlias: string; expected: boolean; labelStatus: string; independentLabel: { severityIfWrong: string } }[] };
+  const real = await Bun.file(`${directory}/real-silence-cases.json`).json() as { cases: { id: string; transcript: Passage[]; sourceAlias: string; expected: boolean; labelStatus: string; independentLabel: { severityIfWrong: string } }[] };
   const result: EvalCase[] = [];
   const silence = [...syntheticSilence.cases.map(x => ({ ...x, expected: x.expectedContinue, sourceAlias: 'synthetic' })), ...real.cases];
   for (const item of silence) {
-    const transcript = item.transcript.slice(-8) as WireEntry[];
+    const transcript = archivedTranscriptSchema.parse(item.transcript).slice(-8);
     const request = await silenceRequest(transcript);
     const split = item.sourceAlias === 'interview-A' || (item.sourceAlias === 'synthetic' && parseInt(hash(item.id).slice(0, 4), 16) % 2 === 0) ? 'development' : 'validation';
     result.push({ id: `silence:${item.id}`, lane: 'silence', split, source: item.sourceAlias, transcript,
       state: request.state, questions: { ...request.questions }, deadlineMs: 3000,
       checks: item.labelStatus !== 'independently-agreed' ? [] : [{ name: 'continue', path: ['continue'], op: 'eq', expected: item.expected, critical: item.independentLabel.severityIfWrong === 'critical' }] });
   }
-  const turns = await Bun.file(`${directory}/turn-cases.json`).json() as { cases: { id: string; sourceAlias: string; transcript: WireEntry[]; map: ConversationMap; atMs: number; mapId: string | null }[] };
-  for (const item of turns.cases) result.push({ id: `turn:${item.id}`, lane: 'turn', split: item.sourceAlias === 'interview-A' ? 'development' : 'validation',
+  const turns = await Bun.file(`${directory}/turn-cases.json`).json() as { cases: { id: string; sourceAlias: string; transcript: Passage[]; map: ConversationMap; atMs: number; mapId: string | null }[] };
+  for (const item of turns.cases) {
+    item.transcript = archivedTranscriptSchema.parse(item.transcript);
+    result.push({ id: `turn:${item.id}`, lane: 'turn', split: item.sourceAlias === 'interview-A' ? 'development' : 'validation',
     source: item.sourceAlias, transcript: item.transcript, map: item.map, atMs: item.atMs, mapId: item.mapId,
-    state: dialogueState(item.transcript.map(toPassage), 'sam'), questions: turnQuestions(item.map, latestTurn(item.transcript)), deadlineMs: 3000, checks: [] });
+    state: dialogueState(item.transcript, 'sam'), questions: turnQuestions(item.map, latestTurn(item.transcript)), deadlineMs: 3000, checks: [] });
+  }
   for (const item of interviewFixtures.filter(x => Object.values(x.expected).some(value => value.length))) {
     const checks: Check[] = [
       ...item.expected.heard.map(id => ({ name: `heard:${id}`, path: ['objectives', id, 'achieved'], op: 'eq' as const, expected: true })),
@@ -54,7 +58,7 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
       ...(item.expected.blankReadings ?? []).map(id => ({ name: `blank:${id}`, path: ['readings', id, 'value'], op: 'eq' as const, expected: null })),
     ];
     result.push({ id: `grade:${item.id}`, lane: 'grade', split: parseInt(hash(item.id).slice(0, 4), 16) % 3 === 0 ? 'validation' : 'development', source: 'synthetic',
-      transcript: item.transcript, state: dialogueState(item.transcript.map(toPassage), 'sam'), questions: interviewQuestions(spec, item.transcript.map(toPassage)), deadlineMs: 8000, checks });
+      transcript: item.transcript, state: dialogueState(item.transcript, 'sam'), questions: interviewQuestions(spec, item.transcript), deadlineMs: 8000, checks });
   }
   const manifest = await Bun.file(`${directory}/sources.json`).json() as { sources: { alias: string; path: string; sha256: string }[] };
   for (const alias of ['interview-A', 'interview-B']) {
@@ -62,16 +66,16 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
     const bytes = await Bun.file(source.path).arrayBuffer();
     if (new Bun.CryptoHasher('sha256').update(bytes).digest('hex') !== source.sha256) throw new Error('Archive source changed');
     const row = JSON.parse(new TextDecoder().decode(bytes));
-    const transcript = JSON.parse(row.transcript_json) as WireEntry[];
+    const transcript = archivedTranscriptSchema.parse(JSON.parse(row.transcript_json));
     const boundaries = [.25, .5, .75, 1].map(fraction => {
       const upto = Math.floor(transcript.length * fraction);
-      return transcript.slice(0, upto).findLastIndex(p => p.speaker === 'trainee') + 1;
+      return transcript.slice(0, upto).findLastIndex(p => p.speaker === 'participant') + 1;
     });
     boundaries.push(alias === 'interview-A' ? 123 : 79);
     for (const count of boundaries) {
       const prefix = transcript.slice(0, count);
       result.push({ id: `grade:${alias}-${prefix.at(-1)!.id}`, lane: 'grade', split: alias === 'interview-A' ? 'development' : 'validation', source: alias,
-        transcript: prefix, state: dialogueState(prefix.map(toPassage), 'sam'), questions: interviewQuestions(spec, prefix.map(toPassage)), deadlineMs: 8000, checks: [] });
+        transcript: prefix, state: dialogueState(prefix, 'sam'), questions: interviewQuestions(spec, prefix), deadlineMs: 8000, checks: [] });
     }
   }
   if (new Set(result.map(x => x.id)).size !== result.length) throw new Error('Duplicate case ID');
@@ -90,7 +94,7 @@ export function interpret(item: EvalCase, answers: Result['answers']) {
     return { ...reading, new: reading.novel >= .8, feedbackNew: (reading.feedback ?? 0) >= .8, wakeCandidate: reading.novel >= .8 || (reading.feedback ?? 0) >= .8,
       pick: pickThreads(item.map!, ranking) };
   }
-  const grade = readInterviewAnswers(spec, item.transcript.map(toPassage), answers);
+  const grade = readInterviewAnswers(spec, item.transcript, answers);
   return { ...grade, objectives: Object.fromEntries(grade.objectives.map(x => [x.id, x])) };
 }
 

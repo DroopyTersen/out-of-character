@@ -1,11 +1,11 @@
 import type { CallFailure } from '../../providers/diagnostics.server';
 import type { ModelUsage } from '../../providers/structured.server';
 import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
-import type { WireSpeaker } from '../wire';
+import type { Speaker } from '../../shared/transcript';
 import type { MapDefect, MapUpdate } from './map';
 import type { Band, Pick, ThreadState } from './ranking';
 
-type InterviewObjectiveReading = Reading<WireSpeaker>;
+type InterviewObjectiveReading = Reading<Speaker>;
 
 /**
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn

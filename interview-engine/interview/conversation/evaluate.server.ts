@@ -76,7 +76,18 @@ export function readInterviewAnswers<const S extends JudgedSpec>(spec: S, passag
     const passage = evidence(answers, `reading:${reading.id}:evidence`, participant);
     if (observed && passage) readings[reading.id as S['readings'][number]['id']] = { value: value.score, distribution: value.probabilities ?? null, evidence: passage };
   }
-  return { readings, objectives: judgedObjectives(spec).map(objective => coverage(answers, objective.id, participant, exploredThreshold)) };
+  return { readings, objectives: judgedObjectives(spec).map(objective => {
+    const reading = coverage(answers, objective.id, participant, exploredThreshold);
+    if (!objective.appliesWhen) return reading;
+    const key = `objective:${objective.id}:applicability`;
+    const answer = choice(answers, key, ['applicable', 'not-applicable', 'unknown']);
+    const support = evidence(answers, `objective:${objective.id}:applicability-evidence`, participant);
+    const applicability = support && (answer.probabilities?.[answer.choice] ?? 0) >= .8
+      ? answer.choice as 'applicable' | 'not-applicable' | 'unknown' : 'unknown';
+    return { ...reading, applicability, applicabilityEvidence: applicability === 'unknown' ? null : support,
+      ...(applicability !== 'applicable' ? { level: 'not-yet' as const, achieved: false, evidence: null } : {}),
+    };
+  }) };
 }
 
 function validate(passages: Passage[]) {

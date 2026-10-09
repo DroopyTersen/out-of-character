@@ -8,11 +8,11 @@ import type { Reading } from '../../shared/spec';
  * Touched only means the topic came up, so its odds are P(it came up at all) = 1 − P(not yet):
  * mass moving toward explored without evidence does not drop it to not yet.
  * A declined topic stays closed until a supported answer reopens it; the final grade is independent.
- * Generic in the speaker because the practice simulator's names still run the live session.
  */
 export function mergeCoverage<S extends string>(previous: InterviewObjectiveReading<S>[], current: InterviewObjectiveReading<S>[]): InterviewObjectiveReading<S>[] {
   return current.map(reading => {
     const prior = previous.find(item => item.id === reading.id);
+    if (reading.applicability && (reading.applicability !== 'applicable' || prior?.applicability !== reading.applicability)) return reading;
     if (reading.level === 'explored' || reading.level === 'set-aside' || !prior || prior.level === 'not-yet' || !prior.evidence) return reading;
     // Retain the boundary and the confidence of its supporting judgment; raw new odds stay in diagnostics.
     if (prior.level === 'set-aside') return prior;

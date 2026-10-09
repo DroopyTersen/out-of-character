@@ -1,9 +1,9 @@
-import type { WireEntry } from '../wire';
+import type { Passage } from '../../shared/transcript';
 
-export type TranscriptDelta = { speaker: WireEntry['speaker']; text: string; startMs: number; endMs: number };
+export type TranscriptDelta = { speaker: Passage['speaker']; text: string; startMs: number; endMs: number };
 
 /** Arrival order preserves overlapping speakers; timestamps describe approximate audio time. */
-export function appendTranscript(entries: WireEntry[], delta: TranscriptDelta, frozenIds?: ReadonlySet<string>): WireEntry[] {
+export function appendTranscript(entries: Passage[], delta: TranscriptDelta, frozenIds?: ReadonlySet<string>): Passage[] {
   if (!delta.text || !Number.isFinite(delta.startMs) || !Number.isFinite(delta.endMs) || delta.startMs < 0 || delta.endMs < delta.startMs) return entries;
   const last = entries.findLast(entry => entry.speaker === delta.speaker);
   const replied = last && entries.some(entry => entry.speaker !== delta.speaker && entry.startMs >= last.endMs);
@@ -14,6 +14,6 @@ export function appendTranscript(entries: WireEntry[], delta: TranscriptDelta, f
 }
 
 /** Each passage must stop growing; a backchannel cannot settle another speaker. */
-export function settledTranscript(entries: WireEntry[], updatedAt: ReadonlyMap<string, number>, now: number): WireEntry[] {
+export function settledTranscript(entries: Passage[], updatedAt: ReadonlyMap<string, number>, now: number): Passage[] {
   return entries.filter(entry => now - (updatedAt.get(entry.id) ?? now) >= 1200);
 }

@@ -29,12 +29,12 @@ function fixture() {
 const base: InterviewArchiveWrite = {
   specId: 'project-closeout', specVersion: 'project-closeout-v1', state: 'partial', capturedAt: 2000,
   snapshot: {
-    id: 'interview-1', scenarioId: 'project-closeout', clientId: 'sam-cedar',
+    id: 'interview-1', planId: 'project-closeout', voiceId: 'sam-cedar',
     status: 'live', startedAt: 1000, limitSeconds: 3600, warning: null, revision: 1,
-    transcript: [{ id: 'p1', speaker: 'trainee', text: 'Jen helped us fix the access issue.', startMs: 100, endMs: 900 }],
-    evaluation: null, coaching: null, feedbackStatus: 'current', message: null, finalization: 'pending', usageSeconds: null,
-    interview: { evaluation: null, summary: { status: 'pending', text: null } },
+    transcript: [{ id: 'p1', speaker: 'participant', text: 'Jen helped us fix the access issue.', startMs: 100, endMs: 900 }],
+    evaluation: null, pause: null, background: [], feedbackStatus: 'current', message: null, finalization: 'pending', usageSeconds: null,
   },
+  narrative: { status: 'pending', text: null },
   provenance: {
     model: 'gpt-live', voice: 'cedar', rubricVersion: 'interview-r1', simulatorVersion: 'interview-v1',
     actorDigest: 'actor-digest', openingDigest: 'opening-digest', workerId: 'worker-id',
@@ -45,12 +45,11 @@ const base: InterviewArchiveWrite = {
 
 function write(capturedAt: number, state: InterviewArchiveWrite['state'], status: 'pending' | 'ready' | 'unavailable', text: string | null = null): InterviewArchiveWrite {
   return {
-    ...base, capturedAt, state,
+    ...base, capturedAt, state, narrative: { status, text },
     snapshot: {
       ...base.snapshot,
       status: state === 'final' ? 'ended' : 'live',
       finalization: state === 'final' ? 'confirmed' : 'pending',
-      interview: { evaluation: null, summary: { status, text } },
     },
   };
 }
@@ -160,7 +159,7 @@ function hour(updateEntities: number): ProducerLogRecord[] {
 }
 
 test('an hour at every producer cap still fits a D1 row: live grades thin first, and Sol updates go only if they must', async () => {
-  const transcript = Array.from({ length: 300 }, (_, index) => ({ id: `p${index + 1}`, speaker: index % 2 ? 'trainee' as const : 'client' as const, text: 'The field crew’s routing work. '.repeat(9).slice(0, 266), startMs: index * 12_000, endMs: index * 12_000 + 10_000 }));
+  const transcript = Array.from({ length: 300 }, (_, index) => ({ id: `p${index + 1}`, speaker: index % 2 ? 'participant' as const : 'interviewer' as const, text: 'The field crew’s routing work. '.repeat(9).slice(0, 266), startMs: index * 12_000, endMs: index * 12_000 + 10_000 }));
   const final = { ...write(3000, 'final', 'ready', 'Summary. '.repeat(3000)), interventions: [] };
   final.snapshot = { ...final.snapshot, transcript };
   const bytes = (row: Record<string, unknown>) => Object.values(row).reduce<number>((sum, value) => sum + (typeof value === 'string' ? new TextEncoder().encode(value).byteLength : 8), 0);

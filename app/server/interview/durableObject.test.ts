@@ -41,7 +41,7 @@ test('background work is handed to waitUntil', () => {
 
 const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 const graded = (revision: number, transcript: { id: string; speaker: string; text: string }[]) => {
-  const passage = transcript[0]!;
+  const passage = transcript.find(passage => passage.speaker === 'participant')!;
   return { revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1, usage, answers: {},
     objectives: [{ id: 'project-delivery', level: 'explored' as const, levels: { 'not-yet': .01, touched: .03, explored: .95, 'set-aside': .01 }, achieved: true, probability: .95, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }] };
 };
@@ -65,7 +65,6 @@ async function interviewObject() {
   return { ...f, grades };
 }
 
-const uuids = (value: unknown) => JSON.parse(JSON.stringify(value).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'uuid'));
 
 type Target = { fetch(request: Request): Promise<Response>; socket: { emit(event: unknown): void; sent: Record<string, unknown>[] }; pending: Promise<unknown>[]; grades: () => number; values: Map<string, unknown> };
 /** One scripted attempt, at fixed clock times, returning every reply as status and JSON text. */
@@ -106,21 +105,21 @@ async function script(target: Target) {
   return { replies, paused };
 }
 
-/** Frozen protocol, checkpoint and archive contract for a scripted interview. */
-const frozen = await Bun.file(new URL('./scripted-attempt.json', import.meta.url)).json() as { replies: [string, number, unknown][]; paused: unknown; lease: unknown; checkpoint: boolean; row: unknown };
-
 test('the interview object preserves the scripted protocol and archive contract', async () => {
   const next = await interviewObject();
   const after = await script({ fetch: request => next.session.fetch(request), get socket() { return next.socket; }, pending: next.pending, grades: () => next.grades.length, values: next.values });
 
   expect(after.replies.map(([action, status]) => [action, status])).toEqual([['poll', 404], ['start', 200], ['start', 403], ['ready', 200], ['poll', 200], ['pause', 200], ['poll', 200], ['end', 200], ['poll', 200], ['report', 200], ['poll', 200]]);
-  expect(after.replies).toEqual(frozen.replies);
-  // The paused checkpoint is the one a restore reads; the note ids inside it are random.
-  expect(after.paused).toBeDefined();
-  expect(uuids(after.paused)).toEqual(frozen.paused);
-  expect(next.values.get('lease')).toEqual(frozen.lease);
-  expect(next.values.has('checkpoint')).toBe(frozen.checkpoint);
-  expect(uuids(next.interviewRow())).toEqual(frozen.row);
+  const final = after.replies.at(-1)![2] as Record<string, any>;
+  expect(final).toMatchObject({ planId: 'project-closeout', voiceId: 'sam-cedar', status: 'ended', report: { status: 'completed', report: { text: 'Fixture summary.' } } });
+  expect(final.transcript.map((passage: { speaker: string; text: string }) => [passage.speaker, passage.text])).toEqual([
+    ['interviewer', 'Hi, I’m Sam. What did you deliver?'], ['participant', 'We built a permit intake portal.'],
+  ]);
+  for (const key of ['scenarioId', 'clientId', 'coaching', 'interview']) expect(final).not.toHaveProperty(key);
+  expect(after.paused).toMatchObject({ definition: { plan: { id: 'project-closeout' } }, snapshot: { status: 'paused' } });
+  expect(next.values.get('lease')).toMatchObject({ capability, closed: true });
+  expect(next.values.has('checkpoint')).toBe(false);
+  expect(next.interviewRow()).toMatchObject({ spec_id: 'project-closeout', archive_state: 'final', summary_status: 'ready' });
 }, 15_000);
 
 test('the alarm wakes the session: an end that arrived before its start is forgotten once the hold passes', async () => {
@@ -162,26 +161,26 @@ async function adHocCatalog() {
   await store.put({ id: approved.id, version: approved.version, base: closeout.id, approvedAt: 1000, record: { ...vendorReview, id: approved.id, base: closeout.id } });
   return { catalog: specCatalog(store), approved };
 }
-const adHocStart = (scenarioId: string, cap = capability) => (target: { fetch(request: Request): Promise<Response> }) =>
-  target.fetch(new Request('https://session/start', { method: 'POST', headers: { Authorization: cap }, body: JSON.stringify({ ...interviewAttempt, scenarioId }) }));
+const adHocStart = (planId: string, cap = capability) => (target: { fetch(request: Request): Promise<Response> }) =>
+  target.fetch(new Request('https://session/start', { method: 'POST', headers: { Authorization: cap }, body: JSON.stringify({ ...interviewAttempt, planId }) }));
 
 test('an attempt under an approved debrief runs, archives and resumes under that debrief’s id and version, and reports with its narrative', async () => {
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);
   const { catalog, approved } = await adHocCatalog();
-  const templates: string[] = [];
-  const narrate = (input: { template: { id: string; version: string } }) => { templates.push(`${input.template.id} ${input.template.version}`); return summary(); };
+  const reports: unknown[] = [];
+  const narrate = (input: unknown) => { reports.push(input); return summary(); };
   const first = await objectFixture({ catalog, overrides: { narrate: narrate as never } });
   expect((await adHocStart('no-such-debrief')(first.session)).status).toBe(400);
   expect(first.values.has('spec')).toBe(false);
   const started = await adHocStart(approved.id)(first.session);
   expect(started.status).toBe(200);
-  expect(first.values.get('spec')).toEqual({ id: approved.id, version: approved.version });
+  expect(first.values.get('spec')).toMatchObject({ plan: { id: approved.id, version: approved.version, goals: vendorReview.goals } });
   setSystemTime(epoch + 1000);
   await send(first.session, 'ready');
   // Sam's brief is the approved debrief's, not the base template's.
   expect(first.created).toHaveLength(1);
-  first.socket.emit({ type: 'session.output_transcript.delta', event_id: 'o1', delta: vendorReview.opening, start_ms: 0, end_ms: 900 });
+  first.socket.emit({ type: 'session.output_transcript.delta', event_id: 'o1', delta: 'Hi, I’m Sam. What was your part in this vendor relationship?', start_ms: 0, end_ms: 900 });
   first.socket.emit({ type: 'session.input_transcript.delta', event_id: 'i1', delta: 'I owned the renewal and the weekly vendor calls.', start_ms: 1500, end_ms: 2400 });
   setSystemTime(epoch + 4000);
   await waitFor(() => first.interviewJudged.length >= 1);
@@ -191,15 +190,17 @@ test('an attempt under an approved debrief runs, archives and resumes under that
   expect(first.interviewRow()).toMatchObject({ scenario_id: approved.id, spec_id: approved.id, spec_version: approved.version, archive_state: 'partial' });
 
   // A replacement owner restores from the same storage and resolves the same debrief, by id and version.
-  const second = await objectFixture({ catalog, values: first.values, archive: first.archive, provider: 'provider-second', overrides: { narrate: narrate as never } });
-  const polled = await (await send(second.session, 'poll')).json() as { scenarioId: string; status: string };
-  expect(polled).toMatchObject({ scenarioId: approved.id, status: 'paused' });
+  const second = await objectFixture({ catalog: specCatalog(memoryDebriefStore()), values: first.values, archive: first.archive, provider: 'provider-second', overrides: { narrate: narrate as never } });
+  const polled = await (await send(second.session, 'poll')).json() as { planId: string; status: string };
+  expect(polled).toMatchObject({ planId: approved.id, status: 'paused' });
   setSystemTime(epoch + 6000);
   expect((await send(second.session, 'end')).status).toBe(200);
   await settle(second);
   expect((await send(second.session, 'report')).status).toBe(200);
   await settle(second);
-  expect(templates).toEqual([`${approved.narrative.id} ${approved.narrative.version}`]);
+  expect(reports).toHaveLength(1);
+  expect(reports[0]).toMatchObject({ format: vendorReview.report });
+  expect(Object.keys(reports[0] as object).sort()).toEqual(['format', 'transcript']);
   expect(second.interviewRow()).toMatchObject({ spec_id: approved.id, spec_version: approved.version, archive_state: 'final', summary_status: 'ready' });
 });
 
@@ -212,7 +213,7 @@ test('a start that names a debrief still honours an end that arrived first, and 
   expect(f.values.get('lease')).toMatchObject({ closed: true });
   const started = await adHocStart(approved.id)(f.session);
   expect(started.status).toBe(409);
-  expect(f.values.get('spec')).toEqual({ id: approved.id, version: approved.version });
+  expect(f.values.get('spec')).toMatchObject({ plan: { id: approved.id, version: approved.version, goals: vendorReview.goals } });
   expect(f.creations()).toBe(0);
   // Once pinned, a start under the base template is a mismatch, not a new attempt.
   expect((await send(f.session, 'start')).status).toBe(400);

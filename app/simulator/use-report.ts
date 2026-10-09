@@ -6,9 +6,9 @@ import type { SessionSnapshot } from '../../core/simulator/types';
 import { idleReport, reportSchema, REPORT_MAX_STARTS, REPORT_DEADLINE_MS, type CoachingReport, type ReportState } from '../../core/simulator/report';
 
 export type ReportTarget = { id: string; url: string; headers: Record<string, string> };
-type ReportData<T = CoachingReport> = { state: ReportState<T>; draft?: DeepPartial<T>; loadError?: boolean; snapshot?: SessionSnapshot | null };
+type ReportData<T = CoachingReport, S = SessionSnapshot> = { state: ReportState<T>; draft?: DeepPartial<T>; loadError?: boolean; snapshot?: S | null };
 export type ReportStage = 'compiling' | 'writing' | 'completed' | 'failed' | 'exhausted' | 'ineligible' | 'unavailable' | 'status-error';
-export type StreamedReportView<T> = ReportData<T> & { stage: ReportStage; canRetry: boolean };
+export type StreamedReportView<T, S = SessionSnapshot> = ReportData<T, S> & { stage: ReportStage; canRetry: boolean };
 export type ReportView = StreamedReportView<CoachingReport>;
 export type ReportActions = { prepare(target: ReportTarget): void; begin(id: string): void; cancel(): void };
 
@@ -17,7 +17,7 @@ export function reportView(data: ReportData): ReportView {
   return streamedReportView(data, !!data.draft?.overview);
 }
 
-export function streamedReportView<T>(data: ReportData<T>, hasContent: boolean): StreamedReportView<T> {
+export function streamedReportView<T, S = SessionSnapshot>(data: ReportData<T, S>, hasContent: boolean): StreamedReportView<T, S> {
   const { state, loadError } = data;
   let stage: ReportStage;
   if (loadError) stage = 'status-error';
@@ -34,11 +34,11 @@ export function useSessionReport() {
   return useStreamedReport(reportSchema, draft => !!draft?.overview);
 }
 
-export function useStreamedReport<T>(schema: z.ZodType<T>, hasContent: (draft: DeepPartial<T> | undefined) => boolean) {
+export function useStreamedReport<T, S = SessionSnapshot>(schema: z.ZodType<T>, hasContent: (draft: DeepPartial<T> | undefined) => boolean) {
   const [target, setTarget] = useState<ReportTarget | null>(null);
   const [state, setState] = useState(idleReport<T>);
   const [loadError, setLoadError] = useState(false);
-  const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<S | null>(null);
   const current = useRef<ReportTarget | null>(null);
   const submitted = useRef(false);
   const statusRead = useRef<AbortController | null>(null);
@@ -58,11 +58,11 @@ export function useStreamedReport<T>(schema: z.ZodType<T>, hasContent: (draft: D
         return;
       }
       if (!response.ok) throw new Error('Report status unavailable.');
-      const value = await response.json() as SessionSnapshot & { report?: ReportState<T> };
+      const value = await response.json() as S & { report?: ReportState<T> };
       const { report: finalState, ...finalSnapshot } = value;
       if (!finalState) throw new Error('Report status unavailable.');
       if (current.current === forTarget) {
-        setState(finalState); setSnapshot(finalSnapshot); setLoadError(false);
+        setState(finalState); setSnapshot(finalSnapshot as S); setLoadError(false);
       }
     } catch {
       if (current.current === forTarget && !controller.signal.aborted) setLoadError(true);

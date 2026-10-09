@@ -19,19 +19,19 @@ export async function answerSocket(data: unknown, context: SocketContext, route:
   try { message = JSON.parse(data); } catch { return reply({ id: null, status: 400, body: { error: 'Send a JSON message.' } }); }
   const parsed = socketRequestSchema.safeParse(message);
   const id = typeof (message as { id?: unknown } | null)?.id === 'number' ? (message as { id: number }).id : null;
-  if (!parsed.success) return reply({ id, status: 400, body: { error: 'Invalid simulator request.' } });
+  if (!parsed.success) return reply({ id, status: 400, body: { error: 'Invalid interview request.' } });
   const { action, capability, body } = parsed.data;
   // A socket belongs to one attempt; a start for another would be a second attempt on this socket.
-  if (action === 'start' && (body as { id?: unknown } | undefined)?.id !== context.attemptId) return reply({ id, status: 400, body: { error: 'Invalid simulator request.' } });
+  if (action === 'start' && (body as { id?: unknown } | undefined)?.id !== context.attemptId) return reply({ id, status: 400, body: { error: 'Invalid interview request.' } });
   const path = action === 'start' ? '/api/interview/sessions' : `/api/interview/sessions/${context.attemptId}/${action}`;
   const headers = new Headers({ Origin: context.origin, Authorization: `Bearer ${capability}`, 'Content-Type': 'application/json' });
   if (context.ip) headers.set('CF-Connecting-IP', context.ip);
   try {
     const response = await route(new Request(new URL(path, context.origin), { method: 'POST', headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }));
-    if (!response) return reply({ id, status: 404, body: { error: 'Unknown simulator route.' } });
+    if (!response) return reply({ id, status: 404, body: { error: 'Unknown interview route.' } });
     return reply({ id, status: response.status, body: await response.json().catch(() => null) });
   } catch {
-    return reply({ id, status: 502, body: { error: 'The simulator connection is unavailable. Please try again.' } });
+    return reply({ id, status: 502, body: { error: 'The interview connection is unavailable. Please try again.' } });
   }
 }
 

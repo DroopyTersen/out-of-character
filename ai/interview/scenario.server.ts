@@ -14,5 +14,5 @@ export const interviewers: (Client & { voice: string; behavior: string; stats: C
 }));
 
 /** Sam's brief for one voice, rendered by the engine from the closeout spec. */
-export const interviewerBrief = (clientId: string) => brief.interviewerBrief(spec, clientId);
-export const interviewOpening = (clientId: string) => brief.interviewOpening(spec, clientId);
+export const interviewerBrief = (voiceId: string) => brief.interviewerBrief(spec, voiceId);
+export const interviewOpening = (voiceId: string) => brief.interviewOpening(spec, voiceId);

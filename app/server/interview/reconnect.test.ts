@@ -68,16 +68,17 @@ test('a restarted interview keeps its readings and summary state, stored inside 
   const f = await live();
   await lose(f);
   const before = await poll(f);
-  expect(before.interview).toMatchObject({ summary: null, background: [] });
+  expect(before).toMatchObject({ background: [] });
+  expect(before).not.toHaveProperty('interview');
   // The stored shape is unchanged, so checkpoints saved before the interview state moved beside the snapshot still restore.
   const stored = (f.values.get('checkpoint') as { snapshot: Record<string, unknown> }).snapshot;
-  expect(stored.interview).toEqual({ evaluation: before.interview.evaluation, summary: null });
+  expect(stored.interview).toEqual({ evaluation: before.evaluation, summary: null });
   expect(stored.interview).not.toHaveProperty('background');
   const replacement = await objectFixture({ values: f.values, archive: f.archive, provider: 'replacement' });
   const state = await poll(replacement);
-  expect(state.interview).toEqual(before.interview);
+  expect(state.evaluation).toEqual(before.evaluation);
   await reconnect(replacement);
-  expect(await read(replacement.session.fetch(request('end')))).toMatchObject({ status: 'ended', interview: { summary: { status: 'pending', text: null } } });
+  expect(await read(replacement.session.fetch(request('end')))).toMatchObject({ status: 'ended' });
   await settle(replacement);
   expect(replacement.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
   await f.session.fetch(request('end'));

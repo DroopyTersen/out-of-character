@@ -1,6 +1,6 @@
 import { experimental_evaluate, type Experimental_EvaluationModel, type Experimental_EvaluationQuestion } from 'ai';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../shared/transcript';
-import { toPassage, type WireEntry as TranscriptEntry } from '../wire';
+import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import { dialogueState, type InterviewAnswers } from './evaluate.server';
 import type { ConversationMap, MapThread } from './map';
 import { THREAD_STATES, threadKey, type ThreadState, type TurnReading } from './ranking';
@@ -17,10 +17,10 @@ const SHORT_ANSWER = /^(?:yes|yeah|yep|no|nope|sure|right|uh[- ]?huh)[.!]*$/i;
 /** Short confirmations can answer a question or a declarative guess. Transcript punctuation cannot decide that. */
 export function said(transcript: TranscriptEntry[], index: number) {
   const entry = transcript[index]!;
-  if (entry.speaker !== 'trainee') return false;
+  if (entry.speaker !== 'participant') return false;
   if (!isBackchannel(entry.text)) return true;
   const before = transcript[index - 1];
-  return SHORT_ANSWER.test(entry.text.trim()) && before?.speaker === 'client' && !isBackchannel(before.text);
+  return SHORT_ANSWER.test(entry.text.trim()) && before?.speaker === 'interviewer' && !isBackchannel(before.text);
 }
 
 /**
@@ -29,7 +29,7 @@ export function said(transcript: TranscriptEntry[], index: number) {
  */
 export function latestTurn(transcript: TranscriptEntry[]): TranscriptEntry[] {
   let start = transcript.length;
-  while (start > 0 && (transcript[start - 1]!.speaker === 'trainee' || yieldsTurn(transcript[start - 1]!.text))) start--;
+  while (start > 0 && (transcript[start - 1]!.speaker === 'participant' || yieldsTurn(transcript[start - 1]!.text))) start--;
   return transcript.flatMap((entry, index) => index >= start && said(transcript, index) ? [entry] : []);
 }
 
@@ -136,7 +136,7 @@ export function readTurnAnswers(map: ConversationMap, answers: InterviewAnswers,
 type Input = { transcript: TranscriptEntry[]; map: ConversationMap; judge: Experimental_EvaluationModel; signal?: AbortSignal; atMs: number };
 
 function validate(input: Pick<Input, 'transcript'>) {
-  if (!input.transcript.length || input.transcript.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(input.transcript.map(toPassage)) > TRANSCRIPT_LIMIT.characters) throw new Error('Transcript is outside the interview limit.');
+  if (!input.transcript.length || input.transcript.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(input.transcript) > TRANSCRIPT_LIMIT.characters) throw new Error('Transcript is outside the interview limit.');
 }
 
 /** With no open thread, Jev still reads whether the turn is new, which can wake Sol. A turn of backchannels alone isn't read. */
@@ -147,7 +147,7 @@ export async function evaluateTurn(input: Input) {
   const started = performance.now();
   const result = await experimental_evaluate({
     model: input.judge,
-    state: dialogueState(input.transcript.map(toPassage), 'sam'), questions: turnQuestions(input.map, turn),
+    state: dialogueState(input.transcript, 'sam'), questions: turnQuestions(input.map, turn),
     abortSignal: input.signal, maxRetries: 0,
   });
   return {

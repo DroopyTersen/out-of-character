@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { testFoundry } from '../../providers/testFoundry.server';
 import { DirectorOutputError, structuredWith } from '../../providers/structured.server';
-import type { WireEntry as TranscriptEntry } from '../wire';
+import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import { emptyMap, MAP_LIMITS, PARTICIPANT_ID, type ConversationMap } from './map';
 import * as map from './map.server';
 import { emptyMapLog, mapCacheKey, MapOutputError, MAP_PROMPT_VERSION, researchLogEvent, settledPrefix, unloggedPassages, type MapLog, type MapLogEvent, type MapTail } from './map.server';
@@ -20,9 +20,9 @@ const generateMap = (input: Omit<Parameters<typeof map.generateMap>[0], 'spec' |
   map.generateMap({ ...input, spec, structured: structuredWith(fixtureFoundry, request) });
 
 const transcript: TranscriptEntry[] = [
-  { id: 'p1', speaker: 'client', text: 'What did the project deliver, and who was the client?', startMs: 0, endMs: 4000 },
-  { id: 'p2', speaker: 'trainee', text: 'A routing layer for\nthe dispatch team.', startMs: 5000, endMs: 9000 },
-  { id: 'p3', speaker: 'client', text: 'Who decided on routing first?', startMs: 260_000, endMs: 262_000 },
+  { id: 'p1', speaker: 'interviewer', text: 'What did the project deliver, and who was the client?', startMs: 0, endMs: 4000 },
+  { id: 'p2', speaker: 'participant', text: 'A routing layer for\nthe dispatch team.', startMs: 5000, endMs: 9000 },
+  { id: 'p3', speaker: 'interviewer', text: 'Who decided on routing first?', startMs: 260_000, endMs: 262_000 },
 ];
 const update = {
   vantage: 'Built the routing layer.', preferences: [],

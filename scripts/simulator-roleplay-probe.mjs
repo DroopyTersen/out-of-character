@@ -1,3 +1,5 @@
+import { archivedTranscriptSchema } from '../core/interview-transcript.ts';
+import { createJevJudge } from '../interview-engine/providers/judge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
 import { createHash } from 'node:crypto';
@@ -539,8 +541,8 @@ const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Dat
 const startedAt = Date.now();
 const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
 // As in the session, Sol's append-only log reads only up to the first passage still being transcribed.
-const prefix = () => { const ready = new Set(settled()); return settledPrefix(report.transcript, entry => ready.has(entry)); };
-const producer = isInterview ? new InterviewProducer({ attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, spec, providers: foundryProviders({ ...foundry, typesafeKey: process.env.TYPESAFE_API_KEY }), services: producerServices, settled: prefix, send }) : null;
+const prefix = () => { const ready = new Set(settled()); return settledPrefix(archivedTranscriptSchema.parse(report.transcript), entry => [...ready].some(item => item.id === entry.id)); };
+const producer = isInterview ? new InterviewProducer({ attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, spec, providers: foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) }), services: producerServices, settled: prefix, send }) : null;
 const directions = producer ?? contextual;
 if (!notesEnabled) directions.close();
 report.interventions = directions.records;
@@ -549,7 +551,7 @@ async function observeClient(afterTurn, transcript) {
   if (producer) {
     // Coverage only: the producer reads turns, calls Sol and sends notes on its own tick.
     try {
-      const graded = await evaluateInterview({ scenarioId, clientId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
+      const graded = await evaluateInterview({ planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(transcript), revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
       if (!closing) coverage = mergeCoverage(coverage, graded.objectives);
     } catch (error) { report.errors.push(`Participant grading failed (${error.name}).`); }
     return;
@@ -671,7 +673,7 @@ const completed = new Promise(resolve => {
       const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
       const changed = next.find(entry => !report.transcript.includes(entry));
       report.transcript = next;
-      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null); }
+      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer?.transcriptChanged(archivedTranscriptSchema.parse([changed])[0], next[next.indexOf(changed) - 1]?.id ?? null); }
     } else if (value.type === 'session.output_audio.delta') {
       const audio = Buffer.from(value.delta, 'base64');
       chunks.push(audio);
@@ -721,8 +723,10 @@ const completed = new Promise(resolve => {
 try {
   await completed;
   if (report.finalized && report.transcript.some(entry => entry.speaker === 'trainee')) {
-    const evaluate = isInterview ? evaluateInterview : evaluateTrainee;
-    report[isInterview ? 'interview' : 'trainee'] = await evaluate({ scenarioId, clientId, transcript: report.transcript, revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) });
+    const common = { revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) };
+    report[isInterview ? 'interview' : 'trainee'] = isInterview
+      ? await evaluateInterview({ ...common, planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(report.transcript) })
+      : await evaluateTrainee({ ...common, scenarioId, clientId, transcript: report.transcript });
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {

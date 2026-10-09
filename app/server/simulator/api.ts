@@ -3,15 +3,17 @@ import { INTERVIEW_SCENARIO_ID } from '../../../core/interview';
 import { getClient, getScenario, publicCatalog } from '../../../ai/simulator/scenarios.server';
 import { BodyError, boundedJson } from '../http';
 import { foundryConfigured } from '../../../ai/foundry.server';
-import { activitySchema, CAPABILITY, resumeSchema, startSchema as sessionStartSchema } from '../../../interview-engine/shared/protocol';
+import { activitySchema, CAPABILITY, offerSchema, resumeSchema } from '../../../interview-engine/shared/protocol';
 
 export { activitySchema, resumeSchema };
 
 const uuid = z.string().uuid();
-export const startSchema = sessionStartSchema.extend({
+export const startSchema = z.object({
+  id: uuid,
   scenarioId: z.string().refine(id => { try { getScenario(id); return true; } catch { return false; } }),
   clientId: z.string().refine(id => { try { getClient(id); return true; } catch { return false; } }),
-});
+  sdp: offerSchema,
+}).strict();
 export const liveAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.TYPESAFE_API_KEY;
 export const simulatorJson = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 

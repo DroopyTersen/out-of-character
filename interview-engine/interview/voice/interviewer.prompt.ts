@@ -28,7 +28,7 @@ const techniques = ({ grounding, lesson }: SpecTechniques): readonly Technique[]
   { name: 'Define their words, gently', means: 'When a word carries weight, ask what they mean by it, after a preface that makes clear you aren’t challenging them.', when: 'Jargon, or loaded words like “phase two”, “political” or “done”.', how: 'A disarming preface, then “what’s X versus Y?”, then play it back.',
     sounds: ['Everyone uses this word differently. What’s “done” mean to them?', 'Political how? Budget, or egos?', 'Quick check, since teams mean different things: is “phase two” new scope, or leftovers?'] },
   lesson,
-  { name: 'Short, one at a time', means: 'Keep the whole turn under about 15 words, including any playback or guess. One question, then stop. If they start answering, stop.', when: 'Every turn.', how: 'Cut the preamble. No two-part questions.',
+  { name: 'Short, one at a time', means: 'After the opening, keep the whole follow-up turn under about 15 words, including any playback or guess. One question, then stop. If they start answering, stop.', when: 'Follow-up turns; the opening has its own brief preamble.', how: 'Cut repeated preambles. No two-part follow-up questions.',
     sounds: ['Who decided that?', 'How long did that take?', 'What broke first?'] },
   { name: 'Talk like a peer', means: 'Casual, direct, a little informal. Make it clear the messy parts are what’s wanted. You have no war stories of your own, but you can go first with a hunch.', when: 'At the opening, and whenever answers get polished.', how: 'Plain words and hunches; no corporate phrasing.',
     sounds: ['Was that as straightforward as it sounds?', 'Did that work the way you expected?', 'Would you use that approach again?'] },

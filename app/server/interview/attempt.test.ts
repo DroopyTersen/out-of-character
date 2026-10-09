@@ -5,7 +5,6 @@ import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/n
 import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
 import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/interview/conversation/records';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
-import { toPassage } from '../../../interview-engine/interview/wire';
 import { interviewAttempt, narrated, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, waitFor } from '../simulator/session-fixture';
 
@@ -39,7 +38,7 @@ test('settled answers drive private optional notes without gating Sam’s turns'
   const f = await objectFixture({ overrides: {
     evaluateTurn: async input => { turns.push(input.transcript.at(-1)!.id); return novelTurn(input); },
     generateMap: async input => { maps.push(input); return mapped(solMap()); },
-    narrate: input => { summarized = JSON.stringify(input.passages); return narrated('The participant led an integration.'); },
+    narrate: input => { summarized = JSON.stringify(input.transcript); return narrated('The participant led an integration.'); },
   } });
   const epoch = 1_800_000_000_000;
   setSystemTime(epoch);
@@ -71,9 +70,8 @@ test('settled answers drive private optional notes without gating Sam’s turns'
     await waitFor(() => turns.includes('p3'));
     expect(noteEvents(f.socket.sent)).toHaveLength(2);
     const snapshot = await (await f.session.fetch(request('poll'))).json() as Record<string, any>;
-    expect(snapshot.coaching).toBeNull();
-    expect(snapshot.evaluation).toBeNull();
-    expect(snapshot.interview.evaluation).toBeDefined();
+    expect(snapshot).not.toHaveProperty('coaching');
+    expect(snapshot.evaluation).toBeDefined();
     expect(JSON.stringify(snapshot)).not.toContain('PRIVATE');
     await f.session.fetch(request('end'));
     await (await f.session.fetch(request('report'))).text();
@@ -85,7 +83,7 @@ test('settled answers drive private optional notes without gating Sam’s turns'
     expect(records.filter(record => record.source === 'turn').map(record => record.passageId)).toEqual(['p1', 'p1', 'p3']);
     expect(JSON.parse(row.provenance_json).contextualDirector).toMatchObject({ version: PRODUCER_VERSION, maps: 1, applied: 1, turns: 3, notes: 2, research: 0 });
     expect(summarized).not.toContain('PRIVATE');
-    expect(JSON.parse(summarized)).toEqual(snapshot.transcript.map(toPassage));
+    expect(JSON.parse(summarized)).toEqual(snapshot.transcript);
     expect(f.row()).toBeNull();
   } finally { await f.session.fetch(request('end')); }
 }, 10_000);
@@ -122,7 +120,7 @@ test('the private archive keeps consecutive probability changes, failed grades, 
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, objectives: [{
         id: 'project-delivery', level: 'explored', achieved: true, probability,
         levels: { 'not-yet': 0, touched: 1 - probability, explored: probability, 'set-aside': 0 },
-        evidence: { entryId: 'p1', speaker: 'trainee', text: 'We built a booking portal.' },
+        evidence: { entryId: 'p1', speaker: 'participant', text: 'We built a booking portal.' },
       }] };
   } } });
   const epoch = 1_800_000_000_000;

@@ -94,11 +94,11 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     return this.transport.request(action, body, { attempt: this.attempt, timeoutMs, keepalive, signal });
   }
 
-  async start(scenarioId: string, clientId: string) {
+  async start(planId: string, voiceId: string) {
     try {
       const connected = await this.connect(async sdp => {
         this.requested = true;
-        const created = await this.request('start', { id: this.id, scenarioId, clientId, sdp }) as { sdp: string; snapshot: S };
+        const created = await this.request('start', { id: this.id, planId, voiceId, sdp }) as { sdp: string; snapshot: S };
         if (this.ending) return null;
         this.callbacks.snapshot(created.snapshot);
         return created.sdp;

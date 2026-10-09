@@ -17,6 +17,9 @@ export type ReadingValue<S extends string = Speaker> = { value: number | null; d
 /** `probability` is P(explored); `achieved` means explored. */
 export type InterviewObjectiveReading<S extends string = Speaker> = {
   id: string;
+  /** Conditional relevance is separate from depth or a participant boundary. Absent for unconditional topics. */
+  applicability?: 'applicable' | 'not-applicable' | 'unknown';
+  applicabilityEvidence?: Evidence<S> | null;
   probability: number | null;
   achieved: boolean;
   evidence: Evidence<S> | null;
@@ -38,12 +41,10 @@ export type InterviewBackground = {
   retrievedAt: number;
 };
 
-/** The transcript entry a snapshot carries: a Passage, or until the runtime is renamed, the practice simulator's entry. */
-export type SnapshotEntry = { id: string; speaker: string; text: string; startMs: number; endMs: number };
 /** What the browser renders during and after an interview. The narrative is not part of it; the host serves that separately. */
-export type InterviewSnapshot<E extends SnapshotEntry = Passage, R extends string = string> = {
+export type InterviewSnapshot<R extends string = string> = {
   id: string;
-  specId: string;
+  planId: string;
   voiceId: string;
   status: SessionStatus;
   startedAt: number;
@@ -52,9 +53,9 @@ export type InterviewSnapshot<E extends SnapshotEntry = Passage, R extends strin
   warning: SessionWarning | null;
   /** Present while paused, and while a resume is connecting. */
   pause: SessionPause | null;
-  transcript: E[];
+  transcript: Passage[];
   /** Coverage of the spec's objectives and the participant readings, re-judged as the conversation goes. */
-  evaluation: InterviewEvaluation<R, E['speaker']> | null;
+  evaluation: InterviewEvaluation<R> | null;
   feedbackStatus: FeedbackStatus;
   background: InterviewBackground[];
   message: string | null;

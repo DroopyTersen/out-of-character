@@ -77,7 +77,7 @@ async function attempt(id: string, command: Request) {
   let hosted = attempts.get(id);
   if (!hosted) {
     const parsed = new URL(command.url).pathname === '/start' ? startSchema.safeParse(await command.clone().json().catch(() => null)) : null;
-    const named = parsed?.success ? await debriefs.catalog.resolve(parsed.data.scenarioId) : null;
+    const named = parsed?.success ? await debriefs.catalog.resolve(parsed.data.planId) : null;
     attempts.set(id, hosted = open(id, named ?? templates[0]!));
   }
   return hosted;
@@ -96,9 +96,9 @@ async function open(id: string, spec: HostedSpec) {
     timer = at == null ? undefined : setTimeout(() => void wake().catch(error => console.error('Interview wake failed', id, error)), Math.max(0, at - Date.now()));
   } });
   hosted = SessionActor.restore({
-    spec, providers, store, background: inlineBackground(), archive,
+    plan: spec.plan, config: spec.config, context: spec.context, providers, store, background: inlineBackground(), archive,
     log: event => { if (event.type === 'session') console.warn('Interview session', event); },
-  }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), template: spec.narrative, model: foundry.agentModel }));
+  }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), model: foundry.agentModel }));
   return hosted;
 }
 
@@ -118,7 +118,7 @@ const accepted = new WeakSet<Request>();
 const gates: InterviewGates = {
   available: () => true, limit,
   session: async (id, command) => (await attempt(id, command)).fetch(command),
-  narrative: (input, signal) => importedNarrative(input, id => debriefs.catalog.resolve(id), narrateWith(providers), signal),
+  narrative: (input, signal) => importedNarrative(input, narrateWith(providers), signal),
   debriefs,
   ...(sockets ? { socket: (_id: string, upgrade: Request) => {
     const context = socketContext(upgrade);

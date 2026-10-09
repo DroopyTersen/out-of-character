@@ -6,7 +6,7 @@ import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/liv
 import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
 import { emptyMap } from '../interview-engine/interview/conversation/map.ts';
 import { listNote, LIVE_NOTE_CHANNEL } from '../interview-engine/interview/conversation/notes.ts';
-import { appendTranscript } from '../core/simulator/state.ts';
+import { appendTranscript } from '../interview-engine/interview/session/transcript.ts';
 import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mjs';
 
 // Delivery probe: does Sam take up a thread note, parrot its words, or mention it?
@@ -194,7 +194,7 @@ async function run(cell, index) {
         report.noteEvent.acknowledgedAt = Date.now();
       } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
         if (value.type === 'session.output_transcript.delta') { lastOutput = Date.now(); said[step] += value.delta; }
-        report.transcript = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'trainee' : 'client', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
+        report.transcript = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
       } else if (value.type === 'session.output_audio.delta') {
         const audio = Buffer.from(value.delta, 'base64');
         // Played as it arrives, after anything still queued, on the input clock.

@@ -1,5 +1,5 @@
-import type { InterviewSession } from '../../../core/interview';
-import type { SessionSnapshot } from '../../../core/simulator/types';
+import type { InterviewSnapshot } from '../../../interview-engine/shared/snapshot';
+import type { NarrativeStatus } from '../../../interview-engine/interview/session/checkpoint';
 import type { ArchiveProvenance } from '../simulator/archive.server';
 import { fitRecords, type ProducerLogRecord } from '../../../interview-engine/interview/conversation/records';
 
@@ -9,7 +9,8 @@ export type InterviewArchiveWrite = {
   specVersion: string;
   state: 'partial' | 'final';
   capturedAt: number;
-  snapshot: SessionSnapshot & { interview: InterviewSession };
+  snapshot: InterviewSnapshot;
+  narrative: NarrativeStatus | null;
   provenance: ArchiveProvenance;
   interventions: ProducerLogRecord[];
 };
@@ -19,13 +20,13 @@ export const ROW_BYTES = 1_990_000;
 const encoder = new TextEncoder();
 
 /** Interview rows stay outside routine simulator transcript exports. */
-export async function writeInterviewArchive(db: D1Database, { specId, specVersion, state, capturedAt, snapshot, provenance, interventions }: InterviewArchiveWrite): Promise<void> {
-  const summary = snapshot.interview.summary;
+export async function writeInterviewArchive(db: D1Database, { specId, specVersion, state, capturedAt, snapshot, narrative, provenance, interventions }: InterviewArchiveWrite): Promise<void> {
+  const summary = narrative;
   const columns = [
-    snapshot.id, snapshot.scenarioId, snapshot.clientId, snapshot.startedAt, capturedAt,
+    snapshot.id, snapshot.planId, snapshot.voiceId, snapshot.startedAt, capturedAt,
     state === 'final' ? capturedAt : null, state, snapshot.status, snapshot.finalization,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
-    JSON.stringify(snapshot.transcript), snapshot.interview.evaluation ? JSON.stringify(snapshot.interview.evaluation) : null,
+    JSON.stringify(snapshot.transcript), snapshot.evaluation ? JSON.stringify(snapshot.evaluation) : null,
     summary?.status ?? 'pending', summary?.text ?? null,
     JSON.stringify(provenance), '[]', specId, specVersion,
   ];

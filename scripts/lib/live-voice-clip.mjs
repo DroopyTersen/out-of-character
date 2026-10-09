@@ -76,7 +76,8 @@ export function captureLiveClip({ voice, instructions, opening, timeoutMs = 55_0
       } else if (value.type === 'session.delegation.created') {
         failure = new Error('The speaker requested an unrelated task.'); close();
       } else if (value.type === 'error') {
-        failure = new Error(`Voice service error: ${value.error?.code ?? 'unknown'}`); close();
+        const detail = String(value.error?.message ?? '').replaceAll(foundry.apiKey, '[redacted]');
+        failure = new Error(`Voice service error: ${value.error?.code ?? 'unknown'}${detail ? ` — ${detail}` : ''}`); close();
       } else if (value.type === 'session.closed') {
         finish(failure ?? (!started || firstAudible === null || !transcript ? new Error('No complete spoken sample was captured.') : null));
       }

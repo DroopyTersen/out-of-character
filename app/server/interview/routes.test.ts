@@ -13,7 +13,7 @@ function fixture() {
   const simulator: Request[] = [];
   const namespace = (into: Request[]) => ({ idFromName: (value: string) => value, get: () => ({ fetch: async (request: Request) => { into.push(request); return Response.json({ accepted: true }); } }) });
   const env = {
-    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', ...fixtureFoundryEnv, TYPESAFE_API_KEY: 'not-a-real-key',
+    SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', ...fixtureFoundryEnv, OPENAI_API_KEY: 'not-a-real-key',
     RATE_SIMULATOR: { limit: async () => ({ success: true }) },
     INTERVIEW_SESSIONS: namespace(calls), SIMULATOR_SESSIONS: namespace(simulator), SIMULATOR_ARCHIVE: archiveDatabase().d1,
   } as unknown as Env;
@@ -60,6 +60,27 @@ test('commands are validated, forwarded by attempt id, and control passes the ki
   expect((await handleInterview(f.request(`sessions/${id}/resume`, { sdp: 'v=0\r\no=fixture-offer\r\nm=application 9' }), f.env))!.status).toBe(400);
   expect((await handleInterview(f.request(`sessions/${id}/resume`, { sdp: 'v=0\r\no=fixture-offer\r\n' }), f.env))!.status).toBe(200);
   expect(f.calls.map(request => new URL(request.url).pathname)).toEqual(['/poll', '/end', '/pause', '/ready', '/resume']);
+  expect(f.calls.every(request => request.headers.get('Authorization') === capability)).toBe(true);
+});
+
+test('a typed answer and a ready report are bounded, validated and forwarded with their bodies', async () => {
+  const f = fixture();
+  const answer = { id: '2f1e4a8c-7b9d-4c3e-8a1f-0d2b3c4e5f60', text: '  Five days to one.  ' };
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, text: '   ' }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, extra: true }), f.env))!.status).toBe(400);
+  // Escaped text within the character limit still fits the body bound; a larger body is refused before it is read.
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, text: '"'.repeat(2000) }), f.env))!.status).toBe(200);
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, { ...answer, padding: 'x'.repeat(17 * 1024) }), f.env))!.status).toBe(413);
+  const disabled = { ...f.env, SIMULATOR_ENABLED: 'false' };
+  expect((await handleInterview(f.request(`sessions/${id}/submitText`, answer), disabled))!.status).toBe(200);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`, { sequence: 3, active: false, audio: false, composing: true }), f.env))!.status).toBe(200);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`, { active: 'yes' }), f.env))!.status).toBe(400);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`, { active: false, audio: false, padding: 'x'.repeat(400) }), f.env))!.status).toBe(413);
+  expect((await handleInterview(f.request(`sessions/${id}/ready`), f.env))!.status).toBe(200);
+  expect(f.calls.map(request => new URL(request.url).pathname)).toEqual(['/submitText', '/submitText', '/ready', '/ready']);
+  expect(await f.calls[1]!.json() as unknown).toEqual(answer);
+  expect(await f.calls[2]!.json() as unknown).toEqual({ sequence: 3, active: false, audio: false, composing: true });
+  expect(await f.calls[3]!.text()).toBe('');
   expect(f.calls.every(request => request.headers.get('Authorization') === capability)).toBe(true);
 });
 

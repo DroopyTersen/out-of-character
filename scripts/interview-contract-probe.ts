@@ -6,13 +6,13 @@ import { foundryConfig } from '../ai/foundry.server';
 import { resolveInterview } from '../interview-engine/interview/definition.server';
 import { evaluateInterview } from '../interview-engine/interview/conversation/evaluate.server';
 import { writeNarrative } from '../interview-engine/narrative/write.server';
-import { createJevJudge } from '../interview-engine/providers/judge.server';
+import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import type { Passage } from '../interview-engine/shared/transcript';
 
 if (!Bun.argv.includes('--paid')) throw new Error('Pass --paid for four synthetic judgments and one synthetic report.');
-if (!process.env.TYPESAFE_API_KEY) throw new Error('Load the project provider credentials.');
-const providers = foundryProviders({ ...foundryConfig(process.env), judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) });
+if (!process.env.OPENAI_API_KEY) throw new Error('Load the project provider credentials.');
+const providers = foundryProviders({ ...foundryConfig(process.env), judge: createDecisionJudge({ apiKey: process.env.OPENAI_API_KEY }) });
 const spec = resolveInterview({
   id: 'handoff-review', version: 'synthetic-v1', title: 'Handoff review', goals: 'Learn what made customer handoffs effective or difficult.',
   topics: [{ id: 'customer-handoff', label: 'Customer handoff', learn: 'Understand handoffs to the customer team, excluding internal engineering handoffs.',

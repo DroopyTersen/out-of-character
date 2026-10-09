@@ -50,6 +50,8 @@ const server = {
   offline: false,
   calls: [] as string[],
   polls: [] as unknown[],
+  /** Every request's action and parsed body, in order. */
+  requests: [] as { action: string; body: unknown }[],
   override: undefined as ((action: string) => Reply | undefined) | undefined,
   snapshot(): ConnectionSnapshot {
     const paused = this.status === 'paused' || (this.status === 'connecting' && this.resumes > 0);
@@ -81,7 +83,9 @@ beforeAll(() => {
   globalThis.fetch = (async (url: string, options: RequestInit) => {
     const action = url === '/api/simulator/sessions' ? 'start' : url.split('/').at(-1)!;
     server.calls.push(action);
-    if (action === 'poll') server.polls.push(options.body ? JSON.parse(String(options.body)) : null);
+    const sent = options.body ? JSON.parse(String(options.body)) : null;
+    server.requests.push({ action, body: sent });
+    if (action === 'poll') server.polls.push(sent);
     if (server.offline) throw new TypeError('Failed to fetch');
     const { status = 200, body } = server.reply(action);
     return { ok: status < 400, status, json: async () => body };
@@ -95,7 +99,7 @@ afterAll(() => {
 beforeEach(() => {
   FakeAudioContext.inputLoud = undefined;
   jest.useFakeTimers();
-  Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], override: undefined });
+  Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], requests: [], override: undefined });
   browser.onLine = true;
   FakePeer.all = [];
   FakePeer.stats = undefined;
@@ -358,4 +362,137 @@ test('microphone noise sends no extra activity reports and never reports Sam as 
   await advance(1500);
   expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
   await connection.end();
+});
+
+type Report = { active: boolean; audio: boolean; sequence?: number; composing?: boolean };
+const sequenced = () => (server.polls as Report[]).filter(poll => poll.sequence != null);
+
+test('composing mutes the microphone and reports at once; ending it restores the manual preference', async () => {
+  const tracks: FakeTrack[] = [];
+  const getUserMedia = navigator.mediaDevices.getUserMedia;
+  navigator.mediaDevices.getUserMedia = (async () => { const stream = new FakeStream(true); tracks.push(...stream.tracks); return stream; }) as never;
+  try {
+    const { connection } = await connected();
+    const mic = tracks.at(-1)!;
+    expect(mic.enabled).toBe(true);
+    const seen = server.polls.length;
+    connection.setComposing(true);
+    expect(mic.enabled).toBe(false);
+    await flush();
+    const reports = server.polls.slice(seen) as Report[];
+    expect(reports.map(report => [report.composing, typeof report.sequence])).toEqual([[true, 'number']]);
+    // An unchanged value sends nothing.
+    connection.setComposing(true);
+    await flush();
+    expect(server.polls.length).toBe(seen + 1);
+    connection.setComposing(false);
+    expect(mic.enabled).toBe(true);
+    await flush();
+    expect(server.polls.at(-1)).toMatchObject({ composing: false });
+    // A manual mute outlasts the draft.
+    connection.mute(true);
+    connection.setComposing(true);
+    connection.setComposing(false);
+    expect(mic.enabled).toBe(false);
+    connection.mute(false);
+    expect(mic.enabled).toBe(true);
+    // Regular polls repeat the state.
+    connection.setComposing(true);
+    await advance(2100);
+    expect(server.polls.at(-1)).toMatchObject({ composing: true });
+    await connection.end();
+  } finally {
+    navigator.mediaDevices.getUserMedia = getUserMedia;
+  }
+});
+
+test('activity sequences rise past the clock; heartbeats carry neither sequence nor composing', async () => {
+  const before = Date.now();
+  const { connection, peer } = await connected();
+  connection.setComposing(true);
+  await advance(3100);
+  const numbers = sequenced().map(poll => poll.sequence!);
+  expect(numbers.length).toBeGreaterThan(2);
+  expect(numbers[0]).toBeGreaterThanOrEqual(before);
+  for (let index = 1; index < numbers.length; index++) expect(numbers[index]).toBeGreaterThan(numbers[index - 1]!);
+  server.override = action => action === 'resume' ? { status: 503, body: { error: 'Unavailable.' } } : undefined;
+  peer().set('failed');
+  await advance(100);
+  const seen = server.polls.length;
+  await advance(6000);
+  const heartbeats = server.polls.slice(seen);
+  expect(heartbeats.length).toBeGreaterThan(0);
+  for (const poll of heartbeats) expect(poll).toEqual({ active: false, audio: false });
+  await connection.end();
+});
+
+test('ready carries the current activity, including an open draft', async () => {
+  const { connection, peer } = await connected();
+  const readies = () => server.requests.filter(request => request.action === 'ready').map(request => request.body as Report);
+  const [first] = readies();
+  expect([first!.active, first!.composing, typeof first!.sequence]).toEqual([false, false, 'number']);
+  connection.setComposing(true);
+  await flush();
+  peer().set('failed');
+  await advance(300);
+  // The draft survives the pause and the resumed connection reports it before going live.
+  const [, second] = readies();
+  expect(readies()).toHaveLength(2);
+  expect(second!.composing).toBe(true);
+  expect(second!.sequence!).toBeGreaterThan(first!.sequence!);
+  await connection.end();
+});
+
+const accepted = (id: string) => ({ acceptedId: id, snapshot: { ...server.snapshot(), transcript: [{ id: `typed-${id}`, speaker: 'participant', text: 'Typed.', startMs: 0, endMs: 0 }] } });
+const submitted = () => server.requests.filter(request => request.action === 'submitText').map(request => request.body as { id: string; text: string });
+
+test('an accepted typed answer resolves with its receipt and shows its snapshot', async () => {
+  const { LiveConnection } = await import('./liveConnection');
+  const snapshots: ConnectionSnapshot[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: () => {}, link: () => {} });
+  await connection.start('sharepoint', 'morgan');
+  server.override = action => action === 'submitText' ? { body: accepted(submitted().at(-1)!.id) } : undefined;
+  const reply = await connection.submitText('Typed.');
+  const [sent] = submitted();
+  expect(sent).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), text: 'Typed.' });
+  expect(reply.acceptedId).toBe(sent!.id);
+  expect(snapshots.at(-1)).toBe(reply.snapshot as unknown as ConnectionSnapshot);
+  await connection.end();
+});
+
+test('a busy server is retried with the same id; a refusal is final', async () => {
+  const { connection, links } = await connected();
+  let busy = true;
+  server.override = action => {
+    if (action !== 'submitText') return;
+    if (busy) { busy = false; return { status: 503, body: { error: 'Saving is slow.' } }; }
+    return { body: accepted(submitted().at(-1)!.id) };
+  };
+  const pending = connection.submitText('Once.');
+  await advance(1100);
+  const reply = await pending;
+  const [first, second] = submitted();
+  expect(submitted()).toHaveLength(2);
+  expect(second).toEqual(first);
+  expect(reply.acceptedId).toBe(first!.id);
+
+  server.override = action => action === 'submitText' ? { status: 409, body: { error: 'This answer conflicts with one already sent.' } } : undefined;
+  const refused = connection.submitText('Twice.');
+  const outcome = refused.then(() => 'resolved', (error: Error) => error.message);
+  await advance(5000);
+  expect(await outcome).toBe('This answer conflicts with one already sent.');
+  expect(submitted()).toHaveLength(3);
+  expect(states(links)).not.toContain('paused');
+  await connection.end();
+});
+
+test('an unreachable server gives up with a readable message, and a closed attempt rejects', async () => {
+  const { connection } = await connected();
+  server.override = action => action === 'submitText' ? { status: 503, body: { error: 'Unavailable.' } } : undefined;
+  const outcome = connection.submitText('Lost.').then(() => 'resolved', (error: Error) => error.message);
+  await advance(40_000);
+  expect(await outcome).toBe('Your answer could not be sent. Check your connection and try again.');
+  expect(new Set(submitted().map(body => body.id)).size).toBe(1);
+  await connection.end();
+  await expect(connection.submitText('Late.')).rejects.toThrow('The interview is not live.');
 });

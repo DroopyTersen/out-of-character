@@ -6,7 +6,7 @@
  * A map applies once its Sol call finished (start plus latency); the replay stops a cadence after the last Sol call. The report holds transcript-derived notes: keep it out of the repo.
  */
 import { evaluateTurn, latestTurn } from '../interview-engine/interview/conversation/ranking.server';
-import { judgeModel } from '../interview-engine/providers/judge.server';
+import { judgeModel } from '../interview-engine/providers/jevJudge.server';
 import { yieldsTurn } from '../core/interview';
 import type { ConversationMap } from '../interview-engine/interview/conversation/map';
 import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../interview-engine/interview/conversation/notes';

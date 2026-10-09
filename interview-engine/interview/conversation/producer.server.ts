@@ -320,7 +320,7 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.lookupTimeout)]);
     try {
-      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, model: this.options.providers.language.fast, signal });
+      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, model: this.options.providers.language.fast, webSearch: this.options.providers.webSearch, signal });
       if (scope.aborted) return;
       signal.throwIfAborted();
       const now = Date.now();

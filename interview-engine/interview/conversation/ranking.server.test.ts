@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { judgeModel } from '../../providers/judge.server';
+import { judgeModel } from '../../providers/jevJudge.server';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapThread } from './map';
 import { threadKey } from './ranking';

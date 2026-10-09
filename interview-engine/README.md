@@ -22,6 +22,10 @@ Sol alone edits the map. The first call needs participant speech. New informatio
 
 Sam receives a short thread note only when the lead or its wording changes, or a named alternative becomes unavailable. Map notes go when their content changes. Both use `session.thinking.append`; they are optional context, not instructions to speak. They are sent immediately, without another delivery timer. This intentionally changes production v22's held-note behavior; unit tests and archived replay cannot establish live interruption quality.
 
+A participant may type an answer instead of speaking. After its required save, the actor forwards it once to the same voice session as `session.thinking.append`, with `event_id: typed-<id>`, `delegation_id: null`, and content from `typedAnswerCue` in `interview/session/voice.prompt.ts`. Unlike a note, it asks Sam to respond. If the voice session changed or paused before the save completed, the answer reaches Sam through the resume context instead. The passage is frozen, so later speech starts a new passage rather than extending it. A provider `error` naming a `typed-` event pauses the attempt through the ordinary provider pause, with the message “Your answer is saved. Reconnect to continue.” When the last participant passage is typed, the resume instruction tells Sam it is a completed answer, not speech that may have been cut off.
+
+`composing` is set only by sequenced poll and `ready` reports. The browser keeps its microphone track disabled while composing (`track.enabled = !muted && !composing && !autoMuted`), so clearing or sending restores the participant's own mute choice. While the actor holds `composing`, the silence check does not run, and entering composition aborts a check already in flight. Leaving composition starts a fresh four-second silence interval. Idle and duration limits, coverage, producer work and Sam's own replies continue; an utterance already underway is not cancelled. Producer notes are held while composing, since Sam tends to speak on one: they are sent to the same provider session just before a typed answer is forwarded, or when composition ends, and a note held for a session that has since closed is dropped (the producer restates its notes to a resumed session itself).
+
 A shared 400-call cap includes failed and interrupted producer calls. Sol, Jev and research deadlines are 50 seconds, 3 seconds and 90 seconds. Research is limited to three calls; ordinary notes to 100. A replacement voice session can receive its existing context beyond the ordinary note cap. Checkpoints retain the map, append-only input log, audit records and transcript cursor; transient ranking is re-read after a restart. Historical trait records remain readable for archived interviews.
 
 ## Layout and import rules
@@ -95,6 +99,7 @@ The host builds ready model clients and passes them in. The engine never sees a 
 export type Providers = {
   voice: VoiceProvider;                                  // Sam: the realtime voice model
   language: { agent: LanguageModel; fast: LanguageModel }; // Sol, Luna and the narrative
+  webSearch: Tool;                                        // Luna's research: the fast model's deployment's search tool
   structured: StructuredRequest;                          // Sol's strict-JSON call to the agent model
   judge: Judge;                                          // model + calibrated thresholds
   telemetry?: TelemetryOptions;                           // AI SDK telemetry
@@ -108,7 +113,7 @@ export type VoiceProvider = {
 };
 ```
 
-`foundryProviders` builds the voice and language clients from one Azure AI Foundry resource. The host supplies its judge with credentials already bound:
+`foundryProviders` builds the voice and language clients and the search tool from one Azure AI Foundry resource. The host supplies its judge with credentials already bound. A host with its own model registry can build `Providers` directly instead: any AI SDK language models, that provider's `tools.webSearch(...)` (the lookup and the fast model must share a deployment), and `structuredWith(config, fetch)` for Sol.
 
 ```ts
 export type FoundryConfig = { resourceName: string; apiKey: string; agentModel: string; fastModel: string; liveModel: string };
@@ -124,10 +129,9 @@ export function foundryProviders(config: FoundryConfig & { judge?: Judge }, plat
 
 ```ts
 import { createDecisionJudge } from './providers/decisionJudge.server';
-import { createJevJudge } from './providers/judge.server';
 
 const judge = createDecisionJudge({ apiKey: openaiKey });
-// To use Jev: createJevJudge({ apiKey: typesafeKey })
+// Jev stays available for evaluation: createJevJudge({ apiKey: typesafeKey }) from './providers/jevJudge.server'
 const providers = foundryProviders({ ...foundry, judge }, platform);
 ```
 
@@ -138,7 +142,7 @@ The voice control channel is a WebSocket upgrade, and each platform completes th
 - **Cloudflare:** `fetch` already performs the upgrade. The `socket` opener only calls `accept()` on `response.webSocket`.
 - **Bun:** `fetch` does not upgrade. The reference host's `fetch` opens a `WebSocket` instead, and its `socket` opener collects that socket from the stand-in response.
 
-Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper supplies the default Jev client, whose key is only needed if judging is actually called. The repository's Cloudflare and Bun hosts currently inject `createJevJudge` explicitly.
+Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper then supplies an unconfigured judge whose only behavior is to fail a judging call with a clear message. The repository's Cloudflare and Bun hosts inject `createDecisionJudge` with `OPENAI_API_KEY`; `providers/jevJudge.server.ts` is the only file that imports `@ai-sdk/typesafe-ai`, so a host that never copies it needs no TypeSafe dependency.
 
 ## Approved input
 
@@ -183,9 +187,10 @@ The voice model composes the opening from that same accepted title, goals, guida
 The browser and the session exchange these actions (`shared/protocol.ts`):
 
 ```ts
-export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume'] as const;
+export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume', 'submitText'] as const;
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;   // the bearer secret returned by start
-// startSchema { id, planId, voiceId, sdp }, resumeSchema { sdp }, activitySchema (the ready/poll body)
+// startSchema { id, planId, voiceId, sdp }, resumeSchema { sdp }, activitySchema (the poll body; readySchema: optional, the ready body)
+// submitTextSchema { id, text }, TYPED_TEXT_LIMIT = 2000, SUBMIT_TEXT_BODY_LIMIT = 16 KiB, SubmitTextReply { acceptedId, snapshot }
 ```
 
 On the server, a host turns each request into a `Command` and returns the `Reply`:
@@ -200,13 +205,36 @@ type Reply = { status: number; body: unknown; terminal?: true; report?: true };
 On the client, `LiveConnection` (`client/liveConnection.ts`) sends its requests through a `ProtocolTransport`:
 
 ```ts
-export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end';
+export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end' | 'submitText';
 export type RequestOptions = { attempt: Attempt; timeoutMs: number; keepalive?: boolean; signal?: AbortSignal };   // Attempt = { id, capability }
 export type ProtocolTransport = { request(action: ProtocolAction, body: unknown, options: RequestOptions): Promise<unknown> };
 
 export function pollTransport(baseUrl: string): ProtocolTransport;   // HTTP POSTs to <baseUrl>/<action>
 export function socketTransport(baseUrl: string): ProtocolTransport; // one WebSocket per attempt at <baseUrl>/<id>/socket
 ```
+
+A poll carries an activity report. A sequenced report (one with a `sequence`) may also carry `composing`, whether the browser holds an unsent typed draft; the draft itself never travels. `ready` may carry the browser's current activity report, which the actor applies before the attempt goes live, so a composer opened during a reconnect is still protected. Only sequenced reports change `composing`, and a report whose sequence is not greater than the last one seen is dropped. The client numbers reports `Math.max(previous + 1, Date.now())`, so a reloaded page never repeats a number the server has already seen.
+
+`submitText` sends one typed participant answer. The body is `{ id, text }`: `id` is a UUID, and `text` is nonblank and at most `TYPED_TEXT_LIMIT` (2,000) characters. The text is kept exactly as typed; it is trimmed only to reject a blank answer. The host bounds the request body at `SUBMIT_TEXT_BODY_LIMIT` (16 KiB, including JSON escaping). The replies are:
+
+| Status | When |
+| --- | --- |
+| 200 | `{ acceptedId, snapshot }`, after a checkpoint holding the answer has been saved |
+| 400 | The body is not a valid `{ id, text }` |
+| 409 | The interview is not live (“The interview is not live.”), the transcript is full, or the id was already sent with different text |
+| 413 | The body is larger than `SUBMIT_TEXT_BODY_LIMIT` |
+| 503 | The required save failed (“Your answer could not be saved. Try again.”) |
+
+The actor appends the answer as an immutable participant passage with id `typed-<id>`, then waits for a checkpoint holding it before it replies. A 200 means the answer was saved, not that the interviewer has spoken. A retry with the same id and text returns the same receipt without adding or forwarding the answer twice; a retry whose earlier save failed runs the save again. New answers are accepted only while the attempt is live, and a generic snapshot is never a receipt.
+
+`LiveConnection` exposes the two calls a host's composer needs:
+
+```ts
+connection.setComposing(value: boolean): void;            // a nonempty draft: mutes the microphone and reports at once
+connection.submitText(text: string): Promise<SubmitTextReply>; // resolves once the answer is saved
+```
+
+`submitText` mints the id and retries the same id while the server is unanswered or replies 503, backing off for up to 30 seconds. Other failures reject with the server's message. The host keeps the draft until the promise resolves and clears it only then. A host forwards the command as it forwards the others: bound the body at `SUBMIT_TEXT_BODY_LIMIT` and pass it to `actor.handle`, which parses it with `submitTextSchema`.
 
 Two transports exist. The browser uses `pollTransport`. `socketTransport` (`client/socketTransport.ts`) is opt-in: a host enables it with `INTERVIEW_SOCKET_ENABLED=true`. It sends the same requests over one WebSocket per attempt and correlates each reply by id. When the socket closes, whatever was waiting fails with `SessionUnanswered`, and the next request reconnects for the same attempt. Keepalive requests still go over HTTP. The errors are the poll transport's.
 
@@ -321,14 +349,14 @@ bun run check          # everything: typecheck, check:engine, bun test, build, b
 
 The steps below use the host app as the example. They follow the plan in the design documents; none of this exists in the host app yet.
 
-1. **Copy the folder.** Copy `interview-engine/` to the host as `app/debrief/engine/`, and add any of the four packages the host lacks. Per the design, the host app is missing only `@ai-sdk/typesafe-ai`. The copy check above is the evidence that this compiles.
+1. **Copy the folder.** Copy `interview-engine/` to the host as `app/debrief/engine/`, and add any of the four packages the host lacks. A host that judges with Decisions can leave `providers/jevJudge.server.ts` behind and skip `@ai-sdk/typesafe-ai`; `ai` must be new enough to export `experimental_evaluate`. The copy check above is the evidence that this compiles.
 2. **Supply approved input.** Pass the approved `InterviewPlan`, runtime `InterviewConfig`, and explicit `InterviewContext` if available. Keep browser labels and host business identity outside the engine.
 3. **Implement the seams.**
    - A `SessionStore` over the host's database. The design calls for an attempts row with a `segment` column and guarded writes that throw `FencedError` when the segment has moved on.
    - A `Background` for fire-and-forget work.
    - An `Archive` that upserts `InterviewArchiveRow`.
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
-4. **Build providers.** Choose `createDecisionJudge({ apiKey })` or `createJevJudge({ apiKey })`, then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
+4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
 5. **Own an actor per attempt.** Call `SessionActor.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
 6. **Serve the report.** Read report format and context from `actor.definition`; pass only these and the canonical transcript. Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `actor.settleNarrative`.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.

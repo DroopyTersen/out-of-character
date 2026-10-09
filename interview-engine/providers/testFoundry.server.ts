@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Experimental_EvaluationModel } from 'ai';
 import type { FoundryConfig } from './foundry.server';
 import type { Providers } from './providers.server';
@@ -13,6 +14,7 @@ export const testFoundry: FoundryConfig = { resourceName: 'fixture-foundry', api
 export function unpaidProviders(voice: unknown, models: { agent: string; fast: string } = { agent: testFoundry.agentModel, fast: testFoundry.fastModel }): Providers {
   return {
     voice: voice as VoiceProvider, language: { agent: models.agent, fast: models.fast },
+    webSearch: { description: 'The test providers make no research lookup.', inputSchema: z.object({}) },
     structured: () => Promise.reject(new Error('The test providers make no structured call.')),
     judge: { model: { modelId: 'test-judge' } as unknown as Experimental_EvaluationModel,
       thresholds: { silenceContinue: .85, coverageExplored: .85 } },

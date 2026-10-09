@@ -85,7 +85,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
   let pair = socketPair();
   const allow = { limit: async () => ({ success: true }) };
   const session = new InterviewObject(ctx, {
-    ...fixtureFoundryEnv, TYPESAFE_API_KEY: 'fixture', SIMULATOR_ARCHIVE: archive.d1,
+    ...fixtureFoundryEnv, OPENAI_API_KEY: 'fixture', SIMULATOR_ARCHIVE: archive.d1,
     SIMULATOR_ENABLED: 'true', PAID_SERVICES_ENABLED: 'true', RATE_SIMULATOR: allow, RATE_JUDGE: allow,
     CF_VERSION_METADATA: { id: 'test-worker', tag: 'test-release', timestamp: '2026-09-26T00:00:00.000Z' },
   } as unknown as Env, {

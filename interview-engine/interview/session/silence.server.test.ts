@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { judgeModel } from '../../providers/judge.server';
+import { judgeModel } from '../../providers/jevJudge.server';
 import { evaluateSilence } from './silence.server';
 
 test('the real Jev adapter preserves a silence probability and rejects malformed answers without retrying', async () => {

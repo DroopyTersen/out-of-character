@@ -9,7 +9,7 @@ export type Fetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fet
 export type Format = 'literal' | 'readable' | 'dialogue';
 export const DECISIONS_MODEL = 'gpt-6-luna';
 
-export function createDecisionJudge(options: { apiKey: string; fetch?: Fetch }): Judge {
+export function createDecisionJudge(options: { apiKey?: string; fetch?: Fetch }): Judge {
   return { model: decisionsModel(options), thresholds: { silenceContinue: .7, coverageExplored: .5 } };
 }
 
@@ -108,12 +108,13 @@ export function singletons(model: Model): Model {
   } };
 }
 
-export function decisionsModel(options: { apiKey: string; format?: Format; fetch?: Fetch }): Model {
+export function decisionsModel(options: { apiKey?: string; format?: Format; fetch?: Fetch }): Model {
   const request = options.fetch ?? fetch;
   return singletons({
     specificationVersion: 'v4', provider: 'openai.decisions', modelId: DECISIONS_MODEL,
     supportedQuestionTypes: ['boolean', 'choice', 'score'],
     async doEvaluate(input) {
+      if (!options.apiKey) throw new Error('Interview judging is not configured.');
       const response = await request('https://api.openai.com/v1/decisions', { method: 'POST',
         headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(decisionPayload(input, options.format ?? 'literal')), signal: input.abortSignal });

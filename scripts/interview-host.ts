@@ -17,17 +17,17 @@ import { answerSocket, socketContext, type SocketContext } from '../app/server/i
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
 import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
-import { createJevJudge } from '../interview-engine/providers/judge.server';
+import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { draftDebrief } from '../interview-engine/setup/draft.server';
 import { startSchema } from '../interview-engine/shared/protocol';
 
 const env = process.env;
-if (!foundryConfigured(env) || !env.TYPESAFE_API_KEY) {
-  console.error('Set AZURE_OPENAI_API_INSTANCE_NAME, AZURE_OPENAI_API_KEY, AZURE_OPENAI_AGENT_MODEL, AZURE_OPENAI_FAST_MODEL and TYPESAFE_API_KEY (for example in .env).');
+if (!foundryConfigured(env) || !env.OPENAI_API_KEY) {
+  console.error('Set AZURE_OPENAI_API_INSTANCE_NAME, AZURE_OPENAI_API_KEY, AZURE_OPENAI_AGENT_MODEL, AZURE_OPENAI_FAST_MODEL and OPENAI_API_KEY (for example in .env).');
   process.exit(1);
 }
 const foundry = foundryConfig(env);
-const typesafeKey = env.TYPESAFE_API_KEY;
+const openaiKey = env.OPENAI_API_KEY;
 
 // GPT-Live's control channel is a WebSocket upgrade. Bun's fetch does not upgrade, so the upgrade request opens a
 // WebSocket instead and the socket opener collects it from the response that stands in for the 101.
@@ -50,7 +50,7 @@ const upgradingFetch = (async (input: string | URL | Request, init?: RequestInit
   upgraded.set(response, socket);
   return response;
 }) as typeof fetch;
-const providers = foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: typesafeKey, fetch: upgradingFetch }) },
+const providers = foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: openaiKey }) },
   { fetch: upgradingFetch, socket: response => upgraded.get(response) ?? null });
 
 const rows = memoryArchive();

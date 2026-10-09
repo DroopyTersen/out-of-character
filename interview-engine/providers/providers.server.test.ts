@@ -1,19 +1,19 @@
 import { expect, test } from 'bun:test';
 import { z } from 'zod';
-import { createJevJudge, evidenceBatches, JEV_MODEL } from './judge.server';
+import { evidenceBatches } from './judge.server';
 import { createDecisionJudge } from './decisionJudge.server';
 import { foundryProviders } from './providers.server';
 import { testFoundry } from './testFoundry.server';
 
 test('foundryProviders builds every client from one resource without calling any of them', async () => {
   const calls: string[] = [];
-  const providers = foundryProviders({ ...testFoundry, judge: createJevJudge({ apiKey: 'typesafe-secret' }) }, {
+  const providers = foundryProviders({ ...testFoundry, judge: createDecisionJudge({ apiKey: 'openai-secret' }) }, {
     fetch: (async (url: string) => { calls.push(url); return Response.json({ session: { id: 's' }, transport: { type: 'webrtc', sdp: 'answer' } }); }) as unknown as typeof fetch,
   });
   expect(calls).toEqual([]);
   expect(providers.language.agent).toMatchObject({ modelId: 'agent-deployment' });
   expect(providers.language.fast).toMatchObject({ modelId: 'fast-deployment' });
-  expect(providers.judge.model).toMatchObject({ modelId: JEV_MODEL });
+  expect(providers.judge.model).toMatchObject({ provider: 'openai.decisions', modelId: 'gpt-6-luna' });
   expect(providers).not.toHaveProperty('telemetry');
   // The voice provider shares the platform fetch.
   expect(await providers.voice.create({ sdp: 'offer', voice: 'cedar', instructions: 'x' })).toEqual({ id: 's', sdp: 'answer' });
@@ -32,6 +32,14 @@ test('the host injects a calibrated judge without constructing a network session
 test('telemetry passes through to the providers', () => {
   const telemetry = { isEnabled: true, functionId: 'interview' };
   expect(foundryProviders(testFoundry, { telemetry }).telemetry).toBe(telemetry);
+});
+
+test('without a judge the providers build, and only a judging call fails', async () => {
+  const providers = foundryProviders(testFoundry);
+  expect(providers.judge.model).toMatchObject({ modelId: 'unconfigured' });
+  const model = providers.judge.model;
+  if (typeof model === 'string') throw new Error('unexpected');
+  await expect(model.doEvaluate({ state: 'x', questions: {} } as Parameters<typeof model.doEvaluate>[0])).rejects.toThrow('Interview judging is not configured.');
 });
 
 test('evidence batches never exceed one question’s choices and an empty transcript is one empty batch', () => {

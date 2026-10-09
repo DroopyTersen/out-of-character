@@ -7,8 +7,8 @@ import { INTERVIEW_RUBRIC_VERSION } from './rubric';
 
 // Explicit opt-in paid replay. All fixtures are synthetic; this is never called by the app.
 if (!process.argv.includes('--paid')) throw new Error('Pass --paid to run a bounded provider replay.');
-const apiKey = process.env.TYPESAFE_API_KEY;
-if (!apiKey) throw new Error('Load TYPESAFE_API_KEY with bun --env-file=.dev.vars.');
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey) throw new Error('Load OPENAI_API_KEY with bun --env-file=.dev.vars.');
 const only = process.argv.find(arg => arg.startsWith('--fixture='))?.slice('--fixture='.length);
 const output = process.argv.find(arg => arg.startsWith('--output='))?.slice('--output='.length) ?? 'output/interview/results.json';
 if (!output) throw new Error('Provide a path after --output=.');

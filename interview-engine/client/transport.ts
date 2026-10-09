@@ -1,7 +1,7 @@
 /** What a reloaded page needs to rejoin its attempt. */
 export type Attempt = { id: string; capability: string };
 
-export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end';
+export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | 'end' | 'submitText';
 export type RequestOptions = {
   /** The attempt the command belongs to; its capability authorizes every command. */
   attempt: Attempt;

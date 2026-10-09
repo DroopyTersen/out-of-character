@@ -102,8 +102,10 @@ test('turn answers become a reading; an invalid answer rejects the whole reading
     natural: { t1: .2, t3: .9 }, states: { t1: 'stalled', t3: 'open' },
   });
   expect(readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 'none' } }, 'p2', 5000).focus).toBeNull();
-  expect(() => readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 't2' } }, 'p2', 5000)).toThrow('focus');
-  expect(() => readTurnAnswers(map, { ...answers, 'state:t1': { type: 'choice', choice: 'later' } }, 'p2', 5000)).toThrow('state:t1');
+  expect(() => readTurnAnswers(map, { ...answers, focus: { type: 'choice', choice: 't2' } }, 'p2', 5000)).toThrow('Invalid interview selection: focus');
+  expect(() => readTurnAnswers(map, { ...answers, 'state:t1': { type: 'choice', choice: 'later' } }, 'p2', 5000)).toThrow('Invalid interview selection: state:t1');
+  expect(() => readTurnAnswers(map, { ...answers, new: { type: 'boolean', probability: 1.5 } }, 'p2', 5000)).toThrow('Invalid interview judgment: new');
+  expect(() => readTurnAnswers(map, { ...answers, 'natural:t3': { type: 'choice', choice: 'yes' } }, 'p2', 5000)).toThrow('Invalid interview judgment: natural:t3');
   expect(readTurnAnswers({ ...map, threads: [] }, { new: { type: 'boolean', probability: .1 }, feedback: { type: 'boolean', probability: 0 } }, 'p2', 5000)).toMatchObject({ focus: null, natural: {}, states: {} });
 });
 

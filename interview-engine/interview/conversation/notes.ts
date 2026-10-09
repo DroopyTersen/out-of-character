@@ -1,6 +1,8 @@
 import type { ConversationMap, MapEntity, MapThread } from './map';
 import { pickThreads, RANKING, threadKey, type Pick, type RankingState } from './ranking';
-export { LIVE_NOTE_CHANNEL } from '../voice/channel';
+
+/** Private suggestions for Sam; never appended to its instructions. */
+export const LIVE_NOTE_CHANNEL = 'session.thinking.append';
 
 /** Sol supplies content; code supplies the same two templates on every interview. */
 export const NOTE_HEADERS = {

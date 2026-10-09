@@ -4,11 +4,11 @@ import { LiveSessionGone, transcriptEvent } from '../../providers/gptLive.server
 import type { Providers, WebSocketLike } from '../../providers/providers.server';
 import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, submitTextSchema, type Activity, type SubmitTextInput, type SubmitTextReply } from '../../shared/protocol';
 import { NETWORK_SAMPLES } from '../../shared/network';
-import type { InterviewEvaluation, SessionPause, SessionWarning } from '../../shared/snapshot';
+import type { InterviewEvaluation, InterviewSnapshot, SessionPause, SessionWarning } from '../../shared/snapshot';
 import type { InterviewLimits } from '../../shared/spec';
 import { resolveInterview, type InterviewDefinition, type ResolvedInterview } from '../definition.server';
 import {
-  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, type PauseSpan,
+  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, within, type PauseSpan,
 } from '../../shared/timing';
 import { TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
 import { mergeCoverage } from '../conversation/coverage';
@@ -20,14 +20,13 @@ import { upToParticipant } from '../conversation/ranking.server';
 import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
 import { FencedError, type Archive, type Background, type InterviewArchiveRow, type NarrativeProvenance, type SessionStore } from '../seams.server';
 import { interviewerBrief, interviewOpening } from '../voice/brief.server';
-import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, PublicSnapshot, Segment, SessionSnapshot } from './checkpoint';
+import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, Segment, SessionSnapshot } from './checkpoint';
 import { appendTranscript, settledTranscript } from './transcript';
-import { conversationSoFar, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue } from './voice.prompt';
+import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from './voice.prompt';
 import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 
 /** Canonical participant readings and topic coverage. */
-export type SessionEvaluation = InterviewEvaluation;
-type Evaluate = (input: { transcript: Passage[]; revision: number; signal: AbortSignal }) => Promise<SessionEvaluation>;
+type Evaluate = (input: { transcript: Passage[]; revision: number; signal: AbortSignal }) => Promise<InterviewEvaluation>;
 /** The paid calls, replaceable for tests: Sol, Jev's turn reads, Luna, and Jev's coverage grade. */
 export type SessionServices = typeof producerServices & { evaluate: Evaluate; evaluateSilence: typeof evaluateSilence };
 
@@ -38,7 +37,7 @@ export type SessionOptions = InterviewDefinition & {
   background: Background;
   archive: Archive;
   now?: () => number;
-  /** Defaults to the providers' log. */
+  /** Receives the attempt's diagnostics; without it nothing is logged. */
   log?: (event: EngineEvent) => void;
   services?: Partial<SessionServices>;
   /**
@@ -76,10 +75,6 @@ const CLOSURE_GRACE_MS = 60 * 60_000;
 class Cancelled extends Error { constructor() { super(CANCELLED); this.name = 'Cancelled'; } }
 const interviewerSpoke = (transcript: Passage[]) => transcript.some(entry => entry.speaker === 'interviewer' && entry.text.trim());
 const reply = (body: unknown, status = 200): Reply => ({ status, body });
-const within = <T>(work: Promise<T>, ms: number) => new Promise<T>((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error('Timed out.')), ms);
-  work.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
-});
 const parse = (body: string | undefined): unknown => { try { return JSON.parse(body ?? ''); } catch { return undefined; } };
 const defaultLimits: InterviewLimits = {
   durationSeconds: SESSION_LIMIT_SECONDS, idleWarningMs: SESSION_IDLE_WARNING_MS, idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
@@ -181,7 +176,7 @@ export class SessionActor {
     this.background = options.background;
     this.archive = options.archive;
     this.now = options.now ?? Date.now;
-    this.report = options.log ?? options.providers.log ?? (() => {});
+    this.report = options.log ?? (() => {});
     this.paid = { ...producerServices, evaluate: judgeWith(this.spec, options.providers), evaluateSilence, ...options.services };
     this.lazyWake = options.lazyWake ?? false;
     this.lastSeen = this.lastActivity = this.lastAudio = this.now();
@@ -240,9 +235,9 @@ export class SessionActor {
     if (action === 'report') return { status: 200, body: null, report: true };
     // A terminal snapshot is not an acceptance receipt.
     // A retry of a turn already in the transcript is still acknowledged after the end; a new one is not.
-    if (action === 'submitText' && (this.state.status === 'ended' || this.state.status === 'interrupted')) return this.submitText(body);
+    if (action === 'submitText' && this.ended()) return this.submitText(body);
     // Terminal reads must not refresh a lease, heartbeat, or live state.
-    if (this.state.status === 'ended' || this.state.status === 'interrupted') return { status: 200, body: this.publicSnapshot(), terminal: true };
+    if (this.ended()) return { status: 200, body: this.publicSnapshot(), terminal: true };
     this.lastSeen = this.now();
     if (action === 'submitText') return this.submitText(body);
     if (action === 'poll' && body) {
@@ -325,7 +320,7 @@ export class SessionActor {
     if (!parsed.success) return reply({ error: INVALID }, 400);
     const input = parsed.data;
     const snapshot = this.state!;
-    const id = `typed-${input.id}`;
+    const id = typedItemId(input.id);
     const existing = snapshot.transcript.find(entry => entry.id === id);
     if (existing) {
       if (existing.text !== input.text) return reply({ error: 'This answer was already sent with different text.' }, 409);
@@ -334,7 +329,7 @@ export class SessionActor {
       if (pending) return pending;
       if (this.fenced) return reply({ error: 'The interview is not live.' }, 409);
       // After the end the turn is in the transcript, the final archive and the grade record; there is no checkpoint to save.
-      if (snapshot.status === 'ending' || snapshot.status === 'ended' || snapshot.status === 'interrupted') return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
+      if (snapshot.status === 'ending' || this.ended()) return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
       return this.acceptTyped(input);
     }
     if (this.fenced || snapshot.status !== 'live') return reply({ error: 'The interview is not live.' }, 409);
@@ -364,7 +359,7 @@ export class SessionActor {
       return reply({ error: 'Your answer could not be saved. Try again.' }, 503);
     }
     // A session that is not live learns the answer from the resume context instead. A failed send is rebuilt the same way.
-    const id = `typed-${input.id}`;
+    const id = typedItemId(input.id);
     if (this.typedUnforwarded.has(id) && this.state?.status === 'live' && this.segment && !this.fenced) {
       this.typedUnforwarded.delete(id);
       // Context first, so Sam answers the typed turn knowing what the producer learned meanwhile.
@@ -375,7 +370,7 @@ export class SessionActor {
   }
 
   /** What the browser sees, or null before the attempt has started here. */
-  snapshot(): PublicSnapshot | null {
+  snapshot(): InterviewSnapshot | null {
     return this.state ? this.publicSnapshot() : null;
   }
 
@@ -384,16 +379,11 @@ export class SessionActor {
     return this.state?.transcript ?? [];
   }
 
-  /** Nothing is running: no attempt here, or it has ended. A host may let an idle actor go. */
-  idle(): boolean {
-    return !this.state || ((this.state.status === 'ended' || this.state.status === 'interrupted') && !this.orphaning);
-  }
-
   /**
-   * `connection` and `drain`: the browser's link closed, or this process is stopping; the attempt is held for the
-   * browser to resume. `fenced`: another owner has taken over; this one stops without writing.
+   * `hold`: the browser's link closed or this process is stopping; the attempt is held for the browser to resume.
+   * `fenced`: another owner has taken over; this one stops without writing.
    */
-  async close(reason: 'connection' | 'drain' | 'fenced'): Promise<void> {
+  async close(reason: 'hold' | 'fenced'): Promise<void> {
     if (reason === 'fenced') { this.fence(); return; }
     if (this.fenced) return;
     await this.pause('browser').catch(error => { if (!(error instanceof FencedError)) throw error; });
@@ -414,43 +404,48 @@ export class SessionActor {
     this.background.track(this.narrativeArchive);
   }
 
-  private publicSnapshot(): PublicSnapshot {
+  private publicSnapshot(): InterviewSnapshot {
     const snapshot = this.state!;
     const interview = this.interview ?? { evaluation: null, summary: null };
     return { ...snapshot, pause: snapshot.pause ?? null, evaluation: interview.evaluation, background: this.producer?.publicBackground() ?? [] };
   }
 
-  private async save(patch: { lease?: Lease; checkpoint?: Checkpoint | null }) {
+  /** The attempt has ended here, one way or the other. */
+  private ended(): boolean {
+    return this.state?.status === 'ended' || this.state?.status === 'interrupted';
+  }
+
+  /** A store write under this owner's fence: refused once fenced, and fencing this owner when the store refuses it. */
+  private async guarded(write: () => Promise<void>) {
     if (this.fenced) throw new FencedError();
-    try { await this.store.save(patch); }
+    try { await write(); }
     catch (error) {
       if (error instanceof FencedError) this.fence();
       throw error;
     }
   }
 
-  private async setWake(at: number | null) {
-    if (this.fenced) throw new FencedError();
-    this.wakeAt = at;
-    try { await this.store.wake(at); }
-    catch (error) {
-      if (error instanceof FencedError) this.fence();
-      throw error;
-    }
+  private save(patch: { lease?: Lease; checkpoint?: Checkpoint | null }) {
+    return this.guarded(() => this.store.save(patch));
+  }
+
+  private setWake(at: number | null) {
+    return this.guarded(() => { this.wakeAt = at; return this.store.wake(at); });
   }
 
   private async clearStore() {
     if (this.fenced) throw new FencedError();
     this.wakeAt = null;
     // Ordered behind any checkpoint write still in flight, so a late write cannot restore what this removes.
-    await this.ordered(async () => {
-      if (this.fenced) throw new FencedError();
-      try { await this.store.clear(); }
-      catch (error) {
-        if (error instanceof FencedError) this.fence();
-        throw error;
-      }
-    });
+    await this.ordered(() => this.guarded(() => this.store.clear()));
+  }
+
+  /** Stops the clock and every paid judgment in flight. Each caller settles the producer and the provider session itself. */
+  private stopClock() {
+    clearInterval(this.timer);
+    this.timer = undefined;
+    this.gradeAbort.abort();
+    this.silenceAbort?.abort();
   }
 
   /** Runs a checkpoint write or deletion after every earlier one. Its failure is the caller's; the chain continues. */
@@ -477,10 +472,7 @@ export class SessionActor {
   private fence() {
     if (this.fenced) return;
     this.fenced = true;
-    clearInterval(this.timer);
-    this.timer = undefined;
-    this.gradeAbort.abort();
-    this.silenceAbort?.abort();
+    this.stopClock();
     this.producer?.close();
     this.closeReceived?.();
     // The provider session stays open: the new owner knows it from the lease and closes it.
@@ -595,7 +587,7 @@ export class SessionActor {
 
   private onEvent(event: Record<string, unknown>, segment: Segment) {
     const snapshot = this.state;
-    if (this.fenced || !snapshot || snapshot.status === 'ended' || snapshot.status === 'interrupted') return;
+    if (this.fenced || !snapshot || this.ended()) return;
     if (event.type === 'session.closed') {
       segment.finalization = 'confirmed';
       segment.endedAt ??= this.now();
@@ -656,7 +648,7 @@ export class SessionActor {
     if (event.type === 'error') {
       const error = event.error as { client_event_id?: unknown } | undefined;
       // A typed answer is already saved; a rejected delivery is recovered by reconnecting with it in the resume context.
-      if (typeof error?.client_event_id === 'string' && error.client_event_id.startsWith('typed-')) {
+      if (typeof error?.client_event_id === 'string' && isTypedItem(error.client_event_id)) {
         (segment.typedErrors ??= []).push({ id: error.client_event_id, at: this.now() });
         snapshot.message = 'Your answer is saved. Reconnect to continue.';
         this.background.track(this.pause('provider'));
@@ -863,10 +855,7 @@ export class SessionActor {
 
   private async suspend(reason: SessionPause['reason']) {
     this.hold(reason, this.now());
-    clearInterval(this.timer);
-    this.timer = undefined;
-    this.gradeAbort.abort();
-    this.silenceAbort?.abort();
+    this.stopClock();
     this.producer?.pause();
     try { await this.connecting; } catch { /* A failed resume is reported by resume. */ }
     await this.closeSegment();
@@ -1038,9 +1027,7 @@ export class SessionActor {
     const drain = snapshot.status === 'live' && !interrupted;
     snapshot.status = 'ending';
     this.producer?.close();
-    clearInterval(this.timer);
-    this.gradeAbort.abort();
-    this.silenceAbort?.abort();
+    this.stopClock();
     try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
     await this.pausing?.catch(() => {});
     await this.grading;
@@ -1193,7 +1180,7 @@ export class SessionActor {
       await this.finishing;
       return;
     }
-    if (!this.state || this.state.status === 'ended' || this.state.status === 'interrupted') {
+    if (!this.state || this.ended()) {
       await this.closeOrphan();
       return;
     }

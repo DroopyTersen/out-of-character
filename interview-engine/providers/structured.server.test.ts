@@ -34,11 +34,11 @@ test('a structured request sends strict JSON schema output with only the marked 
 });
 
 test('an incomplete or unparsable response is an output error carrying the usage it reported', async () => {
-  const incomplete = requestSol({ foundry: testFoundry, signal: new AbortController().signal, instructions: 'x', name: 'n', schema: z.object({}), context: {} },
+  const plain = { foundry: testFoundry, signal: new AbortController().signal, instructions: 'x', name: 'n', schema: z.object({}), messages: [{ role: 'user' as const, text: '{}' }], cacheKey: null };
+  const incomplete = requestSol(plain,
     async () => Response.json({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, model: 'm', output: [], usage: { input_tokens: 1, output_tokens: 2 } }));
   await expect(incomplete).rejects.toMatchObject({ name: 'DirectorOutputError', detail: 'max_output_tokens', usage: { inputTokens: 1, outputTokens: 2, cachedTokens: null } });
-  const unparsable = requestSol({ foundry: testFoundry, signal: new AbortController().signal, instructions: 'x', name: 'n', schema: z.object({}), context: {} },
-    async () => completed('not json'));
+  const unparsable = requestSol(plain, async () => completed('not json'));
   await expect(unparsable).rejects.toBeInstanceOf(DirectorOutputError);
 });
 
@@ -48,7 +48,7 @@ test('a rejected provider request retains its status and support ID without its 
   let failure: unknown;
   try {
     await requestSol({ foundry: testFoundry, signal: new AbortController().signal, instructions: 'PRIVATE PROMPT',
-      context: { transcript: 'PRIVATE TRANSCRIPT' }, name: 'result', schema: z.object({ text: z.string() }) },
+      messages: [{ role: 'user', text: 'PRIVATE TRANSCRIPT' }], cacheKey: null, name: 'result', schema: z.object({ text: z.string() }) },
     async () => new Response('PRIVATE PROVIDER BODY', { status: 429, headers: { 'apim-request-id': 'support-request-123', Authorization: 'PRIVATE TOKEN' } }));
   } catch (error) { failure = error; }
   expect(callFailure(failure)).toEqual({ name: 'DirectorHttpError', status: 429, requestId: 'support-request-123' });

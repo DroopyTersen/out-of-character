@@ -58,6 +58,8 @@ test('answers become readings and coverage; a backchannel is never evidence', ()
   answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2' };
   answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { explored: .99 } };
   answers['objective:role:evidence'] = { type: 'choice', choice: 'p4' };
+  expect(() => readInterviewAnswers(spec, passages, { ...answers, 'reading:specificity': { type: 'score', score: 5 } })).toThrow('Invalid interview score: reading:specificity');
+  expect(() => readInterviewAnswers(spec, passages, { ...answers, 'objective:scope:evidence': { type: 'choice', choice: 'p9' } })).toThrow('Invalid interview selection: objective:scope:evidence');
   const result = readInterviewAnswers(spec, passages, answers);
   expect(result.readings.specificity).toEqual({ value: 3, distribution: null, evidence: { entryId: 'p2', speaker: 'participant', text: passages[1]!.text } });
   expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([['scope', 'explored', 'p2'], ['role', 'not-yet', null]]);

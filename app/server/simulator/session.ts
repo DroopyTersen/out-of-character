@@ -7,7 +7,9 @@ import {
   type PublicSnapshot, type SessionPause, type SessionSnapshot, type SessionWarning,
 } from '../../../core/simulator/types';
 import { attachLive, createLive, LiveSessionGone, NO_EXTERNAL_TASK, transcriptEvent } from './live.server';
-import { activitySchema, resumeSchema, simulatorJson, startSchema } from './api';
+import { activitySchema, resumeSchema } from '../../../interview-engine/shared/protocol';
+import { jsonResponse } from '../http';
+import { startSchema } from './api';
 import { archiveProvenance, writeArchive, writeReport, type ArchiveProvenance, type ConnectionLog, type EndingCheck, type GreetingLog } from './archive.server';
 import { ContextualDirector, directorServices, type DirectorCheckpoint } from './contextual-director';
 import { NETWORK_SAMPLES, type NetworkRecord } from '../../../interview-engine/shared/network';
@@ -119,8 +121,8 @@ export class SimulatorSession extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const action = new URL(request.url).pathname;
     const capability = request.headers.get('Authorization') ?? '';
-    if (!/^Bearer [a-f0-9]{64}$/.test(capability)) return simulatorJson({ error: 'Session capability is required.' }, 401);
-    if (this.lease && capability !== this.lease.capability) return simulatorJson({ error: 'Session ownership did not match.' }, 403);
+    if (!/^Bearer [a-f0-9]{64}$/.test(capability)) return jsonResponse({ error: 'Session capability is required.' }, 401);
+    if (this.lease && capability !== this.lease.capability) return jsonResponse({ error: 'Session ownership did not match.' }, 403);
     if (action === '/start') return this.start(request, capability);
     if (!this.lease) {
       // A cancelled browser may send end before its creation request arrives.
@@ -128,20 +130,20 @@ export class SimulatorSession extends DurableObject<Env> {
         this.lease = { capability, deadline: Date.now(), closed: true };
         await this.ctx.storage.put('lease', this.lease);
         await this.ctx.storage.setAlarm(Date.now() + 60_000);
-        return simulatorJson({ ended: true });
+        return jsonResponse({ ended: true });
       }
-      return simulatorJson({ error: 'This practice session was not found.' }, 404);
+      return jsonResponse({ error: 'This practice session was not found.' }, 404);
     }
     this.recoverCheckpoint();
     if (!this.snapshot) {
       if (!this.lease.closed) this.ctx.waitUntil(this.closeOrphan());
-      return simulatorJson({ error: 'This practice session was interrupted. Start a new attempt.' }, 410);
+      return jsonResponse({ error: 'This practice session was interrupted. Start a new attempt.' }, 410);
     }
     if (action === '/report') return this.startReport(request);
     // Terminal reads must not refresh a lease, heartbeat, or live state.
     if (this.snapshot.status === 'ended' || this.snapshot.status === 'interrupted') {
       const report = action === '/poll' && this.report ? await this.report.read() : this.reportState();
-      return simulatorJson({ ...this.publicSnapshot(), report });
+      return jsonResponse({ ...this.publicSnapshot(), report });
     }
     this.lastSeen = Date.now();
     if (action === '/poll' && request.body) {
@@ -158,7 +160,7 @@ export class SimulatorSession extends DurableObject<Env> {
     if (action === '/pause') this.ctx.waitUntil(this.pause('browser'));
     if (action === '/resume') return this.resume(request);
     if (action === '/ready' && this.snapshot.status === 'connecting') {
-      if (this.checkLifetime()) return simulatorJson(this.publicSnapshot());
+      if (this.checkLifetime()) return jsonResponse(this.publicSnapshot());
       if (this.reachedLive) this.resumed();
       else {
         // The lease makes start single-use, so this transition and its greeting happen once.
@@ -170,7 +172,7 @@ export class SimulatorSession extends DurableObject<Env> {
     }
     if (action === '/end') await this.end();
     this.checkLifetime();
-    return simulatorJson(this.publicSnapshot());
+    return jsonResponse(this.publicSnapshot());
   }
 
   private publicSnapshot(): PublicSnapshot {
@@ -188,10 +190,10 @@ export class SimulatorSession extends DurableObject<Env> {
   private async startReport(request: Request): Promise<Response> {
     if (this.closing) {
       try { await within(this.closing, 40_000); }
-      catch { return simulatorJson({ error: 'The conversation is still closing.' }, 409); }
+      catch { return jsonResponse({ error: 'The conversation is still closing.' }, 409); }
     }
-    if (!this.snapshot || !['ended', 'interrupted'].includes(this.snapshot.status)) return simulatorJson({ error: 'End the conversation before requesting its report.' }, 409);
-    if (this.reportState().status === 'ineligible') return simulatorJson({ error: 'There is not enough scored conversation to review.' }, 422);
+    if (!this.snapshot || !['ended', 'interrupted'].includes(this.snapshot.status)) return jsonResponse({ error: 'End the conversation before requesting its report.' }, 409);
+    if (this.reportState().status === 'ineligible') return jsonResponse({ error: 'There is not enough scored conversation to review.' }, 422);
     if (!this.report) {
       const snapshot = structuredClone(this.publicSnapshot());
       const interventions = structuredClone(this.contextual?.records ?? []);
@@ -216,7 +218,7 @@ export class SimulatorSession extends DurableObject<Env> {
     const input = startSchema.parse(await request.json());
     // Claim after the asynchronous body read so concurrent starts cannot both
     // observe an empty lease and create two paid sessions for the same attempt.
-    if (this.lease) return simulatorJson({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
+    if (this.lease) return jsonResponse({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
     this.lease = { capability, deadline: Date.now() + SESSION_LIMIT_SECONDS * 1000, closed: false };
     this.snapshot = {
       id: input.id, scenarioId: input.scenarioId, clientId: input.clientId,
@@ -231,15 +233,15 @@ export class SimulatorSession extends DurableObject<Env> {
       this.connecting = this.openLive(input);
       const created = await this.connecting;
       if (this.snapshot.status === 'ending' || this.lease.closed) {
-        return simulatorJson({ error: 'The attempt was cancelled.' }, 409);
+        return jsonResponse({ error: 'The attempt was cancelled.' }, 409);
       }
       this.lastSeen = Date.now();
       this.timer = setInterval(() => this.tick(), 500);
-      return simulatorJson({ sdp: created.sdp, snapshot: this.publicSnapshot() });
+      return jsonResponse({ sdp: created.sdp, snapshot: this.publicSnapshot() });
     } catch {
       this.snapshot.message = 'The voice connection could not be established.';
       await this.end(true);
-      return simulatorJson({ error: this.snapshot.message }, 502);
+      return jsonResponse({ error: this.snapshot.message }, 502);
     }
   }
 
@@ -536,12 +538,12 @@ export class SimulatorSession extends DurableObject<Env> {
     if (snapshot.status === 'live' || (snapshot.status === 'connecting' && this.reachedLive)) await this.pause('browser');
     await this.pausing;
     const hold = snapshot.pause;
-    if (this.closing || snapshot.status !== 'paused' || !hold) return simulatorJson({ error: 'This attempt is not paused.', snapshot: this.publicSnapshot() }, 409);
+    if (this.closing || snapshot.status !== 'paused' || !hold) return jsonResponse({ error: 'This attempt is not paused.', snapshot: this.publicSnapshot() }, 409);
     const now = Date.now();
     const refusal = this.resumes >= SESSION_MAX_RESUMES ? 'This attempt has reconnected too many times. End it to keep what was captured.'
       : now >= hold.resumeBy ? 'The hold on this attempt has expired.'
       : this.limitAt(now) - now < 60_000 ? 'Too little time remains to resume this attempt.' : null;
-    if (refusal) return simulatorJson({ error: refusal, snapshot: this.publicSnapshot() }, 409);
+    if (refusal) return jsonResponse({ error: refusal, snapshot: this.publicSnapshot() }, 409);
     this.resumes++;
     hold.resumes = this.resumes;
     // Nothing said before the drop may be extended by the new session.
@@ -556,19 +558,19 @@ export class SimulatorSession extends DurableObject<Env> {
       this.connecting = this.openLive({ scenarioId: snapshot.scenarioId, clientId: snapshot.clientId, sdp: input.sdp }, offsetMs,
         clientSpoke(snapshot.transcript) ? conversationSoFar(getScenario(snapshot.scenarioId), getClient(snapshot.clientId), snapshot.transcript) : undefined);
       const created = await this.connecting;
-      if (this.closing || snapshot.status !== 'connecting') return simulatorJson({ error: 'The attempt changed while reconnecting.', snapshot: this.publicSnapshot() }, 409);
+      if (this.closing || snapshot.status !== 'connecting') return jsonResponse({ error: 'The attempt changed while reconnecting.', snapshot: this.publicSnapshot() }, 409);
       this.lastSeen = Date.now();
       clearInterval(this.timer);
       this.timer = setInterval(() => this.tick(), 500);
-      return simulatorJson({ sdp: created.sdp, snapshot: this.publicSnapshot() });
+      return jsonResponse({ sdp: created.sdp, snapshot: this.publicSnapshot() });
     } catch {
-      if (this.closing || String(snapshot.status) !== 'connecting') return simulatorJson({ error: 'The attempt changed while reconnecting.', snapshot: this.publicSnapshot() }, 409);
+      if (this.closing || String(snapshot.status) !== 'connecting') return jsonResponse({ error: 'The attempt changed while reconnecting.', snapshot: this.publicSnapshot() }, 409);
       snapshot.status = 'paused';
       snapshot.message = 'The voice connection could not be re-established. Try again.';
       // Creation may have succeeded before attachment failed.
       if (this.epoch !== epoch) await this.closeSegment();
       await this.saveCheckpoint();
-      return simulatorJson({ error: snapshot.message, snapshot: this.publicSnapshot() }, 502);
+      return jsonResponse({ error: snapshot.message, snapshot: this.publicSnapshot() }, 502);
     }
   }
 

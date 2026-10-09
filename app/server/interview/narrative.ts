@@ -4,7 +4,7 @@ import { writeNarrative } from '../../../interview-engine/narrative/write.server
 import type { Providers } from '../../../interview-engine/providers/providers.server';
 import type { NarrativeRequest } from '../../../interview-engine/shared/protocol';
 import type { Passage } from '../../../interview-engine/shared/transcript';
-import { simulatorJson } from '../simulator/api';
+import { jsonResponse } from '../http';
 
 /** Writes one narrative run: `writeNarrative` bound to the host's language provider, or a test's stand-in. */
 export type Narrate = (input: NarrativeInput, signal: AbortSignal) => NarrativeRun;
@@ -28,7 +28,7 @@ export function narrativeRunner(input: NarrativeInput, narrate: Narrate, onSettl
  * with its format and explicit context. Nothing could rejoin the run, so it ends with the request.
  */
 export async function importedNarrative(input: NarrativeRequest, narrate: Narrate, signal: AbortSignal): Promise<Response> {
-  if (!participantSpoke(input.transcript)) return simulatorJson({ error: 'There is not enough conversation to write about.' }, 422);
+  if (!participantSpoke(input.transcript)) return jsonResponse({ error: 'There is not enough conversation to write about.' }, 422);
   const runner = narrativeRunner(input, narrate);
   signal.addEventListener('abort', () => runner.cancel(), { once: true });
   return runner.attach(signal);

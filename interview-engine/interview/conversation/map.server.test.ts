@@ -211,17 +211,6 @@ test('a rejected update reports every defect with what Sol returned', async () =
   expect((await run(research, ['L1'])).map.entities.map(item => item.passageId)).toEqual(['p2', 'L1']);
 });
 
-test('existing JSON-context Sol callers send no cache options', async () => {
-  const { requestSol } = await import('../../providers/structured.server');
-  const { z } = await import('zod');
-  let body: Record<string, any> = {};
-  await requestSol({ foundry: fixtureFoundry, signal: new AbortController().signal, instructions: 'x', context: { a: 1 }, name: 'n', schema: z.strictObject({}) },
-    async (_url, options) => { body = JSON.parse(String(options.body)); return solResponse({}); });
-  expect(body.input).toBe('{"a":1}');
-  expect(body.max_output_tokens).toBe(1800);
-  expect(body.prompt_cache_options).toBeUndefined();
-});
-
 test('Sol settles the participant’s own part early, several responsibilities included, and keeps gap threads inside it', () => {
   const instructions = mapInstructions;
   expect(instructions).toContain('Three threads to keep in mind:');

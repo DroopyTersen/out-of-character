@@ -11,13 +11,6 @@ const repo = resolve(import.meta.dir, '..');
 const manifest = await Bun.file(join(repo, 'package.json')).json() as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
 const packages = ['ai', '@ai-sdk/azure', '@ai-sdk/typesafe-ai', 'zod'];
 
-let sources = 0;
-for await (const _ of new Bun.Glob('**/*.ts').scan(join(repo, 'interview-engine'))) sources++;
-if (!sources) {
-  console.log('Engine copy check skipped: interview-engine/ has no TypeScript yet.');
-  process.exit(0);
-}
-
 const scratch = await mkdtemp(join(tmpdir(), 'interview-engine-copy-'));
 let status = 1;
 try {
@@ -39,7 +32,7 @@ try {
   } else {
     const tsc = await $`./node_modules/.bin/tsc -p tsconfig.engine.json --noEmit`.cwd(scratch).nothrow();
     status = tsc.exitCode;
-    console.log(status ? 'Engine copy check failed: the copied folder does not type-check alone.' : `Engine copy check passed for ${sources} TypeScript files.`);
+    console.log(status ? 'Engine copy check failed: the copied folder does not type-check alone.' : 'Engine copy check passed.');
   }
 } finally {
   await rm(scratch, { recursive: true, force: true });

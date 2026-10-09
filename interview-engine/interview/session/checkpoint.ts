@@ -11,7 +11,6 @@ export type InterviewState = { evaluation: InterviewEvaluation | null; summary: 
 
 /** The actor's lifecycle and transcript, before current readings and public references are composed into it. */
 export type SessionSnapshot = Omit<InterviewSnapshot, 'evaluation' | 'background' | 'pause'> & { pause?: SessionPause | null };
-export type PublicSnapshot = InterviewSnapshot;
 
 /** The closure lease: `providerId` is the newest provider session not yet confirmed closed; `unconfirmed` holds any older ones. */
 export type Lease = { capability: string; providerId?: string; unconfirmed?: string[]; deadline: number; closed: boolean };

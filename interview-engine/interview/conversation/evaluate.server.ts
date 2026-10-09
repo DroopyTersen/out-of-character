@@ -20,22 +20,23 @@ export type EvaluationJudge = Pick<Providers, 'judge' | 'telemetry'> | Judge;
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
 
-function booleanProbability(answers: InterviewAnswers, id: string): number {
+// The judge's answers, checked against the question asked. A missing or malformed answer fails the whole reading.
+export function booleanProbability(answers: InterviewAnswers, id: string): number {
   const answer = answers[id];
-  if (answer?.type !== 'boolean' || !validProbability(answer.probability)) throw new Error('Invalid interview boolean judgment.');
+  if (answer?.type !== 'boolean' || !validProbability(answer.probability)) throw new Error(`Invalid interview judgment: ${id}`);
   return answer.probability;
 }
 
-function score(answers: InterviewAnswers, id: string) {
+export function score(answers: InterviewAnswers, id: string) {
   const answer = answers[id];
-  if (answer?.type !== 'score' || !Number.isFinite(answer.score) || answer.score < 0 || answer.score > 4) throw new Error('Invalid interview score judgment.');
+  if (answer?.type !== 'score' || !Number.isFinite(answer.score) || answer.score < 0 || answer.score > 4) throw new Error(`Invalid interview score: ${id}`);
   return answer;
 }
 
-function choice(answers: InterviewAnswers, id: string, options: string[]) {
+export function choice<T extends string>(answers: InterviewAnswers, id: string, options: readonly T[]) {
   const answer = answers[id];
-  if (answer?.type !== 'choice' || !options.includes(answer.choice)) throw new Error('Invalid interview selection.');
-  return answer;
+  if (answer?.type !== 'choice' || !options.includes(answer.choice as T)) throw new Error(`Invalid interview selection: ${id}`);
+  return answer as typeof answer & { choice: T };
 }
 
 function evidence(answers: InterviewAnswers, key: string, participant: Passage[]) {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const text = z.string().trim().min(1);
+export const text = z.string().trim().min(1);
 
 /** Explicit host-supplied background. It helps interpretation and never establishes participant findings. */
 export const interviewContextSchema = z.object({
@@ -21,7 +21,7 @@ export type InterviewTopic = {
   topics?: InterviewTopic[];
 };
 
-const id = text.max(100).regex(/^[A-Za-z0-9_-]+$/, 'Use letters, numbers, underscores or hyphens for IDs.');
+export const id = text.max(100).regex(/^[A-Za-z0-9_-]+$/, 'Use letters, numbers, underscores or hyphens for IDs.');
 export const interviewTopicSchema: z.ZodType<InterviewTopic> = z.lazy(() => z.object({
   id, label: text.max(200), learn: text.max(4000), appliesWhen: text.max(2000).optional(),
   topics: z.array(interviewTopicSchema).min(1).optional(),

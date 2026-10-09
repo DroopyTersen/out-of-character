@@ -16,18 +16,17 @@ export type InterviewArchiveWrite = {
 };
 
 /** D1 rejects a row over 2,000,000 bytes; the margin covers row overhead. */
-export const ROW_BYTES = 1_990_000;
+const ROW_BYTES = 1_990_000;
 const encoder = new TextEncoder();
 
 /** Interview rows stay outside routine simulator transcript exports. */
 export async function writeInterviewArchive(db: D1Database, { specId, specVersion, state, capturedAt, snapshot, narrative, provenance, interventions }: InterviewArchiveWrite): Promise<void> {
-  const summary = narrative;
   const columns = [
     snapshot.id, snapshot.planId, snapshot.voiceId, snapshot.startedAt, capturedAt,
     state === 'final' ? capturedAt : null, state, snapshot.status, snapshot.finalization,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.evaluation ? JSON.stringify(snapshot.evaluation) : null,
-    summary?.status ?? 'pending', summary?.text ?? null,
+    narrative?.status ?? 'pending', narrative?.text ?? null,
     JSON.stringify(provenance), '[]', specId, specVersion,
   ];
   // Producer records take whatever the rest of the row leaves.

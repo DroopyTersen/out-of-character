@@ -2,8 +2,7 @@ import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
 import { activitySchema, CAPABILITY, narrativeRequestSchema, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
 import { routeDebriefs, workerDebriefs, type DebriefGates } from './debriefs';
-import { BodyError, boundedJson } from '../http';
-import { simulatorJson } from '../simulator/api';
+import { BodyError, boundedJson, jsonResponse } from '../http';
 import { importedNarrative, narrateWith } from './narrative';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -30,7 +29,7 @@ export type InterviewGates = {
 export const interviewAvailable = (env: Env) => String(env.SIMULATOR_ENABLED) === 'true' && env.PAID_SERVICES_ENABLED === 'true' && foundryConfigured(env) && !!env.OPENAI_API_KEY;
 
 /** Whether this deployment accepts the socket transport. Off unless `INTERVIEW_SOCKET_ENABLED` is "true". */
-export const socketsEnabled = (env: Env) => (env as Env & { INTERVIEW_SOCKET_ENABLED?: string }).INTERVIEW_SOCKET_ENABLED === 'true';
+const socketsEnabled = (env: Env) => (env as Env & { INTERVIEW_SOCKET_ENABLED?: string }).INTERVIEW_SOCKET_ENABLED === 'true';
 const attemptObject = (env: Env, id: string) => env.INTERVIEW_SESSIONS.get(env.INTERVIEW_SESSIONS.idFromName(id));
 
 /** Narratives are 128 KiB of transcript at most (TRANSCRIPT_LIMIT), with room for the JSON around it. */
@@ -48,7 +47,7 @@ export function workerGates(env: Env): InterviewGates {
     session: (id, command) => attemptObject(env, id).fetch(command),
     narrative: (input, signal) => foundryConfigured(env)
       ? importedNarrative(input, narrateWith(foundryProviders(foundryConfig(env))), signal)
-      : simulatorJson({ error: 'Narratives are currently unavailable.' }, 503),
+      : jsonResponse({ error: 'Narratives are currently unavailable.' }, 503),
     debriefs,
     ...(socketsEnabled(env) ? { socket: (id: string, upgrade: Request) => attemptObject(env, id).fetch(upgrade) } : {}),
   };
@@ -69,64 +68,64 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
   const socket = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/socket$/);
   if (socket) {
     // The browser cannot set headers on a WebSocket, so each command carries its capability instead.
-    if (!gates.socket || !UUID.test(socket[1]!)) return simulatorJson({ error: 'Unknown interview route.' }, 404);
-    if (request.method !== 'GET') return simulatorJson({ error: 'Method not allowed.' }, 405);
-    if (request.headers.get('Origin') !== url.origin) return simulatorJson({ error: 'Same-origin requests are required.' }, 403);
-    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return simulatorJson({ error: 'Expected a WebSocket upgrade.' }, 426);
+    if (!gates.socket || !UUID.test(socket[1]!)) return jsonResponse({ error: 'Unknown interview route.' }, 404);
+    if (request.method !== 'GET') return jsonResponse({ error: 'Method not allowed.' }, 405);
+    if (request.headers.get('Origin') !== url.origin) return jsonResponse({ error: 'Same-origin requests are required.' }, 403);
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return jsonResponse({ error: 'Expected a WebSocket upgrade.' }, 426);
     return gates.socket(socket[1]!, request);
   }
-  if (request.method !== 'POST') return simulatorJson({ error: 'Method not allowed.' }, 405);
-  if (request.headers.get('Origin') !== url.origin) return simulatorJson({ error: 'Same-origin requests are required.' }, 403);
-  if (!CAPABILITY.test(request.headers.get('Authorization') ?? '')) return simulatorJson({ error: 'Session capability is required.' }, 401);
+  if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed.' }, 405);
+  if (request.headers.get('Origin') !== url.origin) return jsonResponse({ error: 'Same-origin requests are required.' }, 403);
+  if (!CAPABILITY.test(request.headers.get('Authorization') ?? '')) return jsonResponse({ error: 'Session capability is required.' }, 401);
   const forward = (id: string, action: string, body?: string, signal?: AbortSignal) =>
     gates.session(id, new Request(`https://session/${action}`, { method: 'POST', headers: request.headers, body, ...(signal ? { signal } : {}) }));
   try {
     if (url.pathname === '/api/interview/sessions') {
-      if (!gates.available()) return simulatorJson({ error: 'Live interviews is currently unavailable. You can explore the workshop.' }, 503);
-      if (!(await gates.limit(request.headers.get('CF-Connecting-IP') || 'local'))) return simulatorJson({ error: 'Please wait a minute before starting another interview.' }, 429);
+      if (!gates.available()) return jsonResponse({ error: 'Live interviews is currently unavailable. You can explore the workshop.' }, 503);
+      if (!(await gates.limit(request.headers.get('CF-Connecting-IP') || 'local'))) return jsonResponse({ error: 'Please wait a minute before starting another interview.' }, 429);
       const parsed = startSchema.safeParse(await boundedJson(request, 64 * 1024));
-      if (!parsed.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
+      if (!parsed.success) return jsonResponse({ error: 'Invalid interview request.' }, 400);
       return forward(parsed.data.id, 'start', JSON.stringify(parsed.data));
     }
     if (url.pathname === '/api/interview/narratives') {
-      if (!gates.available()) return simulatorJson({ error: 'Narratives are currently unavailable.' }, 503);
-      if (!(await gates.limit(`narrative:${request.headers.get('CF-Connecting-IP') || 'local'}`, 'narrative'))) return simulatorJson({ error: 'Please wait a minute before requesting another narrative.' }, 429);
+      if (!gates.available()) return jsonResponse({ error: 'Narratives are currently unavailable.' }, 503);
+      if (!(await gates.limit(`narrative:${request.headers.get('CF-Connecting-IP') || 'local'}`, 'narrative'))) return jsonResponse({ error: 'Please wait a minute before requesting another narrative.' }, 429);
       const parsed = narrativeRequestSchema.safeParse(await boundedJson(request, NARRATIVE_BODY_LIMIT));
-      if (!parsed.success) return simulatorJson({ error: 'Invalid transcript.' }, 400);
+      if (!parsed.success) return jsonResponse({ error: 'Invalid transcript.' }, 400);
       return await gates.narrative(parsed.data, request.signal);
     }
     const match = url.pathname.match(/^\/api\/interview\/sessions\/([^/]+)\/(poll|ready|end|report|pause|resume|submitText)$/);
-    if (!match || !UUID.test(match[1]!)) return simulatorJson({ error: 'Unknown interview route.' }, 404);
+    if (!match || !UUID.test(match[1]!)) return jsonResponse({ error: 'Unknown interview route.' }, 404);
     const [, id, action] = match as unknown as [string, string, string];
-    if (action === 'report' && !gates.available()) return simulatorJson({ error: 'Final reviews are currently unavailable.' }, 503);
+    if (action === 'report' && !gates.available()) return jsonResponse({ error: 'Final reviews are currently unavailable.' }, 503);
     let body: string | undefined;
     if (action === 'poll' && request.body) {
       const activity = activitySchema.safeParse(await boundedJson(request, 384));
-      if (!activity.success) return simulatorJson({ error: 'Invalid activity report.' }, 400);
+      if (!activity.success) return jsonResponse({ error: 'Invalid activity report.' }, 400);
       body = JSON.stringify(activity.data);
     }
     // A ready may carry the browser's current activity; one without a body still connects.
     if (action === 'ready' && request.body) {
       const activity = readySchema.safeParse(await boundedJson(request, 384));
-      if (!activity.success) return simulatorJson({ error: 'Invalid activity report.' }, 400);
+      if (!activity.success) return jsonResponse({ error: 'Invalid activity report.' }, 400);
       if (activity.data) body = JSON.stringify(activity.data);
     }
     if (action === 'submitText') {
       const answer = submitTextSchema.safeParse(await boundedJson(request, SUBMIT_TEXT_BODY_LIMIT));
-      if (!answer.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
+      if (!answer.success) return jsonResponse({ error: 'Invalid interview request.' }, 400);
       body = JSON.stringify(answer.data);
     }
     if (action === 'resume') {
       // Each resume creates a paid voice session; a flapping network must not loop creation.
-      if (!gates.available()) return simulatorJson({ error: 'Live interviews is currently unavailable. End this attempt to keep what was captured.' }, 503);
-      if (!(await gates.limit(`resume:${id}`))) return simulatorJson({ error: 'Please wait a minute before reconnecting again.' }, 429);
+      if (!gates.available()) return jsonResponse({ error: 'Live interviews is currently unavailable. End this attempt to keep what was captured.' }, 503);
+      if (!(await gates.limit(`resume:${id}`))) return jsonResponse({ error: 'Please wait a minute before reconnecting again.' }, 429);
       const resume = resumeSchema.safeParse(await boundedJson(request, 64 * 1024));
-      if (!resume.success) return simulatorJson({ error: 'Invalid interview request.' }, 400);
+      if (!resume.success) return jsonResponse({ error: 'Invalid interview request.' }, 400);
       body = JSON.stringify(resume.data);
     }
     // Poll, ready, end, pause and typed answers pass the kill switch so running attempts can continue and still close.
     return forward(id, action, body, action === 'report' ? request.signal : undefined);
   } catch (error) {
-    return simulatorJson({ error: error instanceof BodyError ? error.message : 'The interview connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);
+    return jsonResponse({ error: error instanceof BodyError ? error.message : 'The interview connection is unavailable. Please try again.' }, error instanceof BodyError ? error.status : 502);
   }
 }

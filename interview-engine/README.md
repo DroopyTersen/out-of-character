@@ -76,7 +76,6 @@ export type SessionStore = {
 };
 export type Background = { track(work: Promise<unknown>): void };
 export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
-export type Seams = { store: SessionStore; background: Background; archive: Archive };
 ```
 
 | Seam | The engine relies on | Cloudflare | Bun reference host |
@@ -103,7 +102,6 @@ export type Providers = {
   structured: StructuredRequest;                          // Sol's strict-JSON call to the agent model
   judge: Judge;                                          // model + calibrated thresholds
   telemetry?: TelemetryOptions;                           // AI SDK telemetry
-  log?: (event: EngineEvent) => void;                     // transcripts, timings, provider failures
 };
 
 export type VoiceProvider = {
@@ -290,6 +288,8 @@ type InterviewGates = {
   limit(key: string, kind?: 'session' | 'narrative'): Promise<boolean>;
   session(id: string, command: Request): Promise<Response>;
   narrative(input: NarrativeRequest, signal: AbortSignal): Response | Promise<Response>;
+  socket?(id: string, upgrade: Request): Response | Promise<Response>;   // opt-in socket transport
+  debriefs?: DebriefGates;                                               // opt-in debrief setup routes
 };
 ```
 
@@ -357,7 +357,7 @@ The steps below use the host app as the example. They follow the plan in the des
    - An `Archive` that upserts `InterviewArchiveRow`.
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
 4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
-5. **Own an actor per attempt.** Call `SessionActor.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('connection')` when the host drops the attempt.
+5. **Own an actor per attempt.** Call `SessionActor.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `actor.handle`, and call `actor.close('hold')` when the host drops the attempt.
 6. **Serve the report.** Read report format and context from `actor.definition`; pass only these and the canonical transcript. Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `actor.settleNarrative`.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.
 

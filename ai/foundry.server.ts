@@ -1,4 +1,5 @@
 import type { FoundryConfig } from '../interview-engine/providers/foundry.server';
+import { LIVE_MODEL } from '../interview-engine/providers/gptLive.server';
 
 export { foundryProvider, foundryUrl, type FoundryConfig } from '../interview-engine/providers/foundry.server';
 
@@ -19,6 +20,6 @@ export function foundryConfig(env: FoundryEnvironment): FoundryConfig {
   return {
     resourceName: env.AZURE_OPENAI_API_INSTANCE_NAME!, apiKey: env.AZURE_OPENAI_API_KEY!,
     agentModel: env.AZURE_OPENAI_AGENT_MODEL!, fastModel: env.AZURE_OPENAI_FAST_MODEL!,
-    liveModel: env.AZURE_OPENAI_LIVE_MODEL || 'gpt-live-1',
+    liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL,
   };
 }

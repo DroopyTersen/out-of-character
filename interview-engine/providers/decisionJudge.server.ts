@@ -7,7 +7,7 @@ export type Request = Parameters<Model['doEvaluate']>[0];
 export type Result = Awaited<ReturnType<Model['doEvaluate']>>;
 export type Fetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
 export type Format = 'literal' | 'readable' | 'dialogue';
-export const DECISIONS_MODEL = 'gpt-6-luna';
+const DECISIONS_MODEL = 'gpt-6-luna';
 
 export function createDecisionJudge(options: { apiKey?: string; fetch?: Fetch }): Judge {
   return { model: decisionsModel(options), thresholds: { silenceContinue: .7, coverageExplored: .5 } };
@@ -48,7 +48,6 @@ export function decisionPayload(request: Request, format: Format) {
     if (question.type === 'boolean') return [{ name, type: 'predicate', instructions: question.criteria
       ? `${instructions}\nTrue criteria: ${render(question.criteria.true ?? '', format)}\nFalse criteria: ${render(question.criteria.false ?? '', format)}` : instructions }];
     if (question.type === 'choice') {
-      if (Object.keys(question.criteria).length === 1) return [];
       return [{ name, type: 'choice', instructions, choices: Object.entries(question.criteria).map(([value, description]) => ({ value,
         ...(description == null ? {} : { description: render(description, format) }) })) }];
     }
@@ -64,7 +63,7 @@ export function decisionPayload(request: Request, format: Format) {
   return { model: DECISIONS_MODEL, input, questions };
 }
 
-export function normalizeResponse(raw: unknown, questions: Request['questions']): Result {
+function normalizeResponse(raw: unknown, questions: Request['questions']): Result {
   const parsed = responseSchema.safeParse(raw);
   if (!parsed.success) throw new DecisionFailure('contract');
   const data = parsed.data;

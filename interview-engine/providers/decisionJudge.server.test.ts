@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { experimental_evaluate } from 'ai';
-import { decisionsModel, decisionPayload, type Model } from './provider';
+import { decisionsModel, decisionPayload, type Model } from './decisionJudge.server';
 
 const questions = {
   visible: { type: 'boolean', instructions: { task: 'Is damage visible?', rule: 'Ignore packaging.' }, criteria: { true: 'The item is broken.', false: 'The item is intact.' } },

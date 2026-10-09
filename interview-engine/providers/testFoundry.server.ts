@@ -14,6 +14,7 @@ export function unpaidProviders(voice: unknown, models: { agent: string; fast: s
   return {
     voice: voice as VoiceProvider, language: { agent: models.agent, fast: models.fast },
     structured: () => Promise.reject(new Error('The test providers make no structured call.')),
-    judge: { modelId: 'test-judge' } as unknown as Experimental_EvaluationModel,
+    judge: { model: { modelId: 'test-judge' } as unknown as Experimental_EvaluationModel,
+      thresholds: { silenceContinue: .85, coverageExplored: .85 } },
   };
 }

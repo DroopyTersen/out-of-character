@@ -38,6 +38,6 @@ test('Jev’s final-grade questions and dialogue are unchanged', async () => {
     specificationVersion: 'v4', provider: 'test', modelId: 'jev-test', supportedQuestionTypes: ['choice', 'score', 'boolean'],
     async doEvaluate(options) { states.push(options.state); throw new Error('captured'); },
   };
-  await expect(evaluateInterview({ spec, passages, revision: 1 }, judge)).rejects.toThrow();
+  await expect(evaluateInterview({ spec, passages, revision: 1 }, { model: judge, thresholds: { silenceContinue: .85, coverageExplored: .85 } })).rejects.toThrow();
   expect(JSON.stringify(states[0], null, 1)).toBe(await fixture('grade-state.json'));
 });

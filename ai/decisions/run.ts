@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { experimental_evaluate as evaluate } from 'ai';
 import { judgeModel } from '../../interview-engine/providers/judge.server';
 import { hash, interpret, type EvalCase } from './cases';
-import { decisionsModel, DecisionFailure, singletons, type Fetch, type Format } from './provider';
+import { decisionsModel, DecisionFailure, singletons, type Fetch, type Format } from '../../interview-engine/providers/decisionJudge.server';
 
 const directory = '.data/openai-decisions-evals';
 const option = (name: string, fallback: string) => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
@@ -38,7 +38,7 @@ const path = `${directory}/runs/${runId}`;
 await mkdir(path, { mode: 0o700 }); // Fails rather than overwriting an existing run.
 await writeFile(`${path}/manifest.json`, JSON.stringify({ runId, corpusHash: corpus.hash, arms, split, lanes, repeats, createdAt: new Date().toISOString(),
   ratesUsdPerMillionInput: { jev: .042, decisions: .1 }, maxUsd: 5, maxAttempts: 468, sdkRetries: 0,
-  sourceHashes: Object.fromEntries(await Promise.all(['ai/decisions/provider.ts', 'ai/decisions/cases.ts', 'ai/decisions/run.ts'].map(async file => [file, hash(await Bun.file(file).text())]))),
+  sourceHashes: Object.fromEntries(await Promise.all(['interview-engine/providers/decisionJudge.server.ts', 'ai/decisions/cases.ts', 'ai/decisions/run.ts'].map(async file => [file, hash(await Bun.file(file).text())]))),
   plan: plan.map(({ item, arm, repeat }) => ({ caseId: item.id, inputHash: hash({ state: item.state, questions: item.questions }), arm, repeat })) }, null, 2), { mode: 0o600 });
 const save = (file: string, value: unknown) => appendFile(file, `${JSON.stringify(value)}\n`, { mode: 0o600 });
 

@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
 import { unpaidProviders } from '../../providers/testFoundry.server';
+import { createJevJudge, type Judge } from '../../providers/judge.server';
+import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
+import { evaluateSilence } from './silence.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';
 import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
 import { testFraming, testTechniques } from '../conversation/testSpec';
@@ -496,8 +499,9 @@ test('failed live coverage retries once per participant input and interviewer sp
 const silenceResult = (probability: number) => ({ probability, model: 'fixture', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } });
 const reminders = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('silence-'));
 
-async function stranded(check: SessionServices['evaluateSilence']) {
+async function stranded(check: SessionServices['evaluateSilence'], judge?: Judge) {
   const f = fixture();
+  if (judge) f.options.providers.judge = judge;
   f.options.services!.evaluateSilence = check;
   const { actor, socket } = await conversation(f);
   f.at(4000);
@@ -505,6 +509,26 @@ async function stranded(check: SessionServices['evaluateSilence']) {
   f.at(8000);
   return { ...f, actor, socket };
 }
+
+test('the host-selected judge controls whether a .75 silence result sends a continuation', async () => {
+  // Substitute only paid HTTP; exercise each real adapter and the session's continuation action.
+  const request: Fetch = async url => Response.json(String(url).includes('typesafe.ai')
+    ? { model: 'jev-1.13.0', answers: { continue: { type: 'choice', choice: 'continue', probabilities: { continue: .75, wait: .25, finished: 0 } } } }
+    : { model: 'gpt-6-luna', usage: { input_tokens: 100, output_tokens: 0 }, answers: [
+      { type: 'choice', name: 'continue', choice: 'continue', confidence: .75,
+        probabilities: [{ value: 'continue', probability: .75 }, { value: 'wait', probability: .25 }, { value: 'finished', probability: 0 }] },
+    ] });
+  const jev = createJevJudge({ apiKey: 'fixture', fetch: request as typeof fetch });
+  const decisions = createDecisionJudge({ apiKey: 'fixture', fetch: request });
+  for (const [judge, expected] of [[jev, 0], [decisions, 1]] as const) {
+    const f = await stranded(evaluateSilence, judge);
+    try {
+      await f.send(f.actor, 'poll');
+      await f.background.settle();
+      expect(reminders(f.socket)).toHaveLength(expected);
+    } finally { await f.send(f.actor, 'end'); }
+  }
+});
 
 test('transcript inactivity gets one Jev check per unchanged exchange and a private, acknowledged reminder', async () => {
   const inputs: string[][] = [];

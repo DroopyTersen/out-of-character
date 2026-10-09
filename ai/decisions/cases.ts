@@ -9,7 +9,7 @@ import { toPassage, type WireEntry } from '../../interview-engine/interview/wire
 import { spec } from '../../interviews/project-closeout/spec';
 import { interviewFixtures } from '../interview/fixtures';
 import syntheticSilence from './silence-fixtures.json';
-import type { Model, Request, Result } from './provider';
+import type { Model, Request, Result } from '../../interview-engine/providers/decisionJudge.server';
 
 export type Check = { name: string; path: string[]; op: 'eq' | 'gte' | 'lt' | 'in'; expected: unknown; critical?: boolean };
 export type EvalCase = {

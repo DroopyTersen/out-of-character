@@ -1,5 +1,5 @@
 import { calibrate, hash, scoreChecks, type Check, type EvalCase } from './cases';
-import type { Result } from './provider';
+import type { Result } from '../../interview-engine/providers/decisionJudge.server';
 
 type Row = { id: string; caseId: string; arm: string; lane: string; split: string; source: string; status: string; durationMs: number;
   estimatedUsd: number | null; output?: Record<string, unknown>; answers?: Result['answers']; usage?: { inputTokens: number; outputTokens: number } };

@@ -1,5 +1,6 @@
 import type { Experimental_EvaluationModel, Experimental_EvaluationQuestion } from 'ai';
 import { z } from 'zod';
+import type { Judge } from './judge.server';
 
 export type Model = Exclude<Experimental_EvaluationModel, string>;
 export type Request = Parameters<Model['doEvaluate']>[0];
@@ -7,6 +8,10 @@ export type Result = Awaited<ReturnType<Model['doEvaluate']>>;
 export type Fetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
 export type Format = 'literal' | 'readable' | 'dialogue';
 export const DECISIONS_MODEL = 'gpt-6-luna';
+
+export function createDecisionJudge(options: { apiKey: string; fetch?: Fetch }): Judge {
+  return { model: decisionsModel(options), thresholds: { silenceContinue: .7, coverageExplored: .5 } };
+}
 
 const probability = z.number().min(0).max(1);
 const answerSchema = z.discriminatedUnion('type', [

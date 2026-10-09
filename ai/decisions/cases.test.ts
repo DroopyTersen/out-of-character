@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { calibrate, scoreChecks } from './cases';
-import type { Result } from './provider';
+import type { Result } from '../../interview-engine/providers/decisionJudge.server';
 
 test('calibration credits a selected supported answer, retaining missing evidence and boundaries', () => {
   const answers: Result['answers'] = {

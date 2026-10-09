@@ -23,7 +23,7 @@ import { toPassage, toWireSpeaker, type WireEntry, type WireSpeaker } from '../w
 import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, PublicSnapshot, Segment, WireSnapshot } from './checkpoint';
 import { appendTranscript, settledTranscript } from './transcript';
 import { conversationSoFar, NO_EXTERNAL_TASK, resumeInstruction } from './voice.prompt';
-import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_CONTINUE, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
+import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 
 /** The parts of a spec the session reads: the interviewer's brief, Jev's rubric, Sol's topics and the limits. */
 export type SessionSpec = Pick<InterviewSpec, 'id' | 'version' | 'limits'> & BriefedSpec & JudgedSpec & MappedSpec;
@@ -588,11 +588,11 @@ export class SessionActor {
   private async judgeSilence(transcript: WireEntry[], segment: Segment, record: SilenceRecord, abort: AbortController) {
     const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(3000)]);
     try {
-      const result = await this.paid.evaluateSilence({ transcript, judge: this.providers.judge, signal });
+      const result = await this.paid.evaluateSilence({ transcript, judge: this.providers.judge.model, signal });
       Object.assign(record, result);
       signal.throwIfAborted();
       if (this.fenced || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision) record.outcome = 'stale';
-      else if (result.probability < SILENCE_CONTINUE) record.outcome = 'wait';
+      else if (result.probability < this.providers.judge.thresholds.silenceContinue) record.outcome = 'wait';
       else {
         record.outcome = 'sent';
         if (!this.send({ type: 'session.instructions.append', event_id: record.id, delegation_id: null, content: CONTINUE_INTERVIEW })) record.outcome = 'error';

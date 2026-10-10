@@ -145,3 +145,29 @@ test('within bounds a promise', async () => {
   expect(await within(Promise.resolve(1), 50)).toBe(1);
   await expect(within(new Promise(() => {}), 5)).rejects.toThrow('Operation timed out.');
 });
+
+test('a headless run drains the stream, settles with the document, and is joined rather than repeated', async () => {
+  let calls = 0, pulled = 0;
+  const saved: SettledNarrative[] = [];
+  const runner = new NarrativeRunner(() => {
+    calls++;
+    // A pull stream writes nothing unless it is read, so a completed run proves it was drained.
+    const stream = new ReadableStream<string>({ pull(controller) { if (pulled++ < 3) controller.enqueue('#'); else controller.close(); } });
+    return { stream, result: (async () => { while (pulled < 4) await Bun.sleep(1); return { document: { text }, failure: null, usage }; })() };
+  }, { onSettled: value => { saved.push(value); } });
+  const [first, joined] = await Promise.all([runner.run(), runner.run()]);
+  expect(first).toEqual({ status: 'completed', starts: 1, document: { text }, failure: null });
+  expect(joined).toEqual(first);
+  expect(await runner.run()).toEqual(first);
+  expect(calls).toBe(1);
+  expect(saved).toHaveLength(1);
+});
+
+test('a headless run settles a silent provider at the deadline, and a run that cannot start as a provider failure', async () => {
+  let runSignal: AbortSignal | undefined;
+  const silent = new NarrativeRunner(value => { runSignal = value; return { stream: new ReadableStream(), result: new Promise<Narrative>(() => {}) }; }, { deadlineMs: 20 });
+  expect(await silent.run()).toMatchObject({ status: 'failed', failure: 'timeout', starts: 1 });
+  expect(runSignal!.aborted).toBe(true);
+  const throwing = new NarrativeRunner(() => { throw new Error('no model'); });
+  expect(await throwing.run()).toMatchObject({ status: 'failed', failure: 'provider', starts: 1 });
+});

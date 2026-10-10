@@ -54,7 +54,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
 
-**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior.
+**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior, and `run()` executes the same run headless for a host that persists the result itself.
 
 **Rejoin**: a request that attaches to a narrative run already in progress. `NarrativeRunner.attach` replays what has been written so far and then streams the rest live; a request that drops only detaches, and the run continues until it settles, is cancelled or reaches its deadline. Once settled, a request gets the stored document instead. An imported transcript's run cannot be rejoined, so it is cancelled when its request drops.
 

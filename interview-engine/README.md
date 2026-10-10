@@ -267,10 +267,11 @@ export function writeNarrative(input: NarrativeInput, providers: Pick<Providers,
 ```ts
 new NarrativeRunner(start: (signal: AbortSignal) => NarrativeRun, options?: { deadlineMs?: number; onSettled?: (narrative: SettledNarrative) => void; track?: (work: Promise<unknown>) => void });
 runner.attach(signal): Response;   // start a run, rejoin the running one, or return the stored document or "retry used"
+runner.run(): Promise<NarrativeState>; // the same run with no request attached, resolving once it settles
 runner.state(); runner.read(); runner.cancel();
 ```
 
-The runner allows two starts at most (`NARRATIVE_MAX_STARTS`), with a 120-second deadline (`NARRATIVE_DEADLINE_MS`). After a run settles, the host passes the result to `actor.settleNarrative(status, provenance)` so the archive records it. A request made while a run is writing rejoins it: it receives everything written so far, then the rest as it is written, so a reloaded page picks up where it was. Dropping a request detaches it without stopping the run. Only the deadline or `runner.cancel()` stops a run, and `track` keeps it alive on a platform that would otherwise stop it (Cloudflare: `waitUntil`).
+The runner allows two starts at most (`NARRATIVE_MAX_STARTS`), with a 120-second deadline (`NARRATIVE_DEADLINE_MS`). After a run settles, the host passes the result to `actor.settleNarrative(status, provenance)` so the archive records it. A request made while a run is writing rejoins it: it receives everything written so far, then the rest as it is written, so a reloaded page picks up where it was. Dropping a request detaches it without stopping the run. Only the deadline or `runner.cancel()` stops a run, and `track` keeps it alive on a platform that would otherwise stop it (Cloudflare: `waitUntil`). A host that persists the report itself and streams nothing calls `run()` instead of `attach`: the deadline, draining and failure handling are the same, and it resolves with the settled state.
 
 ## Debrief setup
 

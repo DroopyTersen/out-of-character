@@ -141,6 +141,25 @@ test('the initial voice brief receives the accepted purpose and context, without
   await f.send(actor, 'end');
 });
 
+test('voice receives compact context while the producer retains the full reference', async () => {
+  const f = fixture();
+  f.options.context = {
+    background: 'Project Atlas for Harbor Labs. Jordan (Engineer), 240 h. Hours by month: 2026-09 240 h.',
+    voiceBackground: 'Project Atlas for Harbor Labs. Team: Jordan (Engineer).',
+    participant: { name: 'Jordan', background: 'Engineer, Delivery' },
+  };
+  const actor = await f.restore();
+  await f.send(actor, 'start', start);
+  const brief = f.voice.created[0]!.instructions;
+  for (const included of ['Project Atlas', 'Harbor Labs', 'Jordan (Engineer)', 'Engineer, Delivery']) expect(brief).toContain(included);
+  for (const excluded of ['240 h', 'Hours by month']) expect(brief).not.toContain(excluded);
+  const resolved = resolveInterview(actor.definition.plan, actor.definition.config, actor.definition.context);
+  expect(resolved.framing.setting).toContain('240 h');
+  expect(resolved.framing.setting).toContain('Hours by month');
+  expect(resolved.framing.setting).not.toContain('voiceBackground');
+  await f.send(actor, 'end');
+});
+
 test('a start, a conversation and an end produce the protocol’s snapshots, a closed lease and the final archive row', async () => {
   const f = fixture();
   const { actor, socket, started } = await conversation(f);
@@ -921,7 +940,7 @@ test('a failed silence check is recorded once; it never fails the interview or r
 
 test.each([false, true])('resume preserves the accepted definition when the original context exists=%s', async hasContext => {
   const original = fixture();
-  if (hasContext) original.options.context = { participant: { name: 'Priya' }, background: 'Atlas is the project name.' };
+  if (hasContext) original.options.context = { participant: { name: 'Priya' }, background: 'Atlas is the project name. 240 h.', voiceBackground: 'Atlas is the project name.' };
   const { actor } = await conversation(original);
   const accepted = actor.definition;
   original.options.plan.goals = 'CHANGED GOALS';
@@ -945,6 +964,7 @@ test.each([false, true])('resume preserves the accepted definition when the orig
   expect(instructions).not.toContain('CHANGED');
   expect(instructions).not.toContain('NEW CALLER');
   expect(instructions.includes('Atlas')).toBe(hasContext);
+  expect(instructions).not.toContain('240 h');
   await replacement.send(resumed, 'end');
   await replacement.background.settle();
 });

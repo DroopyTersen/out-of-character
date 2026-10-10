@@ -72,6 +72,26 @@ test('truncation, empty prose and late provider failure never become a saved sum
   }
 });
 
+test('the report receives full reference context without the voice-only view', async () => {
+  let body: Record<string, any> = {};
+  const run = writeNarrative({ ...input, context: {
+    background: 'Atlas for Harbor Labs. Priya (Engineer), 240 h. Hours by month: 2026-09 240 h.',
+    voiceBackground: 'VOICE_ONLY: Atlas for Harbor Labs. Team: Priya (Engineer).',
+    participant: { name: 'Priya', background: 'Engineer' },
+  } }, providers((async (_url, options) => {
+    body = JSON.parse(String(options?.body));
+    return response([start, added, delta(JSON.stringify(summary)), complete]);
+  }) as typeof fetch));
+  for await (const _ of run.stream) { /* Consume the real SDK stream. */ }
+  const prompt = JSON.parse(body.input.find((item: { role: string }) => item.role === 'user').content[0].text);
+  expect(prompt.context).toEqual({
+    background: 'Atlas for Harbor Labs. Priya (Engineer), 240 h. Hours by month: 2026-09 240 h.',
+    participant: { name: 'Priya', background: 'Engineer' },
+  });
+  expect(JSON.stringify(prompt)).not.toContain('VOICE_ONLY');
+  expect((await run.result).document).toEqual(summary);
+});
+
 test('HTTP failures have no automatic retries, and silent attempts spend no request', async () => {
   let calls = 0;
   const request = (async () => { calls++; return Response.json({ error: { message: 'Private provider detail' } }, { status: 429 }); }) as unknown as typeof fetch;

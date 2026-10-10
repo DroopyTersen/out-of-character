@@ -27,7 +27,7 @@ const epoch = 1_800_000_000_000;
 const usage = { inputTokens: 10, outputTokens: 5 };
 const jevUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
 const facts = [{ text: 'OpenStreetMap is a collaborative, openly licensed world map.', url: 'https://www.openstreetmap.org/about', title: 'About OpenStreetMap' }];
-const request = (name: string, clue: string | null = null): ResearchRequest => ({ kind: 'product', name, clue, passageIds: ['p2'] });
+const request = (name: string, clue: string | null = null): ResearchRequest => ({ kind: 'product', name, clue });
 const MINUTE = 'a minute has passed since your last call';
 const novelReason = (id: string) => `the participant's latest turn (${id}) adds facts or feedback the map lacks`;
 
@@ -66,6 +66,7 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
     { id: 'p2', speaker: 'participant', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
   let connected: boolean | 'throw' = true;
+  let held = false;
   let coverage: InterviewObjectiveReading[] = [];
   const sent: Record<string, unknown>[] = [];
   const calls = { map: [] as Input<'generateMap'>[], turn: [] as Input<'evaluateTurn'>[], lookup: [] as Input<'lookupInterviewBackground'>[] };
@@ -74,7 +75,7 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
   const producer = new InterviewProducer({
     attemptId: 'attempt-1', startedAt: epoch,
     providers: { ...fixtureProviders, judge: { ...fixtureProviders.judge, thresholds: { ...fixtureProviders.judge.thresholds, ...thresholds } } },
-    pauses: () => pauses, waitUntil: work => background.track(work),
+    notesHeld: () => held, pauses: () => pauses, waitUntil: work => background.track(work),
     settled: () => transcript, coverage: () => coverage, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
@@ -106,6 +107,7 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
   const notes = (kind?: keyof typeof NOTE_HEADERS) => sent.filter(event => !kind || String(event.content).startsWith(NOTE_HEADERS[kind])).map(event => String(event.content));
   return {
     producer, background, sent, calls, pauses, say, sam, grow, turn, at, step, of, notes,
+    holdNotes: (value: boolean) => { held = value; },
     setConnected: (value: boolean | 'throw') => { connected = value; },
     setCoverage: (levels: InterviewObjectiveReading['level'][]) => { coverage = levels.map((level, i) => ({ id: `o${i}`, level, achieved: level === 'explored', probability: null, levels: null, evidence: null })); },
   };
@@ -297,6 +299,41 @@ test('a map note credits only the lookups its research facts cite, not every loo
 });
 
 
+test('typing sends only current notes and credits current research after provider acceptance', async () => {
+  const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: 'L1' };
+  const first = mapWith([thread('t1')], { participant: { vantage: 'Delivery lead', preferences: [] } });
+  const current = mapWith([thread('t2')], { participant: { vantage: 'Tech lead', preferences: [] }, entities: [routing, research] });
+  const results = [mapped(first, request('OpenStreetMap')), mapped(current)];
+  const f = fixture({
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+    generateMap: async input => results[f.calls.map.length - 1] ?? mapped(input.previous),
+  });
+  f.holdNotes(true);
+  await f.step(0); await f.step(20_000); await f.step(20_500);
+  await f.step(40_000); await f.step(40_500);
+  // A long draft never consumes the note budget or creates false delivery attempts.
+  for (let i = 0; i <= PRODUCER_LIMITS.notes; i++) await f.step(41_000 + i);
+  expect(f.of('note')).toHaveLength(0);
+  expect(f.sent).toHaveLength(0);
+  expect(f.producer.publicBackground()).toEqual([]);
+  f.holdNotes(false);
+  f.producer.flushNotes();
+  expect(f.notes('list')).toHaveLength(1);
+  expect(f.notes('list')[0]).toContain('Thread t2');
+  expect(f.notes('list')[0]).not.toContain('Thread t1');
+  expect(f.notes('map')).toHaveLength(1);
+  expect(f.notes('map')[0]).toContain('Tech lead');
+  expect(f.notes('map')[0]).not.toContain('Delivery lead');
+  const note = f.of('note').find(item => item.kind === 'map')!;
+  expect(note.researchIds).toEqual([f.of('research')[0]!.id]);
+  expect(note.delivery.status).toBe('unknown');
+  expect(f.producer.publicBackground()).toEqual([]);
+  f.producer.providerEvent(note.id, true);
+  expect(f.producer.publicBackground().map(item => item.facts)).toEqual([facts]);
+  await f.step(42_000);
+  expect(f.of('note')).toHaveLength(2);
+});
+
 test('turns that settle while Jev is busy are each read in order', async () => {
   const pending = deferred<Read>();
   const f = fixture({ evaluateTurn: async input => input.transcript.at(-1)!.id === 'p4' ? pending.promise : reading(input) });
@@ -399,6 +436,27 @@ test('notes are bounded even if the provider repeatedly rejects them', async () 
   expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes);
 });
 
+test('a resumed session receives its current map note after typing even beyond the ordinary cap', async () => {
+  const f = fixture({ generateMap: async () => mapped(mapWith([])) });
+  await f.step(60_000);
+  for (let i = 1; i < PRODUCER_LIMITS.notes; i++) {
+    f.producer.providerEvent(f.of('note').at(-1)!.id, false);
+    await f.step(60_500 + i);
+  }
+  expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes);
+  f.producer.pause();
+  f.holdNotes(true);
+  f.producer.resume();
+  expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes);
+  f.holdNotes(false);
+  f.producer.flushNotes();
+  expect(f.notes('map')).toHaveLength(PRODUCER_LIMITS.notes + 1);
+  expect(f.notes('map').at(-1)).toBe(f.notes('map')[0]);
+  f.producer.providerEvent(f.of('note').at(-1)!.id, false);
+  await f.step(61_000);
+  expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes + 1);
+});
+
 test('all paid producer calls share a cap that survives a restart', async () => {
   const f = fixture({ generateMap: async () => { throw new Error('temporarily unavailable'); } });
   // Distinct answers are observable inputs, not a fabricated internal counter.
@@ -471,6 +529,7 @@ test('research accepts only a participant-named target, serializes, deduplicates
   await f.turn(125_000); await f.step(140_000);
   expect(f.of('research').map(record => record.outcome)).toEqual(['invalid', 'error', 'duplicate', 'busy', 'unresolved', 'found', 'budget']);
   expect(f.calls.lookup.map(call => call.target.name)).toEqual(['OpenStreetMap', 'OpenStreetMap', 'Mapbox']);
+  expect(f.of('research').filter(record => record.outcome !== 'invalid').map(record => record.passageIds)).toEqual(Array.from({ length: 6 }, () => ['p2']));
   expect(f.producer.summary().research).toBe(3);
 });
 

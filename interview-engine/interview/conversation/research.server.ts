@@ -24,11 +24,11 @@ export function normalizeResearchName(value: string): string {
 
 /** A lookup target must occur in the participant's words, never only in Sam's guesses. */
 export function validateResearchRequest(request: ResearchRequest, transcript: TranscriptEntry[]):
-  { ok: true; request: ResearchRequest } | { ok: false; reason: string } {
+  { ok: true; request: ResearchRequest; passageIds: string[] } | { ok: false; reason: string } {
   const name = normalizeResearchName(request.name);
   const spoken = transcript.filter(entry => entry.speaker === 'participant' && ` ${normalizeResearchName(entry.text)} `.includes(` ${name} `));
   if (!name || !spoken.length) return { ok: false, reason: 'name_unspoken' };
-  return { ok: true, request: { ...request, name: request.name.trim(), clue: request.clue?.trim() || null, passageIds: spoken.map(entry => entry.id) } };
+  return { ok: true, request: { ...request, name: request.name.trim(), clue: request.clue?.trim() || null }, passageIds: spoken.map(entry => entry.id) };
 }
 
 /** Repeats of the same name and clue are skipped; a new clue for the same name is a new attempt. */

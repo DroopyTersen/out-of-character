@@ -12,7 +12,7 @@ import { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 export { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
 type TranscriptEntry = Passage;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v17';
+export const MAP_PROMPT_VERSION = 'sol-map-v18';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -40,7 +40,7 @@ const buildOutputSchema = (topicIds: [MapTopicId, ...MapTopicId[]]) => z.strictO
   drop: z.array(z.strictObject({ id: z.string(), reason: text(MAP_LIMITS.reason) })),
   /** Code verifies that the participant named the lookup target. */
   research: z.strictObject({
-    kind: z.enum(RESEARCH_KINDS), name: z.string().trim().min(1), clue: z.string().trim().nullable(), passageIds: z.array(z.string()),
+    kind: z.enum(RESEARCH_KINDS), name: z.string().trim().min(1), clue: z.string().trim().nullable(),
   }).nullable(),
 });
 
@@ -175,7 +175,7 @@ export async function generateMap(input: {
 }): Promise<{ map: ConversationMap; update: MapUpdate; changes: MapChanges; research: ResearchRequest | null; model: string; usage: ModelUsage }> {
   const { output, wire } = mapSchemas(input.spec);
   const { value, model, usage } = await input.structured({
-    signal: input.signal, instructions: mapInstructions(input.spec), name: 'conversation_map_update', schema: output, jsonSchema: wire,
+    signal: input.signal, instructions: mapInstructions(input.spec), name: 'conversation_map_update', jsonSchema: wire,
     effort: input.effort ?? MAP_EFFORT, maxOutputTokens: MAP_MAX_OUTPUT_TOKENS,
     messages: mapMessages(input.spec, input.blocks, renderMapTail(input.spec, input.previous, input.tail)), cacheKey: input.cache === false ? null : mapCacheKey(input.attemptId),
   });

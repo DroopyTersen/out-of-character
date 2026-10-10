@@ -163,8 +163,6 @@ export class SessionActor {
   private typedPending = new Map<string, Promise<Reply>>();
   /** Typed turns the current provider session has not heard; a resume rebuilds them from the transcript instead. */
   private typedUnforwarded = new Set<string>();
-  /** Producer notes that arrived while a draft was open. Sam speaks on a note; they wait for the typed answer or the draft's close. */
-  private heldNotes: { segment: Segment; note: { id: string; content: string } }[] = [];
   /** Every checkpoint write and deletion, in issue order. Each link builds its checkpoint when it runs. */
   private storage: Promise<void> = Promise.resolve();
 
@@ -274,7 +272,7 @@ export class SessionActor {
     return reply(this.publicSnapshot());
   }
 
-  /** A poll's or ready's activity report. A stale sequenced report is dropped; only sequenced reports change composing. */
+  /** A poll's or ready's activity report. Stale reports are dropped; activity changes composing only when sequenced. */
   private applyActivity(activity: Activity, now: number) {
     if (activity.sequence != null && activity.sequence <= this.activitySequence) return;
     if (activity.sequence != null) this.activitySequence = activity.sequence;
@@ -295,23 +293,8 @@ export class SessionActor {
       this.silenceAbort?.abort();
     } else {
       this.lastSpeech = now;
-      this.releaseNotes();
+      this.producer?.flushNotes(now);
     }
-  }
-
-  /** The producer's channel to Sam. While a draft is open a note is held, so Sam does not talk over the participant's typing. */
-  private sendNote(note: { id: string; content: string }): boolean {
-    if (!this.composing || !this.segment || this.state?.status !== 'live') return this.send({ kind: 'context', ...note });
-    if (!this.voice?.connected) return false;
-    this.heldNotes.push({ segment: this.segment, note });
-    return true;
-  }
-
-  /** Held notes go to the session they were written for, in order; a session that has since closed never hears them. */
-  private releaseNotes() {
-    const held = this.heldNotes;
-    this.heldNotes = [];
-    for (const { segment, note } of held) if (segment === this.segment) this.send({ kind: 'context', ...note });
   }
 
   /**
@@ -366,7 +349,7 @@ export class SessionActor {
     if (this.typedUnforwarded.has(id) && this.state?.status === 'live' && this.segment && !this.fenced) {
       this.typedUnforwarded.delete(id);
       // Context first, so Sam answers the typed turn knowing what the producer learned meanwhile.
-      this.releaseNotes();
+      this.setComposing(false, this.now());
       this.send({ kind: 'context', id, content: typedAnswerCue(input.text) });
     }
     return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
@@ -533,7 +516,7 @@ export class SessionActor {
     this.producer = new InterviewProducer({
       spec: this.spec, attemptId: snapshot.id, startedAt: snapshot.startedAt,
       providers: this.providers, services: this.paid,
-      settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: note => this.sendNote(note), waitUntil: work => this.background.track(work),
+      settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: note => this.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
     });
   }

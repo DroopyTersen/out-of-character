@@ -28,7 +28,7 @@ type Options = {
   services: typeof producerServices;
   /** Settled passages in order, stopping at the first still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
-  send: (note: { id: string; content: string }) => boolean; waitUntil: (work: Promise<void>) => void;
+  send: (note: { id: string; content: string }) => boolean; notesHeld?: () => boolean; waitUntil: (work: Promise<void>) => void;
   pauses?: () => PauseSpan[];
 };
 /** Keep the map, its cached input, and the audit log. Re-read the current turn after a restart. */
@@ -56,7 +56,7 @@ export class InterviewProducer {
   private mapRecord: MapRecord | null = null;
   private log: MapLog = emptyMapLog();
   private ranking = emptyRanking();
-  private call: { record: MapRecord; controller: AbortController; unmapped: boolean } | null = null;
+  private call: { record: MapRecord; controller: AbortController } | null = null;
   private lastMapStart: number;
   private reasons = new Set<string>();
   /** A failed call logged input that the current map has not incorporated. */
@@ -98,11 +98,11 @@ export class InterviewProducer {
 
   /** An abandoned call is dropped where it stands; a late result is ignored. */
   private abandon(now: number) {
-    const { record, controller, unmapped } = this.call!;
+    const { record, controller } = this.call!;
     this.call = null;
     record.outcome = 'timeout';
     record.completedAt = now;
-    this.behind ||= unmapped;
+    this.behind = true;
     controller.abort();
   }
 
@@ -132,9 +132,8 @@ export class InterviewProducer {
       if (research) research.loggedAt = now;
     }
     const controller = new AbortController();
-    const unmapped = fresh || this.behind || events.length > 0;
-    this.call = { record, controller, unmapped };
-    this.options.waitUntil(this.generate(record, controller, log, settled, now, unmapped)
+    this.call = { record, controller };
+    this.options.waitUntil(this.generate(record, controller, log, settled, now)
       .finally(() => { if (this.call?.record === record) this.call = null; }));
   }
 
@@ -156,7 +155,7 @@ export class InterviewProducer {
     };
   }
 
-  private async generate(record: MapRecord, controller: AbortController, log: MapLog, settled: TranscriptEntry[], now: number, unmapped: boolean) {
+  private async generate(record: MapRecord, controller: AbortController, log: MapLog, settled: TranscriptEntry[], now: number) {
     const { services, providers, attemptId } = this.options;
     const signal = AbortSignal.any([this.abort.signal, controller.signal, AbortSignal.timeout(LIMITS.mapTimeout)]);
     const live = () => this.alive && this.call?.record === record;
@@ -175,7 +174,7 @@ export class InterviewProducer {
       if (error instanceof MapOutputError) Object.assign(record, { outcome: 'invalid', defects: error.defects.slice(0, 10), model: error.model, usage: error.usage } satisfies Partial<MapRecord>);
       else record.outcome = signal.aborted || timedOut(error) ? 'timeout' : 'error';
       record.completedAt = Date.now();
-      this.behind ||= unmapped;
+      this.behind = true;
       return;
     }
     // Outside the try: a failure after the map lands is not Sol's, so it neither fails this call nor leaves the map behind.
@@ -271,7 +270,7 @@ export class InterviewProducer {
   }
 
   private note(kind: NoteRecord['kind'], text: string, now: number, { turn, researchIds = [] }: { turn?: TurnRecord; researchIds?: string[] } = {}): NoteRecord['outcome'] | null {
-    if (!this.restating && this.counts.notes >= LIMITS.notes) return null;
+    if (this.options.notesHeld?.() || (!this.restating && this.counts.notes >= LIMITS.notes)) return null;
     const id = `note-${crypto.randomUUID()}`;
     const record: NoteRecord = {
       source: 'note', id, kind, text, mapId: this.mapRecord?.id ?? null, ...(turn ? { turnId: turn.id } : {}), sentAt: now, outcome: 'sent',
@@ -296,6 +295,7 @@ export class InterviewProducer {
     const valid = validateResearchRequest(request, settled);
     if (!valid.ok) return refuse('invalid', valid.reason);
     record.request = valid.request;
+    record.passageIds = valid.passageIds;
     const key = researchKey(valid.request);
     if (this.records.some(item => item.source === 'research' && ['pending', 'found', 'unresolved'].includes(item.outcome) && researchKey(item.request) === key)) return refuse('duplicate', 'duplicate');
     if (this.budgetLeft <= 0 || this.counts.research >= LIMITS.research) return refuse('budget', 'budget');
@@ -383,6 +383,12 @@ export class InterviewProducer {
     this.mapKey = null;
     this.list = emptyListState();
     this.restating = true;
+    this.flushNotes(now);
+  }
+
+  /** Current notes are composed from the latest map and ranking; held notes never enter the audit log. */
+  flushNotes(now = Date.now()) {
+    if (!this.alive || this.options.notesHeld?.()) return;
     try { this.sendMapNote(now); this.pick(now); }
     finally { this.restating = false; }
   }

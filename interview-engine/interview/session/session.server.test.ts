@@ -1144,12 +1144,12 @@ test('the resume cue treats a typed last answer as complete and keeps the cut-of
 
 const notes = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('note-'));
 /** A live conversation whose producer writes Sam a map note on its next map call. */
-async function noted() {
+async function noted(vantage = () => 'Tech lead on the claims portal') {
   const f = fixture();
   f.options.services!.evaluateTurn = async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 1 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} });
   f.options.services!.generateMap = async input => ({
-    map: { ...input.previous, participant: { vantage: 'Tech lead on the claims portal', preferences: [] } },
-    update: { vantage: 'Tech lead on the claims portal', preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
+    map: { ...input.previous, participant: { vantage: vantage(), preferences: [] } },
+    update: { vantage: vantage(), preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },
     changes: { added: [], changed: ['participant'], dropped: [], kept: [] }, research: null, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
   });
   const { actor, socket } = await conversation(f);
@@ -1179,7 +1179,33 @@ test('producer notes wait while a draft is open and reach Sam just before the ty
   await f.send(f.actor, 'end');
 });
 
-test('closing a draft without sending releases the held notes; a closed session never hears them', async () => {
+test('successive map corrections during typing send only the current note before the accepted answer', async () => {
+  let vantage = 'Tech lead on the claims portal';
+  const f = await noted(() => vantage);
+  await f.send(f.actor, 'poll', composing(1, true));
+  f.at(30_000); await f.produce();
+  vantage = 'Reviewed the claims portal; did not lead the build';
+  say(f.socket, 'input', 'correction', 'I only reviewed it; I did not lead the build.', 35_000);
+  say(f.socket, 'output', 'next', 'What did you review?', 38_000);
+  f.at(55_000);
+  await f.send(f.actor, 'poll', composing(2, true));
+  await f.produce();
+  expect(notes(f.socket)).toHaveLength(0);
+  const id = crypto.randomUUID();
+  expect((await f.send(f.actor, 'submitText', typed(id, 'I reviewed the release.'))).status).toBe(200);
+  expect(notes(f.socket)).toHaveLength(1);
+  expect(String(notes(f.socket)[0]!.content)).toContain('did not lead the build');
+  expect(String(notes(f.socket)[0]!.content)).not.toContain('Tech lead on');
+  const order = f.socket.sent.map(event => String(event.event_id));
+  expect(order.indexOf(String(notes(f.socket)[0]!.event_id))).toBeLessThan(order.indexOf(`typed-${id}`));
+  await f.send(f.actor, 'end');
+  await f.background.settle();
+  const audit = f.archive.rows.get(attempt.id)!.producerLog.filter(record => record.source === 'note');
+  expect(audit).toHaveLength(1);
+  expect(audit[0]).toMatchObject({ outcome: 'sent', delivery: { eventId: notes(f.socket)[0]!.event_id, status: 'unknown' } });
+});
+
+test('closing a draft sends current notes; the resumed session receives current context', async () => {
   const f = await noted();
   await f.send(f.actor, 'poll', composing(1, true));
   f.at(30_000);
@@ -1202,11 +1228,11 @@ test('closing a draft without sending releases the held notes; a closed session 
   await f.send(f.actor, 'end');
   await g.send(g.actor, 'end');
   await g.background.settle();
-  // The producer restates its notes to the resumed session itself; the one held for the closed session is dropped.
+  // Only the resumed session receives the current context; no delivery was recorded for the closed session.
   const written = g.archive.rows.get(attempt.id)!.producerLog.flatMap(record => record.source === 'note' ? [record.delivery.eventId] : []);
-  expect(written.length).toBeGreaterThanOrEqual(2);
+  expect(written).toHaveLength(1);
   expect(notes(g.socket)).toHaveLength(0);
-  expect(notes(resumed).map(event => event.event_id)).toEqual(written.slice(1));
+  expect(notes(resumed).map(event => event.event_id)).toEqual(written);
 });
 
 test('closure drains final participant evidence into the final grade and archive', async () => {

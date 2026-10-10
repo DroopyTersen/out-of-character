@@ -11,7 +11,7 @@ type InterviewObjectiveReading = Reading<Speaker>;
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v27';
+export const PRODUCER_VERSION = 'interview-producer-v28';
 export const PRODUCER_LIMITS = {
   /** Shared cap for paid producer calls, including failures and interrupted calls. */
   calls: 400,
@@ -23,7 +23,7 @@ export const PRODUCER_LIMITS = {
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
 export type ResearchKind = typeof RESEARCH_KINDS[number];
-export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null; passageIds: string[] };
+export type ResearchRequest = { kind: ResearchKind; name: string; clue: string | null };
 export type NoteDelivery = { eventId: string; afterPassageId: string | null; status: 'unknown' | 'accepted' | 'rejected'; acknowledgedAt?: number; startMs?: number; endMs?: number };
 /** Safe provider metadata only; never response bodies, request headers or exception messages. */
 export type { CallFailure };
@@ -66,6 +66,8 @@ export type NoteRecord = {
 /** Sol requests a lookup on its map output; the result reaches Sol as a log event and Sam only through Sol's map. */
 export type ResearchRecord = {
   source: 'research'; id: string; mapId: string; request: ResearchRequest; model: string;
+  /** Participant passages that code verified named the target. */
+  passageIds?: string[];
   requestedAt: number; lookupAt?: number; completedAt?: number; loggedAt?: number;
   /** The ID of the lookup's event in Sol's log, which research facts cite. */
   eventId?: string;

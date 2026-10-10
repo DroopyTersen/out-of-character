@@ -29,15 +29,24 @@ const search = { type: 'web_search_call', id: 'search-fixture', status: 'complet
 const citation = (url: string) => ({ type: 'url_citation', url, title: 'About Acme', start_index: 0, end_index: 10 });
 
 test('the lookup name must occur as whole words in participant speech; Sol supplies its clue', () => {
-  const base: ResearchRequest = { kind: 'organization', name: 'ACME Field Systems', clue: null, passageIds: [] };
-  expect(validateResearchRequest(base, transcript)).toEqual({ ok: true, request: { ...base, passageIds: ['p1'] } });
-  expect(validateResearchRequest({ ...base, clue: ' an industrial supplier ', passageIds: ['missing'] }, transcript))
-    .toEqual({ ok: true, request: { ...base, clue: 'an industrial supplier', passageIds: ['p1'] } });
+  const base: ResearchRequest = { kind: 'organization', name: 'ACME Field Systems', clue: null };
+  expect(validateResearchRequest(base, transcript)).toEqual({ ok: true, request: base, passageIds: ['p1'] });
+  expect(validateResearchRequest({ ...base, clue: ' an industrial supplier ' }, transcript))
+    .toEqual({ ok: true, request: { ...base, clue: 'an industrial supplier' }, passageIds: ['p1'] });
   for (const name of ['Another Company', 'Acme Fie', '---', '']) {
     expect(validateResearchRequest({ ...base, name }, transcript)).toEqual({ ok: false, reason: 'name_unspoken' });
   }
   expect(validateResearchRequest(base, transcript.slice(0, 1))).toEqual({ ok: false, reason: 'name_unspoken' });
   expect(normalizeResearchName('ACME—Field  Systems!')).toBe('acme field systems');
+});
+
+test('research provenance contains every participant mention and excludes interviewer guesses', () => {
+  const request: ResearchRequest = { kind: 'organization', name: 'Acme Field Systems', clue: null };
+  const result = validateResearchRequest(request, [...transcript,
+    { id: 'p2', speaker: 'participant', text: 'Acme Field Systems approved the design.', startMs: 4000, endMs: 6000 },
+    { id: 'p3', speaker: 'participant', text: 'Acme Field supplied a part.', startMs: 6000, endMs: 7000 },
+  ]);
+  expect(result).toEqual({ ok: true, request, passageIds: ['p1', 'p2'] });
 });
 
 test('repeat keys ignore formatting and treat a new clue as a new attempt', () => {

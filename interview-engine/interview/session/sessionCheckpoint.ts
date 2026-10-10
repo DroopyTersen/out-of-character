@@ -1,6 +1,6 @@
 import type { InterviewDefinition } from '../definition.server';
 import type { NetworkRecord } from '../../shared/network';
-import type { InterviewEvaluation, InterviewSnapshot, SessionPause } from '../../shared/snapshot';
+import type { FeedbackStatus, InterviewEvaluation, InterviewSnapshot, SessionPause } from '../../shared/snapshot';
 import type { ProducerCheckpoint } from '../conversation/interviewProducer.server';
 import type { GradeRecord, ProducerSummary } from '../conversation/conversationRecords';
 import type { SilenceRecord } from './silence.server';
@@ -10,7 +10,7 @@ export type NarrativeStatus = { status: 'pending' | 'ready' | 'unavailable'; tex
 export type InterviewState = { evaluation: InterviewEvaluation | null; summary: NarrativeStatus | null };
 
 /** The actor's lifecycle and transcript, before current coverage and public references are composed into it. */
-export type SessionSnapshot = Omit<InterviewSnapshot, 'evaluation' | 'background' | 'pause'> & { pause?: SessionPause | null };
+export type SessionSnapshot = Omit<InterviewSnapshot, 'evaluation' | 'feedbackStatus' | 'background' | 'pause'> & { pause?: SessionPause | null };
 
 /** Provider sessions still owed closure, in creation order. */
 export type Lease = { capability: string; providerIds: string[]; deadline: number; closed: boolean };
@@ -34,7 +34,7 @@ export type PauseRecord = { epoch: number; reason: SessionPause['reason']; pause
 export type Checkpoint = {
   definition?: InterviewDefinition;
   /** The interview state rides inside the stored snapshot, so older checkpoints restore unchanged. */
-  savedAt: number; snapshot: SessionSnapshot & { interview?: InterviewState }; reachedLive: boolean; epoch: number; resumes: number;
+  savedAt: number; snapshot: SessionSnapshot & { feedbackStatus: FeedbackStatus; interview?: InterviewState }; reachedLive: boolean; epoch: number; resumes: number;
   segments: Segment[]; pauses: PauseRecord[]; grades: GradeRecord[]; gradeCalls: number;
   producer?: ProducerCheckpoint;
 };

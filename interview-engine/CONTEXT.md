@@ -10,7 +10,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Lease**: the small record saved at start, before any checkpoint: the capability, the provider sessions not yet confirmed closed, a deadline, and whether the attempt has closed. It lets a later owner close a provider session the attempt opened even if the conversation never went live.
 
-**Checkpoint fencing**: how the engine keeps one writer per attempt. A store whose owner has been superseded (on a store with segments, when a newer owner has claimed the next one) throws `FencedError` from `save`, `wake` or `clear`; the actor then stops, closes its provider socket and never writes again. On Cloudflare a Durable Object owns its attempt, so nothing is ever fenced; the memory store fences by segment, as a database-backed store would.
+**Checkpoint fencing**: how the engine keeps one writer per attempt. A store whose owner has been superseded (on a store with segments, when a newer owner has claimed the next one) throws `FencedError` from `save`, `wake` or `clear`; the coordinator then stops, closes its provider socket and never writes again. On Cloudflare a Durable Object owns its attempt, so nothing is ever fenced; the memory store fences by segment, as a database-backed store would.
 
 **Seams**: the three things a host implements over its platform, in `interview/seams.server.ts`: `SessionStore` (lease, checkpoint, wake hint, clear), `Background` (work that outlives a reply) and `Archive` (archive row upserts). Everything else the engine needs arrives as providers.
 
@@ -24,9 +24,9 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives in `narrative/`.
 
-**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in `setup/`; the live actor never sees setup concerns.
+**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in `setup/`; the live coordinator never sees setup concerns.
 
-**Approved debrief**: readable learning goals, recursive topics, optional interviewing guidance and report requirements. Approval validates this content and produces a version. Runtime voices, persona, reading rubrics and limits come from the host; prompt construction belongs to the engine.
+**Approved debrief**: readable learning goals, recursive topics, optional interviewing guidance and report requirements. Approval validates this content and produces a version. Runtime voices, persona and limits come from the host; prompt construction belongs to the engine.
 
 **Catalog**: the host lookup used when a new attempt starts. The host pins the full accepted plan, configuration and context before opening the voice session. Checkpoints preserve these inputs, so later owners do not depend on a mutable catalog.
 
@@ -52,7 +52,11 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled, the silence check does not run, and producer notes to Sam are held until the typed answer is forwarded or composition ends; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
 
-**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective, with evidence by passage id.
+**Topic grading**: evidence-backed assessment of approved leaf topics during an attempt. The host's injected judge performs it; Sol receives coverage as conversation-map context. `TopicGrading` owns cadence, retry, cancellation, coverage state and history; the coordinator owns lifecycle and persistence. Grading does not decide whether the participant may end or supply input to the narrative writer.
+
+**Topic coverage**: the depth and applicability recorded for each approved leaf topic, with supporting participant passages. It informs topic marks and the conversation producer, not interview completion.
+
+**Final grade**: the injected judge's assessment of the completed transcript against the judged spec. It replaces live coverage smoothing and is preserved across terminal archive retries.
 
 **Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior, and `run()` executes the same run headless for a host that persists the result itself.
 
@@ -64,7 +68,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 ## Hosts
 
-**Hosted session**: the host wrapper around one actor. It returns canonical interview snapshots and adds report state separately. Reports use the actor’s frozen format and explicit context with the final transcript; they receive no map or coverage.
+**Hosted session**: the host wrapper around one coordinator. It returns canonical interview snapshots and adds report state separately. Reports use the coordinator’s frozen format and explicit context with the final transcript; they receive no map or coverage.
 
 **Narrative route**: `POST /api/interview/narratives`, an independent report from `{ transcript, format, context? }`. No catalog or live attempt is involved. The narrative streams back and is not stored.
 

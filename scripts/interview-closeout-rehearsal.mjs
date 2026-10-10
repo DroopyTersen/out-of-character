@@ -5,7 +5,7 @@ import { generateText, Output } from 'ai';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server.ts';
-import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
+import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
 import { settledPrefix } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
 import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/interviewProducer.server.ts';
@@ -156,7 +156,7 @@ async function reply() {
 function grade() {
   if (grading || closing) return;
   const transcript = [...report.transcript];
-  grading = evaluateInterview({ planId: INTERVIEW_SCENARIO_ID, voiceId: interviewerId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) })
+  grading = judgeTopicCoverage({ planId: INTERVIEW_SCENARIO_ID, voiceId: interviewerId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) })
     .then(graded => { if (!closing) coverage = mergeCoverage(coverage, graded.objectives); }, error => report.errors.push(`Grading failed (${error.name}).`))
     .finally(() => { grading = null; });
 }

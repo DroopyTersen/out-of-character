@@ -15,7 +15,7 @@ import { importedNarrative, narrateWith } from '../app/server/interview/narrativ
 import { routeInterview, type InterviewGates } from '../app/server/interview/routes';
 import { answerSocket, socketContext, type SocketContext } from '../app/server/interview/socket';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
-import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
+import { SessionCoordinator, type Archive } from '../interview-engine/interview/interview.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { draftDebrief } from '../interview-engine/setup/draft.server';
@@ -95,7 +95,7 @@ async function open(id: string, spec: HostedSpec) {
     clearTimeout(timer);
     timer = at == null ? undefined : setTimeout(() => void wake().catch(error => console.error('Interview wake failed', id, error)), Math.max(0, at - Date.now()));
   } });
-  hosted = SessionActor.restore({
+  hosted = SessionCoordinator.restore({
     plan: spec.plan, config: spec.config, context: spec.context, providers, store, background: inlineBackground(), archive,
     log: event => { if (event.type === 'session') console.warn('Interview session', event); },
   }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), model: foundry.agentModel }));

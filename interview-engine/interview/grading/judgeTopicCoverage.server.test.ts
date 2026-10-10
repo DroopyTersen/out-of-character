@@ -5,7 +5,9 @@ import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.s
 import { foundryProviders } from '../../providers/providers.server';
 import { testFoundry } from '../../providers/testFoundry.server';
 import type { Passage } from '../../shared/transcript';
-import { dialogueState, evaluateInterview, readInterviewAnswers, type InterviewAnswers } from './judgeTopicCoverage.server';
+import { judgeTopicCoverage, readTopicCoverage } from './judgeTopicCoverage.server';
+import { dialogueState } from '../../shared/transcript';
+import { type JudgeAnswers } from '../../providers/judgeProvider.server';
 import { interviewQuestions, type JudgedSpec } from './topicCoverage.prompt';
 import { testFraming } from '../conversation/testSpec';
 
@@ -24,10 +26,10 @@ const passages: Passage[] = [
   { id: 'p4', speaker: 'participant', text: 'Mm-hmm.', startMs: 5500, endMs: 6000 },
 ];
 
-function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
+function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): JudgeAnswers {
   return Object.fromEntries(Object.entries(questions).map(([id, question]) => {
     return [id, { type: 'choice', choice: /^objective:[^:]+$/.test(id) ? 'not-yet' : 'none' }];
-  })) as InterviewAnswers;
+  })) as JudgeAnswers;
 }
 
 test('the questions come from the spec, and only participant passages are evidence choices', () => {
@@ -49,8 +51,8 @@ test('answers become coverage; a backchannel is never evidence', () => {
   answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2' };
   answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { explored: .99 } };
   answers['objective:role:evidence'] = { type: 'choice', choice: 'p4' };
-  expect(() => readInterviewAnswers(spec, passages, { ...answers, 'objective:scope:evidence': { type: 'choice', choice: 'p9' } })).toThrow('Invalid interview selection: objective:scope:evidence');
-  const result = readInterviewAnswers(spec, passages, answers);
+  expect(() => readTopicCoverage(spec, passages, { ...answers, 'objective:scope:evidence': { type: 'choice', choice: 'p9' } })).toThrow('Invalid interview selection: objective:scope:evidence');
+  const result = readTopicCoverage(spec, passages, answers);
   expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([['scope', 'explored', 'p2'], ['role', 'not-yet', null]]);
 });
 
@@ -66,12 +68,12 @@ test('Jev sees participant and the spec’s interviewer, and the grade runs on t
     },
   };
   const judge = { model, thresholds: { silenceContinue: .85, coverageExplored: .85 } };
-  const result = await evaluateInterview({ spec, passages, revision: 4 }, { judge });
+  const result = await judgeTopicCoverage({ spec, passages, revision: 4 }, { judge });
   expect(calls).toEqual([dialogueState(passages, 'riley')]);
   expect(result).toMatchObject({ revision: 4, model: 'jev-test' });
   expect(result.objectives.every(item => item.level === 'not-yet')).toBe(true);
-  await expect(evaluateInterview({ spec, passages: [], revision: 1 }, judge)).rejects.toThrow('Transcript is outside the interview limit.');
-  await expect(evaluateInterview({ spec, passages: [passages[1]!, passages[1]!], revision: 1 }, judge)).rejects.toThrow('Transcript passage IDs must be unique.');
+  await expect(judgeTopicCoverage({ spec, passages: [], revision: 1 }, judge)).rejects.toThrow('Transcript is outside the interview limit.');
+  await expect(judgeTopicCoverage({ spec, passages: [passages[1]!, passages[1]!], revision: 1 }, judge)).rejects.toThrow('Transcript passage IDs must be unique.');
 });
 
 test('host-selected judges apply their coverage calibration without changing raw probabilities or evidence rules', async () => {
@@ -96,7 +98,7 @@ test('host-selected judges apply their coverage calibration without changing raw
   const decisions = createDecisionJudge({ apiKey: 'fixture', fetch: request });
   for (const [judge, expected] of [[jev, 'touched'], [decisions, 'explored']] as const) {
     const providers = foundryProviders({ ...testFoundry, judge });
-    const result = await evaluateInterview({ spec, passages, revision: 1 }, providers);
+    const result = await judgeTopicCoverage({ spec, passages, revision: 1 }, providers);
     expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([
       ['scope', expected, 'p2'], ['role', 'not-yet', null],
     ]);
@@ -106,13 +108,13 @@ test('host-selected judges apply their coverage calibration without changing raw
 
 test('conditional relevance needs participant evidence and is distinct from coverage depth', () => {
   const conditional: JudgedSpec = { ...spec, topics: [{ objectives: [{ id: 'handoff', label: 'Handoff', criterion: 'Describe the access handoff.', appliesWhen: 'The participant handled access.' }] }] };
-  const answers: InterviewAnswers = {
+  const answers: JudgeAnswers = {
     'objective:handoff': { type: 'choice', choice: 'explored', probabilities: { explored: .99 } },
     'objective:handoff:evidence': { type: 'choice', choice: 'p2', probabilities: { p2: .99 } },
     'objective:handoff:applicability': { type: 'choice', choice: 'applicable', probabilities: { applicable: .95 } },
     'objective:handoff:applicability-evidence': { type: 'choice', choice: 'p2', probabilities: { p2: .99 } },
   };
-  const read = () => readInterviewAnswers(conditional, passages, answers).objectives[0]!;
+  const read = () => readTopicCoverage(conditional, passages, answers).objectives[0]!;
   expect(read()).toMatchObject({ applicability: 'applicable', level: 'explored', achieved: true, applicabilityEvidence: { entryId: 'p2', speaker: 'participant' } });
   answers['objective:handoff:applicability'] = { type: 'choice', choice: 'not-applicable', probabilities: { 'not-applicable': .95 } };
   expect(read()).toMatchObject({ applicability: 'not-applicable', level: 'not-yet', achieved: false, evidence: null, applicabilityEvidence: { entryId: 'p2' } });

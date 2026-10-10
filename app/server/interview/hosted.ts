@@ -1,6 +1,6 @@
 import type { InterviewSummaryContent } from '../../../core/interview';
 import type { ReportState } from '../../../core/simulator/report';
-import type { SessionActor } from '../../../interview-engine/interview/interview.server';
+import type { SessionCoordinator } from '../../../interview-engine/interview/interview.server';
 import type { NarrativeInput, NarrativeState } from '../../../interview-engine/narrative/narrative.server';
 import { NarrativeRunner, within } from '../../../interview-engine/narrative/narrativeRun.server';
 import { narrativeRunner, participantSpoke, type Narrate } from './narrative';
@@ -29,7 +29,7 @@ export class HostedSession {
   private readonly format: NarrativeInput['format'];
   private readonly context: NarrativeInput['context'];
 
-  constructor(readonly actor: SessionActor, private readonly options: HostedNarrative) {
+  constructor(readonly actor: SessionCoordinator, private readonly options: HostedNarrative) {
     const definition = actor.definition;
     this.format = definition.plan.report;
     this.context = definition.context;

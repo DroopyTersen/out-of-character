@@ -1,7 +1,7 @@
 import { resolveInterview, type InterviewDefinition } from '../../../interview-engine/interview/definition.server';
 import { DurableObject } from 'cloudflare:workers';
 import { foundryConfig, foundryConfigured, type FoundryConfig } from '../../../ai/foundry.server';
-import { SessionActor, type Background, type Checkpoint, type Lease, type SessionOptions, type SessionStore } from '../../../interview-engine/interview/interview.server';
+import { SessionCoordinator, type Background, type Checkpoint, type Lease, type SessionOptions, type SessionStore } from '../../../interview-engine/interview/interview.server';
 import { foundryProviders, type Providers } from '../../../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../../../interview-engine/providers/decisionJudge.server';
 import { startSchema } from '../../../interview-engine/shared/protocol';
@@ -61,7 +61,7 @@ type SpecIdentity = Pick<HostedSpec, 'id' | 'version'>;
 type PinnedSpec = InterviewDefinition | SpecIdentity;
 
 /**
- * One interview attempt. The engine's SessionActor owns everything; this object adapts storage, alarms, background
+ * One interview attempt. The engine's SessionCoordinator owns everything; this object adapts storage, alarms, background
  * work and D1 to its seams and hands the browser's commands to the hosted session.
  *
  * The attempt's spec is whichever debrief its start names, resolved through the catalog and recorded in storage, so
@@ -105,7 +105,7 @@ export class InterviewObject extends DurableObject<Env> {
     const foundry: FoundryConfig = foundryConfigured(env) ? foundryConfig(env) : { resourceName: '', apiKey: '', agentModel: '', fastModel: '', liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL };
     const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { socket: cloudflareSocket });
     const background = durableBackground(ctx);
-    const actor = await SessionActor.restore({
+    const actor = await SessionCoordinator.restore({
       plan: spec.plan, config: spec.config, context: spec.context, providers, store: durableStore(ctx.storage), background,
       archive: d1Archive(env.SIMULATOR_ARCHIVE, { model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null }),
       log: event => { if (event.type === 'session') console.warn('Interview session', event); },

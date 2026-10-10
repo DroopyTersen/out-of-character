@@ -11,7 +11,8 @@ import {
 } from './conversationMap.server';
 import { emptyListState, emptyMapNote, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './interviewerNotes';
 import { emptyRanking, observeMap, observeTurn, RANKING, threadKey, type Pick } from './threadSelection';
-import { evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from './judgeConversationTurn.server';
+import { evaluateTurn, RANKING_RUBRIC_VERSION } from './judgeConversationTurn.server';
+import { latestTurn, said, upToParticipant } from './turnTaking';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TurnRecord,

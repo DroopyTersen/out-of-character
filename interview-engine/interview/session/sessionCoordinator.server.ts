@@ -4,29 +4,25 @@ import type { Providers } from '../../providers/providers.server';
 import type { VoiceConnection, VoiceEvent, VoiceInput } from '../../providers/voice.server';
 import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, submitTextSchema, type Activity, type SubmitTextInput, type SubmitTextReply } from '../../shared/protocol';
 import { NETWORK_SAMPLES } from '../../shared/network';
-import type { InterviewEvaluation, InterviewSnapshot, SessionPause, SessionWarning } from '../../shared/snapshot';
+import type { InterviewSnapshot, SessionPause, SessionWarning } from '../../shared/snapshot';
 import type { InterviewLimits } from '../../shared/spec';
 import { resolveInterview, type InterviewDefinition, type ResolvedInterview } from '../definition.server';
 import {
   SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, within, type PauseSpan,
 } from '../../shared/timing';
 import { TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
-import { mergeCoverage } from '../grading/topicCoverage';
-import { evaluateInterview } from '../grading/judgeTopicCoverage.server';
+import { TopicGrading, type Evaluate } from '../grading/topicGrading.server';
+import { judgeTopicCoverage } from '../grading/judgeTopicCoverage.server';
 import { settledPrefix } from '../conversation/conversationMap.server';
 import { InterviewProducer, producerServices } from '../conversation/interviewProducer.server';
-import { gradeObjectives, type GradeRecord } from '../conversation/conversationRecords';
-import { upToParticipant } from '../conversation/judgeConversationTurn.server';
 import { INTERVIEW_RUBRIC_VERSION } from '../grading/topicCoverage.prompt';
 import { FencedError, type Archive, type Background, type InterviewArchiveRow, type NarrativeProvenance, type SessionStore } from '../seams.server';
 import { interviewerBrief, interviewOpening } from '../voice/brief.server';
-import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, Segment, SessionSnapshot } from './sessionCheckpoint';
+import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus, PauseRecord, Segment, SessionSnapshot } from './sessionCheckpoint';
 import { appendTranscript, settledTranscript } from './sessionTranscript';
 import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from './voice.prompt';
 import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 
-/** Canonical topic coverage. */
-type Evaluate = (input: { transcript: Passage[]; revision: number; signal: AbortSignal }) => Promise<InterviewEvaluation>;
 /** The paid calls, replaceable for tests: Sol, Jev's turn reads, Luna, and Jev's coverage grade. */
 export type SessionServices = typeof producerServices & { evaluate: Evaluate; evaluateSilence: typeof evaluateSilence };
 
@@ -55,13 +51,6 @@ export type Command = { action: string; capability: string; body?: string };
  */
 export type Reply = { status: number; body: unknown; terminal?: true; report?: true };
 
-const GRADE_INTERVAL_MS = 5000;
-const MAX_LIVE_GRADES = 719; // Assessment rounds; long transcripts use several requests per round. Final grade is extra.
-/** Keep answered questions and corrections; a trailing interviewer turn adds no participant evidence. */
-function gradingText(transcript: Passage[]): string {
-  const answered = upToParticipant(transcript);
-  return answered.length ? JSON.stringify(answered.map(({ id, speaker, text }) => [id, speaker, text])) : '';
-}
 // The provider has no command that guarantees speech, and it can accept the greeting and stay silent.
 const GREETING_RETRY_MS = 10_000;
 const GREETING_REPLACE_MS = 25_000;
@@ -87,7 +76,7 @@ const digest = async (text: string) => {
 
 /** Coverage from the host's injected decision model. */
 function judgeWith(spec: ResolvedInterview, providers: Providers): Evaluate {
-  return ({ transcript, revision, signal }) => evaluateInterview({ spec, passages: transcript, revision, signal }, providers);
+  return ({ transcript, revision, signal }) => judgeTopicCoverage({ spec, passages: transcript, revision, signal }, providers);
 }
 
 /**
@@ -95,7 +84,7 @@ function judgeWith(spec: ResolvedInterview, providers: Providers): Evaluate {
  * conversation has gone live, a checkpoint lets a replacement hold it for the browser to resume, or finish it with
  * what was captured. A save the store refuses means another owner has taken over: this one stops and writes nothing.
  */
-export class SessionActor {
+export class SessionCoordinator {
   private readonly spec: ResolvedInterview;
   private readonly limits: InterviewLimits;
   private readonly providers: Providers;
@@ -108,8 +97,8 @@ export class SessionActor {
   private readonly lazyWake: boolean;
   private lease: Lease | undefined;
   private state: SessionSnapshot | undefined;
-  /** The judge's latest coverage and the narrative's status, kept beside the snapshot. */
-  private interview: InterviewState | undefined;
+  private readonly grading: TopicGrading;
+  private narrativeStatus: NarrativeStatus | null = null;
   private voice: VoiceConnection | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private finishing: Promise<void> | undefined;
@@ -125,13 +114,7 @@ export class SessionActor {
   private connectingSince: number | undefined;
   private capacityDeadline: number | null = null;
   private passageUpdatedAt = new Map<string, number>();
-  private judgedPassages = new Set<string>();
-  private lastGrade = 0;
-  private gradedText = '';
-  private retriedText = '';
-  private gradeCalls = 0;
-  private grading: Promise<void> | undefined;
-  private gradeAbort = new AbortController();
+  private frozenPassages = new Set<string>();
   private reachedLive = false;
   private epoch = 0;
   private segments: Segment[] = [];
@@ -141,8 +124,6 @@ export class SessionActor {
   private recovered = false;
   private producer: InterviewProducer | undefined;
   private activitySequence = -1;
-  // Already bounded by MAX_LIVE_GRADES plus the final grade; retain probability-only changes too.
-  private readonly grades: GradeRecord[] = [];
   private seenEvents = new Set<string>();
   /** The current provider session's instruction to speak, kept to ask once more if it is met with silence. */
   private greeting: { eventId: string; content: string } | undefined;
@@ -178,6 +159,11 @@ export class SessionActor {
     this.now = options.now ?? Date.now;
     this.report = options.log ?? (() => {});
     this.paid = { ...producerServices, evaluate: judgeWith(this.spec, options.providers), evaluateSilence, ...options.services };
+    this.grading = new TopicGrading({
+      evaluate: this.paid.evaluate, now: this.now,
+      current: () => ({ transcript: settledTranscript(this.state!.transcript, this.passageUpdatedAt, this.now()), revision: this.state!.revision }),
+      freeze: passages => { for (const passage of passages) this.frozenPassages.add(passage.id); },
+    });
     this.lazyWake = options.lazyWake ?? false;
     this.lastSeen = this.lastActivity = this.lastAudio = this.now();
   }
@@ -186,13 +172,13 @@ export class SessionActor {
    * Loads the attempt this store is bound to. A started conversation whose owner was lost is held for its browser to
    * resume; a finished one whose final row was never acknowledged is archived again.
    */
-  static async restore(options: SessionOptions): Promise<SessionActor> {
+  static async restore(options: SessionOptions): Promise<SessionCoordinator> {
     const stored = await options.store.load();
     const accepted = stored.checkpoint?.definition;
-    const actor = new SessionActor(accepted ? { ...options, ...accepted, context: accepted.context } : options);
-    actor.lease = stored.lease;
-    if (actor.lease && stored.checkpoint) await actor.restoreCheckpoint(stored.checkpoint);
-    return actor;
+    const coordinator = new SessionCoordinator(accepted ? { ...options, ...accepted, context: accepted.context } : options);
+    coordinator.lease = stored.lease;
+    if (coordinator.lease && stored.checkpoint) await coordinator.restoreCheckpoint(stored.checkpoint);
+    return coordinator;
   }
 
   /** A copy of the accepted input, including the report format and context used after resume. */
@@ -332,7 +318,7 @@ export class SessionActor {
     const passage: Passage = { id, speaker: 'participant', text: input.text, startMs: at, endMs: at };
     const next = [...snapshot.transcript, passage];
     // Frozen: later speech starts a new passage instead of extending the typed one.
-    this.judgedPassages.add(id);
+    this.frozenPassages.add(id);
     this.typedUnforwarded.add(id);
     this.committed(next, passage, now);
     const pending = this.acceptTyped(input).finally(() => this.typedPending.delete(id));
@@ -383,9 +369,9 @@ export class SessionActor {
    * the end-of-attempt row has been written.
    */
   settleNarrative(status: NarrativeStatus, provenance: NarrativeProvenance) {
-    if (!this.interview) return;
+    if (!this.state) return;
     this.narrative = provenance;
-    this.interview.summary = status;
+    this.narrativeStatus = status;
     this.narrativeArchive = this.narrativeArchive.then(async () => {
       if (this.finishing) await within(this.finishing, 15_000).catch(() => {});
       await this.archiveFinal();
@@ -395,8 +381,8 @@ export class SessionActor {
 
   private publicSnapshot(): InterviewSnapshot {
     const snapshot = this.state!;
-    const interview = this.interview ?? { evaluation: null, summary: null };
-    return { ...snapshot, pause: snapshot.pause ?? null, evaluation: interview.evaluation, background: this.producer?.publicBackground() ?? [] };
+    const { evaluation, feedbackStatus } = this.grading.snapshot();
+    return { ...snapshot, pause: snapshot.pause ?? null, evaluation, feedbackStatus, background: this.producer?.publicBackground() ?? [] };
   }
 
   /** The attempt has ended here, one way or the other. */
@@ -429,11 +415,10 @@ export class SessionActor {
     await this.ordered(() => this.guarded(() => this.store.clear()));
   }
 
-  /** Stops the clock and every paid judgment in flight. Each caller settles the producer and the provider session itself. */
+  /** Stops the live timer and silence check. Each caller orders grading and voice settlement itself. */
   private stopClock() {
     clearInterval(this.timer);
     this.timer = undefined;
-    this.gradeAbort.abort();
     this.silenceAbort?.abort();
   }
 
@@ -450,9 +435,10 @@ export class SessionActor {
   }
 
   private checkpoint(savedAt = this.now()): Checkpoint {
+    const { evaluation, feedbackStatus, grades, gradeCalls } = this.grading.snapshot();
     return structuredClone({
-      definition: this.definition, savedAt, snapshot: { ...this.state!, interview: this.interview }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
-      segments: this.segments, pauses: this.pauses, grades: this.grades, gradeCalls: this.gradeCalls,
+      definition: this.definition, savedAt, snapshot: { ...this.state!, feedbackStatus, interview: { evaluation, summary: this.narrativeStatus } }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
+      segments: this.segments, pauses: this.pauses, grades, gradeCalls,
       ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
     });
   }
@@ -462,6 +448,7 @@ export class SessionActor {
     if (this.fenced) return;
     this.fenced = true;
     this.stopClock();
+    void this.grading.stop();
     this.producer?.close();
     // The provider session stays open: the new owner knows it from the lease and closes it.
     const voice = this.voice;
@@ -480,10 +467,9 @@ export class SessionActor {
     this.state = {
       id: input.id, planId: input.planId, voiceId: input.voiceId,
       status: 'connecting', startedAt: now, limitSeconds: this.limits.durationSeconds, warning: null,
-      revision: 0, transcript: [], feedbackStatus: 'waiting',
+      revision: 0, transcript: [],
       message: null, finalization: 'pending', usageSeconds: null,
     };
-    this.interview = { evaluation: null, summary: null };
     this.createProducer();
     const snapshot = this.state;
     try {
@@ -519,7 +505,7 @@ export class SessionActor {
     this.producer = new InterviewProducer({
       spec: this.spec, attemptId: snapshot.id, startedAt: snapshot.startedAt,
       providers: this.providers, services: this.paid,
-      settled: prefix, coverage: () => this.interview?.evaluation?.objectives ?? [], send: note => this.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
+      settled: prefix, coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
     });
   }
@@ -589,7 +575,7 @@ export class SessionActor {
       const next = appendTranscript(snapshot.transcript, {
         speaker: delta.speaker, text: delta.text,
         startMs: delta.startMs + segment.offsetMs, endMs: delta.endMs + segment.offsetMs,
-      }, this.judgedPassages);
+      }, this.frozenPassages);
       // Late deltas may arrive during close. Keep the final grading input valid.
       if (next.length > TRANSCRIPT_LIMIT.entries || transcriptCharacters(next) > TRANSCRIPT_LIMIT.characters) return;
       const changed = next.find(entry => !snapshot.transcript.includes(entry));
@@ -657,16 +643,8 @@ export class SessionActor {
     this.unanswered(now);
     this.checkSilence(now);
     this.producer?.tick(now);
-    const transcript = settledTranscript(snapshot.transcript, this.passageUpdatedAt, now);
-    const text = gradingText(transcript);
-    if (this.interview?.evaluation && text !== this.gradedText) snapshot.feedbackStatus = 'delayed';
-    if (!text || this.grading || text === this.gradedText || now - this.lastGrade < GRADE_INTERVAL_MS || this.gradeCalls >= MAX_LIVE_GRADES) return;
-    this.lastGrade = now;
-    this.gradedText = text;
-    // A quoted source must stay exact, even if more speech arrives during grading.
-    for (const entry of transcript) this.judgedPassages.add(entry.id);
-    this.grading = this.grade(transcript, snapshot.revision, false, now).finally(() => { this.grading = undefined; });
-    this.background.track(this.grading);
+    const grading = this.grading.tick();
+    if (grading) this.background.track(grading);
   }
 
   /** Transcript inactivity triggers the check; Jev decides whose turn it is. Audio levels are irrelevant. */
@@ -822,12 +800,12 @@ export class SessionActor {
   private async suspend(reason: SessionPause['reason']) {
     this.hold(reason, this.now());
     this.stopClock();
+    const grading = this.grading.stop();
     this.producer?.pause();
     try { await this.connecting; } catch { /* A failed resume is reported by resume. */ }
     await this.closeSegment();
-    await this.grading;
+    await grading;
     await this.silenceCheck;
-    this.gradeAbort = new AbortController();
     if (this.finishing) return;
     await this.saveCheckpoint();
     await this.setWake(this.now() + 30_000);
@@ -854,7 +832,7 @@ export class SessionActor {
     this.resumes++;
     hold.resumes = this.resumes;
     // Nothing said before the drop may be extended by the new session.
-    for (const entry of snapshot.transcript) this.judgedPassages.add(entry.id);
+    for (const entry of snapshot.transcript) this.frozenPassages.add(entry.id);
     const offsetMs = Math.max(0, ...snapshot.transcript.map(entry => entry.endMs)) + (now - hold.pausedAt);
     snapshot.status = 'connecting';
     snapshot.message = null;
@@ -937,42 +915,6 @@ export class SessionActor {
     return known.length ? known.reduce((total, segment) => total + segment.usageSeconds!, 0) : null;
   }
 
-  /** Coverage is re-judged each time against the whole settled transcript. */
-  private async grade(transcript: Passage[], revision: number, final: boolean, capturedAt = this.now()) {
-    const snapshot = this.state!, interview = this.interview!;
-    this.gradeCalls++;
-    const diagnostic = { source: 'grade' as const, id: `grade-${this.gradeCalls}`, final, revision, capturedAt,
-      inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null };
-    try {
-      const result = await this.paid.evaluate({ transcript, revision, signal: AbortSignal.any([this.gradeAbort.signal, AbortSignal.timeout(final ? 8000 : 3000)]) });
-      const log = { ...diagnostic, completedAt: this.now(), durationMs: result.durationMs };
-      if ((!final && this.finishing) || revision < (interview.evaluation?.revision ?? 0)) {
-        this.grades.push({ ...log, outcome: 'stale', objectives: gradeObjectives(result.objectives, interview.evaluation?.objectives ?? []) });
-        return;
-      }
-      // Live bands resist flicker; the final re-grade replaces them, so an unsupported checkmark is withdrawn.
-      const objectives = final ? result.objectives : mergeCoverage(interview.evaluation?.objectives ?? [], result.objectives);
-      this.grades.push({ ...log, outcome: 'graded', objectives: gradeObjectives(result.objectives, objectives) });
-      interview.evaluation = { revision: result.revision, model: result.model, durationMs: result.durationMs, objectives };
-      snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
-    } catch (error) {
-      this.grades.push({ ...diagnostic, completedAt: this.now(),
-        failure: callFailure(error),
-        outcome: this.gradeAbort.signal.aborted && !final ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
-      if (this.gradeAbort.signal.aborted && !final) return;
-      snapshot.feedbackStatus = interview.evaluation ? 'delayed' : 'unavailable';
-      // One cadence-limited retry per input, still inside the overall paid-call cap.
-      if (!final && this.retriedText !== this.gradedText) {
-        this.retriedText = this.gradedText;
-        this.gradedText = '';
-      }
-    }
-  }
-
-  private isFresh(transcript: Passage[]): boolean {
-    return gradingText(transcript) === gradingText(settledTranscript(this.state!.transcript, this.passageUpdatedAt, this.now()));
-  }
-
   private end(interrupted = false): Promise<void> {
     if (this.fenced) return Promise.resolve();
     if (this.finishing) return this.finishing;
@@ -992,11 +934,11 @@ export class SessionActor {
       snapshot.status = 'ending';
       this.producer?.close();
       this.stopClock();
+      const grading = this.grading.stop();
       try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
       await this.pausing?.catch(() => {});
-      await this.grading;
+      await grading;
       await this.silenceCheck;
-      this.gradeAbort = new AbortController();
       const current = this.segment;
       // Only the newest session can still be open; any other unclosed one is left to the closure lease.
       for (const segment of this.segments) if (segment !== current && segment.finalization === 'pending') segment.finalization = 'unconfirmed';
@@ -1004,7 +946,8 @@ export class SessionActor {
       if (current?.finalization === 'pending' && drain) await new Promise(resolve => setTimeout(resolve, 1000));
       // Even a confirmed segment must persist its lease before final grading, including on a closing retry.
       await this.closeSegment();
-      if (snapshot.transcript.some(item => item.speaker === 'participant')) await this.grade(snapshot.transcript, snapshot.revision, true);
+      if (this.fenced) throw new FencedError();
+      await this.grading.final({ transcript: snapshot.transcript, revision: snapshot.revision });
       snapshot.status = interrupted ? 'interrupted' : 'ended';
       const now = this.now();
       for (const pause of this.pauses) if (pause.resumedAt === null) pause.endedAt ??= now;
@@ -1015,7 +958,7 @@ export class SessionActor {
       if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
       this.lease!.closed = !outstanding.length;
       if (this.reachedLive) {
-        this.interview!.summary = { status: snapshot.transcript.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
+        this.narrativeStatus = { status: snapshot.transcript.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
         this.unarchived = now;
       }
     }
@@ -1055,16 +998,15 @@ export class SessionActor {
    * A finished one only needs its final row: the voice session was closed and the dialogue graded before it was saved.
    */
   private async restoreCheckpoint(checkpoint: Checkpoint) {
-    const { interview, ...stored } = checkpoint.snapshot;
+    const { interview, feedbackStatus, ...stored } = checkpoint.snapshot;
     this.state = stored;
-    this.interview = interview ? { evaluation: interview.evaluation, summary: interview.summary } : { evaluation: null, summary: null };
+    this.narrativeStatus = interview?.summary ?? null;
+    this.grading.restore({ evaluation: interview?.evaluation ?? null, feedbackStatus, grades: checkpoint.grades, gradeCalls: checkpoint.gradeCalls });
     this.reachedLive = checkpoint.reachedLive;
     this.epoch = checkpoint.epoch;
     this.resumes = checkpoint.resumes;
     this.segments = checkpoint.segments;
     this.pauses = checkpoint.pauses;
-    this.grades.push(...checkpoint.grades);
-    this.gradeCalls = checkpoint.gradeCalls;
     // A provider session opened after the checkpoint is known only to the lease; it is the newest.
     const known = new Set(this.segments.map(segment => segment.providerId));
     for (const id of this.lease!.providerIds) if (!known.has(id)) {
@@ -1072,7 +1014,7 @@ export class SessionActor {
     }
     for (const entry of this.state.transcript) {
       this.passageUpdatedAt.set(entry.id, checkpoint.savedAt);
-      this.judgedPassages.add(entry.id);
+      this.frozenPassages.add(entry.id);
     }
     this.createProducer();
     if (checkpoint.producer) this.producer?.restore(checkpoint.producer);
@@ -1202,7 +1144,7 @@ export class SessionActor {
       // Freeze the data and its timestamp before any asynchronous work.
       const snapshot = structuredClone(this.publicSnapshot());
       // Grade diagnostics ride with the private producer records; they are never part of the public snapshot.
-      const producerLog = structuredClone([...(this.producer?.records ?? []), ...this.grades]);
+      const producerLog = structuredClone([...(this.producer?.records ?? []), ...this.grading.snapshot().grades]);
       const producer = this.producer?.summary() ?? null;
       const connection = this.connectionLog();
       const narrative = structuredClone(this.narrative);
@@ -1210,7 +1152,7 @@ export class SessionActor {
       const [actorDigest, openingDigest] = await this.digests;
       const row: InterviewArchiveRow = {
         id: snapshot.id, specId: this.spec.id, specVersion: this.spec.version, voiceId: snapshot.voiceId, state, capturedAt, snapshot,
-        transcript: snapshot.transcript, producerLog, narrative: structuredClone(this.interview?.summary ?? null),
+        transcript: snapshot.transcript, producerLog, narrative: structuredClone(this.narrativeStatus),
         provenance: { voice: this.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection, ...(narrative ? { narrative } : {}) },
       };
       if (this.fenced) return false;

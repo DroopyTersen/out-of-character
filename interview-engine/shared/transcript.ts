@@ -12,3 +12,8 @@ export function findEvidence(passages: Passage[], id: string): Evidence | null {
   const passage = passages.find(item => item.id === id);
   return passage ? { entryId: passage.id, speaker: passage.speaker, text: passage.text } : null;
 }
+
+/** The dialogue as topic and conversation-turn judgments sees it, rendered the same way each time, with the interviewer's speaker token. */
+export function dialogueState(passages: Pick<Passage, 'id' | 'speaker' | 'text'>[], interviewer = 'interviewer') {
+  return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: passages.map(({ id, speaker, text }) => [id, speaker === 'participant' ? 'participant' : interviewer, text]) };
+}

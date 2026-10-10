@@ -12,7 +12,7 @@ import { INTERVIEW_RUBRIC_VERSION } from '../grading/topicCoverage.prompt';
 import { testFraming, testTechniques } from '../conversation/testSpec';
 import { FencedError, type InterviewArchiveRow } from '../seams.server';
 import type { InterviewSnapshot as PublicSnapshot } from '../../shared/snapshot';
-import { SessionActor, type SessionOptions, type SessionServices } from './sessionActor.server';
+import { SessionCoordinator, type SessionOptions, type SessionServices } from './sessionCoordinator.server';
 import { resumeInstruction, typedAnswerCue } from './voice.prompt';
 
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the
@@ -92,10 +92,10 @@ function fixture({ record = memoryRecord(), voice = fakeVoice(), archive = memor
       },
     },
   };
-  const send = (actor: SessionActor, action: string, body?: string, cap = capability) => actor.handle({ action, capability: cap, ...(body != null ? { body } : {}) });
+  const send = (actor: SessionCoordinator, action: string, body?: string, cap = capability) => actor.handle({ action, capability: cap, ...(body != null ? { body } : {}) });
   return {
     record, voice, archive, store, background, graded, events, options, send,
-    restore: () => SessionActor.restore(options),
+    restore: () => SessionCoordinator.restore(options),
     at: (ms: number) => { clock = EPOCH + ms; },
     now: () => clock,
   };
@@ -629,90 +629,92 @@ test('a start whose attachment fails ends the attempt, and every later wake sche
   expect(wakes.at(-1)).toBe(EPOCH + 30_000 + 300_000);
 });
 
-test('live coverage follows participant evidence, retains short answers and corrections, and always grades the final dialogue', async () => {
+test('fencing during an accepted closing lease write prevents final grading', async () => {
   const f = fixture();
-  const evaluate = f.options.services!.evaluate!;
-  const inputs: string[][] = [];
-  let release!: () => void;
-  const pending = new Promise<void>(resolve => { release = resolve; });
-  let releaseSecond!: () => void;
-  const secondPending = new Promise<void>(resolve => { releaseSecond = resolve; });
-  f.options.services!.evaluate = async input => {
-    inputs.push(input.transcript.map(entry => entry.text));
-    if (inputs.length === 1) await pending;
-    if (inputs.length === 2) await secondPending;
-    return evaluate(input);
-  };
-  const { actor, socket } = await conversation(f);
-  // Let the real session timer observe each settled input, using its injected clock.
-  const advance = async (ms: number) => { f.at(ms); await Bun.sleep(650); };
-  try {
-    await advance(5000);
-    expect(inputs).toHaveLength(1);
-    say(socket, 'output', 'e3', 'Was the release accepted?', 4000);
-    f.at(12_000);
-    release();
-    await f.background.settle();
-    expect(body(await f.send(actor, 'poll', quietPoll)).feedbackStatus).toBe('current');
-    await advance(13_000);
-    expect(inputs).toHaveLength(1);
-
-    say(socket, 'input', 'e4', 'Mm.', 5500);
-    await advance(19_000);
-    expect(inputs).toHaveLength(1);
-    expect(body(await f.send(actor, 'poll', quietPoll)).feedbackStatus).toBe('current');
-
-    say(socket, 'output', 'e5', 'Did the customer sign off?', 6500);
-    say(socket, 'input', 'e6', 'Yes.', 7500);
-    await advance(25_000);
-    expect(inputs).toHaveLength(2);
-    expect(inputs[1]).toContain('Did the customer sign off?');
-    expect(inputs[1]!.at(-1)).toBe('Yes.');
-
-    say(socket, 'input', 'e7', 'No, it was still a pilot.', 9500);
-    f.at(28_000);
-    releaseSecond();
-    await f.background.settle();
-    expect(body(await f.send(actor, 'poll')).feedbackStatus).toBe('delayed');
-    await advance(31_000);
-    expect(inputs).toHaveLength(3);
-    expect(inputs[2]!.at(-1)).toBe('No, it was still a pilot.');
-    say(socket, 'output', 'e8', 'What still needed approval?', 11_000);
-    await advance(37_000);
-    expect(inputs).toHaveLength(3);
-    await f.send(actor, 'end');
-    expect(inputs).toHaveLength(4);
-    expect(inputs[3]!.at(-1)).toBe('What still needed approval?');
-    expect(body(await f.send(actor, 'poll')).feedbackStatus).toBe('current');
-  } finally { release(); releaseSecond(); await f.send(actor, 'end'); }
-}, 10_000);
-
-test('failed live coverage retries once per participant input and interviewer speech does not renew the retry', async () => {
-  const f = fixture();
-  const evaluate = f.options.services!.evaluate!;
   let calls = 0;
-  f.options.services!.evaluate = async input => {
-    if (++calls <= 2) throw new Error('Provider unavailable');
-    return evaluate(input);
+  const evaluate = f.options.services!.evaluate!;
+  f.options.services!.evaluate = async input => { calls++; return evaluate(input); };
+  const { actor } = await conversation(f);
+  const accepted = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const save = f.store.save;
+  f.store.save = async patch => {
+    await save(patch);
+    if (patch.lease && !patch.lease.providerIds.length && !('checkpoint' in patch)) {
+      accepted.resolve();
+      await release.promise;
+    }
   };
-  const { actor, socket } = await conversation(f);
-  const advance = async (ms: number) => { f.at(ms); await Bun.sleep(650); await f.background.settle(); };
+  const ending = f.send(actor, 'end');
   try {
-    await advance(5000);
-    expect(calls).toBe(1);
-    await advance(11_000);
-    expect(calls).toBe(2);
-    say(socket, 'output', 'e3', 'Did the customer sign off?', 4000);
-    await advance(17_000);
-    expect(calls).toBe(2);
-    say(socket, 'input', 'e4', 'No.', 5500);
-    await advance(23_000);
-    expect(calls).toBe(3);
-    expect(body(await f.send(actor, 'poll')).feedbackStatus).toBe('current');
+    await accepted.promise;
+    await actor.close('fenced');
+    release.resolve();
+    expect((await ending).status).toBe(409);
+    expect(calls).toBe(0);
+    expect(f.archive.writes).toHaveLength(0);
+  } finally { release.resolve(); await ending; }
+});
+
+test('the actor timer publishes grading and freezes its quoted transcript passages', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  try {
+    f.at(5000);
+    await Bun.sleep(650);
+    await f.background.settle();
+    expect(f.graded).toEqual([['p1', 'p2']]);
+    expect(actor.snapshot()).toMatchObject({ feedbackStatus: 'current', evaluation: { revision: 2,
+      objectives: [{ evidence: { entryId: 'p2', text: 'A claims portal for the adjusters.' } }],
+    } });
+    say(socket, 'input', 'e3', 'It went live in June.', 3000);
+    expect(actor.snapshot()!.transcript.map(entry => entry.text)).toEqual([
+      'Hi, I’m Riley. What did you build?', 'A claims portal for the adjusters.', 'It went live in June.',
+    ]);
     await f.send(actor, 'end');
-    expect(calls).toBe(4);
+    expect(f.archive.rows.get(attempt.id)!.producerLog.filter(record => record.source === 'grade')).toHaveLength(2);
   } finally { await f.send(actor, 'end'); }
-}, 10_000);
+});
+
+test('pause closes voice before settling cancelled grading and checkpoints no late result', async () => {
+  const f = fixture();
+  const evaluate = f.options.services!.evaluate!;
+  const pending = Promise.withResolvers<void>();
+  let signal: AbortSignal | undefined;
+  f.options.services!.evaluate = async input => { signal = input.signal; await pending.promise; return evaluate(input); };
+  const { actor, socket } = await conversation(f);
+  try {
+    f.at(5000);
+    await Bun.sleep(650);
+    expect(signal).toBeDefined();
+    const closed = new Promise<void>(resolve => socket.addEventListener('close', () => resolve(), { once: true }));
+    const pausing = actor.close('hold');
+    await closed;
+    expect(signal!.aborted).toBe(true);
+    pending.resolve();
+    await pausing;
+    expect(f.record.checkpoint!.snapshot).toMatchObject({ status: 'paused', feedbackStatus: 'waiting', interview: { evaluation: null } });
+    expect(f.record.checkpoint!.grades[0]?.outcome).toBe('aborted');
+  } finally { pending.resolve(); await f.send(actor, 'end'); }
+});
+
+test.each(['empty coverage', 'failed final grade'] as const)('End saves participant evidence and permits a report with %s', async outcome => {
+  const f = fixture();
+  f.options.services!.evaluate = async input => {
+    if (outcome === 'failed final grade') throw new Error('Judge unavailable');
+    return { revision: input.revision, model: 'fixture', durationMs: 1, objectives: [] };
+  };
+  const { actor } = await conversation(f);
+  const ended = await f.send(actor, 'end');
+  expect(ended.status).toBe(200);
+  expect(body(ended).status).toBe('ended');
+  const row = f.archive.rows.get(attempt.id)!;
+  expect(row.snapshot.status).toBe('ended');
+  expect(row.transcript.some(entry => entry.speaker === 'participant')).toBe(true);
+  expect(row.narrative?.status).toBe('pending');
+  expect((await f.send(actor, 'report')).report).toBe(true);
+  expect(f.record.checkpoint).toBeUndefined();
+});
 
 const silenceResult = (probability: number) => ({ probability, model: 'fixture', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } });
 const reminders = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('silence-'));

@@ -3,16 +3,16 @@ import type { Experimental_EvaluationQuestion } from 'ai';
 import { interviewTopics, type CoverageLevel } from '../../core/interview';
 import { interviewFixtures } from './fixtures';
 import recordings from './recordings.json';
-import { readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
+import { readTopicCoverage, type JudgeAnswers } from './evaluate.server';
 import { INTERVIEW_RUBRIC_VERSION, interviewQuestions } from './rubric';
 import { interviewerBrief, interviewOpening, interviewers } from './scenario.server';
 
-function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
+function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): JudgeAnswers {
   return Object.fromEntries(Object.entries(questions).map(([id, question]) => {
     return [id, { type: 'choice', choice: /^objective:[^:]+$/.test(id) ? 'not-yet' : 'none' }];
-  })) as InterviewAnswers;
+  })) as JudgeAnswers;
 }
-function cover(answers: InterviewAnswers, id: string, level: CoverageLevel, probability: number, passage: string) {
+function cover(answers: JudgeAnswers, id: string, level: CoverageLevel, probability: number, passage: string) {
   answers[`objective:${id}`] = { type: 'choice', choice: level, probabilities: { [level]: probability } };
   answers[`objective:${id}:evidence`] = { type: 'choice', choice: passage, probabilities: { [passage]: .9 } };
 }
@@ -74,7 +74,7 @@ describe('project closeout interview contracts', () => {
 
     const answers = answersFor(questions);
     cover(answers, 'client-access', 'explored', .99, 'p2');
-    const result = readInterviewAnswers(fixture.transcript, answers);
+    const result = readTopicCoverage(fixture.transcript, answers);
     expect(result.objectives.find(item => item.id === 'client-access')).toMatchObject({ level: 'not-yet', achieved: false, evidence: null });
   });
 
@@ -83,7 +83,7 @@ describe('project closeout interview contracts', () => {
     const answers = answersFor(interviewQuestions(fixture.transcript));
     cover(answers, 'project-delivery', 'explored', .97, 'p2');
     cover(answers, 'project-role', 'explored', .96, 'p2');
-    const result = readInterviewAnswers(fixture.transcript, answers);
+    const result = readTopicCoverage(fixture.transcript, answers);
     expect(result.objectives.filter(item => item.achieved).map(item => item.id)).toEqual(['project-delivery', 'project-role']);
     expect(result.objectives.find(item => item.id === 'project-delivery')).toMatchObject({ level: 'explored', probability: .97, evidence: { entryId: 'p2', speaker: 'participant', text: fixture.transcript[1]!.text } });
     expect(result.objectives.find(item => item.id === 'project-reflection')).toMatchObject({ level: 'not-yet', achieved: false, evidence: null });
@@ -93,18 +93,18 @@ describe('project closeout interview contracts', () => {
     const duration = interviewFixtures.find(item => item.id === 'terse-three-weeks')!;
     const durationAnswers = answersFor(interviewQuestions(duration.transcript));
     cover(durationAnswers, 'client-access', 'explored', .98, 'p2');
-    expect(readInterviewAnswers(duration.transcript, durationAnswers).objectives.find(item => item.id === 'client-access')?.evidence?.text).toBe('Three weeks.');
+    expect(readTopicCoverage(duration.transcript, durationAnswers).objectives.find(item => item.id === 'client-access')?.evidence?.text).toBe('Three weeks.');
 
     const agreement = interviewFixtures.find(item => item.id === 'vague-yes')!;
     const agreementAnswers = answersFor(interviewQuestions(agreement.transcript));
     cover(agreementAnswers, 'client-decisions', 'explored', .98, 'p2');
-    expect(readInterviewAnswers(agreement.transcript, agreementAnswers).objectives.find(item => item.id === 'client-decisions')).toMatchObject({ level: 'not-yet', achieved: false });
+    expect(readTopicCoverage(agreement.transcript, agreementAnswers).objectives.find(item => item.id === 'client-decisions')).toMatchObject({ level: 'not-yet', achieved: false });
   });
 
   test('credit needs high confidence, boundaries need even odds, and both need participant evidence', () => {
     const fixture = interviewFixtures.find(item => item.id === 'vague-rant')!;
     const answers = answersFor(interviewQuestions(fixture.transcript));
-    const read = () => readInterviewAnswers(fixture.transcript, answers).objectives.find(item => item.id === 'process-communication')!;
+    const read = () => readTopicCoverage(fixture.transcript, answers).objectives.find(item => item.id === 'process-communication')!;
     for (const [level, probability, expected] of [['explored', .84, 'touched'], ['explored', .85, 'explored'], ['set-aside', .49, 'touched'], ['set-aside', .5, 'set-aside'], ['set-aside', .9, 'set-aside'], ['touched', .3, 'touched']] as const) {
       cover(answers, 'process-communication', level, probability, 'p2');
       expect(read()).toMatchObject({ level: expected, achieved: expected === 'explored', evidence: { entryId: 'p2' } });
@@ -116,8 +116,8 @@ describe('project closeout interview contracts', () => {
     answers['objective:process-communication:evidence'] = { type: 'choice', choice: 'p2' };
     expect(read()).toMatchObject({ level: 'touched', levels: null, probability: null });
     answers['objective:process-communication:evidence'] = { type: 'choice', choice: 'p1' };
-    expect(() => readInterviewAnswers(fixture.transcript, answers)).toThrow('Invalid interview selection');
+    expect(() => readTopicCoverage(fixture.transcript, answers)).toThrow('Invalid interview selection');
     answers['objective:process-communication'] = { type: 'choice', choice: 'heard' };
-    expect(() => readInterviewAnswers(fixture.transcript, answers)).toThrow('Invalid interview selection');
+    expect(() => readTopicCoverage(fixture.transcript, answers)).toThrow('Invalid interview selection');
   });
 });

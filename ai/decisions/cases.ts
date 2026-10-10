@@ -1,8 +1,10 @@
 import type { Experimental_EvaluationQuestion } from 'ai';
 import { evaluateSilence } from '../../interview-engine/interview/session/silence.server';
-import { dialogueState, readInterviewAnswers } from '../../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { readTopicCoverage } from '../../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { dialogueState } from '../../interview-engine/shared/transcript';
 import { interviewQuestions } from '../../interview-engine/interview/grading/topicCoverage.prompt';
-import { latestTurn, turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/judgeConversationTurn.server';
+import { turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/judgeConversationTurn.server';
+import { latestTurn } from '../../interview-engine/interview/conversation/turnTaking';
 import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/conversation/threadSelection';
 import type { ConversationMap } from '../../interview-engine/interview/conversation/conversationMap';
 import type { Passage } from '../../interview-engine/shared/transcript';
@@ -91,7 +93,7 @@ export function interpret(item: EvalCase, answers: Result['answers']) {
     return { ...reading, new: reading.novel >= .8, feedbackNew: (reading.feedback ?? 0) >= .8, wakeCandidate: reading.novel >= .8 || (reading.feedback ?? 0) >= .8,
       pick: pickThreads(item.map!, ranking) };
   }
-  const grade = readInterviewAnswers(spec, item.transcript, answers);
+  const grade = readTopicCoverage(spec, item.transcript, answers);
   return { ...grade, objectives: Object.fromEntries(grade.objectives.map(x => [x.id, x])) };
 }
 

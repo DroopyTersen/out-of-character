@@ -4,8 +4,9 @@ import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapThread } from './conversationMap';
 import { threadKey } from './threadSelection';
 import { yieldsTurn } from './turnTaking';
-import type { InterviewAnswers } from '../grading/judgeTopicCoverage.server';
-import { evaluateTurn, latestTurn, readTurnAnswers, turnQuestions, upToParticipant } from './judgeConversationTurn.server';
+import type { JudgeAnswers } from '../../providers/judgeProvider.server';
+import { evaluateTurn, readTurnAnswers, turnQuestions } from './judgeConversationTurn.server';
+import { latestTurn, upToParticipant } from './turnTaking';
 
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({
   id, label: `Thread ${id}`, anchors: ['e1'], unknown: `unknown ${id}`, guess: 'a guess Jev never sees', related: [], topics: ['client-decisions'], status: 'open', reason: null, ...changes,
@@ -92,7 +93,7 @@ test('turn questions cover focus, newness and each open thread; closed threads, 
 });
 
 test('turn answers become a reading; an invalid answer rejects the whole reading', () => {
-  const answers: InterviewAnswers = {
+  const answers: JudgeAnswers = {
     focus: { type: 'choice', choice: 't3' }, new: { type: 'boolean', probability: .7 }, feedback: { type: 'boolean', probability: .92 },
     'natural:t1': { type: 'boolean', probability: .2 }, 'state:t1': { type: 'choice', choice: 'stalled' },
     'natural:t3': { type: 'boolean', probability: .9 }, 'state:t3': { type: 'choice', choice: 'open' },

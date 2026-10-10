@@ -1,13 +1,11 @@
-import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationQuestion } from 'ai';
+import { experimental_evaluate } from 'ai';
 import type { Providers } from '../../providers/providers.server';
-import { evidenceBatches, type Judge } from '../../providers/judgeProvider.server';
+import { choice, evidenceBatches, type Judge, type JudgeAnswers } from '../../providers/judgeProvider.server';
 import { COVERAGE_LEVELS, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../shared/snapshot';
-import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
+import { dialogueState, findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
 import { interviewerToken, interviewQuestions, judgedObjectives, type JudgedSpec } from './topicCoverage.prompt';
 import { isBackchannel } from '../conversation/turnTaking';
 
-type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
-export type InterviewAnswers = Record<string, Answer>;
 export type EvaluationInput = {
   spec: JudgedSpec;
   passages: Passage[];
@@ -19,20 +17,7 @@ export type EvaluationJudge = Pick<Providers, 'judge' | 'telemetry'> | Judge;
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
 
-// The judge's answers, checked against the question asked. A missing or malformed answer fails the whole reading.
-export function booleanProbability(answers: InterviewAnswers, id: string): number {
-  const answer = answers[id];
-  if (answer?.type !== 'boolean' || !validProbability(answer.probability)) throw new Error(`Invalid interview judgment: ${id}`);
-  return answer.probability;
-}
-
-export function choice<T extends string>(answers: InterviewAnswers, id: string, options: readonly T[]) {
-  const answer = answers[id];
-  if (answer?.type !== 'choice' || !options.includes(answer.choice as T)) throw new Error(`Invalid interview selection: ${id}`);
-  return answer as typeof answer & { choice: T };
-}
-
-function evidence(answers: InterviewAnswers, key: string, participant: Passage[]) {
+function evidence(answers: JudgeAnswers, key: string, participant: Passage[]) {
   let selected: { id: string; probability: number } | null = null;
   evidenceBatches(participant).forEach((batch, index) => {
     const answer = choice(answers, index ? `${key}:${index}` : key, ['none', ...batch.map(passage => passage.id)]);
@@ -46,7 +31,7 @@ function evidence(answers: InterviewAnswers, key: string, participant: Passage[]
   return passage && !isBackchannel(passage.text) ? passage : null;
 }
 
-function coverage(answers: InterviewAnswers, objectiveId: string, participant: Passage[], exploredThreshold: number): InterviewObjectiveReading {
+function coverage(answers: JudgeAnswers, objectiveId: string, participant: Passage[], exploredThreshold: number): InterviewObjectiveReading {
   const answer = choice(answers, `objective:${objectiveId}`, [...COVERAGE_LEVELS]);
   const levels = answer.probabilities
     ? Object.fromEntries(COVERAGE_LEVELS.map(level => [level, validProbability(answer.probabilities![level] ?? NaN) ? answer.probabilities![level]! : 0])) as Record<CoverageLevel, number>
@@ -61,7 +46,7 @@ function coverage(answers: InterviewAnswers, objectiveId: string, participant: P
 }
 
 /** Turns the judge's answers into topic coverage. Only a participant passage can be evidence. */
-export function readInterviewAnswers(spec: JudgedSpec, passages: Passage[], answers: InterviewAnswers, exploredThreshold = .85): Pick<InterviewEvaluation, 'objectives'> {
+export function readTopicCoverage(spec: JudgedSpec, passages: Passage[], answers: JudgeAnswers, exploredThreshold = .85): Pick<InterviewEvaluation, 'objectives'> {
   const participant = passages.filter(passage => passage.speaker === 'participant');
   return { objectives: judgedObjectives(spec).map(objective => {
     const reading = coverage(answers, objective.id, participant, exploredThreshold);
@@ -82,13 +67,8 @@ function validate(passages: Passage[]) {
   if (new Set(passages.map(passage => passage.id)).size !== passages.length) throw new Error('Transcript passage IDs must be unique.');
 }
 
-/** The dialogue as every Jev interview call sees it, rendered the same way each time, with the interviewer's speaker token. */
-export function dialogueState(passages: Pick<Passage, 'id' | 'speaker' | 'text'>[], interviewer = 'interviewer') {
-  return { dialogueColumns: ['id', 'speaker', 'text'], dialogue: passages.map(({ id, speaker, text }) => [id, speaker === 'participant' ? 'participant' : interviewer, text]) };
-}
-
 /** The final grade: the injected judge reads the whole transcript for every objective. */
-export async function evaluateInterview(input: EvaluationInput, supplied: EvaluationJudge) {
+export async function judgeTopicCoverage(input: EvaluationInput, supplied: EvaluationJudge) {
   validate(input.passages);
   const started = performance.now();
   const { passages } = input;
@@ -98,7 +78,7 @@ export async function evaluateInterview(input: EvaluationInput, supplied: Evalua
     abortSignal: input.signal, maxRetries: 0, ...(telemetry ? { telemetry } : {}),
   });
   return {
-    ...readInterviewAnswers(input.spec, passages, result.answers, judge.thresholds.coverageExplored),
+    ...readTopicCoverage(input.spec, passages, result.answers, judge.thresholds.coverageExplored),
     revision: input.revision, model: result.response.modelId,
     durationMs: Math.round(performance.now() - started), usage: result.usage, answers: result.answers,
   };

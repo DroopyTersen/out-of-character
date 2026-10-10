@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { INTERVIEW_SCENARIO_ID } from '../../core/interview';
-import { evaluateInterview } from './evaluate.server';
+import { judgeTopicCoverage } from './evaluate.server';
 import { interviewFixtures } from './fixtures';
 import { INTERVIEW_RUBRIC_VERSION } from './rubric';
 
@@ -21,7 +21,7 @@ for (const fixture of fixtures) {
   try {
     const input = { planId: INTERVIEW_SCENARIO_ID, voiceId: 'sam-cedar', transcript: fixture.transcript,
       revision: fixture.transcript.length, apiKey, signal: AbortSignal.timeout(30_000) };
-    const participant = await evaluateInterview(input);
+    const participant = await judgeTopicCoverage(input);
     const heard = participant.objectives.filter(item => item.achieved).map(item => item.id);
     const checks = [
       ...fixture.expected.heard.map(id => ({ name: `heard:${id}`, passed: heard.includes(id) })),

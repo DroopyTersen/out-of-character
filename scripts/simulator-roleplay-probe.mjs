@@ -8,7 +8,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateEnding, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
-import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
+import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
 import { settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
@@ -551,7 +551,7 @@ async function observeClient(afterTurn, transcript) {
   if (producer) {
     // Coverage only: the producer reads turns, calls Sol and sends notes on its own tick.
     try {
-      const graded = await evaluateInterview({ planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(transcript), revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
+      const graded = await judgeTopicCoverage({ planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(transcript), revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
       if (!closing) coverage = mergeCoverage(coverage, graded.objectives);
     } catch (error) { report.errors.push(`Participant grading failed (${error.name}).`); }
     return;
@@ -725,7 +725,7 @@ try {
   if (report.finalized && report.transcript.some(entry => entry.speaker === 'trainee')) {
     const common = { revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) };
     report[isInterview ? 'interview' : 'trainee'] = isInterview
-      ? await evaluateInterview({ ...common, planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(report.transcript) })
+      ? await judgeTopicCoverage({ ...common, planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(report.transcript) })
       : await evaluateTrainee({ ...common, scenarioId, clientId, transcript: report.transcript });
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }

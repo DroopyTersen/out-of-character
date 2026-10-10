@@ -1,4 +1,4 @@
-import type { Experimental_EvaluationModel } from 'ai';
+import type { Experimental_EvaluationModel, Experimental_EvaluationAnswer, Experimental_EvaluationQuestion } from 'ai';
 
 /** The host binds the model and its calibrated action thresholds as one judge. */
 export type Judge = {
@@ -21,4 +21,14 @@ export function evidenceBatches<T>(entries: T[]): T[][] {
   const batches: T[][] = [];
   for (let start = 0; start < entries.length; start += 254) batches.push(entries.slice(start, start + 254));
   return batches;
+}
+
+/** Checked answers shared by topic and conversation-turn judgments. */
+type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
+export type JudgeAnswers = Record<string, Answer>;
+
+export function choice<T extends string>(answers: JudgeAnswers, id: string, options: readonly T[]) {
+  const answer = answers[id];
+  if (answer?.type !== 'choice' || !options.includes(answer.choice as T)) throw new Error(`Invalid interview selection: ${id}`);
+  return answer as typeof answer & { choice: T };
 }

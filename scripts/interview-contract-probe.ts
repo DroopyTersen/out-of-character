@@ -4,7 +4,7 @@
  */
 import { foundryConfig } from '../ai/foundry.server';
 import { resolveInterview } from '../interview-engine/interview/definition.server';
-import { evaluateInterview } from '../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { judgeTopicCoverage } from '../interview-engine/interview/grading/judgeTopicCoverage.server';
 import { writeNarrative } from '../interview-engine/narrative/writeNarrative.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
@@ -32,7 +32,7 @@ const cases = [
   { id: 'parent-scope', expected: 'applicable', explored: false, transcript: dialogue('What happened in the handoffs?', 'I personally handled the handoff to the customer, but have not described that yet. Separately, our internal engineering handoff lacked a test command, costing our own developers an hour. That internal example has nothing to do with the customer handoff.') },
 ] as const;
 const results = await Promise.allSettled(cases.map(async row => {
-  const result = await evaluateInterview({ spec, passages: [...row.transcript], revision: 2, signal: AbortSignal.timeout(30_000) }, providers);
+  const result = await judgeTopicCoverage({ spec, passages: [...row.transcript], revision: 2, signal: AbortSignal.timeout(30_000) }, providers);
   const reading = result.objectives[0]!;
   return { id: row.id, passed: reading.applicability === row.expected && reading.achieved === row.explored, reading, durationMs: result.durationMs };
 }));

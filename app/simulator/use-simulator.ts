@@ -149,6 +149,7 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
 
   function end() {
     savedAttempts.clear(kind);
+    setError(null);
     setPhase('ending');
     void connection.current?.end();
   }

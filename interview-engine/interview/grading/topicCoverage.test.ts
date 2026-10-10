@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { CoverageLevel, InterviewObjectiveReading } from '../../shared/snapshot';
-import { coverageConfidence, mergeCoverage } from './coverage';
+import { coverageConfidence, mergeCoverage } from './topicCoverage';
 
 const reading = (id: string, level: CoverageLevel, levels: Partial<Record<CoverageLevel, number>> | null, entryId: string | null = 'p2'): InterviewObjectiveReading => ({
   id, level, achieved: level === 'explored', probability: levels?.explored ?? null,

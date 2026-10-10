@@ -4,9 +4,9 @@ import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { interviewers, interviewerBrief, interviewOpening } from '../ai/interview/scenario.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
-import { emptyMap } from '../interview-engine/interview/conversation/map.ts';
-import { listNote, LIVE_NOTE_CHANNEL } from '../interview-engine/interview/conversation/notes.ts';
-import { appendTranscript } from '../interview-engine/interview/session/transcript.ts';
+import { emptyMap } from '../interview-engine/interview/conversation/conversationMap.ts';
+import { listNote, LIVE_NOTE_CHANNEL } from '../interview-engine/interview/conversation/interviewerNotes.ts';
+import { appendTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
 import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mjs';
 
 // Delivery probe: does Sam take up a thread note, parrot its words, or mention it?

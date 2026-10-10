@@ -1,7 +1,7 @@
 import type { LanguageModel, TelemetryOptions, Tool } from 'ai';
 import { foundryProvider, type FoundryConfig } from './foundry.server';
 import { gptLiveProvider } from './gptLive.server';
-import { unconfiguredJudge, type Judge } from './judge.server';
+import { unconfiguredJudge, type Judge } from './judgeProvider.server';
 import { structuredWith, type StructuredRequest } from './structured.server';
 import type { SocketOpener, VoiceProvider } from './voice.server';
 

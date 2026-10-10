@@ -1,8 +1,8 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/map';
-import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/notes';
-import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
-import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/interview/conversation/records';
+import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/conversationMap';
+import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/interviewerNotes';
+import { threadKey } from '../../../interview-engine/interview/conversation/threadSelection';
+import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/interview/conversation/conversationRecords';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
 import { interviewAttempt, narrated, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, waitFor } from '../simulator/session-fixture';

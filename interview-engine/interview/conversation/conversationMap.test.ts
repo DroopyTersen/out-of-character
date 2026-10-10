@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { applyMapUpdate, emptyMap, PARTICIPANT_ID, renderMapForSol, type ConversationMap, type MapEntity, type MapThread, type MapUpdate } from './map';
+import { applyMapUpdate, emptyMap, PARTICIPANT_ID, renderMapForSol, type ConversationMap, type MapEntity, type MapThread, type MapUpdate } from './conversationMap';
 
 const passages = [
   { id: 'p1', speaker: 'interviewer' as const }, { id: 'p2', speaker: 'participant' as const },

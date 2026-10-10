@@ -1,5 +1,5 @@
 import type { Technique, TopicGroup } from '../../shared/spec';
-import type { MappedSpec } from './map.prompt';
+import type { MappedSpec } from './conversationMap.prompt';
 
 const group = (id: string, label: string, objectives: [string, string][]): TopicGroup => ({
   id, label, objectives: objectives.map(([objective, name]) => ({ id: objective, label: name, criterion: `The participant covers ${name.toLowerCase()}.` })),

@@ -1,6 +1,6 @@
 import type { Experimental_EvaluationModel, Experimental_EvaluationQuestion } from 'ai';
 import { z } from 'zod';
-import type { Judge } from './judge.server';
+import type { Judge } from './judgeProvider.server';
 
 export type Model = Exclude<Experimental_EvaluationModel, string>;
 export type Request = Parameters<Model['doEvaluate']>[0];

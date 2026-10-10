@@ -4,7 +4,7 @@ import { foundryProvider } from '../providers/foundry.server';
 import { testFoundry } from '../providers/testFoundry.server';
 import type { Passage } from '../shared/transcript';
 import type { Narrative, NarrativeInput } from './narrative.server';
-import { writeNarrative } from './write.server';
+import { writeNarrative } from './writeNarrative.server';
 
 const passages: Passage[] = [
   { id: 'p1', speaker: 'interviewer', text: 'Was access the problem?', startMs: 0, endMs: 900 },

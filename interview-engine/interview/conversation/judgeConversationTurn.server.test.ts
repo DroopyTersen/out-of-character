@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
 import { judgeModel } from '../../providers/jevJudge.server';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
-import { emptyMap, type ConversationMap, type MapThread } from './map';
-import { threadKey } from './ranking';
-import { yieldsTurn } from './turns';
-import type { InterviewAnswers } from './evaluate.server';
-import { evaluateTurn, latestTurn, readTurnAnswers, turnQuestions, upToParticipant } from './ranking.server';
+import { emptyMap, type ConversationMap, type MapThread } from './conversationMap';
+import { threadKey } from './threadSelection';
+import { yieldsTurn } from './turnTaking';
+import type { InterviewAnswers } from '../grading/judgeTopicCoverage.server';
+import { evaluateTurn, latestTurn, readTurnAnswers, turnQuestions, upToParticipant } from './judgeConversationTurn.server';
 
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({
   id, label: `Thread ${id}`, anchors: ['e1'], unknown: `unknown ${id}`, guess: 'a guess Jev never sees', related: [], topics: ['client-decisions'], status: 'open', reason: null, ...changes,

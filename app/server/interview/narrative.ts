@@ -1,6 +1,6 @@
 import type { NarrativeInput, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
 import { NarrativeRunner, type SettledNarrative } from '../../../interview-engine/narrative/narrativeRun.server';
-import { writeNarrative } from '../../../interview-engine/narrative/write.server';
+import { writeNarrative } from '../../../interview-engine/narrative/writeNarrative.server';
 import type { Providers } from '../../../interview-engine/providers/providers.server';
 import type { NarrativeRequest } from '../../../interview-engine/shared/protocol';
 import type { Passage } from '../../../interview-engine/shared/transcript';

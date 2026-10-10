@@ -16,7 +16,7 @@ import { foundryConfig } from '../ai/foundry.server';
 import { archivedTranscriptSchema as passagesSchema } from '../core/interview-transcript';
 import { narrativeRequestSchema } from '../interview-engine/shared/protocol';
 import type { NarrativeInput } from '../interview-engine/narrative/narrative.server';
-import { writeNarrative } from '../interview-engine/narrative/write.server';
+import { writeNarrative } from '../interview-engine/narrative/writeNarrative.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import type { Passage } from '../interview-engine/shared/transcript';
 import { spec as closeout } from '../interviews/project-closeout/spec';

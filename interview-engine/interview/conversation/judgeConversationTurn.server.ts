@@ -1,10 +1,10 @@
 import { experimental_evaluate, type Experimental_EvaluationModel, type Experimental_EvaluationQuestion } from 'ai';
 import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../shared/transcript';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
-import { booleanProbability as probability, choice, dialogueState, type InterviewAnswers } from './evaluate.server';
-import type { ConversationMap, MapThread } from './map';
-import { THREAD_STATES, threadKey, type ThreadState, type TurnReading } from './ranking';
-import { isBackchannel, yieldsTurn } from './turns';
+import { booleanProbability as probability, choice, dialogueState, type InterviewAnswers } from '../grading/judgeTopicCoverage.server';
+import type { ConversationMap, MapThread } from './conversationMap';
+import { THREAD_STATES, threadKey, type ThreadState, type TurnReading } from './threadSelection';
+import { isBackchannel, yieldsTurn } from './turnTaking';
 
 export const RANKING_RUBRIC_VERSION = 'ranking-rubric-v5';
 

@@ -4,7 +4,7 @@ import type { InterviewSummaryContent } from '../../core/interview';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import type { ReportResult } from '../simulator/report.server';
 import { spec } from '../../interviews/project-closeout/spec';
-import { writeNarrative } from '../../interview-engine/narrative/write.server';
+import { writeNarrative } from '../../interview-engine/narrative/writeNarrative.server';
 
 export type SummaryInput = { transcript: Passage[]; foundry: FoundryConfig; signal: AbortSignal };
 export type SummaryResult = ReportResult<InterviewSummaryContent>;

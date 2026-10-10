@@ -4,20 +4,20 @@ import { DirectorOutputError, type ModelUsage } from '../../providers/structured
 import type { InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import { activeElapsed, type PauseSpan } from '../../shared/timing';
 import type { Passage as TranscriptEntry, Speaker } from '../../shared/transcript';
-import { emptyMap, type ConversationMap, type MapChanges } from './map';
+import { emptyMap, type ConversationMap, type MapChanges } from './conversationMap';
 import {
   appendMapLog, emptyMapLog, generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
   type MapLog, type MappedSpec, type MapTail,
-} from './map.server';
-import { emptyListState, emptyMapNote, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './notes';
-import { emptyRanking, observeMap, observeTurn, RANKING, threadKey, type Pick } from './ranking';
-import { evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from './ranking.server';
+} from './conversationMap.server';
+import { emptyListState, emptyMapNote, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './interviewerNotes';
+import { emptyRanking, observeMap, observeTurn, RANKING, threadKey, type Pick } from './threadSelection';
+import { evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from './judgeConversationTurn.server';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TurnRecord,
-} from './records';
-import { lookupInterviewBackground, researchKey, validateResearchRequest } from './research.server';
-import { isBackchannel, yieldsTurn } from './turns';
+} from './conversationRecords';
+import { lookupInterviewBackground, researchKey, validateResearchRequest } from './backgroundResearch.server';
+import { isBackchannel, yieldsTurn } from './turnTaking';
 
 type InterviewObjectiveReading = Reading<Speaker>;
 export const producerServices = { generateMap, evaluateTurn, lookupInterviewBackground };

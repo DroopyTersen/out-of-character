@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { yieldsTurn } from './turns';
+import { yieldsTurn } from './turnTaking';
 
 test('yieldsTurn treats short non-questions and go-aheads as handing back the floor', () => {
   expect(yieldsTurn('Mm-hmm.')).toBe(true);

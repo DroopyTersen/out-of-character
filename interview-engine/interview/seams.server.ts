@@ -1,10 +1,10 @@
 import type { Passage } from '../shared/transcript';
-import type { ProducerLogRecord, ProducerSummary } from './conversation/records';
-import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus } from './session/checkpoint';
+import type { ProducerLogRecord, ProducerSummary } from './conversation/conversationRecords';
+import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus } from './session/sessionCheckpoint';
 import type { InterviewSnapshot } from '../shared/snapshot';
 import type { NarrativeProvenance } from '../shared/narrative';
 
-export type { Checkpoint, Lease } from './session/checkpoint';
+export type { Checkpoint, Lease } from './session/sessionCheckpoint';
 export type { NarrativeProvenance } from '../shared/narrative';
 
 /** A save was refused because a newer owner of the attempt has taken over. The superseded owner stops. */

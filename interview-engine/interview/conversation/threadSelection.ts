@@ -1,4 +1,4 @@
-import type { ConversationMap, MapThread } from './map';
+import type { ConversationMap, MapThread } from './conversationMap';
 
 export const THREAD_STATES = ['open', 'answered', 'declined', 'stalled'] as const;
 export type ThreadState = typeof THREAD_STATES[number];

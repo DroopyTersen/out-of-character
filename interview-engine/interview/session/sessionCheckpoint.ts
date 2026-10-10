@@ -1,8 +1,8 @@
 import type { InterviewDefinition } from '../definition.server';
 import type { NetworkRecord } from '../../shared/network';
 import type { InterviewEvaluation, InterviewSnapshot, SessionPause } from '../../shared/snapshot';
-import type { ProducerCheckpoint } from '../conversation/producer.server';
-import type { GradeRecord, ProducerSummary } from '../conversation/records';
+import type { ProducerCheckpoint } from '../conversation/interviewProducer.server';
+import type { GradeRecord, ProducerSummary } from '../conversation/conversationRecords';
 import type { SilenceRecord } from './silence.server';
 
 /** Whether the host has written the narrative. Kept in storage and archives, outside the live snapshot. */

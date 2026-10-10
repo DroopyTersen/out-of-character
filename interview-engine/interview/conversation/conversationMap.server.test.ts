@@ -2,11 +2,11 @@ import { expect, test } from 'bun:test';
 import { testFoundry } from '../../providers/testFoundry.server';
 import { DirectorOutputError, structuredWith } from '../../providers/structured.server';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
-import { emptyMap, MAP_LIMITS, PARTICIPANT_ID, type ConversationMap } from './map';
-import * as map from './map.server';
-import { emptyMapLog, mapCacheKey, MapOutputError, MAP_PROMPT_VERSION, researchLogEvent, settledPrefix, unloggedPassages, type MapLog, type MapLogEvent, type MapTail } from './map.server';
+import { emptyMap, MAP_LIMITS, PARTICIPANT_ID, type ConversationMap } from './conversationMap';
+import * as map from './conversationMap.server';
+import { emptyMapLog, mapCacheKey, MapOutputError, MAP_PROMPT_VERSION, researchLogEvent, settledPrefix, unloggedPassages, type MapLog, type MapLogEvent, type MapTail } from './conversationMap.server';
 import { testSpec as spec } from './testSpec';
-import { listNote } from './notes';
+import { listNote } from './interviewerNotes';
 
 const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
 const mapInstructions = map.mapInstructions(spec);

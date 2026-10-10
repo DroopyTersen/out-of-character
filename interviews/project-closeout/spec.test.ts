@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { INTERVIEW_SCENARIO_ID, interviewSummarySchema, interviewTopics } from '../../core/interview';
 import { SUMMARY_VERSION } from '../../ai/interview/summary.server';
-import { mapSeed } from '../../interview-engine/interview/conversation/map.prompt';
+import { mapSeed } from '../../interview-engine/interview/conversation/conversationMap.prompt';
 import { spec } from './spec';
 
 test('the closeout spec carries the closeout content the app already uses', async () => {

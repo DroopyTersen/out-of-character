@@ -1,10 +1,10 @@
 import { experimental_evaluate, type Experimental_EvaluationAnswer, type Experimental_EvaluationQuestion } from 'ai';
 import type { Providers } from '../../providers/providers.server';
-import { evidenceBatches, type Judge } from '../../providers/judge.server';
+import { evidenceBatches, type Judge } from '../../providers/judgeProvider.server';
 import { COVERAGE_LEVELS, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../shared/snapshot';
 import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
-import { interviewerToken, interviewQuestions, judgedObjectives, type JudgedSpec } from './rubric.prompt';
-import { isBackchannel } from './turns';
+import { interviewerToken, interviewQuestions, judgedObjectives, type JudgedSpec } from './topicCoverage.prompt';
+import { isBackchannel } from '../conversation/turnTaking';
 
 type Answer = Experimental_EvaluationAnswer<Experimental_EvaluationQuestion>;
 export type InterviewAnswers = Record<string, Answer>;

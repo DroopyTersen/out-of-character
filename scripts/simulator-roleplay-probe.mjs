@@ -13,11 +13,11 @@ import { settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
-import { NOTE_HEADERS } from '../interview-engine/interview/conversation/notes.ts';
+import { NOTE_HEADERS } from '../interview-engine/interview/conversation/interviewerNotes.ts';
 import { interviewTurnGaps } from '../core/interview-timeline.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
-import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
+import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/interviewProducer.server.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
 // real GPT-Live supplies the client. In interviews the producer sends Sam its thread and map

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { producerLatency, type ProducerLogRecord } from '../../interview-engine/interview/conversation/records';
+import { producerLatency, type ProducerLogRecord } from '../../interview-engine/interview/conversation/conversationRecords';
 import { parseTimelineExport, producerTimeline, TIMELINE_LANES, type TimelineLane } from '../../core/interview-timeline';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { formatTime } from '../simulator/conversation';

@@ -4,8 +4,8 @@
  */
 import { foundryConfig } from '../ai/foundry.server';
 import { resolveInterview } from '../interview-engine/interview/definition.server';
-import { evaluateInterview } from '../interview-engine/interview/conversation/evaluate.server';
-import { writeNarrative } from '../interview-engine/narrative/write.server';
+import { evaluateInterview } from '../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { writeNarrative } from '../interview-engine/narrative/writeNarrative.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import type { Passage } from '../interview-engine/shared/transcript';

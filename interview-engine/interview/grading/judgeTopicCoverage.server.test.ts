@@ -5,9 +5,9 @@ import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.s
 import { foundryProviders } from '../../providers/providers.server';
 import { testFoundry } from '../../providers/testFoundry.server';
 import type { Passage } from '../../shared/transcript';
-import { dialogueState, evaluateInterview, readInterviewAnswers, type InterviewAnswers } from './evaluate.server';
-import { interviewQuestions, type JudgedSpec } from './rubric.prompt';
-import { testFraming } from './testSpec';
+import { dialogueState, evaluateInterview, readInterviewAnswers, type InterviewAnswers } from './judgeTopicCoverage.server';
+import { interviewQuestions, type JudgedSpec } from './topicCoverage.prompt';
+import { testFraming } from '../conversation/testSpec';
 
 const spec = {
   interviewer: { name: 'Riley' },

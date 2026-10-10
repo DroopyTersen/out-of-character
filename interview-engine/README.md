@@ -54,7 +54,7 @@ The entry points a host uses are:
 - `interview/interview.server.ts`: `SessionActor`, the seam types and the checkpoint types
 - `interview/adapters/memory.server.ts`
 - `providers/providers.server.ts`
-- `narrative/write.server.ts` and `narrative/narrativeRun.server.ts`
+- `narrative/writeNarrative.server.ts` and `narrative/narrativeRun.server.ts`
 - `setup/approve.server.ts` and `setup/draft.server.ts`
 - `shared/*` and `client/*`
 

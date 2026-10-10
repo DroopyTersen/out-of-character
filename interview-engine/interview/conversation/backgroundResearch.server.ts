@@ -2,7 +2,7 @@ import { generateText, Output, type LanguageModel, type Tool } from 'ai';
 import { z } from 'zod';
 import type { InterviewBackground } from '../../shared/snapshot';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
-import type { ResearchKind, ResearchRequest } from './records';
+import type { ResearchKind, ResearchRequest } from './conversationRecords';
 
 /** Only kind, name and clue ever leave the session; Sol chooses the public identity clue. */
 export type ResearchLookup =

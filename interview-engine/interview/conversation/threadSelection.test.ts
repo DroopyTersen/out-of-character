@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
-import { emptyMap, PARTICIPANT_ID, type ConversationMap, type MapEntity, type MapThread } from './map';
+import { emptyMap, PARTICIPANT_ID, type ConversationMap, type MapEntity, type MapThread } from './conversationMap';
 import {
   band, emptyRanking, observeMap, observeTurn, pickThreads, threadKey,
   type TurnReading,
-} from './ranking';
-import { emptyListNote, emptyListState, listNote, mapNote, mapNoteKey, nextListNote, NOTE_HEADERS } from './notes';
+} from './threadSelection';
+import { emptyListNote, emptyListState, listNote, mapNote, mapNoteKey, nextListNote, NOTE_HEADERS } from './interviewerNotes';
 
 const entity = (id: string, changes: Partial<MapEntity> = {}): MapEntity => ({ id, kind: 'person', label: `Entity ${id}`, detail: `Detail ${id}.`, source: 'participant', passageId: 'p2', ...changes });
 const thread = (id: string, changes: Partial<MapThread> = {}): MapThread => ({

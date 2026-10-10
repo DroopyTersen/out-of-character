@@ -8,10 +8,10 @@ import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server
 import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
 import { settledPrefix } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
-import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
+import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/interviewProducer.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
-import { appendTranscript, settledTranscript } from '../interview-engine/interview/session/transcript.ts';
+import { appendTranscript, settledTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
 // speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the

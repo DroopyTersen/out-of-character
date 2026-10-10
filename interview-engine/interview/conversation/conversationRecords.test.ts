@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { CoverageLevel, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import type { Speaker } from '../../shared/transcript';
-import { fitRecords, gradeObjectives, type GradeRecord, type MapRecord, type ProducerLogRecord } from './records';
+import { fitRecords, gradeObjectives, type GradeRecord, type MapRecord, type ProducerLogRecord } from './conversationRecords';
 import { testSpec } from './testSpec';
 
 type InterviewObjectiveReading = Reading<Speaker>;

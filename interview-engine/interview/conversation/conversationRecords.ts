@@ -2,8 +2,8 @@ import type { CallFailure } from '../../providers/diagnostics.server';
 import type { ModelUsage } from '../../providers/structured.server';
 import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import type { Speaker } from '../../shared/transcript';
-import type { MapDefect, MapUpdate } from './map';
-import type { Band, Pick, ThreadState } from './ranking';
+import type { MapDefect, MapUpdate } from './conversationMap';
+import type { Band, Pick, ThreadState } from './threadSelection';
 
 type InterviewObjectiveReading = Reading<Speaker>;
 

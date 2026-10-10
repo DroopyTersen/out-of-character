@@ -3,16 +3,16 @@ import { expect, test } from 'bun:test';
 import { unpaidProviders, testFoundry } from '../../providers/testFoundry.server';
 import { gptLiveProvider } from '../../providers/gptLive.server';
 import type { VoiceHandlers, WebSocketLike } from '../../providers/voice.server';
-import type { Judge } from '../../providers/judge.server';
+import type { Judge } from '../../providers/judgeProvider.server';
 import { createJevJudge } from '../../providers/jevJudge.server';
 import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
 import { evaluateSilence } from './silence.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';
-import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
+import { INTERVIEW_RUBRIC_VERSION } from '../grading/topicCoverage.prompt';
 import { testFraming, testTechniques } from '../conversation/testSpec';
 import { FencedError, type InterviewArchiveRow } from '../seams.server';
 import type { InterviewSnapshot as PublicSnapshot } from '../../shared/snapshot';
-import { SessionActor, type SessionOptions, type SessionServices } from './session.server';
+import { SessionActor, type SessionOptions, type SessionServices } from './sessionActor.server';
 import { resumeInstruction, typedAnswerCue } from './voice.prompt';
 
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the

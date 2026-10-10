@@ -32,7 +32,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Accepted definition**: `InterviewPlan`, `InterviewConfig`, and optional `InterviewContext`. Context is explicit background, not participant evidence. The engine parses and copies these values and compiles its internal brief, framing and judging criteria.
 
-**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/conversation/rubric.prompt.ts`).
+**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/grading/topicCoverage.prompt.ts`).
 
 **Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `interview/voice/brief.server.ts`).
 

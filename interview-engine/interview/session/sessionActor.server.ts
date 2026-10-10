@@ -11,17 +11,17 @@ import {
   SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, within, type PauseSpan,
 } from '../../shared/timing';
 import { TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
-import { mergeCoverage } from '../conversation/coverage';
-import { evaluateInterview } from '../conversation/evaluate.server';
-import { settledPrefix } from '../conversation/map.server';
-import { InterviewProducer, producerServices } from '../conversation/producer.server';
-import { gradeObjectives, type GradeRecord } from '../conversation/records';
-import { upToParticipant } from '../conversation/ranking.server';
-import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
+import { mergeCoverage } from '../grading/topicCoverage';
+import { evaluateInterview } from '../grading/judgeTopicCoverage.server';
+import { settledPrefix } from '../conversation/conversationMap.server';
+import { InterviewProducer, producerServices } from '../conversation/interviewProducer.server';
+import { gradeObjectives, type GradeRecord } from '../conversation/conversationRecords';
+import { upToParticipant } from '../conversation/judgeConversationTurn.server';
+import { INTERVIEW_RUBRIC_VERSION } from '../grading/topicCoverage.prompt';
 import { FencedError, type Archive, type Background, type InterviewArchiveRow, type NarrativeProvenance, type SessionStore } from '../seams.server';
 import { interviewerBrief, interviewOpening } from '../voice/brief.server';
-import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, Segment, SessionSnapshot } from './checkpoint';
-import { appendTranscript, settledTranscript } from './transcript';
+import type { Checkpoint, ConnectionLog, InterviewState, Lease, NarrativeStatus, PauseRecord, Segment, SessionSnapshot } from './sessionCheckpoint';
+import { appendTranscript, settledTranscript } from './sessionTranscript';
 import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from './voice.prompt';
 import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 

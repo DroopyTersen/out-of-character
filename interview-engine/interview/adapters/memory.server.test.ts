@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { FencedError, type InterviewArchiveRow } from '../seams.server';
-import type { Checkpoint } from '../session/checkpoint';
+import type { Checkpoint } from '../session/sessionCheckpoint';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from './memory.server';
 
 const lease = { capability: 'Bearer x', providerIds: [], deadline: 1000, closed: false };

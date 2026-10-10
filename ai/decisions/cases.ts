@@ -1,10 +1,10 @@
 import type { Experimental_EvaluationQuestion } from 'ai';
 import { evaluateSilence } from '../../interview-engine/interview/session/silence.server';
-import { dialogueState, readInterviewAnswers } from '../../interview-engine/interview/conversation/evaluate.server';
-import { interviewQuestions } from '../../interview-engine/interview/conversation/rubric.prompt';
-import { latestTurn, turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/ranking.server';
-import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/conversation/ranking';
-import type { ConversationMap } from '../../interview-engine/interview/conversation/map';
+import { dialogueState, readInterviewAnswers } from '../../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { interviewQuestions } from '../../interview-engine/interview/grading/topicCoverage.prompt';
+import { latestTurn, turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/judgeConversationTurn.server';
+import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/conversation/threadSelection';
+import type { ConversationMap } from '../../interview-engine/interview/conversation/conversationMap';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { archivedTranscriptSchema } from '../../core/interview-transcript';
 import { spec } from '../../interviews/project-closeout/spec';

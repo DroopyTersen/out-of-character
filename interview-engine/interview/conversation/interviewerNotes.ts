@@ -1,5 +1,5 @@
-import type { ConversationMap, MapEntity, MapThread } from './map';
-import { pickThreads, RANKING, threadKey, type Pick, type RankingState } from './ranking';
+import type { ConversationMap, MapEntity, MapThread } from './conversationMap';
+import { pickThreads, RANKING, threadKey, type Pick, type RankingState } from './threadSelection';
 
 /** Private suggestions for Sam; never appended to its instructions. */
 export const LIVE_NOTE_CHANNEL = 'session.thinking.append';

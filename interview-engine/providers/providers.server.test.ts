@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { evidenceBatches } from './judge.server';
+import { evidenceBatches } from './judgeProvider.server';
 import { createDecisionJudge } from './decisionJudge.server';
 import { foundryProviders } from './providers.server';
 import { testFoundry } from './testFoundry.server';

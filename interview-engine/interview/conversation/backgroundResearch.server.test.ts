@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { foundryProvider } from '../../providers/foundry.server';
 import { testFoundry } from '../../providers/testFoundry.server';
-import type { ResearchRequest } from './records';
-import { lookupInterviewBackground, normalizeResearchName, researchKey, validateResearchRequest } from './research.server';
+import type { ResearchRequest } from './conversationRecords';
+import { lookupInterviewBackground, normalizeResearchName, researchKey, validateResearchRequest } from './backgroundResearch.server';
 
 const fixtureFoundry = { ...testFoundry, agentModel: 'gpt-6.1-sol', fastModel: 'gpt-6-luna' };
 

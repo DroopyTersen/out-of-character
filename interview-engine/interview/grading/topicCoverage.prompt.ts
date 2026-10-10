@@ -1,5 +1,5 @@
 import type { Experimental_EvaluationQuestion } from 'ai';
-import { evidenceBatches } from '../../providers/judge.server';
+import { evidenceBatches } from '../../providers/judgeProvider.server';
 import type { CoverageLevel } from '../../shared/snapshot';
 import type { InterviewFraming, Objective } from '../../shared/spec';
 import type { Passage } from '../../shared/transcript';

@@ -2,14 +2,14 @@ import { z } from 'zod';
 import type { ModelUsage, SolMessage, StructuredRequest } from '../../providers/structured.server';
 import type { InterviewBackground, InterviewObjectiveReading } from '../../shared/snapshot';
 import type { Passage } from '../../shared/transcript';
-import { RESEARCH_KINDS, type ResearchRequest } from './records';
+import { RESEARCH_KINDS, type ResearchRequest } from './conversationRecords';
 import {
   applyMapUpdate, EDGE_KINDS, ENTITY_KINDS, ENTITY_SOURCES, MAP_LIMITS, mapTopicIds, renderMapForSol, THREAD_STATUSES,
   type ConversationMap, type MapChanges, type MapDefect, type MapTopicId, type MapUpdate,
-} from './map';
-import { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
+} from './conversationMap';
+import { mapInstructions, mapSeed, type MappedSpec } from './conversationMap.prompt';
 
-export { mapInstructions, mapSeed, type MappedSpec } from './map.prompt';
+export { mapInstructions, mapSeed, type MappedSpec } from './conversationMap.prompt';
 type TranscriptEntry = Passage;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
 export const MAP_PROMPT_VERSION = 'sol-map-v18';

@@ -3,8 +3,8 @@ import { id, interviewContextSchema, interviewPlanSchema, text, type InterviewCo
 import type { InterviewLimits } from '../shared/spec';
 
 import type { BriefedSpec } from './voice/brief.server';
-import type { JudgedSpec } from './conversation/rubric.prompt';
-import type { MappedSpec } from './conversation/map.prompt';
+import type { JudgedSpec } from './grading/topicCoverage.prompt';
+import type { MappedSpec } from './conversation/conversationMap.prompt';
 
 /** Host runtime choices, separate from the organizer's approved content. */
 export const interviewConfigSchema = z.object({

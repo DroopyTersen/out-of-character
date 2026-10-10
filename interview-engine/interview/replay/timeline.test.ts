@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import type { GradeObjective, GradeRecord, ProducerLogRecord } from '../conversation/records';
+import type { GradeObjective, GradeRecord, ProducerLogRecord } from '../conversation/conversationRecords';
 import { testSpec } from '../conversation/testSpec';
 import * as timeline from './timeline';
 import { formatTimelineRows, interviewTurnGaps, parseTimelineExport } from './timeline';

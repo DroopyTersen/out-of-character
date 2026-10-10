@@ -18,7 +18,7 @@ export type TurnReading = {
 export type RankingState = {
   current: string | null; reading: TurnReading | null;
   /** Answered, declined or stalled gaps wait for Sol's next applied map. */
-  holds: Record<string, { state: Exclude<ThreadState, 'open'>; turn: string }>;
+  holds: Record<string, string>;
 };
 export type Ranked = { id: string; score: number; band: Band };
 export type Pick = { current: string | null; action: 'keep' | 'tug' | 'none'; lead: string | null; nearby: string[]; ranked: Ranked[] };
@@ -29,9 +29,9 @@ export const threadKey = (thread: MapThread) => JSON.stringify([thread.label, th
 export function observeTurn(state: RankingState, map: ConversationMap, reading: TurnReading, turn = reading.passageId): RankingState {
   const read = new Set(map.threads.filter(thread => thread.status === 'open' && reading.keys[thread.id] === threadKey(thread)).map(thread => thread.id));
   // Transcript corrections replace this turn's holds, without lifting an earlier turn's decline.
-  const holds = Object.fromEntries(Object.entries(state.holds).filter(([, hold]) => hold.turn !== turn));
+  const holds = Object.fromEntries(Object.entries(state.holds).filter(([, hold]) => hold !== turn));
   for (const [id, status] of Object.entries(reading.states)) {
-    if (read.has(id) && status !== 'open') holds[id] ??= { state: status, turn };
+    if (read.has(id) && status !== 'open') holds[id] ??= turn;
   }
   return { holds, reading, current: reading.focus != null && read.has(reading.focus) ? reading.focus : null };
 }

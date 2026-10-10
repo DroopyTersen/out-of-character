@@ -1,5 +1,4 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { emptyInterviewReadings } from '../../../core/interview';
 import type { Checkpoint, Lease } from '../../../interview-engine/interview/interview.server';
 import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
 import { capability, settle, waitFor } from '../simulator/session-fixture';
@@ -9,7 +8,7 @@ import { fakeStorage, interviewAttempt, objectFixture } from './durableObjectFix
 const { durableStore, durableBackground } = await import('./durableObject');
 afterEach(() => setSystemTime());
 
-const lease: Lease = { capability, deadline: 5, closed: false } as Lease;
+const lease: Lease = { capability, providerIds: [], deadline: 5, closed: false } as Lease;
 const checkpoint = { id: 'checkpoint' } as unknown as Checkpoint;
 
 test('the storage store keeps the lease and checkpoint under the practice simulator’s keys', async () => {
@@ -21,9 +20,9 @@ test('the storage store keeps the lease and checkpoint under the practice simula
   expect(await store.load()).toEqual({ lease, checkpoint });
   await store.save({ checkpoint: null });
   expect(f.values.has('checkpoint')).toBe(false);
-  // A closed lease hides any checkpoint left beside it.
+  // A closed lease keeps the terminal checkpoint saved with it until the final row is acknowledged.
   await store.save({ lease: { ...lease, closed: true }, checkpoint });
-  expect(await store.load()).toEqual({ lease: { ...lease, closed: true } });
+  expect(await store.load()).toEqual({ lease: { ...lease, closed: true }, checkpoint });
   await store.wake(1234);
   expect(f.alarm()).toBe(1234);
   await store.wake(null);
@@ -42,7 +41,7 @@ test('background work is handed to waitUntil', () => {
 const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 const graded = (revision: number, transcript: { id: string; speaker: string; text: string }[]) => {
   const passage = transcript.find(passage => passage.speaker === 'participant')!;
-  return { revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1, usage, answers: {},
+  return { revision, model: 'fixture', durationMs: 1, usage, answers: {},
     objectives: [{ id: 'project-delivery', level: 'explored' as const, levels: { 'not-yet': .01, touched: .03, explored: .95, 'set-aside': .01 }, achieved: true, probability: .95, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }] };
 };
 // The frozen archive row records this summary without usage, as the fixture's earlier summary reported none.
@@ -51,7 +50,7 @@ const summary = (): NarrativeRun => {
   return { stream: new ReadableStream<string>({ start(controller) { controller.enqueue(JSON.stringify(document)); controller.close(); } }), result: Promise.resolve({ document, failure: null, usage: null } as unknown as Narrative) };
 };
 
-const body = (action: string) => action === 'start' ? JSON.stringify(interviewAttempt) : action === 'poll' ? JSON.stringify({ active: false, audio: false, outputQuietMs: 60_000 }) : undefined;
+const body = (action: string) => action === 'start' ? JSON.stringify(interviewAttempt) : action === 'poll' ? JSON.stringify({ active: false, audio: false }) : undefined;
 const send = (target: { fetch(request: Request): Promise<Response> }, action: string, cap = capability) =>
   target.fetch(new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: body(action) }));
 
@@ -146,6 +145,41 @@ test('the report waits for an end and is refused without participant speech', as
   expect(report.status).toBe(422);
   expect(await report.json() as unknown).toEqual({ error: 'There is not enough scored conversation to review.' });
   expect((await (await send(next.session, 'poll')).json() as { report: { status: string } }).report.status).toBe('ineligible');
+});
+
+test('a report resumes failed terminal persistence before starting its narrative', async () => {
+  const values = new Map<string, unknown>();
+  const set = values.set.bind(values);
+  let failed = false;
+  let narrations = 0;
+  let checkpointAtNarration: unknown;
+  values.set = (key, value) => {
+    if (key === 'checkpoint' && (value as Checkpoint).snapshot.status === 'ended' && !failed) {
+      failed = true;
+      throw new Error('one terminal save outage');
+    }
+    return set(key, value);
+  };
+  const next = await objectFixture({ values, overrides: { narrate: () => {
+    narrations++;
+    checkpointAtNarration = values.get('checkpoint');
+    return summary();
+  } } });
+  await send(next.session, 'start');
+  await send(next.session, 'ready');
+  next.socket.emit({ type: 'session.output_transcript.delta', event_id: 'o1', delta: 'What did you build?', start_ms: 0, end_ms: 900 });
+  next.socket.emit({ type: 'session.input_transcript.delta', event_id: 'i1', delta: 'A permit intake portal.', start_ms: 1500, end_ms: 2400 });
+  await next.session.alarm();
+  await settle(next);
+  await expect(send(next.session, 'end')).rejects.toThrow('one terminal save outage');
+  expect(narrations).toBe(0);
+  expect(values.has('checkpoint')).toBe(true);
+  expect((await send(next.session, 'report')).status).toBe(200);
+  await settle(next);
+  expect(narrations).toBe(1);
+  expect(checkpointAtNarration).toBeUndefined();
+  expect(next.interviewJudged).toHaveLength(1);
+  expect(next.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'ready' });
 });
 
 // --- An approved ad hoc debrief: the object resolves its spec at start and pins it for every later owner. ---

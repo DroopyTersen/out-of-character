@@ -13,12 +13,29 @@ export type WebSocketLike = {
  */
 export type SocketOpener<Socket extends WebSocketLike = WebSocketLike> = (response: Response) => Socket | null;
 
-/** The voice model: one provider session per media connection, steered over its control socket. */
-export type VoiceProvider<Socket extends WebSocketLike = WebSocketLike> = {
-  /** Creates a provider session for the browser's SDP offer and returns its id and SDP answer. */
+/** Provider events in the engine's names, independent of the wire protocol. */
+export type VoiceEvent =
+  | { type: 'transcript'; id?: string; speaker: 'participant' | 'interviewer'; text: string; startMs: number; endMs: number }
+  | { type: 'closed'; reason: string | null; usageSeconds: number | null }
+  | { type: 'acknowledged'; id: string; startMs?: number; endMs?: number }
+  | { type: 'delegation'; id: string; target: string | null }
+  | { type: 'error'; id?: string };
+
+export type VoiceInput = { kind: 'instruction' | 'context'; id: string; content: string; delegationId?: string };
+export type VoiceHandlers = { event(event: VoiceEvent): void; dropped(): void };
+export type VoiceConnection = {
+  readonly connected: boolean;
+  send(input: VoiceInput): boolean;
+  /** Confirms provider closure, reattaching if needed; incoming transcript is still delivered while closing. */
+  close(): Promise<void>;
+  /** Drops this owner's control connection without ending the provider session. */
+  detach(): void;
+};
+
+/** The voice model: one provider session per media connection, steered over its control connection. */
+export type VoiceProvider = {
   create(input: { sdp: string; voice: string; instructions: string }): Promise<{ id: string; sdp: string }>;
-  /** Opens the session's control socket: provider events in, instructions out. */
-  attach(id: string): Promise<Socket>;
-  /** Closes a provider session by id and waits for the provider to confirm. A session that no longer exists is closed. */
-  close(id: string): Promise<void>;
+  attach(id: string, handlers?: VoiceHandlers): Promise<VoiceConnection>;
+  /** Closes a provider session by id. A session that no longer exists is closed. */
+  close(id: string, handlers?: VoiceHandlers): Promise<void>;
 };

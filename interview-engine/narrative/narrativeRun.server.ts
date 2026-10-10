@@ -72,6 +72,22 @@ export class NarrativeRunner {
     if (this.current.status === 'completed') return json(this.current.document);
     if (this.current.starts >= NARRATIVE_MAX_STARTS) return json({ error: 'The report retry has already been used.' }, 409);
     if (signal.aborted) return json({ error: 'The report request was cancelled.' }, 400);
+    const text = this.begin();
+    return text ? this.listen(text) : json({ error: 'The report could not be started.' }, 502);
+  }
+
+  /**
+   * Runs an attempt with no request attached, for a host that persists the result itself, and resolves with the
+   * settled state: the deadline, draining and failures are handled as for `attach`. Joins a running attempt; a
+   * completed narrative or a spent retry is answered as it stands.
+   */
+  run(): Promise<NarrativeState> {
+    if (this.current.status !== 'running' && this.current.status !== 'completed' && this.current.starts < NARRATIVE_MAX_STARTS) this.begin();
+    return this.read();
+  }
+
+  /** Starts the next attempt and returns the text it writes, or null when it could not start (settled as failed). */
+  private begin(): Written | null {
     const start = this.current.starts + 1, startedAt = Date.now();
     this.current = { status: 'running', starts: start, document: null, failure: null };
     let resolve!: () => void;
@@ -103,7 +119,7 @@ export class NarrativeRunner {
       outcome = run.result.then(finish, () => finish({ document: null, failure: 'provider', usage: null }));
     } catch {
       finish({ document: null, failure: 'provider', usage: null });
-      return json({ error: 'The report could not be started.' }, 502);
+      return null;
     }
     const text = this.text = written();
     const settled = this.settled;
@@ -127,7 +143,7 @@ export class NarrativeRunner {
       }
     })();
     this.options.track?.(pump);
-    return this.listen(text);
+    return text;
   }
 
   /** One request's view of a run: everything written so far, then each new chunk, until the run's stream ends. */

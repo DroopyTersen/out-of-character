@@ -29,8 +29,8 @@ export function listNote(map: ConversationMap, pick: Pick): string | null {
 
 export const emptyListNote = () => `${NOTE_HEADERS.list}\nNo open thread right now: follow the participant.`;
 export const emptyMapNote = () => `${NOTE_HEADERS.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;
-export type ListState = { lead: string | null; key: string | null; sent: boolean; named: string[] };
-export const emptyListState = (): ListState => ({ lead: null, key: null, sent: false, named: [] });
+export type ListState = { key: string | null; sent: boolean; named: string[] };
+export const emptyListState = (): ListState => ({ key: null, sent: false, named: [] });
 export type ListDecision = { pick: Pick; text: string | null; state: ListState };
 
 /** Only a changed lead or its wording sends a cue, unless a named alternative has become unavailable. */
@@ -40,7 +40,7 @@ export function nextListNote(map: ConversationMap, ranking: RankingState, previo
   const key = lead ? JSON.stringify([lead.id, threadKey(lead)]) : 'none';
   const stale = previous.named.some(id => !pick.ranked.some(item => item.id === id));
   const text = key === previous.key && !stale ? null : lead ? listNote(map, pick) : previous.sent ? emptyListNote() : null;
-  return { pick, text, state: { lead: pick.lead, key, sent: previous.sent || text != null, named: text ? pick.nearby : previous.named } };
+  return { pick, text, state: { key, sent: previous.sent || text != null, named: text ? pick.nearby : previous.named } };
 }
 
 /** The most connected participant facts, in map order, so the note stays short as the map grows. */

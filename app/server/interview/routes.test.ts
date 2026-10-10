@@ -51,8 +51,8 @@ test('commands are validated, forwarded by attempt id, and control passes the ki
   expect((await handleInterview(f.request('sessions/not-a-uuid/poll'), f.env))!.status).toBe(404);
   expect((await handleInterview(f.request(`sessions/${id}/narrative`), f.env))!.status).toBe(404);
   expect((await handleInterview(f.request(`sessions/${id}/poll`, { active: true }), f.env))!.status).toBe(400);
-  expect((await handleInterview(f.request(`sessions/${id}/poll`, { active: true, audio: false, outputQuietMs: 10 }), f.env))!.status).toBe(200);
-  expect(await f.calls[0]!.json() as unknown).toEqual({ active: true, audio: false, outputQuietMs: 10 });
+  expect((await handleInterview(f.request(`sessions/${id}/poll`, { active: true, audio: false }), f.env))!.status).toBe(200);
+  expect(await f.calls[0]!.json() as unknown).toEqual({ active: true, audio: false });
   const disabled = { ...f.env, SIMULATOR_ENABLED: 'false' };
   for (const action of ['end', 'pause', 'ready']) expect((await handleInterview(f.request(`sessions/${id}/${action}`), disabled))!.status).toBe(200);
   expect((await handleInterview(f.request(`sessions/${id}/report`), disabled))!.status).toBe(503);

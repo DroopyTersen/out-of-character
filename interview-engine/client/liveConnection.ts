@@ -1,7 +1,6 @@
 import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../shared/network';
 import type { SubmitTextReply } from '../shared/protocol';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
-import { SPEECH_QUIET_MS } from '../shared/timing';
 import { readAudio, silentLevels, type AudioLevels } from './audioLevels';
 import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolAction, type ProtocolTransport } from './transport';
 
@@ -23,12 +22,20 @@ export type LinkState = 'stable' | 'reconnecting' | 'paused' | 'resuming';
 export type Reach = 'answered' | 'unanswered' | 'offline';
 export type Link = { state: LinkState; reach: Reach; reloaded?: boolean };
 export const stableLink: Link = { state: 'stable', reach: 'answered' };
+/**
+ * How the attempt closed for this page. `ended`: the server ended it or confirmed this page's end, or it never
+ * reached the server. `unconfirmed`: this page's end went unanswered, so the server may still hold the attempt; the
+ * host can reattach to reconcile it. `lost`: the server no longer has it. `reachedLive`: its conversation had started.
+ */
+export type Closure = { outcome: 'ended' | 'unconfirmed' | 'lost'; reachedLive: boolean };
 
 export type Callbacks<S extends ConnectionSnapshot = ConnectionSnapshot> = {
   snapshot: (value: S) => void;
   levels: (value: AudioLevels) => void;
-  error: (message: string, fatal?: boolean) => void;
+  error: (message: string) => void;
   link: (value: Link) => void;
+  /** Once per connection, unless the page detached or disposed of it. */
+  closed: (value: Closure) => void;
 };
 const offline = (reach: Reach): Reach => navigator.onLine ? reach : 'offline';
 const lostStatuses = [401, 403, 404, 410];
@@ -77,9 +84,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private reported: Promise<void> = Promise.resolve();
   private activeSincePoll = false;
   private lastAudioAt = 0;
-  private outputQuietSince: number | undefined;
-  private outputQuietSent = true;
-  private meterUpdatedAt = 0;
   private activitySequence = 0;
   /** The current media connection's last stats read; reports carry the change since. */
   private networkCounters: NetworkCounters | undefined;
@@ -228,18 +232,11 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     return meter;
   }
 
-  private canMeasureOutput() {
-    return !!this.outputMeter && this.context?.state === 'running' && !this.audio.paused && this.pc?.connectionState === 'connected';
-  }
-
   private activity(active: boolean) {
     const now = Date.now();
-    const fresh = now - this.meterUpdatedAt < 250;
-    // Sam audible is quiet for 0 ms; null only when the playback can't be measured.
     // Time-based, so a reloaded page never repeats a number the server already saw.
     this.activitySequence = Math.max(this.activitySequence + 1, now);
-    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing,
-      outputQuietMs: fresh && this.canMeasureOutput() ? Math.min(60_000, now - (this.outputQuietSince ?? now)) : null };
+    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing };
   }
 
   /** Media quality since the last read, at most every few seconds. A slow or failed read is skipped, never waited on. */
@@ -266,23 +263,17 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.meterTimer = setInterval(() => {
       const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
       const now = Date.now();
-      const previousQuiet = this.outputQuietSince;
       const running = this.context?.state === 'running';
       // Only Sam's playback extends the session's idle lease; microphone noise does not.
       const samAudible = running && output.level > .03 && !this.audio.paused;
-      this.meterUpdatedAt = now;
-      this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
+      const outputStarted = samAudible && now - this.lastAudioAt >= 1500;
       if (samAudible) {
         this.keepActive();
         this.lastAudioAt = now;
       }
-      // Report playback changes promptly for activity and connection diagnostics.
-      const outputStarted = previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null;
-      const outputStopped = !this.outputQuietSent && this.outputQuietSince != null && now - this.outputQuietSince >= SPEECH_QUIET_MS;
-      if (this.outputQuietSince == null) this.outputQuietSent = false;
-      if (outputStopped) this.outputQuietSent = true;
+      // Report new playback promptly so it extends the server's idle and ending grace.
       // An older periodic report is ignored on the server.
-      if ((outputStarted || outputStopped) && !this.ending) {
+      if (outputStarted && !this.ending) {
         void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
       }
       this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
@@ -363,8 +354,8 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     if (this.ending || this.link.state !== 'paused') return;
     clearTimeout(this.heartbeatTimer);
     if (automatic) this.autoResumed = true;
-    await this.reported;
     this.setLink({ state: 'resuming', reach: 'answered' });
+    await this.reported;
     let accepted = false;
     try {
       const connected = await this.connect(async sdp => {
@@ -463,29 +454,34 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   private async fail(message: string) {
     if (this.ending) return;
-    const closing = this.end();
-    this.callbacks.error(message, true);
-    await closing;
+    this.callbacks.error(message);
+    await this.end();
   }
 
   /** The server no longer has this attempt, so there is nothing to end. */
   private lost(message: string) {
     if (this.ending) return;
-    this.settle();
-    this.callbacks.error(message, true);
+    this.callbacks.error(message);
+    this.settle('lost');
   }
 
-  /** The server ended the attempt; nothing remains to close. */
-  private settle() {
+  /** The attempt is over for this page and nothing remains to close: the server ended it, lost it, or the page left. */
+  private settle(outcome: Closure['outcome'] = 'ended') {
     this.ending = Promise.resolve();
     this.release();
+    this.closed(outcome);
   }
 
+  private closed(outcome: Closure['outcome']) {
+    if (!this.disposed) this.callbacks.closed({ outcome, reachedLive: this.reachedLive });
+  }
+
+  /** Ends the attempt. `closed` then says whether the server confirmed it; an unanswered end can be reconciled by reattaching. */
   end(): Promise<void> {
     if (this.ending) return this.ending;
     const drain = this.link.state !== 'paused' && this.pc?.connectionState === 'connected';
     this.ending = (async () => {
-      let ended: S | undefined;
+      let outcome: Closure['outcome'] = 'ended';
       // Silence lets the server finish the last utterance during its short grace.
       // A stalled HTTP response must not retain local resources indefinitely.
       this.silence();
@@ -493,15 +489,16 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
       const closeDeadline = setTimeout(() => this.release(), 3000);
       try {
         if (this.requested) {
-          ended = await this.request('end', undefined, { keepalive: true }) as S;
+          const ended = await this.request('end', undefined, { keepalive: true }) as S;
           if (!this.disposed && ended.id) this.callbacks.snapshot(ended);
         }
-      } catch {
-        if (!this.disposed) this.callbacks.error('The session ended locally; server finalization could not be confirmed.', true);
+      } catch (error) {
+        outcome = isLost(error) ? 'lost' : 'unconfirmed';
       } finally {
         clearTimeout(closeDeadline);
         this.release();
       }
+      this.closed(outcome);
     })();
     return this.ending;
   }
@@ -540,8 +537,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.stream = undefined;
     this.pc = undefined;
     this.inputMeter = this.outputMeter = undefined;
-    this.outputQuietSince = undefined;
-    this.outputQuietSent = true;
     this.callbacks.levels(silentLevels);
   }
 

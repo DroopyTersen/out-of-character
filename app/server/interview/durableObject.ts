@@ -19,14 +19,16 @@ export function durableStore(storage: DurableObjectStorage): SessionStore {
   return {
     async load() {
       const lease = await storage.get<Lease>('lease');
-      const checkpoint = lease && !lease.closed ? await storage.get<Checkpoint>('checkpoint') : undefined;
+      const checkpoint = lease ? await storage.get<Checkpoint>('checkpoint') : undefined;
       return { ...(lease ? { lease } : {}), ...(checkpoint ? { checkpoint } : {}) };
     },
-    // One object owns its attempt, so storage writes are never stale here: nothing throws FencedError.
-    async save(patch) {
-      if (patch.lease) await storage.put('lease', patch.lease);
-      if (patch.checkpoint === null) await storage.delete('checkpoint');
-      else if (patch.checkpoint) await storage.put('checkpoint', patch.checkpoint);
+    // One object owns its attempt, so storage writes are never stale here: nothing throws FencedError. Writes issued
+    // without an await between them commit together, so a closed lease never lands without its terminal checkpoint.
+    async save({ lease, checkpoint }) {
+      await Promise.all([
+        lease && storage.put('lease', lease),
+        checkpoint === null ? storage.delete('checkpoint') : checkpoint && storage.put('checkpoint', checkpoint),
+      ]);
     },
     async wake(at) {
       if (at == null) await storage.deleteAlarm();

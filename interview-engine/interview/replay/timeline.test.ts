@@ -64,11 +64,11 @@ const transcript = [
 const records: ProducerLogRecord[] = [
   { source: 'map', id: 'm1', reasons: ['the participant spoke'], startedAt: startedAt + 10_000, completedAt: startedAt + 14_100, outcome: 'applied',
     inputCount: 2, lastInputId: 'u1', model: 'gpt-6.1-sol', changes: { added: ['e1', 't1'], changed: [], dropped: [] },
-    research: { kind: 'product', name: 'OpenStreetMap', clue: null, passageIds: ['u1'] } },
+    research: { kind: 'product', name: 'OpenStreetMap', clue: null } },
   { source: 'traits', id: 'x1', mapId: 'm1', threadIds: ['t1'], startedAt: startedAt + 14_100, completedAt: startedAt + 15_000, outcome: 'read', durationMs: 900, traits: { t1: [.8, .3] } },
   { source: 'note', id: 'n1', kind: 'list', text: 'Threads to pull\n- Who used the routing layer first?', mapId: 'm1', sentAt: startedAt + 15_000, outcome: 'sent',
     delivery: { eventId: 'note-1', afterPassageId: 'u1', status: 'accepted' }, nextSamTurnAt: startedAt + 18_000, nextSamTurnAfterId: 'u1' },
-  { source: 'research', id: 'r1', mapId: 'm1', request: { kind: 'product', name: 'OpenStreetMap', clue: null, passageIds: ['u1'] }, model: 'gpt-6-luna',
+  { source: 'research', id: 'r1', mapId: 'm1', request: { kind: 'product', name: 'OpenStreetMap', clue: null }, passageIds: ['u1'], model: 'gpt-6-luna',
     requestedAt: startedAt + 14_100, lookupAt: startedAt + 40_100, completedAt: startedAt + 40_100, loggedAt: startedAt + 45_000, outcome: 'found',
     facts: [{ text: 'OpenStreetMap is an openly licensed world map.', url: 'https://www.openstreetmap.org/about', title: 'About' }], retrievedAt: startedAt + 40_100 },
   { source: 'turn', id: 'j1', passageId: 'u2', mapId: 'm1', startedAt: startedAt + 20_000, completedAt: startedAt + 21_200, outcome: 'read', durationMs: 1200,

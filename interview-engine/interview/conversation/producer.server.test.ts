@@ -1,4 +1,5 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
+import { inlineBackground } from '../adapters/memory.server';
 import { DirectorHttpError, DirectorOutputError } from '../../providers/structured.server';
 import { unpaidProviders } from '../../providers/testFoundry.server';
 import type { InterviewObjectiveReading as Reading } from '../../shared/snapshot';
@@ -26,7 +27,7 @@ const epoch = 1_800_000_000_000;
 const usage = { inputTokens: 10, outputTokens: 5 };
 const jevUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
 const facts = [{ text: 'OpenStreetMap is a collaborative, openly licensed world map.', url: 'https://www.openstreetmap.org/about', title: 'About OpenStreetMap' }];
-const request = (name: string, clue: string | null = null): ResearchRequest => ({ kind: 'product', name, clue, passageIds: ['p2'] });
+const request = (name: string, clue: string | null = null): ResearchRequest => ({ kind: 'product', name, clue });
 const MINUTE = 'a minute has passed since your last call';
 const novelReason = (id: string) => `the participant's latest turn (${id}) adds facts or feedback the map lacks`;
 
@@ -58,19 +59,23 @@ function deferred<T>() {
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setTimeout(done, 0)); };
 
 // Substitute only paid services: tests exercise real scheduling, ranking, validation, persistence and delivery.
-function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?: boolean } = {}) {
+function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds }: { empty?: boolean; thresholds?: Partial<Options['providers']['judge']['thresholds']> } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = empty ? [] : [
     { id: 'p1', speaker: 'interviewer', text: 'What did the team build?', startMs: 0, endMs: 1000 },
     { id: 'p2', speaker: 'participant', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
   let connected: boolean | 'throw' = true;
+  let held = false;
   let coverage: InterviewObjectiveReading[] = [];
   const sent: Record<string, unknown>[] = [];
   const calls = { map: [] as Input<'generateMap'>[], turn: [] as Input<'evaluateTurn'>[], lookup: [] as Input<'lookupInterviewBackground'>[] };
   const pauses: PauseSpan[] = [];
+  const background = inlineBackground();
   const producer = new InterviewProducer({
-    attemptId: 'attempt-1', startedAt: epoch, providers: fixtureProviders, pauses: () => pauses,
+    attemptId: 'attempt-1', startedAt: epoch,
+    providers: { ...fixtureProviders, judge: { ...fixtureProviders.judge, thresholds: { ...fixtureProviders.judge.thresholds, ...thresholds } } },
+    notesHeld: () => held, pauses: () => pauses, waitUntil: work => background.track(work),
     settled: () => transcript, coverage: () => coverage, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
@@ -101,7 +106,8 @@ function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?:
   const of = <S extends ProducerLogRecord['source']>(source: S) => producer.records.filter(item => item.source === source) as Extract<ProducerLogRecord, { source: S }>[];
   const notes = (kind?: keyof typeof NOTE_HEADERS) => sent.filter(event => !kind || String(event.content).startsWith(NOTE_HEADERS[kind])).map(event => String(event.content));
   return {
-    producer, sent, calls, pauses, say, sam, grow, turn, at, step, of, notes,
+    producer, background, sent, calls, pauses, say, sam, grow, turn, at, step, of, notes,
+    holdNotes: (value: boolean) => { held = value; },
     setConnected: (value: boolean | 'throw') => { connected = value; },
     setCoverage: (levels: InterviewObjectiveReading['level'][]) => { coverage = levels.map((level, i) => ({ id: `o${i}`, level, achieved: level === 'explored', probability: null, levels: null, evidence: null })); },
   };
@@ -181,7 +187,7 @@ test('a Sol call past its timeout is abandoned, its late result is ignored, and 
 
   slow.resolve(mapped(mapWith([thread('t1')])));
   await flush();
-  expect(f.producer.conversationMap.threads).toEqual([]);
+  expect(f.producer.checkpoint().map.threads).toEqual([]);
   expect(f.of('map')[0]!.outcome).toBe('timeout');
   expect(f.sent).toHaveLength(0);
 
@@ -237,7 +243,7 @@ test('a failed Sol call that carried only a lookup is retried on the minute', as
   });
   await f.step(0);
   await f.step(20_000);
-  await f.producer.settle();
+  await f.background.settle();
   await f.step(40_000);
   expect(f.calls.map[1]!.tail.reasons.join(' ')).toContain('public research arrived');
   expect(f.of('map').map(item => item.outcome)).toEqual(['applied', 'error']);
@@ -293,6 +299,41 @@ test('a map note credits only the lookups its research facts cite, not every loo
 });
 
 
+test('typing sends only current notes and credits current research after provider acceptance', async () => {
+  const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: 'L1' };
+  const first = mapWith([thread('t1')], { participant: { vantage: 'Delivery lead', preferences: [] } });
+  const current = mapWith([thread('t2')], { participant: { vantage: 'Tech lead', preferences: [] }, entities: [routing, research] });
+  const results = [mapped(first, request('OpenStreetMap')), mapped(current)];
+  const f = fixture({
+    evaluateTurn: async input => reading(input, { novel: .9 }),
+    generateMap: async input => results[f.calls.map.length - 1] ?? mapped(input.previous),
+  });
+  f.holdNotes(true);
+  await f.step(0); await f.step(20_000); await f.step(20_500);
+  await f.step(40_000); await f.step(40_500);
+  // A long draft never consumes the note budget or creates false delivery attempts.
+  for (let i = 0; i <= PRODUCER_LIMITS.notes; i++) await f.step(41_000 + i);
+  expect(f.of('note')).toHaveLength(0);
+  expect(f.sent).toHaveLength(0);
+  expect(f.producer.publicBackground()).toEqual([]);
+  f.holdNotes(false);
+  f.producer.flushNotes();
+  expect(f.notes('list')).toHaveLength(1);
+  expect(f.notes('list')[0]).toContain('Thread t2');
+  expect(f.notes('list')[0]).not.toContain('Thread t1');
+  expect(f.notes('map')).toHaveLength(1);
+  expect(f.notes('map')[0]).toContain('Tech lead');
+  expect(f.notes('map')[0]).not.toContain('Delivery lead');
+  const note = f.of('note').find(item => item.kind === 'map')!;
+  expect(note.researchIds).toEqual([f.of('research')[0]!.id]);
+  expect(note.delivery.status).toBe('unknown');
+  expect(f.producer.publicBackground()).toEqual([]);
+  f.producer.providerEvent(note.id, true);
+  expect(f.producer.publicBackground().map(item => item.facts)).toEqual([facts]);
+  await f.step(42_000);
+  expect(f.of('note')).toHaveLength(2);
+});
+
 test('turns that settle while Jev is busy are each read in order', async () => {
   const pending = deferred<Read>();
   const f = fixture({ evaluateTurn: async input => input.transcript.at(-1)!.id === 'p4' ? pending.promise : reading(input) });
@@ -331,7 +372,6 @@ test('a map reaches Sam immediately; Jev scores its gaps against the latest answ
   expect(f.notes('list')).toHaveLength(1);
   expect(f.notes('list')[0]).toContain('Worth pulling next (Thread t1)');
   expect(f.calls.turn.at(-1)?.transcript.at(-1)?.id).toBe('p2');
-  expect(f.sent.every(event => event.type === 'session.thinking.append')).toBe(true);
   expect(f.of('note').map(note => note.kind)).toEqual(['map', 'list']);
   await f.step(61_000);
   expect(f.sent).toHaveLength(2);
@@ -396,13 +436,34 @@ test('notes are bounded even if the provider repeatedly rejects them', async () 
   expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes);
 });
 
+test('a resumed session receives its current map note after typing even beyond the ordinary cap', async () => {
+  const f = fixture({ generateMap: async () => mapped(mapWith([])) });
+  await f.step(60_000);
+  for (let i = 1; i < PRODUCER_LIMITS.notes; i++) {
+    f.producer.providerEvent(f.of('note').at(-1)!.id, false);
+    await f.step(60_500 + i);
+  }
+  expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes);
+  f.producer.pause();
+  f.holdNotes(true);
+  f.producer.resume();
+  expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes);
+  f.holdNotes(false);
+  f.producer.flushNotes();
+  expect(f.notes('map')).toHaveLength(PRODUCER_LIMITS.notes + 1);
+  expect(f.notes('map').at(-1)).toBe(f.notes('map')[0]);
+  f.producer.providerEvent(f.of('note').at(-1)!.id, false);
+  await f.step(61_000);
+  expect(f.sent).toHaveLength(PRODUCER_LIMITS.notes + 1);
+});
+
 test('all paid producer calls share a cap that survives a restart', async () => {
   const f = fixture({ generateMap: async () => { throw new Error('temporarily unavailable'); } });
   // Distinct answers are observable inputs, not a fabricated internal counter.
   for (let i = 0; i < PRODUCER_LIMITS.calls; i++) {
     f.say('interviewer', 'What happened next?'); f.say('participant', `The team completed part ${i}.`);
     f.producer.tick(epoch);
-    await f.producer.settle();
+    await f.background.settle();
   }
   await f.step(60_000);
   expect(f.calls.turn).toHaveLength(PRODUCER_LIMITS.calls);
@@ -435,7 +496,6 @@ test('a late Jev result is dropped, including one for a map that Sol has replace
   await f.turn(59_000);
   await f.step(60_000);
   slow.resolve(reading(f.calls.turn[1]!, { focus: 't1', states: { t1: 'declined' }, novel: .9 })); await flush();
-  expect(f.producer.rankingState.holds).toEqual({});
   await f.step(60_500);
   expect(f.notes('list')[0]).toContain('Thread t1');
   const late = deferred<Read>();
@@ -443,7 +503,9 @@ test('a late Jev result is dropped, including one for a map that Sol has replace
   await timeout.step(0);
   timeout.at(3000); late.resolve(reading(timeout.calls.turn[0]!, { novel: 1 })); await flush();
   expect(timeout.of('turn')[0]!.outcome).toBe('timeout');
-  expect(timeout.producer.rankingState.reading).toBeNull();
+  expect(timeout.of('turn')[0]!.reading).toBeUndefined();
+  await timeout.step(20_000);
+  expect(timeout.calls.map).toHaveLength(0);
 });
 
 test('research accepts only a participant-named target, serializes, deduplicates and retries failed calls within the cap', async () => {
@@ -467,13 +529,14 @@ test('research accepts only a participant-named target, serializes, deduplicates
   await f.turn(125_000); await f.step(140_000);
   expect(f.of('research').map(record => record.outcome)).toEqual(['invalid', 'error', 'duplicate', 'busy', 'unresolved', 'found', 'budget']);
   expect(f.calls.lookup.map(call => call.target.name)).toEqual(['OpenStreetMap', 'OpenStreetMap', 'Mapbox']);
+  expect(f.of('research').filter(record => record.outcome !== 'invalid').map(record => record.passageIds)).toEqual(Array.from({ length: 6 }, () => ['p2']));
   expect(f.producer.summary().research).toBe(3);
 });
 
 test('a completed lookup survives restart, wakes Sol, and becomes public only after a cited map note is accepted', async () => {
   const research: MapEntity = { id: 'e2', kind: 'product', label: 'OpenStreetMap', detail: facts[0]!.text, source: 'research', passageId: 'L1' };
   const f = fixture({ generateMap: async input => mapped(input.previous, request('OpenStreetMap')) });
-  await f.step(60_000); await f.producer.settle();
+  await f.step(60_000); await f.background.settle();
   const found = f.of('research')[0]!;
   expect(found.loggedAt).toBeUndefined();
   const checkpoint = structuredClone(f.producer.checkpoint());
@@ -495,7 +558,7 @@ test('unresolved research waits for new conversation and never becomes citable b
     generateMap: async input => mapped(input.previous, f.calls.map.length === 1 ? request('OpenStreetMap') : null),
     lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'Ambiguous.', queries: [] }),
   });
-  await f.step(60_000); await f.producer.settle(); await f.step(120_000);
+  await f.step(60_000); await f.background.settle(); await f.step(120_000);
   expect(f.calls.map).toHaveLength(1);
   await f.turn(125_000);
   expect(f.calls.map[1]!.blocks.at(-1)).toContain('found nothing reliable: Ambiguous.');
@@ -515,7 +578,7 @@ test('pause and End discard late work; a fresh session resumes from the map and 
   expect(next.notes('list')).toHaveLength(1);
   slow.resolve(mapped(mapWith([thread('t2')]))); await flush();
   expect(f.sent).toEqual([]);
-  expect(next.producer.conversationMap.threads.map(thread => thread.id)).toEqual(['t1']);
+  expect(next.producer.checkpoint().map.threads.map(thread => thread.id)).toEqual(['t1']);
   const before = structuredClone(next.producer.records);
   next.producer.close(); next.producer.resume(); await next.step(200_000);
   expect(next.producer.records).toEqual(before);
@@ -558,4 +621,25 @@ test('unsaved interview feedback wakes Sol at the existing floor even without ne
   expect(f.of('turn')[0]!.reading).toMatchObject({ novel: .05, feedback: .95 });
   await f.step(40_000);
   expect(f.calls.map).toHaveLength(1); // No repeated wake without an unlogged participant turn.
+});
+
+test.each([
+  { name: 'calibrated novel information', thresholds: { novelInformation: .7 }, novel: .75, feedback: 0, wakes: true },
+  { name: 'feedback below its default despite a lower novelty threshold', thresholds: { novelInformation: .7 }, novel: 0, feedback: .75, wakes: false },
+  { name: 'feedback at its default with a lower novelty threshold', thresholds: { novelInformation: .7 }, novel: 0, feedback: .8, wakes: true },
+  { name: 'calibrated interview feedback', thresholds: { interviewFeedback: .7 }, novel: 0, feedback: .75, wakes: true },
+  { name: 'novelty below its default despite a lower feedback threshold', thresholds: { interviewFeedback: .7 }, novel: .75, feedback: 0, wakes: false },
+  { name: 'novelty below the omitted default', thresholds: {}, novel: .75, feedback: 0, wakes: false },
+  { name: 'novelty at the omitted default', thresholds: {}, novel: .8, feedback: 0, wakes: true },
+  { name: 'feedback below the omitted default', thresholds: {}, novel: 0, feedback: .75, wakes: false },
+  { name: 'feedback at the omitted default', thresholds: {}, novel: 0, feedback: .8, wakes: true },
+])('$name independently gates an early map wake without changing the probabilities', async ({ thresholds, novel, feedback, wakes }) => {
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel, feedback }) }, { thresholds });
+  await f.step(0);
+  await f.step(19_999);
+  expect(f.calls.map).toHaveLength(0);
+  await f.step(20_000);
+  expect(f.calls.map).toHaveLength(wakes ? 1 : 0);
+  expect(f.of('turn')[0]!.reading).toMatchObject({ novel, feedback });
+  if (wakes) expect(f.calls.map[0]!.tail.reasons).toEqual([novelReason('p2')]);
 });

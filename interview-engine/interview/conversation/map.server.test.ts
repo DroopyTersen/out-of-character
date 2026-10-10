@@ -80,7 +80,7 @@ test('the tail lists each lookup with its status and the lookups left', () => {
 });
 
 test('a research request comes back beside the update, not inside it', async () => {
-  const ask = { kind: 'product' as const, name: 'routing layer', clue: null, passageIds: ['p2'] };
+  const ask = { kind: 'product' as const, name: 'routing layer', clue: null };
   const result = await generateMap({
     signal: new AbortController().signal, attemptId: 'attempt-1', blocks: [], previous: emptyMap(), tail, passages: transcript,
   }, async () => solResponse({ ...update, research: ask }));
@@ -218,5 +218,5 @@ test('Sol settles the participant’s own part early, several responsibilities i
   expect(instructions).toContain('People often hold more than one responsibility');
   expect(instructions).toContain('Never write it when their part is already clear');
   expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
-  expect(MAP_PROMPT_VERSION).toBe('sol-map-v17');
+  expect(MAP_PROMPT_VERSION).toBe('sol-map-v18');
 });

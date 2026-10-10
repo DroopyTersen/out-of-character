@@ -148,7 +148,7 @@ function hour(updateEntities: number): ProducerLogRecord[] {
     })),
     ...Array.from({ length: 100 }, (_, index) => note(index < 60 ? 'map' : 'list', index + 1)),
     ...Array.from({ length: 3 }, (_, index): ResearchRecord => ({
-      source: 'research', id: `research-${index + 1}`, mapId: 'map-90', request: { kind: 'organization', name: text(80), clue: text(120), passageIds: ['p300'] }, model: 'luna',
+      source: 'research', id: `research-${index + 1}`, mapId: 'map-90', request: { kind: 'organization', name: text(80), clue: text(120) }, passageIds: ['p300'], model: 'luna',
       requestedAt: at, lookupAt: at, completedAt: at, loggedAt: at, retrievedAt: at, queries: [text(80), text(80)], outcome: 'found',
       facts: Array.from({ length: 5 }, () => ({ text: text(300), url: 'https://example.com/a/long/path/to/the/source', title: text(80) })),
     })),

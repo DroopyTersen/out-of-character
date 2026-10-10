@@ -21,7 +21,6 @@ export const vendorReview: DebriefDraft = {
 };
 const base = resolveInterview({ ...vendorReview, id: 'vendor-review', version: 'v1' }, {
   interviewer: { name: 'Sam', persona: 'Curious and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/cedar.png' }] },
-  readings: [],
 });
 
 test('approval preserves editable learning content and report format under a stable content version', async () => {
@@ -59,5 +58,4 @@ test('recursive grouping produces only leaf assessments and inherits parent cond
 
 test('topic IDs cannot collide with generated judgment keys', () => {
   expect(() => resolveInterview({ ...base.plan, topics: [{ id: 'handoff:evidence', label: 'Handoff', learn: 'Describe handoff.' }] }, base.config)).toThrow('IDs');
-  expect(() => resolveInterview(base.plan, { ...base.config, readings: [{ id: 'detail:evidence', label: 'Detail', description: 'Detail', rubric: { task: 'How concrete?', criteria: ['0', '1', '2', '3', '4'] } }] })).toThrow('IDs');
 });

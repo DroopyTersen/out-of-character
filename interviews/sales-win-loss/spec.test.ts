@@ -24,8 +24,7 @@ test('a second plan supplies its own learning content to the voice, map and cove
   }
 });
 
-test('runtime configuration rejects duplicate voices/readings and invalid session limits', () => {
+test('runtime configuration rejects duplicate voices and invalid session limits', () => {
   expect(() => resolveInterview(spec.plan, { ...spec.config, interviewer: { ...spec.config.interviewer, voices: [] } })).toThrow();
-  expect(() => resolveInterview(spec.plan, { ...spec.config, readings: [...spec.config.readings, spec.config.readings[0]!] })).toThrow('unique');
   expect(() => resolveInterview(spec.plan, { ...spec.config, limits: { ...spec.config.limits!, idleWarningMs: spec.config.limits!.idleTimeoutMs } })).toThrow('warning');
 });

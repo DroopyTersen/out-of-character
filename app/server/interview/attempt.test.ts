@@ -1,5 +1,4 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { emptyInterviewReadings } from '../../../core/interview';
 import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/map';
 import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/notes';
 import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
@@ -116,7 +115,7 @@ test('the private archive keeps consecutive probability changes, failed grades, 
     calls++;
     if (calls === 3) throw new Error('Synthetic evaluation failure');
     const probability = calls === 1 ? .9 : .92;
-    return { revision: input.revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1,
+    return { revision: input.revision, model: 'fixture', durationMs: 1,
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, objectives: [{
         id: 'project-delivery', level: 'explored', achieved: true, probability,
         levels: { 'not-yet': 0, touched: 1 - probability, explored: probability, 'set-aside': 0 },

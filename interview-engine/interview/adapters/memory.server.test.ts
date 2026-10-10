@@ -3,7 +3,7 @@ import { FencedError, type InterviewArchiveRow } from '../seams.server';
 import type { Checkpoint } from '../session/checkpoint';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from './memory.server';
 
-const lease = { capability: 'Bearer x', deadline: 1000, closed: false };
+const lease = { capability: 'Bearer x', providerIds: [], deadline: 1000, closed: false };
 const checkpoint = (savedAt: number) => ({ savedAt, epoch: 1 }) as unknown as Checkpoint;
 const row = (state: 'partial' | 'final', capturedAt: number, summary: 'pending' | 'ready' | null = null) => ({
   id: 'a1', state, capturedAt,

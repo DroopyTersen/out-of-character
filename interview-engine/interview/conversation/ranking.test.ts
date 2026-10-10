@@ -148,9 +148,9 @@ test('a corrected or grown turn replaces its own holds but preserves another tur
   const value = map();
   let state = observeTurn(emptyRanking(), value, reading({ passageId: 'p2', states: { t2: 'declined' } }), 'p2');
   state = observeTurn(state, value, reading({ passageId: 'p4', states: { t1: 'answered' } }), 'p4');
-  expect(state.holds.t1?.state).toBe('answered');
+  expect(pickThreads(value, state).ranked.map(item => item.id)).not.toContain('t1');
   state = observeTurn(state, value, reading({ passageId: 'p5', states: { t1: 'open' }, natural: { t1: .9, t2: 1 } }), 'p4');
-  expect(state.holds.t1).toBeUndefined();
-  expect(state.holds.t2?.state).toBe('declined');
+  expect(pickThreads(value, state).ranked.map(item => item.id)).toContain('t1');
+  expect(pickThreads(value, state).ranked.map(item => item.id)).not.toContain('t2');
   expect(pickThreads(value, state).lead).toBe('t1');
 });

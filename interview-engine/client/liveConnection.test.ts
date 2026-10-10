@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, jest, test } from 'bun:test';
-import type { ConnectionSnapshot, Link } from './liveConnection';
+import type { Closure, ConnectionSnapshot, Link } from './liveConnection';
 import { pollTransport } from './transport';
 
 // Browser media and the session server are substituted; the connection's own pause, heartbeat, and resume logic is real.
@@ -116,11 +116,11 @@ async function advance(ms: number) {
 }
 async function connected() {
   const { LiveConnection } = await import('./liveConnection');
-  const links: Link[] = [], errors: string[] = [];
-  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: link => links.push(link) });
+  const links: Link[] = [], errors: string[] = [], closures: Closure[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: link => links.push(link), closed: closure => closures.push(closure) });
   await connection.start('sharepoint', 'morgan');
   expect(server.status).toBe('live');
-  return { connection, links, errors, peer: () => FakePeer.all.at(-1)! };
+  return { connection, links, errors, closures, peer: () => FakePeer.all.at(-1)! };
 }
 const states = (links: Link[]) => links.map(link => link.state);
 
@@ -236,9 +236,9 @@ test('a reconnect that fails after the server accepted it holds the attempt agai
 const saved = { id: '00000000-0000-4000-8000-000000000000', capability: 'a'.repeat(64) };
 async function reattached() {
   const { LiveConnection } = await import('./liveConnection');
-  const links: Link[] = [], errors: [string, boolean | undefined][] = [], snapshots: ConnectionSnapshot[] = [];
-  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: (message, fatal) => errors.push([message, fatal]), link: link => links.push(link) }, saved);
-  return { connection, links, errors, snapshots };
+  const links: Link[] = [], errors: string[] = [], snapshots: ConnectionSnapshot[] = [], closures: Closure[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: message => errors.push(message), link: link => links.push(link), closed: closure => closures.push(closure) }, saved);
+  return { connection, links, errors, snapshots, closures };
 }
 
 test('a reloaded page rejoins its attempt paused and waits for the user to resume', async () => {
@@ -261,20 +261,94 @@ test('a reloaded page rejoins its attempt paused and waits for the user to resum
 });
 
 test('leaving mid-conversation holds the attempt instead of ending it', async () => {
-  const { connection, peer } = await connected();
+  const { connection, closures, peer } = await connected();
   const sent = server.calls.length;
   expect(connection.detach()).toBe(true);
   await advance(20_000);
   expect(server.calls.slice(sent)).toEqual(['pause']);
   expect(peer().connectionState).toBe('closed');
+  expect(closures).toEqual([]);
+});
+
+test('a denied microphone closes before the conversation without reaching the server', async () => {
+  const { LiveConnection } = await import('./liveConnection');
+  const errors: string[] = [], closures: Closure[] = [];
+  const denied = navigator.mediaDevices.getUserMedia;
+  navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Permission denied', 'NotAllowedError'); };
+  try {
+    const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: () => {}, closed: closure => closures.push(closure) });
+    await connection.start('sharepoint', 'morgan');
+  } finally { navigator.mediaDevices.getUserMedia = denied; }
+  expect(errors).toEqual(['Microphone access was denied. Allow access in your browser, then try again.']);
+  expect(closures).toEqual([{ outcome: 'ended', reachedLive: false }]);
+  expect(server.calls).toEqual([]);
+});
+
+test('an end the server confirms, or a poll that finds the attempt ended, closes it as ended', async () => {
+  const ending = await connected();
+  await ending.connection.end();
+  expect(ending.closures).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  expect(server.status).toBe('ended');
+
+  server.status = 'connecting';
+  const polled = await connected();
+  server.status = 'ended';
+  await advance(1100);
+  expect(polled.closures).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  await polled.connection.end();
+  expect(server.calls.filter(call => call === 'end')).toHaveLength(1);
+  expect(polled.closures).toHaveLength(1);
+});
+
+test('an end lost before delivery closes unconfirmed, and reattaching once back online holds the attempt to end or resume', async () => {
+  const { connection, closures, errors } = await connected();
+  browser.onLine = false;
+  server.offline = true;
+  await connection.end();
+  expect(closures).toEqual([{ outcome: 'unconfirmed', reachedLive: true }]);
+  expect(errors).toEqual([]);
+  expect(server.status).toBe('live');
+
+  const { LiveConnection } = await import('./liveConnection');
+  const links: Link[] = [], reopened: Closure[] = [];
+  const again = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: () => {}, link: link => links.push(link), closed: closure => reopened.push(closure) }, connection.attempt);
+  await again.reattach();
+  expect(links).toEqual([{ state: 'paused', reach: 'offline', reloaded: true }]);
+  browser.onLine = true;
+  server.offline = false;
+  window.dispatchEvent(new Event('online'));
+  await advance(100);
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'answered', reloaded: true });
+  expect(server.calls).not.toContain('resume');
+  await again.end();
+  expect(reopened).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  expect(server.status).toBe('ended');
+});
+
+test('an end whose reply was lost closes unconfirmed, and reattaching finds it ended', async () => {
+  const { connection, closures } = await connected();
+  server.override = action => {
+    if (server.status === 'ended') return { body: server.snapshot() };
+    if (action === 'end') { server.status = 'ended'; return { status: 504, body: { error: 'The gateway timed out.' } }; }
+  };
+  await connection.end();
+  expect(closures).toEqual([{ outcome: 'unconfirmed', reachedLive: true }]);
+  const { LiveConnection } = await import('./liveConnection');
+  const reopened: Closure[] = [];
+  const again = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: () => {}, link: () => {}, closed: closure => reopened.push(closure) }, connection.attempt);
+  await again.reattach();
+  await advance(100);
+  expect(reopened).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  expect(server.calls.filter(call => call === 'end')).toHaveLength(1);
 });
 
 test('a reloaded page whose attempt is gone reports it once and ends nothing', async () => {
   server.override = () => ({ status: 410, body: { error: 'This interview session was interrupted. Start a new attempt.' } });
-  const { connection, errors } = await reattached();
+  const { connection, errors, closures } = await reattached();
   await connection.reattach();
   await advance(20_000);
-  expect(errors).toEqual([['This attempt is no longer available.', true]]);
+  expect(errors).toEqual(['This attempt is no longer available.']);
+  expect(closures).toEqual([{ outcome: 'lost', reachedLive: true }]);
   expect(server.calls).toEqual(['pause', 'poll']);
   await connection.end();
   expect(server.calls).toEqual(['pause', 'poll']);
@@ -300,36 +374,20 @@ test('polls carry media quality every few seconds, and a failing stats read neve
   await connection.end();
 });
 
-test("Sam's playback starting and going quiet is reported at once with how long Sam has been quiet", async () => {
+test("Sam's playback reports activity promptly and stays recent for a short silence", async () => {
   const { connection, peer } = await connected();
-  const quiet = () => server.polls.map(poll => (poll as { outputQuietMs?: number | null }).outputQuietMs);
-  await advance(1000);
-  // No playback yet: the server can't tell whether Sam is audible.
-  expect(new Set(quiet())).toEqual(new Set([null]));
+  await advance(3000);
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
   peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
-  let seen = server.polls.length;
-  await advance(500);
-  const settled = quiet().slice(seen);
-  expect(settled).toHaveLength(1);
-  expect(settled[0]).toBeGreaterThanOrEqual(300);
-  expect(settled[0]).toBeLessThan(400);
-  // The regular poll carries the growing quiet.
-  await advance(1000);
-  expect(quiet().at(-1)).toBeGreaterThan(settled[0]!);
-  seen = server.polls.length;
+  const seen = server.polls.length;
   FakeAudioContext.loud = true;
   await advance(100);
-  expect(quiet().slice(seen)).toEqual([0]);
-  await advance(400);
-  seen = server.polls.length;
+  expect(server.polls.slice(seen)).toEqual([expect.objectContaining({ active: true, audio: true })]);
   FakeAudioContext.loud = false;
-  await advance(200);
-  expect(quiet().slice(seen)).toEqual([]);
-  await advance(300);
-  const stopped = quiet().slice(seen);
-  expect(stopped).toHaveLength(1);
-  expect(stopped[0]).toBeGreaterThanOrEqual(300);
-  expect(stopped[0]).toBeLessThan(400);
+  await advance(1000);
+  expect(server.polls.at(-1)).toMatchObject({ audio: true });
+  await advance(2000);
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
   await connection.end();
 });
 
@@ -357,7 +415,6 @@ test('microphone noise sends no extra activity reports and never reports Sam as 
   expect(server.polls.length).toBe(seen);
   await advance(1500);
   expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
-  expect(server.polls.at(-1)).not.toHaveProperty('inputQuietMs');
   connection.mute(true);
   await advance(1500);
   expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
@@ -449,7 +506,7 @@ const submitted = () => server.requests.filter(request => request.action === 'su
 test('an accepted typed answer resolves with its receipt and shows its snapshot', async () => {
   const { LiveConnection } = await import('./liveConnection');
   const snapshots: ConnectionSnapshot[] = [];
-  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: () => {}, link: () => {} });
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: () => {}, link: () => {}, closed: () => {} });
   await connection.start('sharepoint', 'morgan');
   server.override = action => action === 'submitText' ? { body: accepted(submitted().at(-1)!.id) } : undefined;
   const reply = await connection.submitText('Typed.');
@@ -495,4 +552,37 @@ test('an unreachable server gives up with a readable message, and a closed attem
   expect(new Set(submitted().map(body => body.id)).size).toBe(1);
   await connection.end();
   await expect(connection.submitText('Late.')).rejects.toThrow('The interview is not live.');
+});
+
+test('repeated resume calls wait for the pause acknowledgment and negotiate one connection', async () => {
+  const { connection, peer, links } = await connected();
+  const fixtureFetch = globalThis.fetch;
+  let releasePause!: () => void;
+  const pauseHeld = new Promise<void>(resolve => { releasePause = resolve; });
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).endsWith('/pause')) await pauseHeld;
+    return fixtureFetch(input, init);
+  }) as typeof fetch;
+  try {
+    peer().set('failed');
+    await flush();
+    const beforePeers = FakePeer.all.length;
+    const first = connection.resume();
+    const second = connection.resume();
+    await flush();
+    // Negotiation must wait until the earlier pause cannot arrive late at the server.
+    expect(FakePeer.all).toHaveLength(beforePeers);
+    expect(server.calls).not.toContain('resume');
+    const pendingLink = links.at(-1)?.state;
+    releasePause();
+    await Promise.all([first, second]);
+    expect(FakePeer.all).toHaveLength(beforePeers + 1);
+    expect(server.calls.filter(action => action === 'resume')).toHaveLength(1);
+    expect(pendingLink).toBe('resuming');
+    expect(links.at(-1)?.state).toBe('stable');
+  } finally {
+    releasePause();
+    globalThis.fetch = fixtureFetch;
+    await connection.end();
+  }
 });

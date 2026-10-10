@@ -10,8 +10,6 @@ import type { MappedSpec } from './conversation/map.prompt';
 export const interviewConfigSchema = z.object({
   interviewer: z.object({ name: text, persona: text, voices: z.array(z.object({ id, voice: text, label: text, presentation: text, image: text })).min(1)
     .refine(voices => new Set(voices.map(voice => voice.id)).size === voices.length, 'Voice IDs must be unique.') }),
-  readings: z.array(z.object({ id, label: text, description: text, rubric: z.object({ task: text, criteria: z.array(text).length(5) }) }))
-    .refine(readings => new Set(readings.map(reading => reading.id)).size === readings.length, 'Reading IDs must be unique.'),
   limits: (z.object({ durationSeconds: z.number().int().positive(), idleWarningMs: z.number().int().positive(), idleTimeoutMs: z.number().int().positive(), pauseHoldMs: z.number().int().nonnegative(), maxResumes: z.number().int().nonnegative() }) satisfies z.ZodType<InterviewLimits>)
     .refine(limits => limits.idleWarningMs < limits.idleTimeoutMs, 'The idle warning must precede the timeout.').optional(),
 });
@@ -69,6 +67,5 @@ export function resolveInterview(input: InterviewPlan, supplied: InterviewConfig
     topics: plan.topics.map(topic => ({ id: topic.id, label: topic.label,
       objectives: coverageTopics([topic]),
     })),
-    readings: config.readings,
   };
 }

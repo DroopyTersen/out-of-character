@@ -3,7 +3,7 @@ import type { Experimental_EvaluationModel } from 'ai';
 /** The host binds the model and its calibrated action thresholds as one judge. */
 export type Judge = {
   model: Experimental_EvaluationModel;
-  thresholds: { silenceContinue: number; coverageExplored: number };
+  thresholds: { silenceContinue: number; coverageExplored: number; novelInformation?: number; interviewFeedback?: number };
 };
 
 /** The judge a provider set carries when the host configured none: narrative-only callers never reach it. */

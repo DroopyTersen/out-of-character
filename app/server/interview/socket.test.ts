@@ -51,8 +51,8 @@ test('the socket path is unknown without the opt-in gate, and otherwise needs a 
 
 test('the interview object answers socket commands exactly as the HTTP routes do', async () => {
   const script: [ProtocolAction, unknown, string?][] = [
-    ['poll', { active: false, audio: false, outputQuietMs: 60_000 }], ['start', interviewAttempt], ['start', interviewAttempt, 'b'.repeat(64)], ['ready', undefined],
-    ['poll', { active: true, audio: false, outputQuietMs: 60_000 }], ['pause', undefined], ['poll', undefined], ['end', undefined], ['poll', undefined],
+    ['poll', { active: false, audio: false }], ['start', interviewAttempt], ['start', interviewAttempt, 'b'.repeat(64)], ['ready', undefined],
+    ['poll', { active: true, audio: false }], ['pause', undefined], ['poll', undefined], ['end', undefined], ['poll', undefined],
   ];
   const run = async (send: (action: ProtocolAction, body: unknown, capability: string) => Promise<{ status: number; body: unknown }>) => {
     setSystemTime(1_800_000_000_000);

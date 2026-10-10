@@ -53,9 +53,6 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
     const checks: Check[] = [
       ...item.expected.heard.map(id => ({ name: `heard:${id}`, path: ['objectives', id, 'achieved'], op: 'eq' as const, expected: true })),
       ...item.expected.unheard.map(id => ({ name: `unheard:${id}`, path: ['objectives', id, 'achieved'], op: 'eq' as const, expected: false, critical: true })),
-      ...(item.expected.highReadings ?? []).map(id => ({ name: `high:${id}`, path: ['readings', id, 'value'], op: 'gte' as const, expected: 2.5 })),
-      ...(item.expected.lowReadings ?? []).map(id => ({ name: `low:${id}`, path: ['readings', id, 'value'], op: 'lt' as const, expected: 2 })),
-      ...(item.expected.blankReadings ?? []).map(id => ({ name: `blank:${id}`, path: ['readings', id, 'value'], op: 'eq' as const, expected: null })),
     ];
     result.push({ id: `grade:${item.id}`, lane: 'grade', split: parseInt(hash(item.id).slice(0, 4), 16) % 3 === 0 ? 'validation' : 'development', source: 'synthetic',
       transcript: item.transcript, state: dialogueState(item.transcript, 'sam'), questions: interviewQuestions(spec, item.transcript), deadlineMs: 8000, checks });

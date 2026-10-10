@@ -18,13 +18,13 @@ The voice, turn and map loops run independently. Sam listens and chooses when to
 
 Jev reads each settled participant turn and scores the open gaps for natural next questions. The current thread stays unless another score is more than 0.1 higher; a thread Sol marked related can win a near-tie. Answered, declined and stalled gaps stay out until the next applied map. A transcript correction replaces only that turn's holds. New or rewritten gaps get a reading against the latest answer, without a separate trait-scoring call.
 
-Sol alone edits the map. The first call needs participant speech. New information (Jev probability at least 0.8) or useful public research wakes Sol, with one call in flight and a 20-second start-to-start floor. After a minute, new participant speech or a failed unapplied update also triggers a call. Topic lists stay in Sol's seed. Project facts must cite participant speech; web findings retain their separate source and lookup citation.
+Sol alone edits the map. The first call needs participant speech. New information or interview feedback (probability at least 0.8 by default, with independent host-selected judge thresholds) or useful public research wakes Sol, with one call in flight and a 20-second start-to-start floor. After a minute, new participant speech or a failed unapplied update also triggers a call. Topic lists stay in Sol's seed. Project facts must cite participant speech; web findings retain their separate source and lookup citation.
 
 Sam receives a short thread note only when the lead or its wording changes, or a named alternative becomes unavailable. Map notes go when their content changes. Both use `session.thinking.append`; they are optional context, not instructions to speak. They are sent immediately, without another delivery timer. This intentionally changes production v22's held-note behavior; unit tests and archived replay cannot establish live interruption quality.
 
 A participant may type an answer instead of speaking. After its required save, the actor forwards it once to the same voice session as `session.thinking.append`, with `event_id: typed-<id>`, `delegation_id: null`, and content from `typedAnswerCue` in `interview/session/voice.prompt.ts`. Unlike a note, it asks Sam to respond. If the voice session changed or paused before the save completed, the answer reaches Sam through the resume context instead. The passage is frozen, so later speech starts a new passage rather than extending it. A provider `error` naming a `typed-` event pauses the attempt through the ordinary provider pause, with the message “Your answer is saved. Reconnect to continue.” When the last participant passage is typed, the resume instruction tells Sam it is a completed answer, not speech that may have been cut off.
 
-`composing` is set only by sequenced poll and `ready` reports. The browser keeps its microphone track disabled while composing (`track.enabled = !muted && !composing && !autoMuted`), so clearing or sending restores the participant's own mute choice. While the actor holds `composing`, the silence check does not run, and entering composition aborts a check already in flight. Leaving composition starts a fresh four-second silence interval. Idle and duration limits, coverage, producer work and Sam's own replies continue; an utterance already underway is not cancelled. Producer notes are held while composing, since Sam tends to speak on one: they are sent to the same provider session just before a typed answer is forwarded, or when composition ends, and a note held for a session that has since closed is dropped (the producer restates its notes to a resumed session itself).
+`composing` follows sequenced poll and `ready` reports and clears when a durably saved typed answer is forwarded. The browser keeps its microphone track disabled while composing (`track.enabled = !muted && !composing && !autoMuted`), so clearing or sending restores the participant's own mute choice. While the actor holds `composing`, the silence check does not run, and entering composition aborts a check already in flight. Leaving composition starts a fresh four-second silence interval. Idle and duration limits, coverage, producer work and Sam's own replies continue; an utterance already underway is not cancelled. While composing, the producer continues updating its map and ranking but emits no notes or delivery records. When composition ends or just before a typed answer is forwarded, it sends only the current changed notes. A resumed session receives the current notes even when the ordinary note cap was already reached.
 
 A shared 400-call cap includes failed and interrupted producer calls. Sol, Jev and research deadlines are 50 seconds, 3 seconds and 90 seconds. Research is limited to three calls; ordinary notes to 100. A replacement voice session can receive its existing context beyond the ordinary note cap. Checkpoints retain the map, append-only input log, audit records and transcript cursor; transient ranking is re-read after a restart. Historical trait records remain readable for archived interviews.
 
@@ -82,9 +82,9 @@ export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
 | --- | --- | --- | --- |
 | `SessionStore` | One writer per attempt. A superseded writer's `save` throws `FencedError`, and the actor then closes its provider socket and stops. | Durable Object storage. Writes are never stale, because one object owns its attempt. `wake` sets the alarm. | `memoryStore`. Each store opened on a record claims the next segment. `wake` sets a timer. |
 | `Background` | Work keeps running after a reply has been sent. | `ctx.waitUntil` | `inlineBackground()` |
-| `Archive` | Rows are upserts by attempt id, and a partial row never replaces a final one. | D1 `interview_attempts` | `memoryArchive()`, plus JSON files when `INTERVIEW_ARCHIVE_DIR` is set |
+| `Archive` | Rows are upserts by attempt id, a partial row never replaces a final one, and a resolved `write` is durable. A final row can arrive more than once. | D1 `interview_attempts` | `memoryArchive()`, plus JSON files when `INTERVIEW_ARCHIVE_DIR` is set |
 
-While the attempt is live, the actor writes a partial archive row every 30 seconds. It writes a final row at the end.
+While the attempt is live, the actor writes a partial archive row every 30 seconds; a failed one is logged and dropped. At the end it saves the closed lease and a terminal checkpoint in one patch, so a store should commit them together, then writes the final row. The terminal checkpoint stays until `write` resolves for that row. A failed write is retried on the next wake, and a later owner restores the terminal checkpoint even beside a closed lease and writes the same row again: the end time, transcript and grades are frozen, so a retry never closes a voice session or grades again. `closing` resolves after the first attempt at the final row.
 
 A host without timers can ignore `wake` and pass `lazyWake: true`. Each command then first runs any work that has come due. Every wake job also runs on restore.
 
@@ -106,8 +106,8 @@ export type Providers = {
 
 export type VoiceProvider = {
   create(input: { sdp: string; voice: string; instructions: string }): Promise<{ id: string; sdp: string }>;
-  attach(id: string): Promise<WebSocketLike>;             // the control socket: events in, instructions out
-  close(id: string): Promise<void>;
+  attach(id: string, handlers?: VoiceHandlers): Promise<VoiceConnection>; // normalized events and typed commands
+  close(id: string, handlers?: VoiceHandlers): Promise<void>;
 };
 ```
 
@@ -163,7 +163,6 @@ const config = {
   interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [
     { id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/sam.png' },
   ] },
-  readings: [], // Optional participant readings; each configured reading has a task and five score criteria.
 };
 const actor = await SessionActor.restore({ plan, config, context, providers, store, background, archive });
 ```
@@ -211,7 +210,7 @@ export function pollTransport(baseUrl: string): ProtocolTransport;   // HTTP POS
 export function socketTransport(baseUrl: string): ProtocolTransport; // one WebSocket per attempt at <baseUrl>/<id>/socket
 ```
 
-A poll carries an activity report. A sequenced report (one with a `sequence`) may also carry `composing`, whether the browser holds an unsent typed draft; the draft itself never travels. `ready` may carry the browser's current activity report, which the actor applies before the attempt goes live, so a composer opened during a reconnect is still protected. Only sequenced reports change `composing`, and a report whose sequence is not greater than the last one seen is dropped. The client numbers reports `Math.max(previous + 1, Date.now())`, so a reloaded page never repeats a number the server has already seen.
+A poll carries an activity report. A sequenced report (one with a `sequence`) may also carry `composing`, whether the browser holds an unsent typed draft; the draft itself never travels. `ready` may carry the browser's current activity report, which the actor applies before the attempt goes live, so a composer opened during a reconnect is still protected. Activity changes `composing` only through sequenced reports; durable typed acceptance also clears it. A report whose sequence is not greater than the last one seen is dropped. The client numbers reports `Math.max(previous + 1, Date.now())`, so a reloaded page never repeats a number the server has already seen.
 
 `submitText` sends one typed participant answer. The body is `{ id, text }`: `id` is a UUID, and `text` is nonblank and at most `TYPED_TEXT_LIMIT` (2,000) characters. The text is kept exactly as typed; it is trimmed only to reject a blank answer. The host bounds the request body at `SUBMIT_TEXT_BODY_LIMIT` (16 KiB, including JSON escaping). The replies are:
 
@@ -233,6 +232,14 @@ connection.submitText(text: string): Promise<SubmitTextReply>; // resolves once 
 ```
 
 `submitText` mints the id and retries the same id while the server is unanswered or replies 503, backing off for up to 30 seconds. Other failures reject with the server's message. The host keeps the draft until the promise resolves and clears it only then. A host forwards the command as it forwards the others: bound the body at `SUBMIT_TEXT_BODY_LIMIT` and pass it to `actor.handle`, which parses it with `submitTextSchema`.
+
+`closed` reports, once per connection, how the attempt closed for this page, so a host never infers it from snapshots:
+
+```ts
+type Closure = { outcome: 'ended' | 'unconfirmed' | 'lost'; reachedLive: boolean };
+```
+
+`ended` means the server ended the attempt or confirmed this page's `end`, or the attempt never reached the server (a denied microphone, for example). `unconfirmed` means this page's `end` went unanswered, so the server may still hold the attempt: the host reconciles it by reattaching a new `LiveConnection` with the same `Attempt`, which rejoins paused (as after a reload) and finds the attempt ended if the `end` did arrive. `lost` means the server no longer has the attempt. `reachedLive` says whether the conversation had started. `detach()` and `dispose()` report nothing. `error` carries only messages to show.
 
 Two transports exist. The browser uses `pollTransport`. `socketTransport` (`client/socketTransport.ts`) is opt-in: a host enables it with `INTERVIEW_SOCKET_ENABLED=true`. It sends the same requests over one WebSocket per attempt and correlates each reply by id. When the socket closes, whatever was waiting fails with `SessionUnanswered`, and the next request reconnects for the same attempt. Keepalive requests still go over HTTP. The errors are the poll transport's.
 
@@ -259,10 +266,11 @@ export function writeNarrative(input: NarrativeInput, providers: Pick<Providers,
 ```ts
 new NarrativeRunner(start: (signal: AbortSignal) => NarrativeRun, options?: { deadlineMs?: number; onSettled?: (narrative: SettledNarrative) => void; track?: (work: Promise<unknown>) => void });
 runner.attach(signal): Response;   // start a run, rejoin the running one, or return the stored document or "retry used"
+runner.run(): Promise<NarrativeState>; // the same run with no request attached, resolving once it settles
 runner.state(); runner.read(); runner.cancel();
 ```
 
-The runner allows two starts at most (`NARRATIVE_MAX_STARTS`), with a 120-second deadline (`NARRATIVE_DEADLINE_MS`). After a run settles, the host passes the result to `actor.settleNarrative(status, provenance)` so the archive records it. A request made while a run is writing rejoins it: it receives everything written so far, then the rest as it is written, so a reloaded page picks up where it was. Dropping a request detaches it without stopping the run. Only the deadline or `runner.cancel()` stops a run, and `track` keeps it alive on a platform that would otherwise stop it (Cloudflare: `waitUntil`).
+The runner allows two starts at most (`NARRATIVE_MAX_STARTS`), with a 120-second deadline (`NARRATIVE_DEADLINE_MS`). After a run settles, the host passes the result to `actor.settleNarrative(status, provenance)` so the archive records it. A request made while a run is writing rejoins it: it receives everything written so far, then the rest as it is written, so a reloaded page picks up where it was. Dropping a request detaches it without stopping the run. Only the deadline or `runner.cancel()` stops a run, and `track` keeps it alive on a platform that would otherwise stop it (Cloudflare: `waitUntil`). A host that persists the report itself and streams nothing calls `run()` instead of `attach`: the deadline, draining and failure handling are the same, and it resolves with the settled state.
 
 ## Debrief setup
 

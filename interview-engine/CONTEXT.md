@@ -6,7 +6,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Segment**: one voice-provider session within an attempt. Starting opens the first; each resume after a drop opens a new one. Provider events and closures are bound to their segment, so a superseded session can never pause or end its successor. Segments restart their own clock at zero, and an offset keeps the attempt's transcript clock monotonic.
 
-**Checkpoint**: the durable record a replacement owner needs to hold an attempt for resume or finish it with what was captured. Saved through `SessionStore`; in-flight paid work is not kept.
+**Checkpoint**: the durable record a replacement owner needs to hold an attempt for resume or finish it with what was captured. Saved through `SessionStore`; in-flight paid work is not kept. A finished conversation keeps a terminal checkpoint until its final archive row is acknowledged.
 
 **Lease**: the small record saved at start, before any checkpoint: the capability, the provider sessions not yet confirmed closed, a deadline, and whether the attempt has closed. It lets a later owner close a provider session the attempt opened even if the conversation never went live.
 
@@ -14,13 +14,13 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Seams**: the three things a host implements over its platform, in `interview/seams.server.ts`: `SessionStore` (lease, checkpoint, wake hint, clear), `Background` (work that outlives a reply) and `Archive` (archive row upserts). Everything else the engine needs arrives as providers.
 
-**Archive row**: the attempt's record for later reading: transcript, snapshot, conversation map, producer log and prompt versions. Written through `Archive` as a partial row while live and a final row at the end; each write is an upsert by attempt id, and a partial never replaces a final.
+**Archive row**: the attempt's record for later reading: transcript, snapshot, conversation map, producer log and prompt versions. Written through `Archive` as a partial row while live (best effort) and a final row at the end (retried from the terminal checkpoint until acknowledged); each write is an upsert by attempt id, and a partial never replaces a final.
 
 **Capability**: the bearer secret the browser receives at start and sends with every command. It is the only proof of ownership the engine checks; identity is the host's business.
 
-**Wake**: a time at which the attempt has due work (pause-hold expiry, idle timeout, limit, partial archive, provider close retry, post-finish clear). The engine asks the store for a wake as a hint; a host with durable timers calls `wake()` then. Due work also runs on restore, and with `lazyWake` before each command, so a host without timers can ignore the hint.
+**Wake**: a time at which the attempt has due work (pause-hold expiry, idle timeout, limit, partial archive, final archive retry, provider close retry, post-finish clear). The engine asks the store for a wake as a hint; a host with durable timers calls `wake()` then. Due work also runs on restore, and with `lazyWake` before each command, so a host without timers can ignore the hint.
 
-**Interview phase**: the live conversation that produces a transcript, coverage and readings. Lives in `interview/`.
+**Interview phase**: the live conversation that produces a transcript and topic coverage. Lives in `interview/`.
 
 **Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives in `narrative/`.
 
@@ -52,11 +52,13 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled, the silence check does not run, and producer notes to Sam are held until the typed answer is forwarded or composition ends; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
 
-**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
+**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective, with evidence by passage id.
 
-**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior.
+**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior, and `run()` executes the same run headless for a host that persists the result itself.
 
 **Rejoin**: a request that attaches to a narrative run already in progress. `NarrativeRunner.attach` replays what has been written so far and then streams the rest live; a request that drops only detaches, and the run continues until it settles, is cancelled or reaches its deadline. Once settled, a request gets the stored document instead. An imported transcript's run cannot be rejoined, so it is cancelled when its request drops.
+
+**Closure**: how an attempt closed for one page, which `LiveConnection` reports once through `closed`: `ended` (the server ended it or confirmed the end, or it never reached the server), `unconfirmed` (the end went unanswered; the host reattaches with the same attempt to reconcile it) or `lost` (the server no longer has it), with whether the conversation had started.
 
 **Transport**: how the browser client delivers its commands. The poll transport sends one HTTP request per command; the socket transport (`client/socketTransport.ts`) sends the same commands over one WebSocket per attempt, as `{ id, action, capability, body }`, and receives `{ id, status, body }` replies equal to the HTTP replies. The report, which streams, stays on HTTP; a socket start must name the socket's own attempt. The socket is opt-in on the host.
 
@@ -74,7 +76,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 - **Sam**: the interviewer the participant hears, a realtime voice model.
 - **Sol**: the producer with the notepad; keeps the conversation map of what has been said and what is still open, and writes Sam's notes.
-- **Jev**: the producer's instincts; a judge model that reads coverage, readings and which thread to follow, and gives the final grade.
+- **Jev**: the producer's instincts; a judge model that reads coverage and which thread to follow, and gives the final grade.
 - **Luna**: the research assistant; looks up public background on organizations, products and terms the participant mentions.
 
 **Topic**: one recursive node with `id`, `label`, `learn`, optional `appliesWhen` and optional child `topics`. Only leaves are assessed. Parent learning intent scopes children, and parent conditions apply to descendants.

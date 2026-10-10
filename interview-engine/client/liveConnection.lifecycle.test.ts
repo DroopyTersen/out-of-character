@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, jest, test } from 'bun:test';
 import type { MediaCallbacks, MediaConnection } from './browserMedia';
-import { LiveConnection, type Closure, type ConnectionSnapshot } from './liveConnection';
+import { LiveConnection, type Closure, type ConnectionSnapshot, type Link } from './liveConnection';
 import type { ProtocolAction, ProtocolTransport } from './transport';
 import { silentLevels } from './audioLevels';
 
@@ -42,6 +42,7 @@ async function flush() { for (let turn = 0; turn < 20; turn++) await Promise.res
 function fixture(intercept?: (...args: Parameters<ProtocolTransport['request']>) => Promise<unknown> | undefined) {
   let status: ConnectionSnapshot['status'] = 'connecting';
   const requests: ProtocolAction[] = [], snapshots: ConnectionSnapshot[] = [], closures: Closure[] = [];
+  const links: Link[] = [], errors: string[] = [];
   const snapshot = (): ConnectionSnapshot => ({ id: 'attempt', status, warning: null });
   const transport: ProtocolTransport = { async request(action, body, options) {
     requests.push(action);
@@ -55,9 +56,9 @@ function fixture(intercept?: (...args: Parameters<ProtocolTransport['request']>)
   } };
   let media!: MediaFixture;
   const connection = new LiveConnection(transport, {
-    snapshot: value => snapshots.push(value), closed: value => closures.push(value), levels: () => {}, error: () => {}, link: () => {},
+    snapshot: value => snapshots.push(value), closed: value => closures.push(value), levels: () => {}, error: value => errors.push(value), link: value => links.push(value),
   }, { id: 'attempt', capability: 'capability' }, callbacks => media = new MediaFixture(callbacks));
-  return { connection, media, requests, snapshots, closures };
+  return { connection, media, requests, snapshots, closures, links, errors };
 }
 
 test('End while ready is pending cannot publish a late live state or start media loops', async () => {
@@ -81,19 +82,18 @@ test('End while ready is pending cannot publish a late live state or start media
   f.connection.dispose();
 });
 
-test('a saved typed receipt after End resolves without publishing a snapshot to the closed page', async () => {
-  const saved = Promise.withResolvers<unknown>();
+test('a typed receipt already received before End cannot publish a snapshot to the closed page', async () => {
   let submitted: { id: string; text: string } | undefined;
-  const f = fixture((action, body) => {
+  const f = fixture((action, body, { signal }) => {
     if (action !== 'submitText') return undefined;
+    signal!.throwIfAborted();
     submitted = body as typeof submitted;
-    return saved.promise;
+    return Promise.resolve({ acceptedId: submitted!.id, snapshot: { id: 'attempt', status: 'live', warning: null } });
   });
   await f.connection.start('plan', 'voice');
   const sending = f.connection.submitText('Saved before closing.');
   await f.connection.end();
   const afterEnd = [...f.snapshots];
-  saved.resolve({ acceptedId: submitted!.id, snapshot: { id: 'attempt', status: 'live', warning: null } });
   expect((await sending).acceptedId).toBe(submitted!.id);
   expect(f.snapshots).toEqual(afterEnd);
   expect(f.closures).toEqual([{ outcome: 'ended', reachedLive: true }]);
@@ -114,5 +114,31 @@ test('a held pause serializes competing resume requests without starting duplica
   await Promise.all([first, second]);
   expect(f.media.openings).toBe(2);
   expect(f.requests.filter(action => action === 'resume')).toHaveLength(1);
+  await f.connection.end();
+});
+
+test('media failure during resume readiness returns to a recoverable pause and releases media', async () => {
+  const ready = Promise.withResolvers<ConnectionSnapshot>();
+  let hold = false;
+  const f = fixture(action => action === 'ready' && hold ? ready.promise : undefined);
+  await f.connection.start('plan', 'voice');
+  f.media.callbacks.state('failed');
+  await flush();
+  hold = true;
+  const resuming = f.connection.resume();
+  await flush();
+  expect(f.links.at(-1)?.state).toBe('resuming');
+  expect(f.media.connected).toBe(true);
+  f.media.callbacks.state('failed');
+  ready.resolve({ id: 'attempt', status: 'live', warning: null });
+  await resuming;
+  expect(f.links.at(-1)?.state).toBe('paused');
+  expect(f.media.connected).toBe(false);
+  expect(f.errors).toEqual(['The voice connection was interrupted.']);
+  expect(f.requests.filter(action => action === 'pause')).toHaveLength(2);
+  hold = false;
+  await f.connection.resume();
+  expect(f.links.at(-1)?.state).toBe('stable');
+  expect(f.media.connected).toBe(true);
   await f.connection.end();
 });

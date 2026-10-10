@@ -96,13 +96,15 @@ test('cancellation reaches an in-flight request and does not retry its rejection
   expect(sends).toBe(1);
 });
 
-test('a saved receipt arriving after cancellation remains an acceptance receipt', async () => {
+test('a receipt already received when cancellation occurs remains an acceptance receipt', async () => {
   const controller = new AbortController();
-  const reply = Promise.withResolvers<SubmitTextReply>();
   let answerId = '';
-  const pending = delivery((_action, body) => { answerId = (body as SubmitTextInput).id; return reply.promise; }, controller.signal);
+  const pending = delivery(async (_action, body, { signal }) => {
+    signal!.throwIfAborted();
+    answerId = (body as SubmitTextInput).id;
+    return receipt(answerId);
+  }, controller.signal);
   controller.abort();
-  reply.resolve(receipt(answerId));
   expect((await pending).acceptedId).toBe(answerId);
 });
 

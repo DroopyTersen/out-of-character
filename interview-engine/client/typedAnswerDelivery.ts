@@ -4,7 +4,7 @@ import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolTran
 const NOT_LIVE = 'The interview is not live.';
 const UNSENT = 'Your answer could not be sent. Check your connection and try again.';
 
-/** One answer keeps its ID through unanswered requests. A receipt means it was saved, including a late receipt after cancellation. */
+/** One answer keeps its ID through unanswered requests. Cancellation abandons pending delivery; the server may still save it. An already received receipt remains valid. */
 export async function deliverTypedAnswer({ text, transport, attempt, signal }: {
   text: string; transport: ProtocolTransport; attempt: Attempt; signal: AbortSignal;
 }): Promise<SubmitTextReply> {

@@ -76,7 +76,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Browser media**: microphone, peer connection, playback, audio context, meters and network statistics, owned together by `BrowserMedia`. It reports media observations; `LiveConnection` owns attempt commands and reconnect policy. Pause preserves the audio context. End silences immediately and releases the peer after its bounded drain.
 
-**Typed answer delivery**: the browser operation that keeps one answer ID through bounded retries until it receives a durable receipt or fails. It can run without browser media. A saved receipt remains valid after End, but cannot publish a live snapshot to a closed page.
+**Typed answer delivery**: the browser operation that keeps one answer ID through bounded retries until it receives a durable receipt or fails. It can run without browser media. End cancels pending delivery; the server may still save the answer without the browser receiving its receipt. An already received receipt remains valid, but cannot publish a live snapshot to a closed page.
 
 **Archive capture**: construction of an immutable archive row from one captured moment. It excludes provider IDs and preserves private diagnostic records and prompt fingerprints. The coordinator still owns archive writes, retries and terminal-checkpoint retention.
 

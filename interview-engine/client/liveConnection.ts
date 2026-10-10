@@ -142,10 +142,12 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     const segment = this.segment = new AbortController();
     this.applyMute();
     const connected = await this.media.connect(exchange, segment.signal);
-    if (!connected || this.ending || segment.signal.aborted) return false;
+    if (!connected || this.ending) return false;
+    if (segment.signal.aborted) throw new Error('The voice connection was interrupted.');
     // The server applies the current activity, including an open draft, before going live.
     const ready = await this.request('ready', this.activity(false)) as S;
-    if (this.ending || segment.signal.aborted) return false;
+    if (this.ending) return false;
+    if (segment.signal.aborted) throw new Error('The voice connection was interrupted.');
     this.callbacks.snapshot(ready);
     return true;
   }
@@ -337,7 +339,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   }
 
   /**
-   * Sends one typed answer. Its id is minted here and retried unchanged while the server is unreachable or busy,
+   * Sends one typed answer under one ID, retried unchanged while the server is unreachable or busy,
    * so a lost reply never creates a second turn. Resolves once the server saved it.
    */
   async submitText(text: string): Promise<SubmitTextReply> {

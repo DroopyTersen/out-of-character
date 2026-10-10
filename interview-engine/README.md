@@ -58,6 +58,12 @@ The entry points a host uses are:
 - `setup/approve.server.ts` and `setup/draft.server.ts`
 - `shared/*` and `client/*`
 
+## Topic grading and session coordination
+
+`interview/grading/topicGrading.server.ts` owns grading cadence, input deduplication, the call budget, cancellation, retries, live coverage smoothing and the final grade. `judgeTopicCoverage.server.ts` makes one judgment through the supplied judge; `topicCoverage.prompt.ts` defines its questions and `topicCoverage.ts` holds the pure coverage rules. Grading can be tested with a transcript callback and a judge without opening a voice session.
+
+`interview/session/sessionCoordinator.server.ts` coordinates that module with the voice session and conversation producer. It owns lifecycle, transcript settlement, persistence, fencing and closing order. Each module reports through typed values and callbacks; the coordinator controls when work starts and stops.
+
 ## The three seams
 
 The host implements these for its platform. They are defined in `interview/seams.server.ts`.
@@ -282,7 +288,7 @@ const draft = templateDraft(template);
 const approved = await approveDebrief(template, { ...draft, id: 'my-review' });
 ```
 
-Approval validates the content and builds a version from its digest plus the base template identity. The base supplies voices, persona, participant reading rubrics and limits; the engine supplies prompt construction. Approval does not replace the requested report format with a topic-sectioned report. Business authorization and the approval workflow remain host responsibilities.
+Approval validates the content and builds a version from its digest plus the base template identity. The base supplies voices, persona and limits; the engine supplies prompt construction. Approval does not replace the requested report format with a topic-sectioned report. Business authorization and the approval workflow remain host responsibilities.
 
 ## How this repository hosts it
 
@@ -365,7 +371,7 @@ The steps below use the host app as the example. They follow the plan in the des
    - An `Archive` that upserts `InterviewArchiveRow`.
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
 4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
-5. **Own an coordinator per attempt.** Call `SessionCoordinator.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `coordinator.handle`, and call `coordinator.close('hold')` when the host drops the attempt.
+5. **Own a coordinator per attempt.** Call `SessionCoordinator.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `coordinator.handle`, and call `coordinator.close('hold')` when the host drops the attempt.
 6. **Serve the report.** Read report format and context from `coordinator.definition`; pass only these and the canonical transcript. Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `coordinator.settleNarrative`.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.
 

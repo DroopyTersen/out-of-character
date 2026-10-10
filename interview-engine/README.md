@@ -82,9 +82,9 @@ export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
 | --- | --- | --- | --- |
 | `SessionStore` | One writer per attempt. A superseded writer's `save` throws `FencedError`, and the actor then closes its provider socket and stops. | Durable Object storage. Writes are never stale, because one object owns its attempt. `wake` sets the alarm. | `memoryStore`. Each store opened on a record claims the next segment. `wake` sets a timer. |
 | `Background` | Work keeps running after a reply has been sent. | `ctx.waitUntil` | `inlineBackground()` |
-| `Archive` | Rows are upserts by attempt id, and a partial row never replaces a final one. | D1 `interview_attempts` | `memoryArchive()`, plus JSON files when `INTERVIEW_ARCHIVE_DIR` is set |
+| `Archive` | Rows are upserts by attempt id, a partial row never replaces a final one, and a resolved `write` is durable. A final row can arrive more than once. | D1 `interview_attempts` | `memoryArchive()`, plus JSON files when `INTERVIEW_ARCHIVE_DIR` is set |
 
-While the attempt is live, the actor writes a partial archive row every 30 seconds. It writes a final row at the end.
+While the attempt is live, the actor writes a partial archive row every 30 seconds; a failed one is logged and dropped. At the end it saves the closed lease and a terminal checkpoint in one patch, so a store should commit them together, then writes the final row. The terminal checkpoint stays until `write` resolves for that row. A failed write is retried on the next wake, and a later owner restores the terminal checkpoint even beside a closed lease and writes the same row again: the end time, transcript and grades are frozen, so a retry never closes a voice session or grades again. `closing` resolves after the first attempt at the final row.
 
 A host without timers can ignore `wake` and pass `lazyWake: true`. Each command then first runs any work that has come due. Every wake job also runs on restore.
 

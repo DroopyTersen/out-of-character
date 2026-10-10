@@ -33,12 +33,15 @@ export type SessionStore = {
 };
 /** Keeps work running after the request that started it has been answered: grading, map updates, archive writes. */
 export type Background = { track(work: Promise<unknown>): void };
-/** Upserts the attempt's archive row by id. Best effort: a failed write is logged, never retried. */
+/**
+ * Upserts the attempt's archive row by id, and resolves once the row is durable. A failed partial row is logged and
+ * dropped. A failed final row is retried from the terminal checkpoint, so the same row may arrive more than once.
+ */
 export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
 
 /**
  * One archived attempt. A partial row is written every 30 seconds while live; the final row once the attempt ends,
- * and again when the narrative settles. A partial row never replaces a final one.
+ * until the archive acknowledges it, and again when the narrative settles. A partial row never replaces a final one.
  */
 export type InterviewArchiveRow = {
   id: string;

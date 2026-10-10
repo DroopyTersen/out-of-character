@@ -8,7 +8,7 @@ import { evaluateSilence } from './silence.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';
 import { INTERVIEW_RUBRIC_VERSION } from '../conversation/rubric.prompt';
 import { testFraming, testTechniques } from '../conversation/testSpec';
-import { FencedError } from '../seams.server';
+import { FencedError, type InterviewArchiveRow } from '../seams.server';
 import type { InterviewSnapshot as PublicSnapshot } from '../../shared/snapshot';
 import { SessionActor, type SessionOptions, type SessionServices } from './session.server';
 import { resumeInstruction, typedAnswerCue } from './voice.prompt';
@@ -196,6 +196,84 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   await actor.wake();
   expect(f.record.lease).toBeUndefined();
   expect(f.record.clears).toBe(1);
+});
+
+/** An archive that refuses final rows while `refusing` is set, over the in-memory upsert rules. */
+function flakyArchive() {
+  const archive = memoryArchive();
+  const control = { refusing: true };
+  const flaky = { ...archive, write: async (row: InterviewArchiveRow) => { if (control.refusing && row.state === 'final') throw new Error('archive outage'); await archive.write(row); } };
+  return { archive: flaky, control };
+}
+const finalFailures = (f: ReturnType<typeof fixture>) => f.events.filter(event => (event as { event?: string; category?: string }).event === 'archive.failed' && (event as { category?: string }).category === 'final');
+const dialogue = [['interviewer', 'Hi, I’m Riley. What did you build?'], ['participant', 'A claims portal for the adjusters.']];
+
+test('a final row the archive refuses keeps the terminal checkpoint, and a later owner archives it again without paid work', async () => {
+  const { archive, control } = flakyArchive();
+  const f = fixture({ archive });
+  const { actor, socket } = await conversation(f);
+  f.at(10_000);
+  expect(body(await f.send(actor, 'end'))).toMatchObject({ status: 'ended', finalization: 'confirmed' });
+  expect(finalFailures(f)).toHaveLength(1);
+  expect(f.record.lease).toMatchObject({ closed: true });
+  expect(f.record.checkpoint).toMatchObject({ savedAt: EPOCH + 10_000, snapshot: { status: 'ended', interview: { summary: { status: 'pending' } } } });
+  expect(f.record.wakeAt).toBe(EPOCH + 25_000);
+  const paid = { created: f.voice.created.length, closed: [...f.voice.closed], closes: socket.sent.filter(event => event.type === 'session.close').length, graded: f.graded.length };
+
+  // Each wake retries the frozen row until the archive acknowledges it.
+  f.at(25_000);
+  await actor.wake();
+  expect(finalFailures(f)).toHaveLength(2);
+  expect(f.record.wakeAt).toBe(EPOCH + 40_000);
+
+  // The owner is lost. The next one restores the terminal checkpoint beside the closed lease and archives it.
+  control.refusing = false;
+  const next = fixture({ record: f.record, voice: f.voice, archive });
+  next.at(40_000);
+  const restored = await next.restore();
+  const read = await next.send(restored, 'poll', quietPoll);
+  expect(read.terminal).toBe(true);
+  expect(body(read)).toMatchObject({ status: 'ended', finalization: 'confirmed', usageSeconds: 12 });
+  expect(body(read).transcript.map(entry => [entry.speaker, entry.text])).toEqual(dialogue);
+  await restored.wake();
+  const row = archive.rows.get(attempt.id)!;
+  expect(row).toMatchObject({ state: 'final', capturedAt: EPOCH + 10_000, snapshot: { status: 'ended', usageSeconds: 12 }, narrative: { status: 'pending' } });
+  expect(row.transcript.map(entry => [entry.speaker, entry.text])).toEqual(dialogue);
+  expect(row.producerLog.some(record => record.source === 'grade' && record.final)).toBe(true);
+  expect(f.record.checkpoint).toBeUndefined();
+  expect(f.record.wakeAt).toBe(EPOCH + 40_000 + 300_000);
+  expect({ created: f.voice.created.length, closed: f.voice.closed, closes: socket.sent.filter(event => event.type === 'session.close').length, graded: f.graded.length }).toEqual(paid);
+  expect(next.graded).toEqual([]);
+
+  // The narrative rewrites the acknowledged row, and the hold then forgets the attempt.
+  restored.settleNarrative({ status: 'ready', text: 'A summary.' }, { model: 'fixture', version: 'v1', attempts: [] });
+  await next.background.settle();
+  expect(archive.rows.get(attempt.id)!.narrative).toEqual({ status: 'ready', text: 'A summary.' });
+  next.at(340_000);
+  await restored.wake();
+  expect(f.record.lease).toBeUndefined();
+  expect(f.record.clears).toBe(1);
+});
+
+test('without timers, the next command after the retry time archives the final row, with a narrative that settled meanwhile', async () => {
+  const { archive, control } = flakyArchive();
+  const f = fixture({ archive, lazyWake: true });
+  const { actor } = await conversation(f);
+  f.at(10_000);
+  await f.send(actor, 'end');
+  actor.settleNarrative({ status: 'ready', text: 'A summary.' }, { model: 'fixture', version: 'v1', attempts: [] });
+  await f.background.settle();
+  expect(finalFailures(f)).toHaveLength(2);
+  expect(archive.rows.has(attempt.id)).toBe(false);
+  control.refusing = false;
+  f.at(20_000);
+  await f.send(actor, 'poll', quietPoll);
+  expect(archive.rows.has(attempt.id)).toBe(false);
+  f.at(25_000);
+  expect((await f.send(actor, 'poll', quietPoll)).terminal).toBe(true);
+  expect(archive.rows.get(attempt.id)).toMatchObject({ state: 'final', capturedAt: EPOCH + 10_000, narrative: { status: 'ready', text: 'A summary.' } });
+  expect(f.record.checkpoint).toBeUndefined();
+  expect(f.record.wakeAt).toBe(EPOCH + 25_000 + 300_000);
 });
 
 test('the capability is checked before anything else, and an end before start leaves a closed lease', async () => {

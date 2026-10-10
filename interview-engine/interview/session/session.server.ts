@@ -151,7 +151,8 @@ export class SessionActor {
   private silenceCheck: Promise<void> | undefined;
   private silenceAbort: AbortController | undefined;
   private replacedSilent = false;
-  private finalArchive: Promise<void> | undefined;
+  /** When the attempt ended, while the archive has not acknowledged its final row. Its terminal checkpoint is kept until then. */
+  private unarchived: number | null = null;
   private narrativeArchive = Promise.resolve();
   private narrative: NarrativeProvenance | undefined;
   private digests: Promise<[string, string]> | undefined;
@@ -182,13 +183,16 @@ export class SessionActor {
     this.lastSeen = this.lastActivity = this.lastAudio = this.now();
   }
 
-  /** Loads the attempt this store is bound to. A started conversation whose owner was lost is held for its browser to resume. */
+  /**
+   * Loads the attempt this store is bound to. A started conversation whose owner was lost is held for its browser to
+   * resume; a finished one whose final row was never acknowledged is archived again.
+   */
   static async restore(options: SessionOptions): Promise<SessionActor> {
     const stored = await options.store.load();
     const accepted = stored.checkpoint?.definition;
     const actor = new SessionActor(accepted ? { ...options, ...accepted, context: accepted.context } : options);
     actor.lease = stored.lease;
-    if (actor.lease && !actor.lease.closed && stored.checkpoint) await actor.restoreCheckpoint(stored.checkpoint);
+    if (actor.lease && stored.checkpoint) await actor.restoreCheckpoint(stored.checkpoint);
     return actor;
   }
 
@@ -197,7 +201,7 @@ export class SessionActor {
     return structuredClone({ plan: this.spec.plan, config: this.spec.config, ...(this.spec.context ? { context: this.spec.context } : {}) });
   }
 
-  /** The end of the attempt while it is being finished: a host serving the report waits for it. */
+  /** The end of the attempt while it is being finished, through the first write of its final row: a host serving the report waits for it. */
   get closing(): Promise<void> | undefined { return this.finishing; }
 
   private get segment(): Segment | undefined { return this.segments.at(-1); }
@@ -398,8 +402,8 @@ export class SessionActor {
     this.narrative = provenance;
     this.interview.summary = status;
     this.narrativeArchive = this.narrativeArchive.then(async () => {
-      if (this.finalArchive) await within(this.finalArchive, 15_000).catch(() => {});
-      await this.saveArchive('final');
+      if (this.finishing) await within(this.finishing, 15_000).catch(() => {});
+      await this.archiveFinal();
     });
     this.background.track(this.narrativeArchive);
   }
@@ -457,14 +461,14 @@ export class SessionActor {
 
   /** Saves a checkpoint built when its turn in the chain comes, and propagates any failure. */
   private requiredCheckpoint(): Promise<void> {
-    return this.ordered(async () => {
-      const snapshot = this.state!;
-      const checkpoint: Checkpoint = structuredClone({
-        definition: this.definition, savedAt: this.now(), snapshot: { ...snapshot, interview: this.interview }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
-        segments: this.segments, pauses: this.pauses, grades: this.grades, gradeCalls: this.gradeCalls,
-        ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
-      });
-      await this.save({ checkpoint });
+    return this.ordered(() => this.save({ checkpoint: this.checkpoint() }));
+  }
+
+  private checkpoint(savedAt = this.now()): Checkpoint {
+    return structuredClone({
+      definition: this.definition, savedAt, snapshot: { ...this.state!, interview: this.interview }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
+      segments: this.segments, pauses: this.pauses, grades: this.grades, gradeCalls: this.gradeCalls,
+      ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
     });
   }
 
@@ -967,13 +971,13 @@ export class SessionActor {
     return this.segments.filter(segment => segment.finalization !== 'confirmed').map(segment => segment.providerId);
   }
 
-  private async persistLease(ids = this.outstanding()) {
+  private async persistLease(ids = this.outstanding(), checkpoint?: Checkpoint | null) {
     const lease = this.lease!;
     delete lease.providerId;
     delete lease.unconfirmed;
     if (ids.length) lease.providerId = ids.at(-1);
     if (ids.length > 1) lease.unconfirmed = ids.slice(0, -1);
-    await this.save({ lease });
+    await this.save({ lease, ...(checkpoint !== undefined ? { checkpoint } : {}) });
   }
 
   private usageSeconds(): number | null {
@@ -1054,15 +1058,28 @@ export class SessionActor {
     snapshot.finalization = this.segments.length && !outstanding.length ? 'confirmed' : 'unconfirmed';
     if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
     this.lease!.closed = !outstanding.length;
-    await this.persistLease(outstanding);
-    // Behind any typed answer's write, whether or not it succeeded.
-    await this.ordered(() => this.save({ checkpoint: null }));
-    await this.setWake(this.now() + (this.lease!.closed ? 300_000 : 15_000));
     if (this.reachedLive) {
       this.interview!.summary = { status: snapshot.transcript.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
-      this.finalArchive = this.saveArchive('final');
-      this.background.track(this.finalArchive);
+      this.unarchived = now;
     }
+    // One write with the lease, behind any typed answer's whether or not it succeeded. A conversation keeps a terminal
+    // checkpoint until its final row is acknowledged, so a later owner can archive it again without any paid work.
+    await this.ordered(() => this.persistLease(outstanding, this.reachedLive ? this.checkpoint(now) : null));
+    if (this.reachedLive) await this.archiveFinal();
+    await this.holdFinished();
+  }
+
+  /** A settled attempt is held for five minutes before it is forgotten; an unacknowledged row or open session is retried sooner. */
+  private holdFinished() {
+    return this.setWake(this.now() + (this.lease!.closed && this.unarchived == null ? 300_000 : 15_000));
+  }
+
+  /** Writes the final row. Until the archive acknowledges one, the terminal checkpoint stays and every wake retries it. */
+  private async archiveFinal() {
+    const endedAt = this.unarchived;
+    if (!(await this.saveArchive('final', endedAt ?? this.now())) || endedAt == null) return;
+    this.unarchived = null;
+    await this.ordered(() => this.save({ checkpoint: null }));
   }
 
   private async saveCheckpoint() {
@@ -1075,7 +1092,10 @@ export class SessionActor {
     }
   }
 
-  /** The previous owner was lost. A started conversation is held for its browser to resume, as after a lost connection. */
+  /**
+   * The previous owner was lost. A started conversation is held for its browser to resume, as after a lost connection.
+   * A finished one only needs its final row: the voice session was closed and the dialogue graded before it was saved.
+   */
   private async restoreCheckpoint(checkpoint: Checkpoint) {
     const { interview, ...stored } = checkpoint.snapshot;
     this.state = stored;
@@ -1100,6 +1120,11 @@ export class SessionActor {
     if (checkpoint.producer) this.producer?.restore(checkpoint.producer);
     const snapshot = this.state;
     const now = this.now();
+    if (this.ended()) {
+      this.unarchived = checkpoint.savedAt;
+      await this.setWake(now);
+      return;
+    }
     if (!['live', 'connecting', 'paused'].includes(snapshot.status) || now >= this.limitAt(now) - 60_000) {
       this.recovered = true;
       return;
@@ -1174,14 +1199,18 @@ export class SessionActor {
   private async alarm() {
     if (this.fenced) return;
     this.wakeAt = null;
-    if (this.lease?.closed) { await this.clearStore(); return; }
     if (this.recovered) {
       this.recoverCheckpoint();
       await this.finishing;
       return;
     }
     if (!this.state || this.ended()) {
-      await this.closeOrphan();
+      // The final row, then any provider session not confirmed closed. The attempt is forgotten only after both.
+      const archiving = this.unarchived != null;
+      if (archiving) await this.archiveFinal();
+      if (!this.lease?.closed) await this.closeOrphan();
+      else if (!archiving) await this.clearStore();
+      if (archiving) await this.holdFinished();
       return;
     }
     this.checkLifetime();
@@ -1203,8 +1232,9 @@ export class SessionActor {
     };
   }
 
-  private async saveArchive(state: 'partial' | 'final') {
-    if (this.fenced) return;
+  /** Whether the archive acknowledged the row. */
+  private async saveArchive(state: 'partial' | 'final', capturedAt = this.now()): Promise<boolean> {
+    if (this.fenced) return false;
     const id = this.state?.id ?? '';
     try {
       // Freeze the data and its timestamp before any asynchronous work.
@@ -1213,7 +1243,6 @@ export class SessionActor {
       const producerLog = structuredClone([...(this.producer?.records ?? []), ...this.grades]);
       const producer = this.producer?.summary() ?? null;
       const connection = this.connectionLog();
-      const capturedAt = this.now();
       const narrative = structuredClone(this.narrative);
       this.digests ??= Promise.all([digest(interviewerBrief(this.spec, snapshot.voiceId)), digest(interviewOpening(this.spec, snapshot.voiceId))]);
       const [actorDigest, openingDigest] = await this.digests;
@@ -1222,11 +1251,13 @@ export class SessionActor {
         transcript: snapshot.transcript, producerLog, narrative: structuredClone(this.interview?.summary ?? null),
         provenance: { voice: this.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection, ...(narrative ? { narrative } : {}) },
       };
-      if (this.fenced) return;
+      if (this.fenced) return false;
       await this.archive.write(row);
+      return true;
     } catch {
-      // Best effort: never delay closure or retry a failed transcript save.
+      // A partial row is best effort. A final row is retried from the terminal checkpoint.
       this.report({ type: 'session', event: 'archive.failed', id, category: state });
+      return false;
     }
   }
 }

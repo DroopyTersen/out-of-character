@@ -21,9 +21,9 @@ test('the storage store keeps the lease and checkpoint under the practice simula
   expect(await store.load()).toEqual({ lease, checkpoint });
   await store.save({ checkpoint: null });
   expect(f.values.has('checkpoint')).toBe(false);
-  // A closed lease hides any checkpoint left beside it.
+  // A closed lease keeps the terminal checkpoint saved with it until the final row is acknowledged.
   await store.save({ lease: { ...lease, closed: true }, checkpoint });
-  expect(await store.load()).toEqual({ lease: { ...lease, closed: true } });
+  expect(await store.load()).toEqual({ lease: { ...lease, closed: true }, checkpoint });
   await store.wake(1234);
   expect(f.alarm()).toBe(1234);
   await store.wake(null);

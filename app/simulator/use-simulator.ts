@@ -94,10 +94,10 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
   function begin(choice: AttemptChoice, saved?: SavedAttempt) {
     connection.current?.dispose();
     const attempt = ++generation.current;
-    let reachedLive = false;
+    // A rejoined attempt is already saved; a new one is saved once its conversation starts.
+    let remembered = !!saved;
     setError(null); setSnapshot(null); setMuted(false); setLevels(silentLevels); setLink(stableLink); setPhase(saved ? 'paused' : 'connecting');
     const active = () => generation.current === attempt;
-    const beginReport = () => reportActions.current.begin(live.attempt.id);
     // A rejoined attempt stays on the routes it started on.
     const route = saved?.route ?? sessions;
     const transport = pollTransport(route);
@@ -111,34 +111,35 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
     } }, {
       snapshot: value => {
         if (!active()) return;
-        // A rejoined attempt had already started.
-        if (!reachedLive && (value.status === 'live' || saved)) {
-          reachedLive = true;
-          if (!saved) savedAttempts.write(kind, { ...live.attempt, ...choice, route });
+        if (!remembered && value.status === 'live') {
+          remembered = true;
+          savedAttempts.write(kind, { ...live.attempt, ...choice, route });
         }
         setSnapshot(value);
         const status = value.status;
-        if (status === 'ended' || status === 'interrupted') {
-          savedAttempts.clear(kind);
-          setPhase(reachedLive ? 'debrief' : 'selection');
-          if (reachedLive) beginReport();
-        }
-        // After the conversation starts, reconnecting media is part of the pause.
-        else setPhase(reachedLive && status === 'connecting' ? 'paused' : status);
+        // `closed` follows a terminal snapshot. After the conversation starts, reconnecting media is part of the pause.
+        if (status !== 'ended' && status !== 'interrupted') setPhase(current => status === 'connecting' && current !== 'connecting' ? 'paused' : status);
       },
       levels: value => { if (active()) setLevels(value); },
-      error: (message, fatal) => {
-        if (!active()) return;
-        setError(message);
-        if (!fatal) return;
-        savedAttempts.clear(kind);
-        setPhase(reachedLive ? 'debrief' : 'selection');
-        if (reachedLive) beginReport();
-      },
+      error: message => { if (active()) setError(message); },
       link: value => {
         if (!active()) return;
         setLink(value);
         if (value.state === 'resuming') setError(null);
+      },
+      closed: ({ outcome, reachedLive }) => {
+        if (!active()) return;
+        // An unanswered end may have left the attempt held: rejoin it, paused, to resume or end it again.
+        if (outcome === 'unconfirmed' && reachedLive) {
+          const held = { ...live.attempt, ...choice, route };
+          savedAttempts.write(kind, held);
+          begin(choice, held);
+          setError('Ending did not reach the server. Your attempt is paused; resume it or end it again.');
+          return;
+        }
+        savedAttempts.clear(kind);
+        setPhase(reachedLive ? 'debrief' : 'selection');
+        if (reachedLive) reportActions.current.begin(live.attempt.id);
       },
     }, saved);
     connection.current = live;
@@ -146,13 +147,10 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
     void (saved ? live.reattach() : live.start(choice.scenarioId, choice.clientId));
   }
 
-  async function end() {
-    const attempt = generation.current;
-    const cancelled = phase === 'connecting';
+  function end() {
     savedAttempts.clear(kind);
     setPhase('ending');
-    await connection.current?.end();
-    if (generation.current === attempt) setPhase(cancelled ? 'selection' : 'debrief');
+    void connection.current?.end();
   }
   function reset() {
     generation.current++;

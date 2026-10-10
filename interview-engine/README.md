@@ -234,6 +234,14 @@ connection.submitText(text: string): Promise<SubmitTextReply>; // resolves once 
 
 `submitText` mints the id and retries the same id while the server is unanswered or replies 503, backing off for up to 30 seconds. Other failures reject with the server's message. The host keeps the draft until the promise resolves and clears it only then. A host forwards the command as it forwards the others: bound the body at `SUBMIT_TEXT_BODY_LIMIT` and pass it to `actor.handle`, which parses it with `submitTextSchema`.
 
+`closed` reports, once per connection, how the attempt closed for this page, so a host never infers it from snapshots:
+
+```ts
+type Closure = { outcome: 'ended' | 'unconfirmed' | 'lost'; reachedLive: boolean };
+```
+
+`ended` means the server ended the attempt or confirmed this page's `end`, or the attempt never reached the server (a denied microphone, for example). `unconfirmed` means this page's `end` went unanswered, so the server may still hold the attempt: the host reconciles it by reattaching a new `LiveConnection` with the same `Attempt`, which rejoins paused (as after a reload) and finds the attempt ended if the `end` did arrive. `lost` means the server no longer has the attempt. `reachedLive` says whether the conversation had started. `detach()` and `dispose()` report nothing. `error` carries only messages to show.
+
 Two transports exist. The browser uses `pollTransport`. `socketTransport` (`client/socketTransport.ts`) is opt-in: a host enables it with `INTERVIEW_SOCKET_ENABLED=true`. It sends the same requests over one WebSocket per attempt and correlates each reply by id. When the socket closes, whatever was waiting fails with `SessionUnanswered`, and the next request reconnects for the same attempt. Keepalive requests still go over HTTP. The errors are the poll transport's.
 
 Each socket message is one command, `{ id, action, capability, body? }`, where `capability` is the 64 hex digits without `Bearer ` (`socketRequestSchema` in `shared/protocol.ts`). Each reply is `{ id, status, body }`: the status and JSON body that the command's HTTP route returns. The host builds the HTTP request the poll transport would have sent and passes it to the same route handler (`answerSocket` in `app/server/interview/socket.ts`), so the gates and the replies are the same. The report streams, so it stays on HTTP.

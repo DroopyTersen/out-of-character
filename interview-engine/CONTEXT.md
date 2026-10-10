@@ -58,6 +58,8 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Rejoin**: a request that attaches to a narrative run already in progress. `NarrativeRunner.attach` replays what has been written so far and then streams the rest live; a request that drops only detaches, and the run continues until it settles, is cancelled or reaches its deadline. Once settled, a request gets the stored document instead. An imported transcript's run cannot be rejoined, so it is cancelled when its request drops.
 
+**Closure**: how an attempt closed for one page, which `LiveConnection` reports once through `closed`: `ended` (the server ended it or confirmed the end, or it never reached the server), `unconfirmed` (the end went unanswered; the host reattaches with the same attempt to reconcile it) or `lost` (the server no longer has it), with whether the conversation had started.
+
 **Transport**: how the browser client delivers its commands. The poll transport sends one HTTP request per command; the socket transport (`client/socketTransport.ts`) sends the same commands over one WebSocket per attempt, as `{ id, action, capability, body }`, and receives `{ id, status, body }` replies equal to the HTTP replies. The report, which streams, stays on HTTP; a socket start must name the socket's own attempt. The socket is opt-in on the host.
 
 ## Hosts

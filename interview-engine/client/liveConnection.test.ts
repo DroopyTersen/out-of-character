@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, jest, test } from 'bun:test';
-import type { ConnectionSnapshot, Link } from './liveConnection';
+import type { Closure, ConnectionSnapshot, Link } from './liveConnection';
 import { pollTransport } from './transport';
 
 // Browser media and the session server are substituted; the connection's own pause, heartbeat, and resume logic is real.
@@ -116,11 +116,11 @@ async function advance(ms: number) {
 }
 async function connected() {
   const { LiveConnection } = await import('./liveConnection');
-  const links: Link[] = [], errors: string[] = [];
-  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: link => links.push(link) });
+  const links: Link[] = [], errors: string[] = [], closures: Closure[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: link => links.push(link), closed: closure => closures.push(closure) });
   await connection.start('sharepoint', 'morgan');
   expect(server.status).toBe('live');
-  return { connection, links, errors, peer: () => FakePeer.all.at(-1)! };
+  return { connection, links, errors, closures, peer: () => FakePeer.all.at(-1)! };
 }
 const states = (links: Link[]) => links.map(link => link.state);
 
@@ -236,9 +236,9 @@ test('a reconnect that fails after the server accepted it holds the attempt agai
 const saved = { id: '00000000-0000-4000-8000-000000000000', capability: 'a'.repeat(64) };
 async function reattached() {
   const { LiveConnection } = await import('./liveConnection');
-  const links: Link[] = [], errors: [string, boolean | undefined][] = [], snapshots: ConnectionSnapshot[] = [];
-  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: (message, fatal) => errors.push([message, fatal]), link: link => links.push(link) }, saved);
-  return { connection, links, errors, snapshots };
+  const links: Link[] = [], errors: string[] = [], snapshots: ConnectionSnapshot[] = [], closures: Closure[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: message => errors.push(message), link: link => links.push(link), closed: closure => closures.push(closure) }, saved);
+  return { connection, links, errors, snapshots, closures };
 }
 
 test('a reloaded page rejoins its attempt paused and waits for the user to resume', async () => {
@@ -261,20 +261,94 @@ test('a reloaded page rejoins its attempt paused and waits for the user to resum
 });
 
 test('leaving mid-conversation holds the attempt instead of ending it', async () => {
-  const { connection, peer } = await connected();
+  const { connection, closures, peer } = await connected();
   const sent = server.calls.length;
   expect(connection.detach()).toBe(true);
   await advance(20_000);
   expect(server.calls.slice(sent)).toEqual(['pause']);
   expect(peer().connectionState).toBe('closed');
+  expect(closures).toEqual([]);
+});
+
+test('a denied microphone closes before the conversation without reaching the server', async () => {
+  const { LiveConnection } = await import('./liveConnection');
+  const errors: string[] = [], closures: Closure[] = [];
+  const denied = navigator.mediaDevices.getUserMedia;
+  navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Permission denied', 'NotAllowedError'); };
+  try {
+    const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: message => errors.push(message), link: () => {}, closed: closure => closures.push(closure) });
+    await connection.start('sharepoint', 'morgan');
+  } finally { navigator.mediaDevices.getUserMedia = denied; }
+  expect(errors).toEqual(['Microphone access was denied. Allow access in your browser, then try again.']);
+  expect(closures).toEqual([{ outcome: 'ended', reachedLive: false }]);
+  expect(server.calls).toEqual([]);
+});
+
+test('an end the server confirms, or a poll that finds the attempt ended, closes it as ended', async () => {
+  const ending = await connected();
+  await ending.connection.end();
+  expect(ending.closures).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  expect(server.status).toBe('ended');
+
+  server.status = 'connecting';
+  const polled = await connected();
+  server.status = 'ended';
+  await advance(1100);
+  expect(polled.closures).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  await polled.connection.end();
+  expect(server.calls.filter(call => call === 'end')).toHaveLength(1);
+  expect(polled.closures).toHaveLength(1);
+});
+
+test('an end lost before delivery closes unconfirmed, and reattaching once back online holds the attempt to end or resume', async () => {
+  const { connection, closures, errors } = await connected();
+  browser.onLine = false;
+  server.offline = true;
+  await connection.end();
+  expect(closures).toEqual([{ outcome: 'unconfirmed', reachedLive: true }]);
+  expect(errors).toEqual([]);
+  expect(server.status).toBe('live');
+
+  const { LiveConnection } = await import('./liveConnection');
+  const links: Link[] = [], reopened: Closure[] = [];
+  const again = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: () => {}, link: link => links.push(link), closed: closure => reopened.push(closure) }, connection.attempt);
+  await again.reattach();
+  expect(links).toEqual([{ state: 'paused', reach: 'offline', reloaded: true }]);
+  browser.onLine = true;
+  server.offline = false;
+  window.dispatchEvent(new Event('online'));
+  await advance(100);
+  expect(links.at(-1)).toEqual({ state: 'paused', reach: 'answered', reloaded: true });
+  expect(server.calls).not.toContain('resume');
+  await again.end();
+  expect(reopened).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  expect(server.status).toBe('ended');
+});
+
+test('an end whose reply was lost closes unconfirmed, and reattaching finds it ended', async () => {
+  const { connection, closures } = await connected();
+  server.override = action => {
+    if (server.status === 'ended') return { body: server.snapshot() };
+    if (action === 'end') { server.status = 'ended'; return { status: 504, body: { error: 'The gateway timed out.' } }; }
+  };
+  await connection.end();
+  expect(closures).toEqual([{ outcome: 'unconfirmed', reachedLive: true }]);
+  const { LiveConnection } = await import('./liveConnection');
+  const reopened: Closure[] = [];
+  const again = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: () => {}, link: () => {}, closed: closure => reopened.push(closure) }, connection.attempt);
+  await again.reattach();
+  await advance(100);
+  expect(reopened).toEqual([{ outcome: 'ended', reachedLive: true }]);
+  expect(server.calls.filter(call => call === 'end')).toHaveLength(1);
 });
 
 test('a reloaded page whose attempt is gone reports it once and ends nothing', async () => {
   server.override = () => ({ status: 410, body: { error: 'This interview session was interrupted. Start a new attempt.' } });
-  const { connection, errors } = await reattached();
+  const { connection, errors, closures } = await reattached();
   await connection.reattach();
   await advance(20_000);
-  expect(errors).toEqual([['This attempt is no longer available.', true]]);
+  expect(errors).toEqual(['This attempt is no longer available.']);
+  expect(closures).toEqual([{ outcome: 'lost', reachedLive: true }]);
   expect(server.calls).toEqual(['pause', 'poll']);
   await connection.end();
   expect(server.calls).toEqual(['pause', 'poll']);
@@ -449,7 +523,7 @@ const submitted = () => server.requests.filter(request => request.action === 'su
 test('an accepted typed answer resolves with its receipt and shows its snapshot', async () => {
   const { LiveConnection } = await import('./liveConnection');
   const snapshots: ConnectionSnapshot[] = [];
-  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: () => {}, link: () => {} });
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: () => {}, link: () => {}, closed: () => {} });
   await connection.start('sharepoint', 'morgan');
   server.override = action => action === 'submitText' ? { body: accepted(submitted().at(-1)!.id) } : undefined;
   const reply = await connection.submitText('Typed.');

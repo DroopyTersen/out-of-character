@@ -23,12 +23,20 @@ export type LinkState = 'stable' | 'reconnecting' | 'paused' | 'resuming';
 export type Reach = 'answered' | 'unanswered' | 'offline';
 export type Link = { state: LinkState; reach: Reach; reloaded?: boolean };
 export const stableLink: Link = { state: 'stable', reach: 'answered' };
+/**
+ * How the attempt closed for this page. `ended`: the server ended it or confirmed this page's end, or it never
+ * reached the server. `unconfirmed`: this page's end went unanswered, so the server may still hold the attempt; the
+ * host can reattach to reconcile it. `lost`: the server no longer has it. `reachedLive`: its conversation had started.
+ */
+export type Closure = { outcome: 'ended' | 'unconfirmed' | 'lost'; reachedLive: boolean };
 
 export type Callbacks<S extends ConnectionSnapshot = ConnectionSnapshot> = {
   snapshot: (value: S) => void;
   levels: (value: AudioLevels) => void;
-  error: (message: string, fatal?: boolean) => void;
+  error: (message: string) => void;
   link: (value: Link) => void;
+  /** Once per connection, unless the page detached or disposed of it. */
+  closed: (value: Closure) => void;
 };
 const offline = (reach: Reach): Reach => navigator.onLine ? reach : 'offline';
 const lostStatuses = [401, 403, 404, 410];
@@ -463,29 +471,34 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   private async fail(message: string) {
     if (this.ending) return;
-    const closing = this.end();
-    this.callbacks.error(message, true);
-    await closing;
+    this.callbacks.error(message);
+    await this.end();
   }
 
   /** The server no longer has this attempt, so there is nothing to end. */
   private lost(message: string) {
     if (this.ending) return;
-    this.settle();
-    this.callbacks.error(message, true);
+    this.callbacks.error(message);
+    this.settle('lost');
   }
 
-  /** The server ended the attempt; nothing remains to close. */
-  private settle() {
+  /** The attempt is over for this page and nothing remains to close: the server ended it, lost it, or the page left. */
+  private settle(outcome: Closure['outcome'] = 'ended') {
     this.ending = Promise.resolve();
     this.release();
+    this.closed(outcome);
   }
 
+  private closed(outcome: Closure['outcome']) {
+    if (!this.disposed) this.callbacks.closed({ outcome, reachedLive: this.reachedLive });
+  }
+
+  /** Ends the attempt. `closed` then says whether the server confirmed it; an unanswered end can be reconciled by reattaching. */
   end(): Promise<void> {
     if (this.ending) return this.ending;
     const drain = this.link.state !== 'paused' && this.pc?.connectionState === 'connected';
     this.ending = (async () => {
-      let ended: S | undefined;
+      let outcome: Closure['outcome'] = 'ended';
       // Silence lets the server finish the last utterance during its short grace.
       // A stalled HTTP response must not retain local resources indefinitely.
       this.silence();
@@ -493,15 +506,16 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
       const closeDeadline = setTimeout(() => this.release(), 3000);
       try {
         if (this.requested) {
-          ended = await this.request('end', undefined, { keepalive: true }) as S;
+          const ended = await this.request('end', undefined, { keepalive: true }) as S;
           if (!this.disposed && ended.id) this.callbacks.snapshot(ended);
         }
-      } catch {
-        if (!this.disposed) this.callbacks.error('The session ended locally; server finalization could not be confirmed.', true);
+      } catch (error) {
+        outcome = isLost(error) ? 'lost' : 'unconfirmed';
       } finally {
         clearTimeout(closeDeadline);
         this.release();
       }
+      this.closed(outcome);
     })();
     return this.ending;
   }

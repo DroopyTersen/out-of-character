@@ -5,7 +5,7 @@ import { activeElapsed, type PauseSpan } from '../../shared/timing';
 import type { Passage as TranscriptEntry, Speaker } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapChanges } from './conversationMap';
 import {
-  appendMapLog, emptyMapLog, type generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
+  appendMapLog, emptyMapLog, type generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, renderMapCoverage, unloggedPassages,
   type MapLog, type MappedSpec, type MapTail,
 } from './conversationMap.server';
 import { emptyListState, emptyMapNote, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './interviewerNotes';
@@ -38,7 +38,7 @@ type Options = {
   pauses?: () => PauseSpan[];
 };
 /** Keep the map, its cached input, and the audit log. Re-read the current turn after a restart. */
-export type ProducerCheckpoint = { records: ProducerLogRecord[]; map: ConversationMap; log: MapLog; readThrough: number };
+export type ProducerCheckpoint = { records: ProducerLogRecord[]; map: ConversationMap; log: MapLog; readThrough: number; coverageKey: string };
 
 const LIMITS = PRODUCER_LIMITS;
 const timedOut = (error: unknown) => error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name);
@@ -64,6 +64,7 @@ export class InterviewProducer {
   private ranking = emptyRanking();
   private call: { record: MapRecord; controller: AbortController } | null = null;
   private lastMapStart: number;
+  private coverageKey: string;
   private reasons = new Set<string>();
   /** A failed call logged input that the current map has not incorporated. */
   private behind = false;
@@ -77,7 +78,10 @@ export class InterviewProducer {
   private closed = false;
   private restating = false;
 
-  constructor(private options: Options) { this.lastMapStart = options.startedAt; }
+  constructor(private options: Options) {
+    this.lastMapStart = options.startedAt;
+    this.coverageKey = renderMapCoverage(options.spec, []);
+  }
   private get alive() { return !this.abort.signal.aborted; }
   private elapsed(now: number) { return activeElapsed(this.options.startedAt, now, this.options.pauses?.()); }
   publicBackground(): InterviewBackground[] { return deliveredBackground(this.records); }
@@ -117,17 +121,21 @@ export class InterviewProducer {
     const settled = [...this.options.settled()];
     const unlogged = new Set(unloggedPassages(this.log, settled).map(entry => entry.id));
     const fresh = settled.some((entry, index) => unlogged.has(entry.id) && said(settled, index));
+    const coverageKey = renderMapCoverage(this.options.spec, this.options.coverage());
+    const coverageChanged = coverageKey !== this.coverageKey && settled.some((_, index) => said(settled, index));
+    if (coverageChanged) this.reasons.add('topic coverage changed');
     const events = this.pendingResearch();
     if (events.some(item => this.records.some(record => record.source === 'research' && record.id === item.researchId && record.outcome === 'found'))) this.reasons.add('public research arrived');
     if (now - this.lastMapStart >= LIMITS.mapTimer && (fresh || this.behind)) this.reasons.add('a minute has passed since your last call');
     if (!this.reasons.size) return;
     // A wake whose news an earlier call already logged has nothing left to say.
-    if (!fresh && !this.behind && !events.length) { this.reasons.clear(); return; }
+    if (!fresh && !this.behind && !events.length && !coverageChanged) { this.reasons.clear(); return; }
     const reasons = [...this.reasons];
     this.reasons.clear();
     const log = appendMapLog(this.options.spec, this.log, settled, events.map(item => item.event));
     this.log = log;
     this.lastMapStart = now;
+    this.coverageKey = coverageKey;
     const record: MapRecord = {
       source: 'map', id: `map-${crypto.randomUUID()}`, reasons, startedAt: now, outcome: 'pending',
       inputCount: settled.length, lastInputId: settled.at(-1)?.id ?? null, model: this.options.models.agent,
@@ -400,7 +408,7 @@ export class InterviewProducer {
   }
 
   checkpoint(): ProducerCheckpoint {
-    return { records: this.records, map: this.map, log: this.log, readThrough: this.readThrough };
+    return { records: this.records, map: this.map, log: this.log, readThrough: this.readThrough, coverageKey: this.coverageKey };
   }
 
   restore(checkpoint: ProducerCheckpoint) {
@@ -413,6 +421,7 @@ export class InterviewProducer {
     this.lastMapStart = lastMap?.startedAt ?? this.options.startedAt;
     this.behind = lastMap != null && lastMap.outcome !== 'applied';
     this.readThrough = checkpoint.readThrough;
+    this.coverageKey = checkpoint.coverageKey;
     this.readTurnKey = '';
     this.ranking = emptyRanking();
     this.readMapId = null;

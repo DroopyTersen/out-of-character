@@ -127,12 +127,17 @@ export type MapTail = {
   research?: { requests: { kind: ResearchRequest['kind']; name: string; clue: string | null; status: string }[]; left: number };
 };
 
+/** The semantic coverage visible to the map; probability and evidence changes do not alter it. */
+export function renderMapCoverage(spec: MappedSpec, readings: MapTail['coverage']): string {
+  const coverage = new Map(readings.map(item => [item.id, item.applicability ? `${item.level}; applicability: ${item.applicability}` : item.level]));
+  return mapTopicIds(spec).map(id => `- ${id}: ${coverage.get(id) ?? 'not-yet'}`).join('\n');
+}
+
 export function renderMapTail(spec: MappedSpec, previous: ConversationMap, tail: MapTail): string {
   const first = !previous.entities.length && !previous.threads.length && !previous.participant.vantage;
-  const coverage = new Map(tail.coverage.map(item => [item.id, item.applicability ? `${item.level}; applicability: ${item.applicability}` : item.level]));
   return [
     `PREVIOUS MAP${first ? ' (empty: this is your first call)' : ''}\n${renderMapForSol(previous)}`,
-    `COVERAGE (Jev's readings; fallible)\n${mapTopicIds(spec).map(id => `- ${id}: ${coverage.get(id) ?? 'not-yet'}`).join('\n')}`,
+    `COVERAGE (Jev's readings; fallible)\n${renderMapCoverage(spec, tail.coverage)}`,
     ...(tail.signals?.length ? [`THREAD SIGNALS (Jev, latest participant turn; fallible)\n${tail.signals.map(item => `- ${item.threadId}: ${item.state}`).join('\n')}`] : []),
     ...(tail.research ? [`RESEARCH (${tail.research.left} lookup${tail.research.left === 1 ? '' : 's'} left)\n${tail.research.requests.map(item => `- ${item.kind} "${item.name}"${item.clue ? ` (clue: ${item.clue})` : ''}: ${item.status}`).join('\n') || '- none requested yet'}`] : []),
     `WHY NOW\n${tail.reasons.map(reason => `- ${reason}`).join('\n') || '- scheduled'}`,

@@ -6,7 +6,7 @@ import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/liv
 import { INTERVIEW_SCENARIO_ID } from '../core/interview.ts';
 import { emptyMap } from '../interview-engine/interview/reasoning/conversationMap.ts';
 import { listNote, LIVE_NOTE_CHANNEL } from '../interview-engine/interview/reasoning/interviewerNotes.ts';
-import { appendTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
+import { SessionTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
 import { askedIn, measure, unusable } from './lib/interview-delivery-measures.mjs';
 
 // Delivery probe: does Sam take up a thread note, parrot its words, or mention it?
@@ -146,6 +146,7 @@ async function run(cell, index) {
   const noteText = cell === 'control' ? null : note();
   const opening = interviewOpening(interviewerId);
   const session = sessionFor();
+  const dialogue = new SessionTranscript();
   const report = { cell, run: index, checkedAt: new Date().toISOString(), ...identity(cell), noteEvent: null, samDuringAnswer: lines.map(() => 0), uptake: null, segments: [], transcript: [], deadAir: [], delegations: 0, providerErrors: [], errors: [], finalized: false, usageSeconds: null };
   const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
   const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
@@ -194,7 +195,8 @@ async function run(cell, index) {
         report.noteEvent.acknowledgedAt = Date.now();
       } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
         if (value.type === 'session.output_transcript.delta') { lastOutput = Date.now(); said[step] += value.delta; }
-        report.transcript = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
+        dialogue.appendSpeech({ id: value.event_id, speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms }, { epoch: 1, offsetMs: 0 }, Date.now());
+        report.transcript = dialogue.entries;
       } else if (value.type === 'session.output_audio.delta') {
         const audio = Buffer.from(value.delta, 'base64');
         // Played as it arrives, after anything still queued, on the input clock.

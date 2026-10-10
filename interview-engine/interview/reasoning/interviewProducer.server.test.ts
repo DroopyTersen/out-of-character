@@ -107,7 +107,7 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
     producer, background, sent, calls, pauses, say, sam, grow, turn, at, step, of, notes,
     holdNotes: (value: boolean) => { held = value; },
     setConnected: (value: boolean | 'throw') => { connected = value; },
-    setCoverage: (levels: InterviewObjectiveReading['level'][]) => { coverage = levels.map((level, i) => ({ id: `o${i}`, level, achieved: level === 'explored', probability: null, levels: null, evidence: null })); },
+    setCoverage: (levels: InterviewObjectiveReading['level'][], over: Partial<InterviewObjectiveReading> = {}) => { coverage = levels.map((level, i) => ({ id: testSpec.topics.flatMap(group => group.objectives)[i]!.id, level, achieved: level === 'explored', probability: null, levels: null, evidence: null, ...over })); },
   };
 }
 
@@ -468,6 +468,7 @@ test('all paid producer calls share a cap that survives a restart', async () => 
   expect(f.calls.map).toHaveLength(0);
   const saved = structuredClone(f.producer.checkpoint());
   const next = fixture(); next.producer.restore(saved); next.producer.resume(epoch + 60_000);
+  next.setCoverage(['explored']);
   await next.step(120_000);
   expect(next.calls.map).toHaveLength(0);
   expect(next.calls.turn).toHaveLength(0);
@@ -658,4 +659,76 @@ test.each([
   expect(f.calls.map).toHaveLength(wakes ? 1 : 0);
   expect(f.of('turn')[0]!.reading).toMatchObject({ novel, feedback });
   if (wakes) expect(f.calls.map[0]!.tail.reasons).toEqual([novelReason('p2')]);
+});
+
+
+test('coverage arriving after mapped speech wakes one map at the next floor without more speech', async () => {
+  const f = fixture();
+  await f.step(60_000);
+  expect(f.calls.map).toHaveLength(1);
+  f.setCoverage(['explored']);
+  await f.step(79_999);
+  expect(f.calls.map).toHaveLength(1);
+  await f.step(80_000);
+  expect(f.calls.map).toHaveLength(2);
+  expect(f.calls.map[1]!.passages.map(entry => entry.id)).toEqual(['p1', 'p2']);
+  expect(f.calls.map[1]!.tail.coverage).toMatchObject([{ id: 'project-delivery', level: 'explored' }]);
+  await f.step(140_000);
+  expect(f.calls.map).toHaveLength(2);
+});
+
+test('only coverage visible to the map wakes it, including conditional applicability', async () => {
+  const f = fixture();
+  await f.step(60_000);
+  f.setCoverage(['not-yet']); await f.step(80_000);
+  expect(f.calls.map).toHaveLength(1);
+  f.setCoverage(['explored'], { id: 'unknown-topic' }); await f.step(81_000);
+  expect(f.calls.map).toHaveLength(1);
+  f.setCoverage(['touched'], { probability: .4 }); await f.step(82_000);
+  expect(f.calls.map).toHaveLength(2);
+  f.setCoverage(['touched'], { probability: .7, evidence: { entryId: 'p2', speaker: 'participant', text: 'routing layer' } });
+  await f.step(102_000);
+  expect(f.calls.map).toHaveLength(2);
+  f.setCoverage(['touched'], { applicability: 'not-applicable' }); await f.step(103_000);
+  expect(f.calls.map).toHaveLength(3);
+  expect(f.calls.map[2]!.tail.coverage[0]!.applicability).toBe('not-applicable');
+});
+
+test('coverage changes during a map coalesce into its latest reading after the in-flight call ends', async () => {
+  const first = deferred<Mapped>();
+  const f = fixture({ generateMap: async input => f.calls.map.length === 1 ? first.promise : mapped(input.previous) });
+  await f.step(60_000);
+  f.setCoverage(['touched']); await f.step(80_000);
+  f.setCoverage(['explored']); await f.step(81_000);
+  expect(f.calls.map).toHaveLength(1);
+  first.resolve(mapped(emptyMap())); await flush();
+  await f.step(82_000);
+  expect(f.calls.map).toHaveLength(2);
+  expect(f.calls.map[1]!.tail.coverage[0]!.level).toBe('explored');
+  await f.step(142_000);
+  expect(f.calls.map).toHaveLength(2);
+});
+
+test('coverage alone cannot start a map without substantive participant speech', async () => {
+  const f = fixture({}, { empty: true });
+  f.setCoverage(['explored']);
+  f.say('interviewer', 'Tell me about your work.');
+  await f.step(60_000);
+  expect(f.calls.map).toHaveLength(0);
+  f.say('participant', 'Mm.'); await f.step(80_000);
+  expect(f.calls.map).toHaveLength(0);
+  f.say('participant', 'We built a map for field teams.'); await f.step(81_000);
+  expect(f.calls.map).toHaveLength(1);
+});
+
+test('restart retains consumed coverage and notices a newer grade without new speech', async () => {
+  const f = fixture();
+  f.setCoverage(['touched']); await f.step(20_000);
+  const saved = structuredClone(f.producer.checkpoint());
+  const next = fixture(); next.setCoverage(['touched']); next.producer.restore(saved); next.producer.resume(epoch + 30_000);
+  await next.step(80_000);
+  expect(next.calls.map).toHaveLength(0);
+  next.setCoverage(['explored']); await next.step(81_000);
+  expect(next.calls.map).toHaveLength(1);
+  expect(next.calls.map[0]!.tail.coverage[0]!.level).toBe('explored');
 });

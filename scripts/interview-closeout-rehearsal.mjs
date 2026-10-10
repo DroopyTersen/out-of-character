@@ -7,7 +7,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server.ts';
 import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
-import { generateMap, settledPrefix } from '../ai/interview/map.server.ts';
+import { generateMap } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
 import { InterviewProducer } from '../interview-engine/interview/reasoning/interviewProducer.server.ts';
 import { evaluateTurn } from '../interview-engine/interview/judging/judgeConversationTurn.server.ts';
@@ -15,7 +15,7 @@ import { lookupInterviewBackground } from '../interview-engine/interview/reasoni
 import { modelName } from '../interview-engine/providers/providers.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
-import { appendTranscript, settledTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
+import { SessionTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
 // speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the
@@ -98,9 +98,8 @@ const report = {
 const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
 const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
 const provider = foundryProvider(foundry);
-const passageUpdatedAt = new Map();
-const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
-const prefix = () => { const ready = new Set(settled()); return settledPrefix(report.transcript, entry => ready.has(entry)); };
+const dialogue = new SessionTranscript();
+const prefix = () => dialogue.settledPrefix(Date.now());
 const received = [];
 let current = null, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, samCursor = 0, audibleUntil = 0;
 let samSince = '', generating = false, closing = false, offersSeen = 0, coverage = [], grading = null, pacing, deadline;
@@ -219,10 +218,9 @@ await new Promise(resolve => {
       pace();
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       if (value.type === 'session.output_transcript.delta') { lastOutput = Date.now(); samSince += value.delta; }
-      const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
-      const changed = next.find(entry => !report.transcript.includes(entry));
-      report.transcript = next;
-      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null); }
+      const changed = dialogue.appendSpeech({ id: value.event_id, speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms }, { epoch: 1, offsetMs: 0 }, Date.now());
+      report.transcript = dialogue.entries;
+      if (changed) producer.transcriptChanged(changed, report.transcript[report.transcript.indexOf(changed) - 1]?.id ?? null);
     } else if (value.type === 'session.output_audio.delta') {
       const audio = Buffer.from(value.delta, 'base64');
       // Played as it arrives, after anything still queued, on the input clock.

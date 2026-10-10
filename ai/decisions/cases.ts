@@ -88,13 +88,16 @@ export function interpret(item: EvalCase, answers: Result['answers']) {
     if (answer?.type !== 'choice' || answer.probabilities?.continue == null) throw new Error('Incomplete silence answer');
     return { probability: answer.probabilities.continue, continue: answer.probabilities.continue >= .85, state: answer.choice };
   }
+  // Frozen v1 cases predate the participant/interviewer speaker names. Keep API inputs frozen;
+  // normalize only the local reader so historical and new responses have identical semantics.
+  const transcript = archivedTranscriptSchema.parse(item.transcript);
   if (item.lane === 'turn') {
-    const reading = readTurnAnswers(item.map!, answers, item.transcript.at(-1)!.id, item.atMs!);
-    const ranking = observeTurn(emptyRanking(), item.map!, reading, latestTurn(item.transcript)[0]!.id);
+    const reading = readTurnAnswers(item.map!, answers, transcript.at(-1)!.id, item.atMs!);
+    const ranking = observeTurn(emptyRanking(), item.map!, reading, latestTurn(transcript)[0]!.id);
     return { ...reading, new: reading.novel >= .8, feedbackNew: (reading.feedback ?? 0) >= .8, wakeCandidate: reading.novel >= .8 || (reading.feedback ?? 0) >= .8,
       pick: pickThreads(item.map!, ranking) };
   }
-  const grade = readInterviewAnswers(spec, item.transcript, answers);
+  const grade = readInterviewAnswers(spec, transcript, answers);
   return { ...grade, objectives: Object.fromEntries(grade.objectives.map(x => [x.id, x])) };
 }
 
@@ -108,13 +111,24 @@ export function scoreChecks(checks: Check[], output: unknown) {
 }
 
 /** Experimental gates only; raw distributions and participant-evidence requirements stay intact. */
-export function calibrate(item: Pick<EvalCase, 'lane'>, answers: Result['answers'], output: Record<string, unknown>, gates: { silence: number; explored: number }) {
+export function calibrate(item: Pick<EvalCase, 'lane'>, answers: Result['answers'], output: Record<string, unknown>, gates: { silence: number; explored: number; novel?: number; feedback?: number; satisfied?: number }) {
   if (item.lane === 'silence') return { ...output, continue: Number(output.probability) >= gates.silence };
+  if (item.lane === 'turn' && (gates.novel !== undefined || gates.feedback !== undefined)) {
+    const novel = Number(output.novel) >= (gates.novel ?? .8);
+    const feedback = Number(output.feedback) >= (gates.feedback ?? .8);
+    return { ...output, new: novel, feedbackNew: feedback, wakeCandidate: novel || feedback };
+  }
   if (item.lane !== 'grade') return output;
   const grade = structuredClone(output);
   for (const [id, objective] of Object.entries(grade.objectives as Record<string, { level: string; achieved: boolean; evidence: unknown }>)) {
     const answer = answers[`objective:${id}`];
     if (answer?.type === 'choice' && answer.choice === 'explored' && objective.evidence && (answer.probabilities?.explored ?? 0) >= gates.explored) {
+      objective.level = 'explored';
+      objective.achieved = true;
+    }
+    const satisfied = answers[`objective:${id}:satisfied`];
+    if (gates.satisfied !== undefined && satisfied?.type === 'boolean' && satisfied.probability >= gates.satisfied
+      && objective.evidence && objective.level === 'touched') {
       objective.level = 'explored';
       objective.achieved = true;
     }

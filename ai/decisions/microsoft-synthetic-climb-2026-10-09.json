@@ -1,0 +1,443 @@
+{
+  "generatedAt": "2026-10-10T04:38:33.764Z",
+  "measuredDateLocal": "2026-10-09",
+  "model": "Microsoft-Decision-1",
+  "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+  "gradeGoldHash": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa",
+  "gates": {
+    "silence": 0.9,
+    "explored": 0.35,
+    "novel": 0.7,
+    "feedback": 0.8
+  },
+  "baseline": {
+    "development": {
+      "synthetic": 42,
+      "coverage": 79,
+      "reading": 30,
+      "evidence": 44,
+      "falseCredit": 0,
+      "critical": 0
+    },
+    "validation": {
+      "synthetic": 40,
+      "coverage": 161,
+      "reading": 49,
+      "evidence": 105,
+      "falseCredit": 4,
+      "critical": 4
+    }
+  },
+  "developmentFloors": {
+    "synthetic": 42,
+    "coverage": 79,
+    "reading": 30,
+    "falseCreditMaximum": 0,
+    "criticalFailuresMaximum": 0,
+    "evidence": 44
+  },
+  "validationFloors": {
+    "synthetic": 40,
+    "coverage": 161,
+    "reading": 49,
+    "evidence": 105,
+    "falseCreditMaximum": 4,
+    "criticalFailuresMaximum": 4
+  },
+  "candidateIdeas": [
+    "Clarify sufficient concrete accounts and unresolved difficulties without asking for unstated follow-up detail.",
+    "Separate firsthand facts, attributed accounts and topic-specific knowledge limits.",
+    "Make internal-team versus product/client requirements explicit at the decision point.",
+    "Align evidence selection with the original topic criterion and explicit boundaries.",
+    "Use neutral contrast examples that demonstrate the rubric without copying eval cases."
+  ],
+  "rule": "Four atomic grade-presentation experiments. Thresholds, reader, frozen cases and labels unchanged. Advance only when development synthetic is at least the current incumbent and all other development scores are retained, with no additional false credit or critical failures. Freeze a passing candidate before two-repeat validation. Accept only when synthetic improves and coverage, reading, evidence, false-credit and critical-failure floors hold. Rejected experiments do not change the incumbent. Existing validation is regression evidence, not untouched holdout. No production changes. If the final selected recipe changes, rerun Jev/Decisions once under the prior comparison request.",
+  "iterations": [
+    {
+      "iteration": 1,
+      "arm": "foundry-synthetic-1",
+      "base": "human",
+      "changeType": "grade-presentation",
+      "hypothesis": "Concrete accounts can answer a topic without resolving every follow-up.",
+      "developmentRun": "microsoft-synthetic-1-development-2026-10-09",
+      "synthetic": 41,
+      "coverage": 77,
+      "reading": 29,
+      "evidence": 43,
+      "falseCredit": 2,
+      "critical": 1,
+      "decision": "rejected on development regressions",
+      "validationRun": null,
+      "dimensions": {
+        "synthetic": {
+          "passed": 41,
+          "total": 44
+        },
+        "coverage": {
+          "passed": 77,
+          "total": 100
+        },
+        "reading": {
+          "passed": 29,
+          "total": 30
+        },
+        "evidence": {
+          "passed": 43,
+          "total": 103
+        }
+      },
+      "failedFloors": [
+        "synthetic",
+        "coverage",
+        "reading",
+        "evidence",
+        "falseCredit",
+        "critical"
+      ],
+      "attempts": 25,
+      "usable": 25,
+      "costUsd": 0.029224398000000006,
+      "manifestHash": "e6d5a59d9cbb03072b9d55c9ccfd90354df3c3bff232b7089e321ee197b05322",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "4e48a7d48d984bf0a5325cb849be8cf7dc59052f6a9ec026668821cf290e4820",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "4bd66f718a9fec13cc9247c8f3733c64e65ca273fc9a1cc7f89c1f28874af992"
+      },
+      "requestHashes": {
+        "grade:client-cloud-gap-not-team-resourcing": "c969d3033250c45bd236678bc170af2d5f7b5f8682c0c04915c296481f31f745",
+        "grade:attributed-handoff-effect": "cef2c44d95784864466f10ae93aa5f40b7bcffd0f51078550b4a536ed6a83618",
+        "grade:vague-handoff-report": "0afea6813d6f89ae296dac9b469c931b7c0ed89aad345f97c6a9c03fc7e3d849",
+        "grade:team-speed-not-client-pace": "b635e6d5a518daa0b19f29df31efc557afdc255cc9feb98da11f13c705f82eb9",
+        "grade:missing-role-without-effect": "aacebe882699900b7f80eae804d1049895b67958a05feb8b2ee28844f6f77b94",
+        "grade:vendor-story-skipped": "c0cebe3cce853524bfc99f31d3c4de4af5dfc3b4fe81b233ce51e1f91473b0ad",
+        "grade:staffing-story-skipped": "c0b5860cc1b6228d9c3eeadf733dfc15fb3bf0533bed134b95d6c2fe926205f3",
+        "grade:terse-three-weeks": "3d399db683256ae1f5a7025abeafe69f50c9d19aa61f1167414da3c2ccb13964",
+        "grade:vague-rant": "bcfdc8465e9987e14051a3bdaaae98d7b188284a65c35390a93c3e7073c9db7a",
+        "grade:uncertainty": "3310810caa5c830e06d27c53f350f5a10290ab5f947dcb7e23690a23054f39e8",
+        "grade:explicit-boundary": "28f71bf93e15bbb4917caba3edf3bf027a8fe9d42d0209615da15e09b09066f8",
+        "grade:revealing-aside": "00e467b186d2c33896d1fbcf93d64ffede14cf321d8e2875443ee4a3a06f4872",
+        "grade:abandoned-release-decision": "78c441657cede2ac94ca0b11064afbb20717a2cd681dc4e2e89aae94235bb854",
+        "grade:named-hearsay": "86974f717f3d0cc847ad4351fa8bad4dc64cb47f9643d48ad0b68e27c6d29060",
+        "grade:productive-thread": "4a12b8a1d1c418cd61f34d999bbd7a1f32948b2adac540393a575e67a3f9a68e",
+        "grade:invented-history": "f055dbe82ea70aab5373d58e343699d311b4498b5bfd8ee7b14eec3df786c7f5",
+        "grade:corrected-leading": "18cfa3c46421ac5fcb10ee316bd44af9930fc3cccc23c8577e2680f96af3a967",
+        "grade:client-sponsor-authority": "d6de60813690de27a6c794b247ea729bc4263bcc7655cf368e8a7c3e9044d2f2",
+        "grade:client-delegated-decisions": "d8c91155cdae6f7cff342fa8972200c2a45cdf732bc6c4310f3b63d9b64fe5cc",
+        "grade:speaking-time-not-authority": "65f4b8e496af538b5c29d18fcb2747c7793612d72a929e92d336b1f82503e93b",
+        "grade:interview-A-p38": "6132e62c821524d301caa42ecdf46fc69c2a3a8831617704e30bfc56597a728e",
+        "grade:interview-A-p78": "959c8ed22ff63af9b8449630fc927b131d8436d3761f918b72e2ceeaabf87822",
+        "grade:interview-A-p117": "6cfbc876d40f03db9b0d29ae565a1909ffcb1a6ed941d5f1b288da3a50f69b4b",
+        "grade:interview-A-p155": "ef637474f7b9c25c707953c02c08b37383d66cf20bfd07c32fa45d6cb3021bbc",
+        "grade:interview-A-p123": "0f7a9d5c45e5ed903fea92aff0874d233104b5ff666597e238c23e1d3e59e84c"
+      },
+      "createdAt": "2026-10-10T04:30:58.675Z",
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0
+    },
+    {
+      "iteration": 2,
+      "arm": "foundry-synthetic-2",
+      "base": "human",
+      "changeType": "grade-presentation",
+      "hypothesis": "Preserve concrete facts alongside claim-specific knowledge limits.",
+      "developmentRun": "microsoft-synthetic-2-development-2026-10-09",
+      "synthetic": 42,
+      "coverage": 76,
+      "reading": 29,
+      "evidence": 44,
+      "falseCredit": 1,
+      "critical": 0,
+      "decision": "rejected on real coverage and reading regressions",
+      "validationRun": null,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 44
+        },
+        "coverage": {
+          "passed": 76,
+          "total": 100
+        },
+        "reading": {
+          "passed": 29,
+          "total": 30
+        },
+        "evidence": {
+          "passed": 44,
+          "total": 103
+        }
+      },
+      "failedFloors": [
+        "coverage",
+        "reading",
+        "falseCredit"
+      ],
+      "attempts": 25,
+      "usable": 25,
+      "costUsd": 0.029707398000000003,
+      "manifestHash": "ca50d07d350319ed5e0b4366b947a17f1396aef5e3c7535eba9ca0209a6b001a",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "fc4fadba4c92b44d9b940969acafbb7e611ef177b5bb72c6c0edc0bfa2440a4e",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "4bd66f718a9fec13cc9247c8f3733c64e65ca273fc9a1cc7f89c1f28874af992"
+      },
+      "requestHashes": {
+        "grade:client-cloud-gap-not-team-resourcing": "b480550412628091b45c64bc4b2b4246b9bc9da8379e90e72d7bc68d81f565c9",
+        "grade:attributed-handoff-effect": "97c85b6956a7ef62993b9ff5f6fdff9eda2fceaa2df04642ec3149d11aeb9ab8",
+        "grade:vague-handoff-report": "17c96bbff79a632f162a3063b0aa33d8d94a95a4b6a9abf9ac07458cbb796c90",
+        "grade:team-speed-not-client-pace": "28fa272b3c6631af3b49ed16ad876e0ddb3ac8903ca773e32c44c1b38a666565",
+        "grade:missing-role-without-effect": "cf1d5497d6dd18503d6dcb35bc0c637f36d115123b7d3a6345507c38910a8222",
+        "grade:vendor-story-skipped": "43a7eb8c8ca9a21896cdc3529351f65fc80b6310e2144b7e38a9bf2932563e83",
+        "grade:staffing-story-skipped": "b7f891efe70322c233f0edfb26ea8b65fb78ab1ff6b3b0127c17db4cf41a8fdc",
+        "grade:terse-three-weeks": "efd9ed251fdcbb62dc9e733ffe6a4d32a1130245c425ecc40c64fb993a2fda79",
+        "grade:vague-rant": "9a0a64ed2d7a0f4d8dd5e6734eff548ace299793c9e7095217150682e8cf6448",
+        "grade:uncertainty": "4e5302face93a9808e1fbbc0ef1cdb0e8856c77ab9b49bede25883f37d0a2502",
+        "grade:explicit-boundary": "688a475e6841a54dae400da13027dcb8ad3a94622061a7d3e17c2419ef5348e7",
+        "grade:revealing-aside": "b24dfa1e07c4234eff4378be99fc1d89cd898b112e9a9c4fd3fdcfcb69d76d63",
+        "grade:abandoned-release-decision": "c63e5f2f47340f8b4980c17bf1ee8923d3af60462780d6a3d553f22a8090c5d1",
+        "grade:named-hearsay": "b6f97ec997d6fc59245c43593665c98ea56d2dd6282b0437b381ecea722e60b6",
+        "grade:productive-thread": "772c185a05f7eae597cba0f7a0260481037ee0155ac385f8523a079aadf62005",
+        "grade:invented-history": "ed976dec80cbec71a729f4af35583ab2f71021a25290371ba891f75967e6bd81",
+        "grade:corrected-leading": "4c9f9d90156e62eb8eceff7de594c6d388cf5c0a482fc708ec2f0ee5e12759c6",
+        "grade:client-sponsor-authority": "e2d6bb920805d044dd9788a03873fcbbe1b9c96bf4765b5d0bffd6a0840c2c19",
+        "grade:client-delegated-decisions": "dfc1e4b0d7540b027f26e22a254ce5177da3f253761bede5dd2102e1cacf655c",
+        "grade:speaking-time-not-authority": "4263b4c02833f45c4c3be94c041e0b0e2fa4a3856fc93b85fff330a995102768",
+        "grade:interview-A-p38": "5d3c00e13b389787443440e08011519074638d2bf5449e123a33a417314f7d6f",
+        "grade:interview-A-p78": "cbcff01e31759c6cac21bb7a4d6c4e0a3c0d1ccae90b751555e0dcfa587dff1b",
+        "grade:interview-A-p117": "6a3412a406910ca421e84e2d2ea4cab7473941b0d098aabe12d6d8b1dcd4402b",
+        "grade:interview-A-p155": "80aed2c42f56d3919af59ea03396e3561d659ec3d87651183db78f9f4b2827f1",
+        "grade:interview-A-p123": "8aed3298aaaba5289ab58a0c33e34ca4953b4414169e64baa59f797e5a525820"
+      },
+      "createdAt": "2026-10-10T04:32:15.360Z",
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0
+    },
+    {
+      "iteration": 3,
+      "arm": "foundry-synthetic-3",
+      "base": "human",
+      "changeType": "grade-presentation",
+      "hypothesis": "Distinguish internal team tools from delivered product features with neutral examples.",
+      "developmentRun": "microsoft-synthetic-3-development-2026-10-09",
+      "synthetic": 42,
+      "coverage": 76,
+      "reading": 29,
+      "evidence": 44,
+      "falseCredit": 0,
+      "critical": 0,
+      "decision": "rejected on real coverage and reading regressions",
+      "validationRun": null,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 44
+        },
+        "coverage": {
+          "passed": 76,
+          "total": 100
+        },
+        "reading": {
+          "passed": 29,
+          "total": 30
+        },
+        "evidence": {
+          "passed": 44,
+          "total": 103
+        }
+      },
+      "failedFloors": [
+        "coverage",
+        "reading"
+      ],
+      "attempts": 25,
+      "usable": 25,
+      "costUsd": 0.027403698,
+      "manifestHash": "d6f5f098746dcbb81781bad0d348b98a89c22486b39dea59b05524ad4a332e65",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "a67cac94fecc7e84dc42646ce6a035b58b14638b692b6a0cc0f2c8e7cbbb9dcf",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "4bd66f718a9fec13cc9247c8f3733c64e65ca273fc9a1cc7f89c1f28874af992"
+      },
+      "requestHashes": {
+        "grade:client-cloud-gap-not-team-resourcing": "661ed57b1591dedb266572d51e483ad5d7f5ccf9885d3dc03049ce629b1eb225",
+        "grade:attributed-handoff-effect": "8044d61abf26eaba089ebdf51217e6ce948b896befd69367eb023e3a9168adb9",
+        "grade:vague-handoff-report": "c9abad5aff4c8c8889a9bb092f05f0c3dabab53c6f7be635ddde22303200662b",
+        "grade:team-speed-not-client-pace": "728640e13119464c6b9757418c809553279087c3cfd58d80f1b7f4d9bced6b64",
+        "grade:missing-role-without-effect": "9124f1f4889e7cb050ab8e3989bb98846210f21fa6b0af420d21785284722e06",
+        "grade:vendor-story-skipped": "86d013f8847e383bb7c6e8b55968ee15a60eefb0acdc7acd4c645f38c47b5abf",
+        "grade:staffing-story-skipped": "61a8ff2ca14a0e23f00c0644af6b924aab5a97da0c64766e5765f204c0cd1170",
+        "grade:terse-three-weeks": "aecce6c1fc3db8cdc53bf3ebec0849dc872496ce6b8546b2351ede0b498de879",
+        "grade:vague-rant": "7c8056630e452f46bc25ea6304b073a457c830d823adce783e9a09bc7bd7b14a",
+        "grade:uncertainty": "d63baf3ebf9749d67e18398e64cc05a34b848c20b08dfad5fe6893392e6d56f6",
+        "grade:explicit-boundary": "8c6a5f8da6e04b7c8e1c62486aa0ee9013a26967bf9ec3242717b09c00e17a39",
+        "grade:revealing-aside": "557de2fa2778c1f4f4b62b760f80742bd106bb9fe28ec033e8517cae5b547773",
+        "grade:abandoned-release-decision": "cb8af3b73262ab345d24f22becf2fe782da3034f5d3cd71e66bc3368d0eaaedb",
+        "grade:named-hearsay": "d12071a4d35196234890f762835dd9f7f61d2a9ac58602a426032af27242fa27",
+        "grade:productive-thread": "4438b45fc528ac2c5d6a144c9945c31ed4e960a5cd447cdee3977dff0b7b06cf",
+        "grade:invented-history": "028ac45cd6a4031a0be484881547d3ebc8bba2192180f7c0b1d27143927b378e",
+        "grade:corrected-leading": "7e1dd5ba71878e88bc611b3b5d7a2c8e5fcd97e7d846c0730ab4d9d460d7e749",
+        "grade:client-sponsor-authority": "275c57e8b50b1a16dde458547106501326a31cc2ae0b3ba912ce992b9058de5d",
+        "grade:client-delegated-decisions": "cb2b6df6cbfa132481cd251725809edde1328b6ad0c4df29c39d0b4f66ad771b",
+        "grade:speaking-time-not-authority": "8b63ed18adaf2fb6df33caf22dc364e1df22f4461ce13ba7af2a585d8e206138",
+        "grade:interview-A-p38": "a44544be1d792532b7a39a360613ec591b579fb8b24ecf437070e8cc1b2baf26",
+        "grade:interview-A-p78": "9bfb505a4c6f0a5f161ca291d07d774b50f3d328cb1d40376f7bbf5a84a9321d",
+        "grade:interview-A-p117": "a06aa2655924d641bfe54dd78bfffd32174dc07d1551f1fdc68d334b1ae67cb0",
+        "grade:interview-A-p155": "457f3c3e3b8098b1b3a42476c9281ca2180ecae02393d185b7b10413aa903016",
+        "grade:interview-A-p123": "3061570cee9bdbfa4be56de630056c90f85f7a2b76da48a05e3b1eb63656c54b"
+      },
+      "createdAt": "2026-10-10T04:33:23.617Z",
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0
+    },
+    {
+      "iteration": 4,
+      "arm": "foundry-synthetic-4",
+      "base": "human",
+      "changeType": "grade-presentation",
+      "hypothesis": "Relevant incomplete participant speech can support touched evidence without granting full credit.",
+      "developmentRun": "microsoft-synthetic-4-development-2026-10-09",
+      "synthetic": 42,
+      "coverage": 79,
+      "reading": 29,
+      "evidence": 42,
+      "falseCredit": 0,
+      "critical": 0,
+      "decision": "rejected on reading and evidence regressions; synthetic unchanged",
+      "validationRun": null,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 44
+        },
+        "coverage": {
+          "passed": 79,
+          "total": 100
+        },
+        "reading": {
+          "passed": 29,
+          "total": 30
+        },
+        "evidence": {
+          "passed": 42,
+          "total": 103
+        }
+      },
+      "failedFloors": [
+        "reading",
+        "evidence"
+      ],
+      "attempts": 25,
+      "usable": 25,
+      "costUsd": 0.029287397999999992,
+      "manifestHash": "f440749289c6296dad920093c10d4cf891a1059647a0c7f48c02c507e149918c",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "a89f29ddfface230e09d7972784586910ff5fb0ae3705900d600bea49e43be78",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "4bd66f718a9fec13cc9247c8f3733c64e65ca273fc9a1cc7f89c1f28874af992"
+      },
+      "requestHashes": {
+        "grade:client-cloud-gap-not-team-resourcing": "c6f7cbad8cf3babb3f5fc37270eaa1c8aaad5c9452eeb5377041135d4405021a",
+        "grade:attributed-handoff-effect": "9580fc39abf1abf7d3e09bda305348045cee750a63558863655ace3e532e85ac",
+        "grade:vague-handoff-report": "1d01bb1c9d305832588243e49929a41c54f417825d36171c964913d4240ddcf1",
+        "grade:team-speed-not-client-pace": "5e3f298cae42373f1cc5ba393bd642fdc8f7d42db684f3b6302308c998f53ccb",
+        "grade:missing-role-without-effect": "ef2ef7c7f5ab40ccf6697f417d81aaaad192f80d12d811c5620c550aef362b3c",
+        "grade:vendor-story-skipped": "37d37fe784d22e1e8d704b3f3e8455218ef60e039e61b72173d02c1a111089da",
+        "grade:staffing-story-skipped": "84348d4116bfe8dae2d9c1d5a98c4a227e4db42fdd8d0a8c83b2f35a5ff388bd",
+        "grade:terse-three-weeks": "a13a492c9fb54eb2a3d0ab2653783bbcab6f144c4d1ca8bf7c4434bc5efbaa7d",
+        "grade:vague-rant": "81871732ca4b6442181bb5edeb79fc2a0e6f5d6154ef568727d12fbe0bea1a41",
+        "grade:uncertainty": "2982ed31b2022d1632055f8b0c5454b9f256213e5c86d9f64f87188d7ab59193",
+        "grade:explicit-boundary": "c705734b6fcd2dfbfec365206e68604513108b868e133d1924c226fa73cfc53e",
+        "grade:revealing-aside": "7f25b2fdbd8382c518b2fc18409ef122df48a0c29c41c8e85d3f8a167988946c",
+        "grade:abandoned-release-decision": "0b4a32816b59561916d23e9df4b340ba0a48ed36c977290edda8202d6618062d",
+        "grade:named-hearsay": "52ed2e72a4f990973d2c7212d3a8f4d83cfd12f3011d5cbc17eb9017436db1a5",
+        "grade:productive-thread": "62f18299ca2486ee6b4dcfc17c75b1f0a5c59cb6debea3b6eb97240c6d4cbb38",
+        "grade:invented-history": "2c1ca1793d7c6a415973e1ec73dc3f5419aa769cf620bd722f302a0bc0a9c381",
+        "grade:corrected-leading": "bf68b8bd8950f0487eaa4bd0b35708c71c7a67fffe1862ff1acdae02e7a8a02d",
+        "grade:client-sponsor-authority": "44fefd1d37c212cb88e81551a1617b0d3e48d7b60fc5336c74a64869401d5dce",
+        "grade:client-delegated-decisions": "bbf98b3d9daba867e5cb16ecdb6e052398de938b7544fe994a05d54808f35a3c",
+        "grade:speaking-time-not-authority": "0db4cf076a7f528d748c38204cac0400088d89f1016d39757f584f4fc7109a5d",
+        "grade:interview-A-p38": "8b7d0e1a9a446187e49ed67ddaa469f6126ed7cb2314dd1ef693e24d5dfe874e",
+        "grade:interview-A-p78": "8d2be0ba933fc666015b6069a3b67120f89679c65805c0291e53e508067ea006",
+        "grade:interview-A-p117": "05069f4cbb807d43259123d7f277fa60d45e66624e144b3e900aa1f427b68f7b",
+        "grade:interview-A-p155": "d95b6e3e7bcb74f63279d44fd8c31156632b722cc34db391d16dada84350e1c6",
+        "grade:interview-A-p123": "a8af6c9caf0a78b8ce90055819d7b786dc61efd9a0920882ea8e073e101111f6"
+      },
+      "createdAt": "2026-10-10T04:34:39.896Z",
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0
+    }
+  ],
+  "retainedRecipe": {
+    "grade": "human",
+    "turn": "precise",
+    "silence": "literal",
+    "validation": {
+      "synthetic": {
+        "passed": 40,
+        "total": 48
+      },
+      "coverage": {
+        "passed": 161,
+        "total": 200
+      },
+      "reading": {
+        "passed": 49,
+        "total": 60
+      },
+      "evidence": {
+        "passed": 105,
+        "total": 178
+      },
+      "turn": {
+        "passed": 73,
+        "total": 82
+      },
+      "silence": {
+        "passed": 20,
+        "total": 22
+      }
+    },
+    "validationRerunPerformed": false
+  },
+  "accounting": {
+    "newCalls": 100,
+    "usableNewResponses": 100,
+    "newUsd": 0.115622892,
+    "cumulativeReservations": 1594,
+    "cumulativeReservedOrSettledUsd": 1.419064046000001
+  },
+  "audit": {
+    "unchangedTurnAndSilenceRequestHashes": 252,
+    "retainedFrozenRequestHashesChecked": 59,
+    "focusedTests": 27,
+    "focusedAssertions": 89,
+    "fullRepositoryCheck": "passed",
+    "repositoryTests": 584,
+    "repositoryAssertions": 9209,
+    "independentNativeReplays": 100,
+    "nativePayloadHashMismatches": 0,
+    "nativeAnswerMismatches": 0,
+    "readerOutputMismatches": 0,
+    "transportFailures": 0
+  },
+  "finalDecision": "Retain human grade recipe and existing precise turn recipe at unchanged gates. No candidate passed development no-regression floors, so none advanced to validation.",
+  "limitations": [
+    "Four development experiments, no changes to frozen corpus, labels, gates or core reader.",
+    "No candidate met development no-regression floors; no fresh validation or cross-provider reruns were needed.",
+    "Existing validation had already been inspected; retained validation scores come from the prior frozen run.",
+    "One missed development fixture has an unresolved party ambiguity; its original label remains unchanged.",
+    "Small reading changes around a hard numeric bound are still counted as regressions."
+  ]
+}

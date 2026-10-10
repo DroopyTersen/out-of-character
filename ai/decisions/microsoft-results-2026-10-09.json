@@ -1,0 +1,5392 @@
+{
+  "measuredDateLocal": "2026-10-09",
+  "generatedAt": "2026-10-10T04:25:59.522Z",
+  "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+  "goldHash": "ed588341382fbd67e754c62248f1df71e9f6aa7c17515d871ab9457c9fb7eac8",
+  "foundry": {
+    "deployment": "Decision-1",
+    "model": "Microsoft-Decision-1",
+    "version": "1",
+    "region": "eastus2",
+    "sku": "GlobalStandard",
+    "quotaRequestsPerMinute": 354
+  },
+  "ratesUsdPerMillionInput": {
+    "jev": 0.042,
+    "decisions": 0.1,
+    "foundry": 0.042
+  },
+  "outputsFree": true,
+  "baselinePolicy": "Reuse 358 selected saved Jev/OpenAI responses for the original baseline and same-gate controls; all 450 historical reader outputs reproduced exactly. After Microsoft tuning, rerun Jev/OpenAI with the same frozen request transformations and gates, as requested. Frozen API inputs and labels remain unchanged.",
+  "responseCounts": {
+    "selectedRawReportRecords": 1308,
+    "reusedBaselineResponses": 358,
+    "microsoftReplayAttempts": 676,
+    "successfulMicrosoftReplayResponses": 668,
+    "microsoftSmokeCalls": 1,
+    "freshOptimizedComparisonCalls": 274,
+    "successfulOptimizedComparisonResponses": 272
+  },
+  "finalRecipe": {
+    "formats": {
+      "silence": "literal",
+      "turn": "precise",
+      "grade": "human"
+    },
+    "gates": {
+      "silence": 0.9,
+      "explored": 0.35,
+      "novel": 0.7,
+      "feedback": 0.8
+    },
+    "rationale": "Microsoft development selected explicit latest-turn context, clarified criteria, readable topic grading and compact exact evidence excerpts. Jev/OpenAI receive those same inputs and confidence gates without provider-specific retuning."
+  },
+  "candidateFreeze": {
+    "frozenAt": "2026-10-09T13:22:24.755Z",
+    "inputRuns": [
+      "baseline-development"
+    ],
+    "format": "literal",
+    "rule": "zero development false continuations; minimum missed continuations; highest tied threshold",
+    "grid": [
+      {
+        "threshold": 0.7,
+        "falseContinues": 0,
+        "missedContinues": 2
+      },
+      {
+        "threshold": 0.75,
+        "falseContinues": 0,
+        "missedContinues": 3
+      },
+      {
+        "threshold": 0.8,
+        "falseContinues": 0,
+        "missedContinues": 3
+      },
+      {
+        "threshold": 0.85,
+        "falseContinues": 0,
+        "missedContinues": 3
+      },
+      {
+        "threshold": 0.9,
+        "falseContinues": 0,
+        "missedContinues": 8
+      },
+      {
+        "threshold": 0.95,
+        "falseContinues": 0,
+        "missedContinues": 12
+      }
+    ],
+    "selected": {
+      "threshold": 0.7,
+      "falseContinues": 0,
+      "missedContinues": 2
+    },
+    "original": 0.85,
+    "turnAndGradeThresholds": "unchanged",
+    "validationInspected": false
+  },
+  "gradeCandidateFreeze": {
+    "frozenAt": "2026-10-09T13:27:54.723Z",
+    "inputRuns": [
+      "baseline-development"
+    ],
+    "format": "literal",
+    "rule": "zero development false explored credit; maximum synthetic and topic coverage checks; highest tied threshold",
+    "grid": [
+      {
+        "threshold": 0.5,
+        "passes": 124,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.6,
+        "passes": 122,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.7,
+        "passes": 120,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.8,
+        "passes": 119,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.85,
+        "passes": 116,
+        "total": 144,
+        "falseCredit": 0
+      }
+    ],
+    "selected": {
+      "threshold": 0.5,
+      "passes": 124,
+      "total": 144,
+      "falseCredit": 0
+    },
+    "original": 0.85,
+    "limitation": "Selected after first validation results were seen; validation re-scoring is a regression check, not a new blind holdout. No validation cases used to choose threshold."
+  },
+  "foundryCandidateFreeze": {
+    "frozenAt": "2026-10-10T03:31:32.917Z",
+    "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+    "goldHash": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa",
+    "inputRuns": [
+      "microsoft-recovered-development-2026-10-09",
+      "microsoft-development-remaining-2026-10-09"
+    ],
+    "rules": {
+      "silence": "Zero development false continuations; minimum misses; highest tied threshold. Retain .85 if no candidate meets zero false continuations.",
+      "explored": "Zero development false explored credit; maximum synthetic/real coverage checks; highest tied threshold. Retain .85 if no candidate meets zero false credit."
+    },
+    "silenceGrid": [
+      {
+        "threshold": 0.7,
+        "falseContinues": 1,
+        "missedContinues": 2
+      },
+      {
+        "threshold": 0.75,
+        "falseContinues": 1,
+        "missedContinues": 2
+      },
+      {
+        "threshold": 0.8,
+        "falseContinues": 1,
+        "missedContinues": 2
+      },
+      {
+        "threshold": 0.85,
+        "falseContinues": 1,
+        "missedContinues": 2
+      },
+      {
+        "threshold": 0.9,
+        "falseContinues": 0,
+        "missedContinues": 2
+      },
+      {
+        "threshold": 0.95,
+        "falseContinues": 0,
+        "missedContinues": 4
+      }
+    ],
+    "gradeGrid": [
+      {
+        "threshold": 0.5,
+        "passed": 101,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.6,
+        "passed": 99,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.7,
+        "passed": 90,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.8,
+        "passed": 84,
+        "total": 144,
+        "falseCredit": 0
+      },
+      {
+        "threshold": 0.85,
+        "passed": 84,
+        "total": 144,
+        "falseCredit": 0
+      }
+    ],
+    "selected": {
+      "silence": 0.9,
+      "explored": 0.5
+    },
+    "silenceCandidateAccepted": true,
+    "gradeCandidateAccepted": true,
+    "validationInspected": false,
+    "limitations": "Reuses a corpus already used for the prior provider comparison; this is a development-selected regression comparison, not an independent new population."
+  },
+  "foundryHillFreeze": {
+    "frozenAt": "2026-10-10T03:42:05.010Z",
+    "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+    "goldHash": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa",
+    "searchHash": "902cf61b86bddc1253ae9570d1fe18136eddef2f23984e8885750ddbc018738d",
+    "search": {
+      "createdAt": "2026-10-10T03:42:04.915Z",
+      "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+      "goldHash": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa",
+      "inputRuns": [
+        "microsoft-recovered-development-2026-10-09",
+        "microsoft-development-remaining-2026-10-09",
+        "microsoft-format-development-2026-10-09",
+        "microsoft-evidence-compact-development-2026-10-09"
+      ],
+      "grid": [
+        0.3,
+        0.35,
+        0.4,
+        0.45,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.85
+      ],
+      "candidates": [
+        {
+          "arm": "foundry",
+          "explored": 0.3,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.35,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.4,
+          "passed": 102,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 60,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.45,
+          "passed": 101,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 59,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.5,
+          "passed": 101,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 59,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.6,
+          "passed": 99,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 58,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.7,
+          "passed": 90,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 49,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.8,
+          "passed": 84,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 43,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry",
+          "explored": 0.85,
+          "passed": 84,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 43,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.3,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.35,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.4,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.45,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.5,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.6,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 61,
+          "synthetic": 42,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.7,
+          "passed": 101,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 60,
+          "synthetic": 41,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.8,
+          "passed": 98,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 57,
+          "synthetic": 41,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-task-last",
+          "explored": 0.85,
+          "passed": 94,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 53,
+          "synthetic": 41,
+          "reading": 30,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.3,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 64,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.35,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 64,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.4,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 64,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.45,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 64,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.5,
+          "passed": 102,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 63,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.6,
+          "passed": 101,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 62,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.7,
+          "passed": 96,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 57,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.8,
+          "passed": 92,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 53,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-readable",
+          "explored": 0.85,
+          "passed": 89,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 50,
+          "synthetic": 39,
+          "reading": 29,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.3,
+          "passed": 97,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 56,
+          "synthetic": 41,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.35,
+          "passed": 97,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 56,
+          "synthetic": 41,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.4,
+          "passed": 96,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 55,
+          "synthetic": 41,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.45,
+          "passed": 96,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 55,
+          "synthetic": 41,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.5,
+          "passed": 95,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 54,
+          "synthetic": 41,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.6,
+          "passed": 93,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 53,
+          "synthetic": 40,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.7,
+          "passed": 90,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 50,
+          "synthetic": 40,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.8,
+          "passed": 85,
+          "total": 144,
+          "falseCredit": 1,
+          "coverage": 45,
+          "synthetic": 40,
+          "reading": 28,
+          "criticalFailures": 1
+        },
+        {
+          "arm": "foundry-dialogue",
+          "explored": 0.85,
+          "passed": 83,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 42,
+          "synthetic": 41,
+          "reading": 28,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.3,
+          "passed": 110,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 68,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.35,
+          "passed": 110,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 68,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.4,
+          "passed": 110,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 68,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.45,
+          "passed": 108,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 66,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.5,
+          "passed": 108,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 66,
+          "synthetic": 42,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.6,
+          "passed": 103,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 62,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.7,
+          "passed": 96,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 55,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.8,
+          "passed": 89,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 48,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        },
+        {
+          "arm": "foundry-evidence-compact",
+          "explored": 0.85,
+          "passed": 87,
+          "total": 144,
+          "falseCredit": 0,
+          "coverage": 46,
+          "synthetic": 41,
+          "reading": 29,
+          "criticalFailures": 0
+        }
+      ],
+      "selected": {
+        "arm": "foundry-evidence-compact",
+        "explored": 0.4,
+        "passed": 110,
+        "total": 144,
+        "falseCredit": 0,
+        "coverage": 68,
+        "synthetic": 42,
+        "reading": 29,
+        "criticalFailures": 0
+      },
+      "rule": "Zero false explored credit and zero critical failures; maximize real coverage plus synthetic assertions. Prefer the unchanged native request on a primary tie, then real reading checks and highest tied threshold. Remaining ties use arm name.",
+      "limitation": "Development selection only. Baseline validation was already inspected; subsequent validation is a regression replay, not a new untouched holdout."
+    },
+    "arm": "foundry-evidence-compact",
+    "selected": {
+      "silence": 0.9,
+      "explored": 0.4
+    },
+    "unchangedLanes": [
+      "silence",
+      "turn"
+    ],
+    "validationRun": "microsoft-improved-validation-2026-10-09",
+    "rule": "Use the selected arm for changed lanes; reuse native results only when complete transformed requests are identical. All original labels, criteria and evidence rules remain fixed.",
+    "limitation": "Development selection only. Baseline validation was already inspected; subsequent validation is a regression replay, not a new untouched holdout."
+  },
+  "foundryGoalFreezes": {
+    "turn": {
+      "frozenAt": "2026-10-10T04:00:12.735Z",
+      "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+      "goldHash": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+      "arm": "foundry-precise",
+      "gates": {
+        "silence": 0.9,
+        "explored": 0.5,
+        "novel": 0.7,
+        "feedback": 0.8
+      },
+      "developmentRun": "microsoft-precise-development-2026-10-09",
+      "developmentScore": {
+        "split": "development",
+        "arm": "foundry-precise",
+        "lane": "turn",
+        "novel": 0.7,
+        "passed": 41,
+        "total": 45,
+        "failures": [
+          "new_preference_against_repeated_feedback_questions",
+          "earlier_success_measurement_not_current_answer",
+          "new_nonpresumptive_question_preference",
+          "new_nonpresumptive_question_preference"
+        ]
+      },
+      "validationRun": "microsoft-turn-goal-validation-2026-10-09",
+      "requestHashes": {
+        "turn:interview-A-p35-1": "90973ff33cd42b02ff67bb375fafdf63ff887edb4268efa9ff711315346b0e45",
+        "turn:interview-A-p50-1": "68d7af96735b23756810d1394da654a4eda6d74d584492875070c1f7e1aff736",
+        "turn:interview-A-p56-1": "975cdf76d5ef832276d5aaa694932f5c4ad3e9852f4d46d7a41b83ca2f60a06f",
+        "turn:interview-A-p76-1": "268c1553cc0e4af8f223952cb8c5da531be0477903cf1240d7ff149e1a3ab521",
+        "turn:interview-A-p100-1": "f6bbd7c16f01bd3c6391509383ab6e27be9188ffff521f1a6c24457c4394ded7",
+        "turn:interview-A-p117-1": "1d20687bfa8baf26625c0a55d0587b800c19af6e96678fac241bb0a4e23d11cd",
+        "turn:interview-A-p139-1": "74aa35d46dca06701b82cf3c2781bad0cfb937ec120ae827b803972886695a41",
+        "turn:interview-A-p144-1": "1a60ff80c09a678e1bed773661a9806694cf60c1c343d86d4b3e2ffe26a3ac93",
+        "turn:interview-A-p146-1": "c0a0b7234ae01b0c753dff0a4f62a713166332f702a6737c54c436fe5dc4ef5a",
+        "turn:interview-A-p146-2": "c65cda6567bbd5eb75498147eff645741492f35062f0e49678dba7fa63ff4849",
+        "turn:interview-B-p10-1": "0ebfe8cbb0abe1456528777d7f3645f221f1da87d817b8fb197aacac68717370",
+        "turn:interview-B-p20-1": "a13f6cd77c5e0f70f87223b8428a58f345ae81cfb93c74dbdb2fdb045f6dba70",
+        "turn:interview-B-p31-1": "8cb56a26450b135bb651e8e43437d105ffdf8ca769fada55a4384b11df86d6d9",
+        "turn:interview-B-p41-1": "d1a4571621b0dc5bc7c29b8224d08bcf850aca6786c36dfdae46a3280b006f27",
+        "turn:interview-B-p51-1": "9b6537522a1fcfccee4bdc5d5e9e3a44b03456cdf3788f99de3d5cbdf0b578b7",
+        "turn:interview-B-p60-1": "e08f271e10bbfb8a1785029be90710f514eddb7a53b13525d2cfef10422dcaa0",
+        "turn:interview-B-p70-1": "cee0680177a79f3053f672c5a980c094031fd8f1bf626b899714f699caeaab52",
+        "turn:interview-B-p91-1": "9ac2197c86ae24d9d2c37583dc393fbec2c06ffa0012ac2f487e796c7e41604d",
+        "turn:interview-B-p111-1": "b4856647b02e23a86d8c4b2c8e869a5f4398b9a89ee0fe14c80f77b2806c2851",
+        "turn:interview-B-p120-1": "897e030903edcde34abe6d8517b27e3c17f304fbe66f1b463db3f100bcdad66a"
+      },
+      "rule": "Maximize development turn checks; highest tied novel threshold, retain feedback gate .8. Cases and labels remain frozen.",
+      "limitation": "Regression replay on previously inspected validation corpus; not an untouched holdout."
+    },
+    "grade": {
+      "frozenAt": "2026-10-10T04:16:39.903Z",
+      "corpusHash": "20659f5082e7e92f127e55dda8616395fcef075d1d83acaa62eeb3764a289cff",
+      "goldHash": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa",
+      "arm": "foundry-human",
+      "gates": {
+        "silence": 0.9,
+        "explored": 0.35,
+        "novel": 0.7,
+        "feedback": 0.8
+      },
+      "developmentRun": "microsoft-human-development-2026-10-09",
+      "developmentScore": {
+        "arm": "foundry-human",
+        "explored": 0.35,
+        "passed": 121,
+        "total": 144,
+        "falseCredit": 0,
+        "coverage": 79,
+        "synthetic": 42,
+        "reading": 30,
+        "criticalFailures": 0
+      },
+      "validationRun": "microsoft-human-validation-2026-10-09",
+      "requestHashes": {
+        "grade:client-testers-not-delivery-staff": "477dc56cab0ac76d19779015d8efd70472f7ad864d0486882b3a4f85ed2a23c3",
+        "grade:client-cloud-gap-not-team-resourcing": "ec9bdd0c84470f5f6e98c37092f8ad4dc27f84296a49c25e701498b22b611a62",
+        "grade:attributed-handoff-effect": "de55477983af694ec7cb91eb5395966f1a57abf17c0ba05796bc0a0d066e3fcc",
+        "grade:vague-handoff-report": "81c9639ee4b24d61298d10992db41314b650d7682976863ff7ca4e845fd481a6",
+        "grade:quiet-win-mechanism-supplied": "79bc21ea4593f1c796c4a891bba87b169822a32be07bd83608316ecef25ac0ba",
+        "grade:team-speed-not-client-pace": "04d0e1f49fdae7af2d292e3791a84154398174eeae97b10304afd99c0eb64089",
+        "grade:missing-role-without-effect": "f9f80d0686f6f43af8c89a88708f04f4178af6fefb3f9d22f779b55441258913",
+        "grade:vendor-story-skipped": "c0b059b4d8b25958f2bc127bbeb26348e8524dcf3803950413e90bca21150598",
+        "grade:staffing-story-skipped": "68fcb08780a9fe95dd6e93a9508869f010a56dc2ffaf1721af720b49ba734c56",
+        "grade:story-still-developing": "d4cbbf0e1f0fc11651077e6fa1439202854e6d9610c3c7c47f29c75b9214d607",
+        "grade:terse-three-weeks": "38dd46f4300576a530e35cac37bfe1b848707ef98329d4581e14387bc09fe7e1",
+        "grade:vague-yes": "1f7d10a459afbeb34c4a27184c056ca4ce70bb9bbc400cc859820e1d72d7fed6",
+        "grade:terse-expert": "ab9be0877d98cec8937355084f2976798250bb8a3e06f3d6c6bf98ad66371cb5",
+        "grade:vague-rant": "60feefdafa80700eed256ade4b523bc078d6282eb085385293f1d70c1de19a7d",
+        "grade:leading-and-mm": "469a0160e90d48213ee97ff29eab41e514a845d4be7fbfc1ac5a22ae5a9318e5",
+        "grade:uncertainty": "720b7cbb83fc213857c0135cec4ee63f8f26c3a5834a10db97ce25898cac9818",
+        "grade:explicit-boundary": "4585c44bb41dcd900150663d09ae68d4fd8d3227a68b78a4b3fc5ebc3d06b37f",
+        "grade:revealing-aside": "a4e3c8cecb071fee1fed086e6f45ca39af4f175142ecc1dacd3033fa1c4bbc2b",
+        "grade:abandoned-release-decision": "7eaae180073ae590f828a2483d931f2c290f0b89376a0fd0bb9678c1239a4695",
+        "grade:named-hearsay": "dbd6236c60d9ef43ecc959ac30d17983a92ab6b4cd6eac637e014d1ec8bbb1a8",
+        "grade:productive-thread": "3e68f6abb08a5bc308387d2e6494eab494acac9d49f88484f4cd11ccaafe9134",
+        "grade:boundary-accepted": "c0047b61d6706b78f1724edaa2fe0c2ed6ee5bf0af9428bbd6d49544062e97bd",
+        "grade:question-stack": "ab0246e53c30237e3587ced87e847015c0bb8c4370707e6358bb252e0de9dc0e",
+        "grade:invented-history": "06603be3b66d14eab71fd913eb9ac067e5bd2d7ab4a41da7c56eb9583ab11c86",
+        "grade:corrected-leading": "2f9c59f78d5d696a0abcc0c12181877f75aab0babeaa83a4f14879d799a82649",
+        "grade:delivery-team-kept-decisions": "fb57f3d5bc04e2147e343f25671b110706de11ed3b54ed74b8125ffdf3e00512",
+        "grade:client-sponsor-authority": "c2fb3b72f997691a88361a538c6715e802abb0cba36f82b430f918aebff78df7",
+        "grade:client-delegated-decisions": "b745f2f0eb9d688f8881092ac23f3bd6349437c69e9c5e1c51c7299a7f09ba2d",
+        "grade:speaking-time-not-authority": "43b6a4f7d7cee817ee318e96bec30bd860c912b79d75a4552a6be6a1d047bc51",
+        "grade:interview-A-p38": "33dd220ad039124dc4d2bcb46b24b0905b09952db85e27292618bb8d607d6bb6",
+        "grade:interview-A-p78": "1b7d0fb67f4065c2cf6704fc6fdc7b45ab578097b198d7164e110ef7c5974a95",
+        "grade:interview-A-p117": "74f26d173b6a28650f80b569e272cd4864d534e2fa9d7c52c8f074057868b06a",
+        "grade:interview-A-p155": "fae1f3ec3b3b215fd41c1ea1615b57b4a434c774a49e865f32326942ffb5caf3",
+        "grade:interview-A-p123": "fe6b0c0004dfb0042280b550c32a4a336cfab08f9cde6784cfa8b7663abd6328",
+        "grade:interview-B-p31": "75292b6add3335fb2a49bd0d026f9d50c416c53b2cbe7cbd81989da925ba1c2b",
+        "grade:interview-B-p64": "94369a0b0823f7c7c3e4714a9b2a700883e800c12b27140bb2e0ec2b476e88ac",
+        "grade:interview-B-p96": "c5b60bef5b4c0dd22f140060bb15d376f3785a4b4ef441257bfea494332835c8",
+        "grade:interview-B-p129": "efe3750cae5816d89952ca00795a97d206a28288b1ddcd88d2bf91bb80a92af2",
+        "grade:interview-B-p79": "5296e5ebd8cf49dcb5f2703b1e4e6308e9f1cacf6a9fd59ed7aa236c53b14d43"
+      },
+      "searchHash": "f2eb4170bf1f2a97d151a30ae2965b0d26ed59a3074f1f81233ee021cfcbbb16",
+      "searchPath": ".data/openai-decisions-evals/microsoft-human-search.json",
+      "rule": "Zero false explored credit and zero critical failures; maximize real coverage plus synthetic assertions. Prefer the unchanged native request on a primary tie, then real reading checks and highest tied explored and satisfaction thresholds. Remaining ties use arm name.",
+      "limitation": "Development selection only. Baseline validation was already inspected; subsequent validation is a regression replay, not a new untouched holdout."
+    }
+  },
+  "optimizedRecipe": {
+    "gates": {
+      "silence": 0.9,
+      "explored": 0.35,
+      "novel": 0.7,
+      "feedback": 0.8
+    },
+    "formats": {
+      "silence": "literal",
+      "turn": "precise",
+      "grade": "human"
+    },
+    "turnFreezeHash": "289a64c5bae4b483393aab5fd3df23cec0fc25473c5784b39504d98a87a2b067",
+    "gradeFreezeHash": "ff16adf96c30ea0f7f128ad26d3a682b74a05bc136840dd04c9d4f3355e51766"
+  },
+  "manifests": [
+    {
+      "run": "baseline-development",
+      "createdAt": "2026-10-09T13:19:33.851Z",
+      "arms": [
+        "jev",
+        "literal"
+      ],
+      "split": "development",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 134,
+      "maxUsd": 5,
+      "maxAttempts": 468,
+      "sdkRetries": 0,
+      "manifestHash": "80324bc07775fc034e4668f9a703e12a6bcb57912651535fc49fb828a479ee7e",
+      "sourceHashes": {
+        "ai/decisions/provider.ts": "e3459c16d8fb33e6d1689ca846aceb8c7cb29fefd6299b92b31d8724f6f31214",
+        "ai/decisions/cases.ts": "f624e65d3c9725a61b1ccbf997c99017d0137c75a0dc6169d187f4208ff1654a",
+        "ai/decisions/run.ts": "8c156113b7155dbfff8416cbd2aea0d7425c94cb873347056f5f02e53911376c"
+      }
+    },
+    {
+      "run": "validation-frozen",
+      "createdAt": "2026-10-09T13:22:24.828Z",
+      "arms": [
+        "jev",
+        "literal"
+      ],
+      "split": "validation",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 70,
+      "maxUsd": 5,
+      "maxAttempts": 468,
+      "sdkRetries": 0,
+      "manifestHash": "cc1de4884ce1b32e6ddc28df7801e801062968ae6af5c295d54cdef722a2782d",
+      "sourceHashes": {
+        "ai/decisions/provider.ts": "e3459c16d8fb33e6d1689ca846aceb8c7cb29fefd6299b92b31d8724f6f31214",
+        "ai/decisions/cases.ts": "f624e65d3c9725a61b1ccbf997c99017d0137c75a0dc6169d187f4208ff1654a",
+        "ai/decisions/run.ts": "8c156113b7155dbfff8416cbd2aea0d7425c94cb873347056f5f02e53911376c"
+      }
+    },
+    {
+      "run": "paired-repeat",
+      "createdAt": "2026-10-09T13:23:51.004Z",
+      "arms": [
+        "jev",
+        "literal"
+      ],
+      "split": "all",
+      "lanes": [
+        "silence",
+        "turn"
+      ],
+      "repeats": 1,
+      "attempts": 126,
+      "maxUsd": 5,
+      "maxAttempts": 468,
+      "sdkRetries": 0,
+      "manifestHash": "2536a212e745c167e095aac1c6c728ffa9fe1bc45a6524f1e5e1d64511578379",
+      "sourceHashes": {
+        "ai/decisions/provider.ts": "e3459c16d8fb33e6d1689ca846aceb8c7cb29fefd6299b92b31d8724f6f31214",
+        "ai/decisions/cases.ts": "f624e65d3c9725a61b1ccbf997c99017d0137c75a0dc6169d187f4208ff1654a",
+        "ai/decisions/run.ts": "8c156113b7155dbfff8416cbd2aea0d7425c94cb873347056f5f02e53911376c"
+      }
+    },
+    {
+      "run": "grade-repeat",
+      "createdAt": "2026-10-09T13:28:27.029Z",
+      "arms": [
+        "jev",
+        "literal"
+      ],
+      "split": "validation",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 28,
+      "maxUsd": 5,
+      "maxAttempts": 468,
+      "sdkRetries": 0,
+      "manifestHash": "abacb5fe474e82b2990dfdababe694a0a947d4d3ed3d4112b474fb1732ddaf5a",
+      "sourceHashes": {
+        "ai/decisions/provider.ts": "2d2aa3d108663767c700ca03a86fd86e03739f6c28b96bc44495159543c98dee",
+        "ai/decisions/cases.ts": "cc4ced89599e4b2b2f1514e76f1ab7e22d5b64846b4763ebf40046d51a9fddbc",
+        "ai/decisions/run.ts": "b317a77e4ffb83cae8eeb82817b4af571af253a1af54f2153c2d42f0170f3153"
+      }
+    },
+    {
+      "run": "microsoft-recovered-development-2026-10-09",
+      "createdAt": "2026-10-10T03:27:10.087Z",
+      "arms": [
+        "foundry"
+      ],
+      "split": "development",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 44,
+      "maxUsd": 5,
+      "maxAttempts": 1100,
+      "sdkRetries": 0,
+      "manifestHash": "f1f3a3c1ca24633e7db5f0b19a22adeba3764f3a8878df387c7157c19f698fc4",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "15f20e4f7f7ad142b9e5e6ef58c1c56e5300eb7e9217a227d3f10ed17d177f05",
+        "ai/decisions/cases.ts": "82b0aa800ea12a38462fae0cdf82d0e537f5f7b1afb1e9b08cace3823808f18f",
+        "ai/decisions/run.ts": "429a1b507343af91a2e534be10058d1c5516c2de08d06d5a5ff607b1ebf882a7"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      },
+      "recoveredFrom": "microsoft-development-2026-10-09",
+      "recovery": {
+        "createdAt": "2026-10-10T03:30:19.165Z",
+        "sourceResultsHash": "58173aa5d6c3e603269375054e0eb8e4ff4929cf0b2bff4ba34f0cdeed6fae45",
+        "sourceWireHash": "094ad7eb3e97bad1ad46fd267184c27900c88ea3e1a6681a0aba319a62d90ba6",
+        "readerSourceHash": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6"
+      }
+    },
+    {
+      "run": "microsoft-development-remaining-2026-10-09",
+      "createdAt": "2026-10-10T03:30:26.212Z",
+      "arms": [
+        "foundry"
+      ],
+      "split": "development",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 23,
+      "maxUsd": 5,
+      "maxAttempts": 800,
+      "sdkRetries": 0,
+      "manifestHash": "b31b90e4e5d043e37f55f4e8a06dfe0f30417adfc8d009f1a7893681fb82411a",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "15f20e4f7f7ad142b9e5e6ef58c1c56e5300eb7e9217a227d3f10ed17d177f05",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "4aeae3bd578316d81bfe31fce9f3184a0dc7cfad0ff7ff7b4b0e311f01482326"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      },
+      "completedRun": "microsoft-recovered-development-2026-10-09"
+    },
+    {
+      "run": "microsoft-validation-2026-10-09",
+      "createdAt": "2026-10-10T03:31:58.107Z",
+      "arms": [
+        "foundry"
+      ],
+      "split": "validation",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 2,
+      "attempts": 70,
+      "maxUsd": 5,
+      "maxAttempts": 800,
+      "sdkRetries": 0,
+      "manifestHash": "49376aec94c3db59bf04fb924f016fa22a6e886903069506ca3e399a7c1bf1b0",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "15f20e4f7f7ad142b9e5e6ef58c1c56e5300eb7e9217a227d3f10ed17d177f05",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "4aeae3bd578316d81bfe31fce9f3184a0dc7cfad0ff7ff7b4b0e311f01482326"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-format-development-2026-10-09",
+      "createdAt": "2026-10-10T03:36:20.399Z",
+      "arms": [
+        "foundry-readable",
+        "foundry-dialogue",
+        "foundry-task-last"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 75,
+      "maxUsd": 5,
+      "maxAttempts": 900,
+      "sdkRetries": 0,
+      "manifestHash": "873d9c5b5cfbde7da5efcaf0eb9a36436c85501f7821b5020cd6ed41e9b31701",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "7afb6181815d20515acd30b85dd6ed98f29c7772afe786a8a13eb054d5aa1996",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "92de6ab88f8e0d2cdf0af9d5905c070f5fc0c62a07be0df4987be683d91ff560"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-evidence-development-2026-10-09",
+      "createdAt": "2026-10-10T03:39:17.669Z",
+      "arms": [
+        "foundry-evidence"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 900,
+      "sdkRetries": 0,
+      "manifestHash": "305c86a538994ffa090a78a854fda6326cdc8cb59ef7f78875f799b11057b36d",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "e4d43ba481c7f224b667a0da7d9573f69a9ff364c75a0f380d48ce0108d654e7",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "b92baa4089b77e312cbb890370f3f29a402ff14f15500435bec67f5fb89514ce"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-evidence-compact-development-2026-10-09",
+      "createdAt": "2026-10-10T03:41:26.854Z",
+      "arms": [
+        "foundry-evidence-compact"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 950,
+      "sdkRetries": 0,
+      "manifestHash": "33d54164c59a3a46cb6866e065a7197dd207e05e86e194ab3ff5403cc250fd31",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "50a270b7c3d216cfc17c0695772d854889317789db20f4fa8fa2392ddca43fbc",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "3857975a0d50036f4ae14b860bdb8a12be108fe4d7f1646e0b0d99e73e861ef6"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-improved-validation-2026-10-09",
+      "createdAt": "2026-10-10T03:42:21.378Z",
+      "arms": [
+        "foundry-evidence-compact"
+      ],
+      "split": "validation",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 2,
+      "attempts": 28,
+      "maxUsd": 5,
+      "maxAttempts": 950,
+      "sdkRetries": 0,
+      "manifestHash": "2c5f348b542136c2277829162888d1ccacdf7ae9fb5cadd873806f0c1c92e04a",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "50a270b7c3d216cfc17c0695772d854889317789db20f4fa8fa2392ddca43fbc",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "3857975a0d50036f4ae14b860bdb8a12be108fe4d7f1646e0b0d99e73e861ef6"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-turn-development-2026-10-09",
+      "createdAt": "2026-10-10T03:44:34.876Z",
+      "arms": [
+        "foundry-readable",
+        "foundry-task-last"
+      ],
+      "split": "development",
+      "lanes": [
+        "turn"
+      ],
+      "repeats": 1,
+      "attempts": 20,
+      "maxUsd": 5,
+      "maxAttempts": 950,
+      "sdkRetries": 0,
+      "manifestHash": "52deb52ed482c2162cf37d2d99f42bb8b7ea0aacfa350e462c4483397e26af41",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "50a270b7c3d216cfc17c0695772d854889317789db20f4fa8fa2392ddca43fbc",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "3857975a0d50036f4ae14b860bdb8a12be108fe4d7f1646e0b0d99e73e861ef6"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-context-development-2026-10-09",
+      "createdAt": "2026-10-10T03:55:27.005Z",
+      "arms": [
+        "foundry-context",
+        "foundry-scoped"
+      ],
+      "split": "development",
+      "lanes": [
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 70,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "4db47b2b138674a4ca2380093849093c9327c6cd8c871e31a4f0b93329e9d795",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "581d8ae38ae80b3a7b685bd4bd4a8b22717ff3e05d556235b75f3fdf841087f1",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "9f69e9b8f8a7b9a99c6ecbdf01851ba0e0e775564b0b3b488ff006ab083f6250"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-clarified-development-2026-10-09",
+      "createdAt": "2026-10-10T03:57:28.713Z",
+      "arms": [
+        "foundry-clarified"
+      ],
+      "split": "development",
+      "lanes": [
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 35,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "435a426a8df7578504cf15e504fcd530c50ed5b0ce408f03a409c0bb15b86198",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "488f94c52c995ae858e83f6110e0188681e693cc639641dd35d481241e4f13fe",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "a8612afb8d6c665290ebb2a9551adf0aac344a198e21389a72cb4e22cc249c78"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-precise-development-2026-10-09",
+      "createdAt": "2026-10-10T03:58:56.735Z",
+      "arms": [
+        "foundry-precise"
+      ],
+      "split": "development",
+      "lanes": [
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 35,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "e3c0bb988be90c561e87e723476e7d40929bd13b94506e35ade71dcea7ddff2f",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "c7abfb277917ca409adc561a3acd969a2e9622e92ab92231f8359b72dffc43f9",
+        "ai/decisions/cases.ts": "6c3c6f06798dd881e08e71c99737622ec62e987b49288849b62f723e4db7e0a6",
+        "ai/decisions/run.ts": "a7a29b7dca3244edfc57506d2ce910d58b51b11da7b109c95c994e7f2bfb5d43"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-turn-goal-validation-2026-10-09",
+      "createdAt": "2026-10-10T04:00:13.836Z",
+      "arms": [
+        "foundry-precise"
+      ],
+      "split": "validation",
+      "lanes": [
+        "turn"
+      ],
+      "repeats": 2,
+      "attempts": 20,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "b27a4e56c7fc4c135ed82eb052690f9d1af5a2f6abd7674730094975ece5ad80",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "c7abfb277917ca409adc561a3acd969a2e9622e92ab92231f8359b72dffc43f9",
+        "ai/decisions/cases.ts": "0d06146cbfb7d3c925eca2390a0ace44ee0fb5e2cce849119e50792910a28eed",
+        "ai/decisions/run.ts": "a7a29b7dca3244edfc57506d2ce910d58b51b11da7b109c95c994e7f2bfb5d43"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-topic-development-2026-10-09",
+      "createdAt": "2026-10-10T04:00:39.269Z",
+      "arms": [
+        "foundry-topic"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "3aa469f17e7cd779ba7724247866030ad937dac62d60ac152c0a6f6a9108300c",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "298ad9dbe9e8e11dd5df17463ab9cfe945fdcce89afb9b381cb39f721755264d",
+        "ai/decisions/cases.ts": "0d06146cbfb7d3c925eca2390a0ace44ee0fb5e2cce849119e50792910a28eed",
+        "ai/decisions/run.ts": "14a61fdcdda054ab55b972d87ecef4326be7ea779d670dfabd91f796318af9d5"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-grade-goal-validation-2026-10-09",
+      "createdAt": "2026-10-10T04:01:41.807Z",
+      "arms": [
+        "foundry-topic"
+      ],
+      "split": "validation",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 2,
+      "attempts": 28,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "22dac052478b83a8f13248fd194df546d055d756dcaa85a9072291098c1f76ca",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "298ad9dbe9e8e11dd5df17463ab9cfe945fdcce89afb9b381cb39f721755264d",
+        "ai/decisions/cases.ts": "0d06146cbfb7d3c925eca2390a0ace44ee0fb5e2cce849119e50792910a28eed",
+        "ai/decisions/run.ts": "14a61fdcdda054ab55b972d87ecef4326be7ea779d670dfabd91f796318af9d5"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-satisfied-recovered-development-2026-10-09",
+      "createdAt": "2026-10-10T04:04:18.617Z",
+      "arms": [
+        "foundry-satisfied"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 19,
+      "maxUsd": 5,
+      "maxAttempts": 1500,
+      "sdkRetries": 0,
+      "manifestHash": "a2f66bc6ee33b2e1969e967ce1c6f5bdca8a8161d1c194789a098a6dcb37764f",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "ca24a56d1d5fdff8701c1b51b9290a8c4cd1a98722ded4b7db8e42820b36accb",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "551683c2f7d855737792b61b129ea5e94d3c905ee0bf7a02815a80569391bd9f"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      },
+      "recoveredFrom": "microsoft-satisfied-development-2026-10-09",
+      "recovery": {
+        "createdAt": "2026-10-10T04:06:02.413Z",
+        "sourceResultsHash": "f4b714554a5407c9f0f19ed458acbe65349c8a4bd30e3e32b4597236fdde54e3",
+        "sourceWireHash": "2981afc42223276cb9982fe56b833c87188bbb5b8c50997027610e0c897c9c91",
+        "readerSourceHash": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579"
+      }
+    },
+    {
+      "run": "microsoft-satisfied-remaining-development-2026-10-09",
+      "createdAt": "2026-10-10T04:06:03.608Z",
+      "arms": [
+        "foundry-satisfied"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 6,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "ab44d242cd24219322169b3b10d3899d516dee372cc3ccf93bfdf7eb2eb31393",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "b943b65c66bc3023a9ed3acaa0539f2b7821fa7b932dc1e55c62f69cacb8718d",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "1b351c297c516250c4f3f26ad2f2e0fec91f69b00fcce9edad2bdb553cfa94a7"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      },
+      "completedRun": "microsoft-satisfied-recovered-development-2026-10-09"
+    },
+    {
+      "run": "microsoft-satisfied-short-development-2026-10-09",
+      "createdAt": "2026-10-10T04:07:00.519Z",
+      "arms": [
+        "foundry-satisfied-short"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "5dafa7db6af345825234ed23a81bf8f50074426089cc010e31f6e5bdd915d3ab",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "c38d9a073b2c9c577d4084dca4483e14dcd1c4d4b78c752bcbde89387133e6c9",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "7206c488272d6b3e6854731e6fdde64ab641d4e6ff75b4acfd1906f42deb57f0"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-accounts-development-2026-10-09",
+      "createdAt": "2026-10-10T04:09:00.703Z",
+      "arms": [
+        "foundry-accounts"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "3f51d77c5cafbebc65ea3fe11d006f545af3b799088cb6bae3f09bc2bc7a4881",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "1dac9063af1afe85a2e9136990e6badfc7d677b4508feb8f358cd7d73c994685",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "a9d08a07d7838f5eaaea39c262a4cd9f0cb06f5f8d7faf80e530469536905235"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-anchored-development-2026-10-09",
+      "createdAt": "2026-10-10T04:13:46.969Z",
+      "arms": [
+        "foundry-anchored"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "e0534baf8d8348adaf679b36bc7da6297599646b641d50f6d322c9a405b6b007",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "9986e99c5a8beeceb8cd94009512d2f12ecff84641de7f5396f1c38c4d65b6e5",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "057d1db4e2e34460954dffd5edbf9c13620b9d1489482981188b45b27d2bddbd"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-human-development-2026-10-09",
+      "createdAt": "2026-10-10T04:15:42.643Z",
+      "arms": [
+        "foundry-human"
+      ],
+      "split": "development",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 25,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "4ade95e921f05d36854ef78fbdcd4a4c8006fd0b3e9ee3bf35ed007895804a17",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "aa125d9dc29085c94c2f5fbf7bb399c2415f69957b27385fa128fa44eae8d587",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "63433bb420691fc83adc062337272eaf3bc48c77f5949da013404cf5d17c32cf"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "microsoft-human-validation-2026-10-09",
+      "createdAt": "2026-10-10T04:16:41.173Z",
+      "arms": [
+        "foundry-human"
+      ],
+      "split": "validation",
+      "lanes": [
+        "grade"
+      ],
+      "repeats": 2,
+      "attempts": 28,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "f88acef51e33cfc79825cce00b99e46092c5a7e5311d432e421fd6207eafe7ed",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "aa125d9dc29085c94c2f5fbf7bb399c2415f69957b27385fa128fa44eae8d587",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "63433bb420691fc83adc062337272eaf3bc48c77f5949da013404cf5d17c32cf"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      }
+    },
+    {
+      "run": "optimized-providers-development-2026-10-09",
+      "createdAt": "2026-10-10T04:18:04.833Z",
+      "arms": [
+        "jev-optimized",
+        "literal-optimized"
+      ],
+      "split": "development",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 1,
+      "attempts": 134,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "6a586c98ce454ef8a627ab7fa4bb704fed11a61f8cea339aeccb40b863312f4f",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "aa125d9dc29085c94c2f5fbf7bb399c2415f69957b27385fa128fa44eae8d587",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "4a64db767957c859337d9957b3b12cea93208e964a0652e7280cf0b2355db78a"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      },
+      "optimizedRecipe": {
+        "formats": {
+          "silence": "literal",
+          "turn": "precise",
+          "grade": "human"
+        },
+        "gates": {
+          "silence": 0.9,
+          "explored": 0.35,
+          "novel": 0.7,
+          "feedback": 0.8
+        },
+        "turnFreezeHash": "289a64c5bae4b483393aab5fd3df23cec0fc25473c5784b39504d98a87a2b067",
+        "gradeFreezeHash": "ff16adf96c30ea0f7f128ad26d3a682b74a05bc136840dd04c9d4f3355e51766"
+      }
+    },
+    {
+      "run": "optimized-providers-validation-2026-10-09",
+      "createdAt": "2026-10-10T04:21:24.300Z",
+      "arms": [
+        "jev-optimized",
+        "literal-optimized"
+      ],
+      "split": "validation",
+      "lanes": [
+        "silence",
+        "turn",
+        "grade"
+      ],
+      "repeats": 2,
+      "attempts": 140,
+      "maxUsd": 5,
+      "maxAttempts": 2200,
+      "sdkRetries": 0,
+      "manifestHash": "4e42b2f24317cb8d7c2e41738f7f7a929748b67e7c15e3df651dedda1158c336",
+      "sourceHashes": {
+        "interview-engine/providers/decisionJudge.server.ts": "c5b8bc15eeddf2f1671632cba9357517f95597baa7e7e00eaa25d4713997b2c3",
+        "interview-engine/providers/jevJudge.server.ts": "d4193f73a0f87f0e884aa729cd3be6493f0cc73aaf02b95d48e546875b34c3f7",
+        "ai/decisions/foundry.ts": "aa125d9dc29085c94c2f5fbf7bb399c2415f69957b27385fa128fa44eae8d587",
+        "ai/decisions/cases.ts": "2912c466585de30d9b0eeb47fd2386defe8250735c2e47a2b3bd9bee79ad7579",
+        "ai/decisions/run.ts": "4a64db767957c859337d9957b3b12cea93208e964a0652e7280cf0b2355db78a"
+      },
+      "goldHashes": {
+        "turn": "3df9a6d12e49bd0d0459390aad2851a7285e03ccf97edbd52430299feb518ba0",
+        "grade": "9f843adcdcaefd212c61ef4d97ac7b4a7a86b9c40a0cc58e060a26e6374b69fa"
+      },
+      "optimizedRecipe": {
+        "formats": {
+          "silence": "literal",
+          "turn": "precise",
+          "grade": "human"
+        },
+        "gates": {
+          "silence": 0.9,
+          "explored": 0.35,
+          "novel": 0.7,
+          "feedback": 0.8
+        },
+        "turnFreezeHash": "289a64c5bae4b483393aab5fd3df23cec0fc25473c5784b39504d98a87a2b067",
+        "gradeFreezeHash": "ff16adf96c30ea0f7f128ad26d3a682b74a05bc136840dd04c9d4f3355e51766"
+      }
+    }
+  ],
+  "summary": {
+    "validation/jev/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 102,
+        "allP95": 207,
+        "usableP50": 102,
+        "usableP95": 207
+      },
+      "brier": 0.008763636363636362,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 17198,
+      "estimatedUsd": 0.000722316,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 69,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 69,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8525,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 136,
+        "allP95": 180,
+        "usableP50": 136,
+        "usableP95": 180
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 154432,
+      "estimatedUsd": 0.006486143999999999,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 13,
+      "checks": 486,
+      "passedChecks": 398,
+      "dimensions": {
+        "synthetic": {
+          "passed": 43,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 159,
+          "total": 200
+        },
+        "reading": {
+          "passed": 54,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 142,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8136455398586945,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 223,
+        "allP95": 411,
+        "usableP50": 223,
+        "usableP95": 411
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 584298,
+      "estimatedUsd": 0.024540516,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 160,
+        "allP95": 286,
+        "usableP50": 160,
+        "usableP95": 286
+      },
+      "brier": 0.05690909090909091,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 10966,
+      "estimatedUsd": 0.0010966,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 72,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 72,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8800000000000001,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 205,
+        "allP95": 231,
+        "usableP50": 205,
+        "usableP95": 231
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 158794,
+      "estimatedUsd": 0.0158794,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 14,
+      "checks": 486,
+      "passedChecks": 388,
+      "dimensions": {
+        "synthetic": {
+          "passed": 44,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 150,
+          "total": 200
+        },
+        "reading": {
+          "passed": 60,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 134,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.863277760386688,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 325,
+        "allP95": 721,
+        "usableP50": 325,
+        "usableP95": 721
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 597932,
+      "estimatedUsd": 0.0597932,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 311,
+        "allP95": 972,
+        "usableP50": 311,
+        "usableP95": 972
+      },
+      "brier": 0.05976800931704432,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 9266,
+      "estimatedUsd": 0.000389172,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 8,
+      "checks": 82,
+      "passedChecks": 60,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 60,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.75,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 556,
+        "allP95": 940,
+        "usableP50": 556,
+        "usableP95": 940
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 127964,
+      "estimatedUsd": 0.005374488,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 10,
+      "checks": 486,
+      "passedChecks": 325,
+      "dimensions": {
+        "synthetic": {
+          "passed": 40,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 136,
+          "total": 200
+        },
+        "reading": {
+          "passed": 49,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 100,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.6860931309683697,
+      "criticalFailureCases": [
+        "grade:terse-expert",
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 897,
+        "allP95": 1848,
+        "usableP50": 897,
+        "usableP95": 1848
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 494140,
+      "estimatedUsd": 0.020753880000000002,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 311,
+        "allP95": 972,
+        "usableP50": 311,
+        "usableP95": 972
+      },
+      "brier": 0.05976800931704432,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 9266,
+      "estimatedUsd": 0.000389172,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 8,
+      "checks": 82,
+      "passedChecks": 60,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 60,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.75,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 556,
+        "allP95": 940,
+        "usableP50": 556,
+        "usableP95": 940
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 127964,
+      "estimatedUsd": 0.005374488,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 12,
+      "checks": 486,
+      "passedChecks": 332,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 140,
+          "total": 200
+        },
+        "reading": {
+          "passed": 50,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 100,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7253156482781139,
+      "criticalFailureCases": [
+        "grade:terse-expert",
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 807,
+        "allP95": 1385,
+        "usableP50": 807,
+        "usableP95": 1385
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 562588,
+      "estimatedUsd": 0.023628695999999998,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 13,
+      "checks": 82,
+      "passedChecks": 73,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 73,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 503,
+        "allP95": 1357,
+        "usableP50": 503,
+        "usableP95": 1357
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 104308,
+      "estimatedUsd": 0.004380936,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 10,
+      "checks": 486,
+      "passedChecks": 355,
+      "dimensions": {
+        "synthetic": {
+          "passed": 40,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 161,
+          "total": 200
+        },
+        "reading": {
+          "passed": 49,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 105,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7095538512287647,
+      "criticalFailureCases": [
+        "grade:terse-expert",
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 922,
+        "allP95": 1987,
+        "usableP50": 922,
+        "usableP95": 1987
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 742460,
+      "estimatedUsd": 0.031183320000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 311,
+        "allP95": 972,
+        "usableP50": 311,
+        "usableP95": 972
+      },
+      "brier": 0.05976800931704432,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 9266,
+      "estimatedUsd": 0.000389172,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 18,
+      "checks": 22,
+      "passedChecks": 18,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 18,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8181818181818182,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 160,
+        "allP95": 286,
+        "usableP50": 160,
+        "usableP95": 286
+      },
+      "brier": 0.05690909090909091,
+      "falseContinues": 0,
+      "missedContinues": 4,
+      "inputTokens": 10966,
+      "estimatedUsd": 0.0010966,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 102,
+        "allP95": 207,
+        "usableP50": 102,
+        "usableP95": 207
+      },
+      "brier": 0.008763636363636362,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 17198,
+      "estimatedUsd": 0.000722316,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 69,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 69,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8525,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 136,
+        "allP95": 180,
+        "usableP50": 136,
+        "usableP95": 180
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 154432,
+      "estimatedUsd": 0.006486143999999999,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 72,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 72,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8800000000000001,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 205,
+        "allP95": 231,
+        "usableP50": 205,
+        "usableP95": 231
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 158794,
+      "estimatedUsd": 0.0158794,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 18,
+      "checks": 486,
+      "passedChecks": 410,
+      "dimensions": {
+        "synthetic": {
+          "passed": 48,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 166,
+          "total": 200
+        },
+        "reading": {
+          "passed": 54,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 142,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9375570329566758,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 223,
+        "allP95": 411,
+        "usableP50": 223,
+        "usableP95": 411
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 584298,
+      "estimatedUsd": 0.024540516,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 16,
+      "checks": 486,
+      "passedChecks": 388,
+      "dimensions": {
+        "synthetic": {
+          "passed": 46,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 148,
+          "total": 200
+        },
+        "reading": {
+          "passed": 60,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 134,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8854261546281055,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 325,
+        "allP95": 721,
+        "usableP50": 325,
+        "usableP95": 721
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 597932,
+      "estimatedUsd": 0.0597932,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-optimized-calibrated/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 18,
+      "checks": 22,
+      "passedChecks": 18,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 18,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8181818181818182,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 155,
+        "allP95": 195,
+        "usableP50": 155,
+        "usableP95": 195
+      },
+      "brier": 0.05690909090909091,
+      "falseContinues": 0,
+      "missedContinues": 4,
+      "inputTokens": 10966,
+      "estimatedUsd": 0.0010966,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/silence": {
+      "attempts": 22,
+      "usable": 22,
+      "statuses": {
+        "ok": 22
+      },
+      "labeledAttempts": 22,
+      "cases": 11,
+      "fullyPassed": 20,
+      "checks": 22,
+      "passedChecks": 20,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 20,
+          "total": 22
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9090909090909091,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 100,
+        "allP95": 154,
+        "usableP50": 100,
+        "usableP95": 154
+      },
+      "brier": 0.007981818181818184,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 17198,
+      "estimatedUsd": 0.000722316,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 9,
+      "checks": 82,
+      "passedChecks": 67,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 67,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8225,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 119,
+        "allP95": 157,
+        "usableP50": 119,
+        "usableP95": 157
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 124804,
+      "estimatedUsd": 0.005241768,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-optimized-calibrated/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 70,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 70,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.86,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 197,
+        "allP95": 269,
+        "usableP50": 197,
+        "usableP95": 269
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 135686,
+      "estimatedUsd": 0.013568600000000002,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/grade": {
+      "attempts": 28,
+      "usable": 27,
+      "statuses": {
+        "ok": 27,
+        "error": 1
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 17,
+      "checks": 486,
+      "passedChecks": 407,
+      "dimensions": {
+        "synthetic": {
+          "passed": 46,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 165,
+          "total": 200
+        },
+        "reading": {
+          "passed": 54,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 142,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9018382241565602,
+      "criticalFailureCases": [
+        "grade:client-testers-not-delivery-staff"
+      ],
+      "latencyMs": {
+        "allP50": 267,
+        "allP95": 483,
+        "usableP50": 274,
+        "usableP95": 483
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 838071,
+      "estimatedUsd": 0.035198982000000004,
+      "unknownCostAttempts": 1
+    },
+    "validation/literal-optimized-calibrated/grade": {
+      "attempts": 28,
+      "usable": 28,
+      "statuses": {
+        "ok": 28
+      },
+      "labeledAttempts": 28,
+      "cases": 14,
+      "fullyPassed": 12,
+      "checks": 486,
+      "passedChecks": 414,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 166,
+          "total": 200
+        },
+        "reading": {
+          "passed": 60,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 146,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8264334605687897,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 338,
+        "allP95": 511,
+        "usableP50": 338,
+        "usableP95": 511
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 843452,
+      "estimatedUsd": 0.08434520000000001,
+      "unknownCostAttempts": 0
+    }
+  },
+  "bySource": {
+    "validation/jev/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 98,
+        "allP95": 278,
+        "usableP50": 98,
+        "usableP95": 278
+      },
+      "brier": 0.011856249999999999,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 10978,
+      "estimatedUsd": 0.00046107600000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 6,
+      "checks": 6,
+      "passedChecks": 6,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 6,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 111,
+        "allP95": 127,
+        "usableP50": 111,
+        "usableP95": 127
+      },
+      "brier": 0.0005166666666666676,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 6220,
+      "estimatedUsd": 0.00026124000000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 69,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 69,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8525,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 136,
+        "allP95": 180,
+        "usableP50": 136,
+        "usableP95": 180
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 154432,
+      "estimatedUsd": 0.006486143999999999,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 13,
+      "checks": 48,
+      "passedChecks": 43,
+      "dimensions": {
+        "synthetic": {
+          "passed": 43,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8148148148148148,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 216,
+        "allP95": 412,
+        "usableP50": 216,
+        "usableP95": 412
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 316128,
+      "estimatedUsd": 0.013277376,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 355,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 159,
+          "total": 200
+        },
+        "reading": {
+          "passed": 54,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 142,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8115408449376782,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 232,
+        "allP95": 313,
+        "usableP50": 232,
+        "usableP95": 313
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 268170,
+      "estimatedUsd": 0.011263140000000001,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 16,
+      "checks": 16,
+      "passedChecks": 16,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 16,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 165,
+        "allP95": 941,
+        "usableP50": 165,
+        "usableP95": 941
+      },
+      "brier": 0.052937500000000005,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 6880,
+      "estimatedUsd": 0.0006880000000000001,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 4,
+      "checks": 6,
+      "passedChecks": 4,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 4,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 0.6666666666666666,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 160,
+        "allP95": 219,
+        "usableP50": 160,
+        "usableP95": 219
+      },
+      "brier": 0.06749999999999999,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 4086,
+      "estimatedUsd": 0.00040860000000000007,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 72,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 72,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8800000000000001,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 205,
+        "allP95": 231,
+        "usableP50": 205,
+        "usableP95": 231
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 158794,
+      "estimatedUsd": 0.0158794,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 14,
+      "checks": 48,
+      "passedChecks": 44,
+      "dimensions": {
+        "synthetic": {
+          "passed": 44,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9074074074074076,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 280,
+        "allP95": 814,
+        "usableP50": 280,
+        "usableP95": 814
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 344458,
+      "estimatedUsd": 0.0344458,
+      "unknownCostAttempts": 0
+    },
+    "validation/calibrated/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 344,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 150,
+          "total": 200
+        },
+        "reading": {
+          "passed": 60,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 134,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7838443957493932,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 356,
+        "allP95": 518,
+        "usableP50": 356,
+        "usableP95": 518
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 253474,
+      "estimatedUsd": 0.0253474,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 326,
+        "allP95": 998,
+        "usableP50": 326,
+        "usableP95": 998
+      },
+      "brier": 0.08162467758861562,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 5560,
+      "estimatedUsd": 0.00023352,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 6,
+      "checks": 6,
+      "passedChecks": 6,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 6,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 240,
+        "allP95": 345,
+        "usableP50": 240,
+        "usableP95": 345
+      },
+      "brier": 0.0014835605928542447,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 3706,
+      "estimatedUsd": 0.000155652,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 8,
+      "checks": 82,
+      "passedChecks": 60,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 60,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.75,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 556,
+        "allP95": 940,
+        "usableP50": 556,
+        "usableP95": 940
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 127964,
+      "estimatedUsd": 0.005374488,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 10,
+      "checks": 48,
+      "passedChecks": 40,
+      "dimensions": {
+        "synthetic": {
+          "passed": 40,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7037037037037037,
+      "criticalFailureCases": [
+        "grade:terse-expert"
+      ],
+      "latencyMs": {
+        "allP50": 888,
+        "allP95": 1904,
+        "usableP50": 888,
+        "usableP95": 1904
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 272142,
+      "estimatedUsd": 0.011429963999999999,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-calibrated/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 285,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 136,
+          "total": 200
+        },
+        "reading": {
+          "passed": 49,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 100,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.6543941000447681,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 946,
+        "allP95": 1458,
+        "usableP50": 946,
+        "usableP95": 1458
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 221998,
+      "estimatedUsd": 0.009323916,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 326,
+        "allP95": 998,
+        "usableP50": 326,
+        "usableP95": 998
+      },
+      "brier": 0.08162467758861562,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 5560,
+      "estimatedUsd": 0.00023352,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 6,
+      "checks": 6,
+      "passedChecks": 6,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 6,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 240,
+        "allP95": 345,
+        "usableP50": 240,
+        "usableP95": 345
+      },
+      "brier": 0.0014835605928542447,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 3706,
+      "estimatedUsd": 0.000155652,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 8,
+      "checks": 82,
+      "passedChecks": 60,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 60,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.75,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 556,
+        "allP95": 940,
+        "usableP50": 556,
+        "usableP95": 940
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 127964,
+      "estimatedUsd": 0.005374488,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 12,
+      "checks": 48,
+      "passedChecks": 42,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7592592592592593,
+      "criticalFailureCases": [
+        "grade:terse-expert"
+      ],
+      "latencyMs": {
+        "allP50": 757,
+        "allP95": 1763,
+        "usableP50": 757,
+        "usableP95": 1763
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 275546,
+      "estimatedUsd": 0.011572932000000001,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-improved/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 290,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 140,
+          "total": 200
+        },
+        "reading": {
+          "passed": 50,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 100,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.664217148512052,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 940,
+        "allP95": 1051,
+        "usableP50": 940,
+        "usableP95": 1051
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 287042,
+      "estimatedUsd": 0.012055764000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 13,
+      "checks": 82,
+      "passedChecks": 73,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 73,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 503,
+        "allP95": 1357,
+        "usableP50": 503,
+        "usableP95": 1357
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 104308,
+      "estimatedUsd": 0.004380936,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 10,
+      "checks": 48,
+      "passedChecks": 40,
+      "dimensions": {
+        "synthetic": {
+          "passed": 40,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7037037037037037,
+      "criticalFailureCases": [
+        "grade:terse-expert"
+      ],
+      "latencyMs": {
+        "allP50": 886,
+        "allP95": 1687,
+        "usableP50": 886,
+        "usableP95": 1687
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 391178,
+      "estimatedUsd": 0.016429476000000002,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 315,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 161,
+          "total": 200
+        },
+        "reading": {
+          "passed": 49,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 105,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7200841167738743,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 1067,
+        "allP95": 2290,
+        "usableP50": 1067,
+        "usableP95": 2290
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 351282,
+      "estimatedUsd": 0.014753844000000002,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 326,
+        "allP95": 998,
+        "usableP50": 326,
+        "usableP95": 998
+      },
+      "brier": 0.08162467758861562,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 5560,
+      "estimatedUsd": 0.00023352,
+      "unknownCostAttempts": 0
+    },
+    "validation/foundry-goal/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 6,
+      "checks": 6,
+      "passedChecks": 6,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 6,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 240,
+        "allP95": 345,
+        "usableP50": 240,
+        "usableP95": 345
+      },
+      "brier": 0.0014835605928542447,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 3706,
+      "estimatedUsd": 0.000155652,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 165,
+        "allP95": 941,
+        "usableP50": 165,
+        "usableP95": 941
+      },
+      "brier": 0.052937500000000005,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 6880,
+      "estimatedUsd": 0.0006880000000000001,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 98,
+        "allP95": 278,
+        "usableP50": 98,
+        "usableP95": 278
+      },
+      "brier": 0.011856249999999999,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 10978,
+      "estimatedUsd": 0.00046107600000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 6,
+      "checks": 6,
+      "passedChecks": 6,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 6,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 111,
+        "allP95": 127,
+        "usableP50": 111,
+        "usableP95": 127
+      },
+      "brier": 0.0005166666666666676,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 6220,
+      "estimatedUsd": 0.00026124000000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 4,
+      "checks": 6,
+      "passedChecks": 4,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 4,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 0.6666666666666666,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 160,
+        "allP95": 219,
+        "usableP50": 160,
+        "usableP95": 219
+      },
+      "brier": 0.06749999999999999,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 4086,
+      "estimatedUsd": 0.00040860000000000007,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 69,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 69,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8525,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 136,
+        "allP95": 180,
+        "usableP50": 136,
+        "usableP95": 180
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 154432,
+      "estimatedUsd": 0.006486143999999999,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 72,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 72,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8800000000000001,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 205,
+        "allP95": 231,
+        "usableP50": 205,
+        "usableP95": 231
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 158794,
+      "estimatedUsd": 0.0158794,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 18,
+      "checks": 48,
+      "passedChecks": 48,
+      "dimensions": {
+        "synthetic": {
+          "passed": 48,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 216,
+        "allP95": 412,
+        "usableP50": 216,
+        "usableP95": 412
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 316128,
+      "estimatedUsd": 0.013277376,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 16,
+      "checks": 48,
+      "passedChecks": 46,
+      "dimensions": {
+        "synthetic": {
+          "passed": 46,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9444444444444444,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 280,
+        "allP95": 814,
+        "usableP50": 280,
+        "usableP95": 814
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 344458,
+      "estimatedUsd": 0.0344458,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-shared-gates/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 342,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 148,
+          "total": 200
+        },
+        "reading": {
+          "passed": 60,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 134,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.7791932329586956,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 356,
+        "allP95": 518,
+        "usableP50": 356,
+        "usableP95": 518
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 253474,
+      "estimatedUsd": 0.0253474,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-shared-gates/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 362,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 166,
+          "total": 200
+        },
+        "reading": {
+          "passed": 54,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 142,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8251596922786927,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 232,
+        "allP95": 313,
+        "usableP50": 232,
+        "usableP95": 313
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 268170,
+      "estimatedUsd": 0.011263140000000001,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-optimized-calibrated/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 154,
+        "allP95": 266,
+        "usableP50": 154,
+        "usableP95": 266
+      },
+      "brier": 0.052937500000000005,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 6880,
+      "estimatedUsd": 0.0006880000000000001,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/synthetic/silence": {
+      "attempts": 16,
+      "usable": 16,
+      "statuses": {
+        "ok": 16
+      },
+      "labeledAttempts": 16,
+      "cases": 8,
+      "fullyPassed": 14,
+      "checks": 16,
+      "passedChecks": 14,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 14,
+          "total": 16
+        }
+      },
+      "meanCaseCheckAccuracy": 0.875,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 97,
+        "allP95": 203,
+        "usableP50": 97,
+        "usableP95": 203
+      },
+      "brier": 0.010762500000000003,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 10978,
+      "estimatedUsd": 0.00046107600000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 6,
+      "checks": 6,
+      "passedChecks": 6,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 6,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 1,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 102,
+        "allP95": 125,
+        "usableP50": 102,
+        "usableP95": 125
+      },
+      "brier": 0.0005666666666666677,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 6220,
+      "estimatedUsd": 0.00026124000000000004,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-optimized-calibrated/interview-B/silence": {
+      "attempts": 6,
+      "usable": 6,
+      "statuses": {
+        "ok": 6
+      },
+      "labeledAttempts": 6,
+      "cases": 3,
+      "fullyPassed": 4,
+      "checks": 6,
+      "passedChecks": 4,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 4,
+          "total": 6
+        }
+      },
+      "meanCaseCheckAccuracy": 0.6666666666666666,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 160,
+        "allP95": 193,
+        "usableP50": 160,
+        "usableP95": 193
+      },
+      "brier": 0.06749999999999999,
+      "falseContinues": 0,
+      "missedContinues": 2,
+      "inputTokens": 4086,
+      "estimatedUsd": 0.00040860000000000007,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 9,
+      "checks": 82,
+      "passedChecks": 67,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 67,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8225,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 119,
+        "allP95": 157,
+        "usableP50": 119,
+        "usableP95": 157
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 124804,
+      "estimatedUsd": 0.005241768,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-optimized-calibrated/interview-B/turn": {
+      "attempts": 20,
+      "usable": 20,
+      "statuses": {
+        "ok": 20
+      },
+      "labeledAttempts": 20,
+      "cases": 10,
+      "fullyPassed": 12,
+      "checks": 82,
+      "passedChecks": 70,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 70,
+          "total": 82
+        }
+      },
+      "meanCaseCheckAccuracy": 0.86,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 197,
+        "allP95": 269,
+        "usableP50": 197,
+        "usableP95": 269
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 135686,
+      "estimatedUsd": 0.013568600000000002,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/synthetic/grade": {
+      "attempts": 18,
+      "usable": 17,
+      "statuses": {
+        "ok": 17,
+        "error": 1
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 17,
+      "checks": 48,
+      "passedChecks": 46,
+      "dimensions": {
+        "synthetic": {
+          "passed": 46,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.9444444444444444,
+      "criticalFailureCases": [
+        "grade:client-testers-not-delivery-staff"
+      ],
+      "latencyMs": {
+        "allP50": 237,
+        "allP95": 557,
+        "usableP50": 237,
+        "usableP95": 557
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 399555,
+      "estimatedUsd": 0.01678131,
+      "unknownCostAttempts": 1
+    },
+    "validation/literal-optimized-calibrated/synthetic/grade": {
+      "attempts": 18,
+      "usable": 18,
+      "statuses": {
+        "ok": 18
+      },
+      "labeledAttempts": 18,
+      "cases": 9,
+      "fullyPassed": 12,
+      "checks": 48,
+      "passedChecks": 42,
+      "dimensions": {
+        "synthetic": {
+          "passed": 42,
+          "total": 48
+        },
+        "coverage": {
+          "passed": 0,
+          "total": 0
+        },
+        "reading": {
+          "passed": 0,
+          "total": 0
+        },
+        "evidence": {
+          "passed": 0,
+          "total": 0
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8148148148148149,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 310,
+        "allP95": 428,
+        "usableP50": 310,
+        "usableP95": 428
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 458014,
+      "estimatedUsd": 0.045801400000000006,
+      "unknownCostAttempts": 0
+    },
+    "validation/literal-optimized-calibrated/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 372,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 166,
+          "total": 200
+        },
+        "reading": {
+          "passed": 60,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 146,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8473470229259442,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ],
+      "latencyMs": {
+        "allP50": 388,
+        "allP95": 692,
+        "usableP50": 388,
+        "usableP95": 692
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 385438,
+      "estimatedUsd": 0.0385438,
+      "unknownCostAttempts": 0
+    },
+    "validation/jev-optimized-calibrated/interview-B/grade": {
+      "attempts": 10,
+      "usable": 10,
+      "statuses": {
+        "ok": 10
+      },
+      "labeledAttempts": 10,
+      "cases": 5,
+      "fullyPassed": 0,
+      "checks": 438,
+      "passedChecks": 361,
+      "dimensions": {
+        "synthetic": {
+          "passed": 0,
+          "total": 0
+        },
+        "coverage": {
+          "passed": 165,
+          "total": 200
+        },
+        "reading": {
+          "passed": 54,
+          "total": 60
+        },
+        "evidence": {
+          "passed": 142,
+          "total": 178
+        },
+        "action": {
+          "passed": 0,
+          "total": 0
+        }
+      },
+      "meanCaseCheckAccuracy": 0.8251470276383686,
+      "criticalFailureCases": [],
+      "latencyMs": {
+        "allP50": 374,
+        "allP95": 483,
+        "usableP50": 374,
+        "usableP95": 483
+      },
+      "brier": null,
+      "falseContinues": 0,
+      "missedContinues": 0,
+      "inputTokens": 438516,
+      "estimatedUsd": 0.018417672,
+      "unknownCostAttempts": 0
+    }
+  },
+  "validationGradeFailureCounts": {
+    "jev": {
+      "falseExploredCredits": 16,
+      "failedCriticalAssertions": 0,
+      "criticalFailureCases": []
+    },
+    "calibrated": {
+      "falseExploredCredits": 4,
+      "failedCriticalAssertions": 2,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ]
+    },
+    "foundry-calibrated": {
+      "falseExploredCredits": 4,
+      "failedCriticalAssertions": 4,
+      "criticalFailureCases": [
+        "grade:terse-expert",
+        "grade:interview-B-p31"
+      ]
+    },
+    "foundry-improved": {
+      "falseExploredCredits": 9,
+      "failedCriticalAssertions": 4,
+      "criticalFailureCases": [
+        "grade:terse-expert",
+        "grade:interview-B-p31"
+      ]
+    },
+    "foundry-goal": {
+      "falseExploredCredits": 4,
+      "failedCriticalAssertions": 4,
+      "criticalFailureCases": [
+        "grade:terse-expert",
+        "grade:interview-B-p31"
+      ]
+    },
+    "jev-shared-gates": {
+      "falseExploredCredits": 25,
+      "failedCriticalAssertions": 0,
+      "criticalFailureCases": []
+    },
+    "literal-shared-gates": {
+      "falseExploredCredits": 6,
+      "failedCriticalAssertions": 2,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ]
+    },
+    "jev-optimized-calibrated": {
+      "falseExploredCredits": 24,
+      "failedCriticalAssertions": 2,
+      "criticalFailureCases": [
+        "grade:client-testers-not-delivery-staff"
+      ]
+    },
+    "literal-optimized-calibrated": {
+      "falseExploredCredits": 14,
+      "failedCriticalAssertions": 2,
+      "criticalFailureCases": [
+        "grade:interview-B-p31"
+      ]
+    }
+  },
+  "freshProviderFailures": [
+    {
+      "run": "optimized-providers-development-2026-10-09",
+      "arm": "jev-optimized",
+      "caseId": "grade:interview-A-p155",
+      "repeat": 0,
+      "status": "http",
+      "httpStatus": 400,
+      "reason": "max_tokens_exceeded"
+    },
+    {
+      "run": "optimized-providers-validation-2026-10-09",
+      "arm": "jev-optimized",
+      "caseId": "grade:client-testers-not-delivery-staff",
+      "repeat": 1,
+      "status": "error",
+      "httpStatus": 200,
+      "reason": "Native project-delivery choice not-yet has probability .42 while touched has .43; SDK rejects a selected choice that is not a highest-probability option. No response repair or replacement; failed slot retained."
+    }
+  ],
+  "costAudit": {
+    "recoveredUsage": 1,
+    "cumulativeAttempts": 1494,
+    "cumulativeUsd": 1.3034411540000008,
+    "newReservations": 1043,
+    "incrementalReservedOrSettledUsd": 0.9596131840000004,
+    "recordedMicrosoftReplayAttempts": 676,
+    "successfulMicrosoftReplayResponses": 668,
+    "successfulMicrosoftReplayCostUsd": 0.5379465420000005,
+    "optimizedComparisonCalls": 274,
+    "successfulOptimizedComparisonResponses": 272,
+    "optimizedComparisonReservedOrSettledUsd": 0.2701104460000002,
+    "unusedFreshBaselineCalls": 90,
+    "unusedFreshBaselineUsd": 0.028627697999999997,
+    "unknownAttempts": [
+      {
+        "id": "microsoft-development-2026-10-09:134",
+        "reservedUsd": 0.004183368000000001
+      },
+      {
+        "id": "microsoft-evidence-development-2026-10-09:22",
+        "reservedUsd": 0.014123592
+      },
+      {
+        "id": "microsoft-evidence-development-2026-10-09:23",
+        "reservedUsd": 0.017337978000000004
+      },
+      {
+        "id": "microsoft-evidence-development-2026-10-09:24",
+        "reservedUsd": 0.014615286
+      },
+      {
+        "id": "microsoft-precise-development-2026-10-09:31",
+        "reservedUsd": 0.011988648000000001
+      },
+      {
+        "id": "microsoft-precise-development-2026-10-09:32",
+        "reservedUsd": 0.013219206
+      },
+      {
+        "id": "microsoft-precise-development-2026-10-09:33",
+        "reservedUsd": 0.014321916
+      },
+      {
+        "id": "microsoft-precise-development-2026-10-09:34",
+        "reservedUsd": 0.013390188
+      },
+      {
+        "id": "microsoft-satisfied-development-2026-10-09:19",
+        "reservedUsd": 0.0076944840000000006
+      },
+      {
+        "id": "microsoft-satisfied-remaining-development-2026-10-09:4",
+        "reservedUsd": 0.01204938
+      },
+      {
+        "id": "optimized-providers-development-2026-10-09:131",
+        "reservedUsd": 0.010021746000000002
+      }
+    ]
+  },
+  "excludedCases": [
+    "silence:holdout-unfinished-sam-question"
+  ],
+  "verification": {
+    "focusedTests": 26,
+    "focusedAssertions": 72,
+    "repositoryTests": 583,
+    "repositoryAssertions": 9192,
+    "fullCheck": "passed",
+    "historicalReaderResponses": 450,
+    "historicalReaderMismatches": 0,
+    "optimizedNativePayloadHashesChecked": 274,
+    "optimizedSuccessfulSdkReplays": 272,
+    "applicationDeploymentPerformed": false
+  },
+  "limitations": [
+    "Repeated cases measure stability, not independent accuracy samples.",
+    "Two related historical interview archives with finalized transcript prefixes.",
+    "Turn decisions use frozen maps and isolated one-step ranking; no live voice or full causal interview replay.",
+    "Saved baseline latency is historical; optimized Jev/OpenAI timing is contemporary, and Microsoft uses a separate Azure endpoint.",
+    "Selection used development only, but validation had already been inspected; this is a regression replay, not an untouched holdout.",
+    "Expected evidence-ID lists are not exhaustive; mismatches require semantic review.",
+    "Lower coverage gates can increase both correct coverage and false explored credit; same-gate saved controls separate this policy effect from prompt changes.",
+    "Critical assertion failures include missing outputs caused by transport/format failures; they are not all semantic model errors."
+  ],
+  "derivedArms": "calibrated and improved arms reuse the named source responses, latency and usage without additional API calls."
+}

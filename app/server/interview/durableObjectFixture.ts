@@ -2,7 +2,9 @@ import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
 import { emptyInterviewReadings } from '../../../core/interview';
 import type { SessionServices } from '../../../interview-engine/interview/interview.server';
 import { interviewerBrief } from '../../../interview-engine/interview/voice/brief.server';
-import { unpaidProviders } from '../../../interview-engine/providers/testFoundry.server';
+import { unpaidProviders, testFoundry } from '../../../interview-engine/providers/testFoundry.server';
+import { gptLiveProvider } from '../../../interview-engine/providers/gptLive.server';
+import type { VoiceHandlers, WebSocketLike } from '../../../interview-engine/providers/voice.server';
 import { spec } from '../../../interviews/project-closeout/spec';
 // The simulator fixture substitutes the Workers base class before anything imports it.
 import { archiveDatabase, attempt, ProviderSocket } from '../simulator/session-fixture';
@@ -79,7 +81,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
       socketFor(id);
       return { id, sdp: 'v=0\r\nanswer' };
     },
-    attach: async (id: string) => socketFor(id),
+    attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { socket: () => socketFor(id) as unknown as WebSocketLike, fetch: (async () => ({ status: 101 }) as Response) as unknown as typeof fetch }).attach(id, handlers),
     close: async () => {},
   };
   let pair = socketPair();

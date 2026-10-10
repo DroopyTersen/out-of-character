@@ -18,7 +18,7 @@ The voice, turn and map loops run independently. Sam listens and chooses when to
 
 Jev reads each settled participant turn and scores the open gaps for natural next questions. The current thread stays unless another score is more than 0.1 higher; a thread Sol marked related can win a near-tie. Answered, declined and stalled gaps stay out until the next applied map. A transcript correction replaces only that turn's holds. New or rewritten gaps get a reading against the latest answer, without a separate trait-scoring call.
 
-Sol alone edits the map. The first call needs participant speech. New information (Jev probability at least 0.8) or useful public research wakes Sol, with one call in flight and a 20-second start-to-start floor. After a minute, new participant speech or a failed unapplied update also triggers a call. Topic lists stay in Sol's seed. Project facts must cite participant speech; web findings retain their separate source and lookup citation.
+Sol alone edits the map. The first call needs participant speech. New information or interview feedback (probability at least 0.8 by default, with independent host-selected judge thresholds) or useful public research wakes Sol, with one call in flight and a 20-second start-to-start floor. After a minute, new participant speech or a failed unapplied update also triggers a call. Topic lists stay in Sol's seed. Project facts must cite participant speech; web findings retain their separate source and lookup citation.
 
 Sam receives a short thread note only when the lead or its wording changes, or a named alternative becomes unavailable. Map notes go when their content changes. Both use `session.thinking.append`; they are optional context, not instructions to speak. They are sent immediately, without another delivery timer. This intentionally changes production v22's held-note behavior; unit tests and archived replay cannot establish live interruption quality.
 
@@ -106,8 +106,8 @@ export type Providers = {
 
 export type VoiceProvider = {
   create(input: { sdp: string; voice: string; instructions: string }): Promise<{ id: string; sdp: string }>;
-  attach(id: string): Promise<WebSocketLike>;             // the control socket: events in, instructions out
-  close(id: string): Promise<void>;
+  attach(id: string, handlers?: VoiceHandlers): Promise<VoiceConnection>; // normalized events and typed commands
+  close(id: string, handlers?: VoiceHandlers): Promise<void>;
 };
 ```
 

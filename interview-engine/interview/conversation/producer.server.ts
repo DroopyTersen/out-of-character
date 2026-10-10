@@ -9,7 +9,7 @@ import {
   appendMapLog, emptyMapLog, generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
   type MapLog, type MappedSpec, type MapTail,
 } from './map.server';
-import { emptyListState, emptyMapNote, LIVE_NOTE_CHANNEL, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './notes';
+import { emptyListState, emptyMapNote, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './notes';
 import { emptyRanking, observeMap, observeTurn, RANKING, threadKey, type Pick } from './ranking';
 import { evaluateTurn, latestTurn, RANKING_RUBRIC_VERSION, said, upToParticipant } from './ranking.server';
 import {
@@ -28,7 +28,7 @@ type Options = {
   services: typeof producerServices;
   /** Settled passages in order, stopping at the first still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
-  send: (event: Record<string, unknown>) => boolean; waitUntil: (work: Promise<void>) => void;
+  send: (note: { id: string; content: string }) => boolean; waitUntil: (work: Promise<void>) => void;
   pauses?: () => PauseSpan[];
 };
 /** Keep the map, its cached input, and the audit log. Re-read the current turn after a restart. */
@@ -279,7 +279,7 @@ export class InterviewProducer {
       ...(researchIds.length ? { researchIds } : {}),
     };
     this.records.push(record);
-    if (!this.options.send({ type: LIVE_NOTE_CHANNEL, event_id: id, delegation_id: null, content: text })) record.outcome = 'error';
+    if (!this.options.send({ id, content: text })) record.outcome = 'error';
     return record.outcome;
   }
 

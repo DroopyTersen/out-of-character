@@ -335,7 +335,6 @@ test('a map reaches Sam immediately; Jev scores its gaps against the latest answ
   expect(f.notes('list')).toHaveLength(1);
   expect(f.notes('list')[0]).toContain('Worth pulling next (Thread t1)');
   expect(f.calls.turn.at(-1)?.transcript.at(-1)?.id).toBe('p2');
-  expect(f.sent.every(event => event.type === 'session.thinking.append')).toBe(true);
   expect(f.of('note').map(note => note.kind)).toEqual(['map', 'list']);
   await f.step(61_000);
   expect(f.sent).toHaveLength(2);

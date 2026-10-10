@@ -1,6 +1,8 @@
 import { resolveInterview } from '../definition.server';
 import { expect, test } from 'bun:test';
-import { unpaidProviders } from '../../providers/testFoundry.server';
+import { unpaidProviders, testFoundry } from '../../providers/testFoundry.server';
+import { gptLiveProvider } from '../../providers/gptLive.server';
+import type { VoiceHandlers, WebSocketLike } from '../../providers/voice.server';
 import type { Judge } from '../../providers/judge.server';
 import { createJevJudge } from '../../providers/jevJudge.server';
 import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
@@ -58,7 +60,7 @@ function fakeVoice() {
         sockets.set(id, new ProviderSocket());
         return { id, sdp: 'v=0\r\nanswer' };
       },
-      attach: async (id: string) => sockets.get(id)!,
+      attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { socket: () => sockets.get(id)! as unknown as WebSocketLike, fetch: (async () => ({ status: 101 }) as Response) as unknown as typeof fetch }).attach(id, handlers),
       close: async (id: string) => { closed.push(id); },
     },
   };
@@ -1205,4 +1207,52 @@ test('closing a draft without sending releases the held notes; a closed session 
   expect(written.length).toBeGreaterThanOrEqual(2);
   expect(notes(g.socket)).toHaveLength(0);
   expect(notes(resumed).map(event => event.event_id)).toEqual(written.slice(1));
+});
+
+test('closure drains final participant evidence into the final grade and archive', async () => {
+  const f = fixture();
+  const { actor, socket } = await conversation(f);
+  const send = socket.send.bind(socket);
+  socket.send = text => {
+    if (JSON.parse(text).type === 'session.close') {
+      say(socket, 'input', 'final-answer', 'We shipped it in June.', 6000);
+      say(socket, 'output', 'unheard-answer', 'A reply after the end.', 7000);
+    }
+    send(text);
+  };
+  const ended = body(await f.send(actor, 'end'));
+  expect(ended.finalization).toBe('confirmed');
+  expect(ended.transcript.filter(item => item.speaker === 'participant').map(item => item.text)).toContain('We shipped it in June.');
+  expect(ended.transcript.map(item => item.text)).not.toContain('A reply after the end.');
+  expect(f.graded.at(-1)).toEqual(ended.transcript.map(item => item.id));
+  expect(f.archive.rows.get(attempt.id)!.transcript).toEqual(ended.transcript);
+});
+
+test('restored near-limit closure retains the final participant delta and usage', async () => {
+  const first = fixture();
+  const { actor } = await conversation(first);
+  first.at(30_000);
+  await actor.wake();
+  await first.background.settle();
+  await actor.close('fenced');
+  const finalSocket = new ProviderSocket();
+  finalSocket.send = text => {
+    finalSocket.sent.push(JSON.parse(text));
+    if (JSON.parse(text).type === 'session.close') queueMicrotask(() => {
+      say(finalSocket, 'input', 'final-tail', 'The last answer survived.', 3500);
+      finalSocket.emit({ type: 'session.closed', reason: 'close_requested', usage: { seconds: 12 } });
+    });
+  };
+  first.voice.sockets.set('provider-1', finalSocket);
+  const second = fixture({ record: first.record, voice: first.voice, archive: first.archive });
+  second.options.providers.voice.close = (id, handlers) => gptLiveProvider(testFoundry, {
+    socket: () => finalSocket as unknown as WebSocketLike, fetch: (async () => ({ status: 101 }) as Response) as unknown as typeof fetch,
+  }).close(id, handlers);
+  second.at(3_550_000);
+  const restored = await second.restore();
+  await second.send(restored, 'end');
+  await second.background.settle();
+  const result = restored.snapshot()!;
+  expect(result.transcript.map(item => item.text).join(' ')).toContain('The last answer survived.');
+  expect(result).toMatchObject({ finalization: 'confirmed', usageSeconds: 12 });
 });

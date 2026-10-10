@@ -1,6 +1,6 @@
 import type { FoundryConfig } from '../../../ai/foundry.server';
 import { actorBrief, getClient, getScenario } from '../../../ai/simulator/scenarios.server';
-import { gptLiveProvider, LIVE_MODEL } from '../../../interview-engine/providers/gptLive.server';
+import { attachGptLiveSocket, gptLiveProvider, LIVE_MODEL } from '../../../interview-engine/providers/gptLive.server';
 
 export { LIVE_MODEL, LiveSessionGone, transcriptEvent } from '../../../interview-engine/providers/gptLive.server';
 export { NO_EXTERNAL_TASK } from '../../../interview-engine/interview/session/voice.prompt';
@@ -31,5 +31,5 @@ export async function createLive(input: { scenarioId: string; clientId: string; 
 }
 
 export async function attachLive(id: string, foundry: FoundryConfig, request: typeof fetch = fetch): Promise<WebSocket> {
-  return live(foundry, request).attach(id);
+  return attachGptLiveSocket(id, foundry, { fetch: request, socket: cloudflareSocket });
 }

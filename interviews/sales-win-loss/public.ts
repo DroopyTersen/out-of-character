@@ -8,13 +8,6 @@ export const salesVoices = [
   { id: 'sam-meridian', voice: 'meridian', label: 'Meridian', presentation: 'Male', image: '/interview/sam-male.png' },
 ] as const;
 
-export const salesReadings = [
-  { id: 'candor', label: 'Candor', description: 'Giving the real reasons behind the decision, including the uncomfortable ones.' },
-  { id: 'specificity', label: 'Specificity', description: 'Naming the moments, comparisons and criteria that actually moved the decision.' },
-  { id: 'perspective', label: 'Perspective', description: 'Describing how others in the buying group saw it, not only your own view.' },
-] as const;
-export type SalesReadingId = typeof salesReadings[number]['id'];
-
 export const salesTopics = [
   { id: 'need', label: 'Why you were buying', objectives: [
     { id: 'need-trigger', label: 'What started the search' },

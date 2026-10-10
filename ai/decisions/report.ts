@@ -50,7 +50,7 @@ const summarize = (group: typeof scored) => {
   const dimensions = ['synthetic', 'coverage', 'reading', 'evidence', 'action'].map(dimension => {
     const selected = labeled.flatMap(row => row.checks.filter(check => {
       const kind = row.lane !== 'grade' ? 'action' : row.source === 'synthetic' ? 'synthetic'
-        : check.path.includes('evidence') ? 'evidence' : check.path[0] === 'readings' ? 'reading' : 'coverage';
+        : check.path.includes('evidence') ? 'evidence' : 'coverage';
       return kind === dimension;
     }));
     return [dimension, { passed: selected.filter(check => check.pass).length, total: selected.length }];

@@ -17,12 +17,10 @@ const fixtureIds = new Set(jev.rows.map((row: { fixtureId: string }) => row.fixt
 if (fixtureIds.size !== jev.rows.length || fixtureIds.size !== interviewFixtures.length || interviewFixtures.some(fixture => !fixtureIds.has(fixture.id))) throw new Error('Interview fixture results are incomplete or duplicated.');
 const rows = [];
 for (const row of jev.rows) {
-  const readings: Record<string, { value: number | null; evidence: unknown }> = row.participant.readings;
   rows.push({
     fixtureId: row.fixtureId,
     participant: {
       model: row.participant.model, durationMs: row.participant.durationMs,
-      readings: Object.fromEntries(Object.entries(readings).map(([id, reading]) => [id, { value: reading.value, evidence: reading.evidence }])),
       objectives: row.participant.objectives.map(({ id, level, levels, probability, achieved, evidence }: InterviewObjectiveReading) => ({ id, level, levels, probability, achieved, evidence })),
     },
   });

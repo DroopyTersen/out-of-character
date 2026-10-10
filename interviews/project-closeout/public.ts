@@ -8,13 +8,6 @@ export const interviewVoices = [
   { id: 'sam-gleam', voice: 'gleam', label: 'Gleam', presentation: 'Female', image: '/interview/sam-female.png' },
 ] as const;
 
-export const interviewReadings = [
-  { id: 'engagement', label: 'Engagement', description: 'Following the conversation and developing an answer.' },
-  { id: 'openness', label: 'Openness', description: 'Sharing your perspective, including uncertainty and tradeoffs.' },
-  { id: 'specificity', label: 'Specificity', description: 'Giving concrete examples of what happened.' },
-] as const;
-export type InterviewReadingId = typeof interviewReadings[number]['id'];
-
 export const interviewTopics = [
   { id: 'project', label: 'What you delivered', objectives: [
     { id: 'project-purpose', label: 'Why the client needed it' },

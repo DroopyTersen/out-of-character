@@ -20,7 +20,7 @@ const spec = resolveInterview({
     topics: [{ id: 'missing-information', label: 'Missing information', learn: 'Describe missing information and its effect.' }],
   }],
   report: { audience: 'Delivery leads', format: 'Write a concise Markdown report with headings Findings and Root cause. State when the account does not establish a root cause. Do not organize by the topic tree.' },
-}, { interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/synthetic.png' }] }, readings: [] });
+}, { interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/synthetic.png' }] } });
 const dialogue = (question: string, answer: string): Passage[] => [
   { id: 'p1', speaker: 'interviewer', text: question, startMs: 0, endMs: 1000 },
   { id: 'p2', speaker: 'participant', text: answer, startMs: 1500, endMs: 8000 },

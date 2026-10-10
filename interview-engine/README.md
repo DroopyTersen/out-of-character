@@ -163,7 +163,6 @@ const config = {
   interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [
     { id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/sam.png' },
   ] },
-  readings: [], // Optional participant readings; each configured reading has a task and five score criteria.
 };
 const actor = await SessionActor.restore({ plan, config, context, providers, store, background, archive });
 ```

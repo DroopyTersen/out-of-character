@@ -4,10 +4,6 @@
  */
 export type Objective = { id: string; label: string; criterion?: string; appliesWhen?: string };
 export type TopicGroup = { id: string; label: string; objectives: readonly Objective[] };
-/** How Jev scores one reading: the question it answers and one criterion for each point of its 0–4 scale. Server-only. */
-export type ReadingRubric = { task: string; criteria: readonly string[] };
-/** One reading of the participant on Jev's scale (for example specificity). */
-export type Reading = { id: string; label: string; description: string; rubric?: ReadingRubric };
 /** `voice` is the voice provider's voice name; `image` is the host's portrait for it. */
 export type Voice = { id: string; voice: string; label: string; presentation: string; image: string };
 /** One numbered technique in the interviewer's guide. Without `sounds`, `how` gives the shape and the brief quotes no example lines. */

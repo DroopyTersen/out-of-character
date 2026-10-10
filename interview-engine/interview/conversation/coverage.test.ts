@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { CoverageLevel, InterviewObjectiveReading } from '../../shared/snapshot';
-import { coverageConfidence, emptyReadings, mergeCoverage } from './coverage';
+import { coverageConfidence, mergeCoverage } from './coverage';
 
 const reading = (id: string, level: CoverageLevel, levels: Partial<Record<CoverageLevel, number>> | null, entryId: string | null = 'p2'): InterviewObjectiveReading => ({
   id, level, achieved: level === 'explored', probability: levels?.explored ?? null,
@@ -49,11 +49,6 @@ test('confidence describes exploration, setting aside, or whether a provisional 
   expect(coverageConfidence(reading('project-role', 'not-yet', { 'not-yet': .96 }, null))).toBeNull();
   expect(coverageConfidence(reading('project-role', 'touched', null))).toBeNull();
   expect(coverageConfidence(undefined)).toBeNull();
-});
-
-test('empty readings name every reading of the spec, unread', () => {
-  expect(emptyReadings([{ id: 'engagement', label: 'Engagement', description: 'd' }, { id: 'specificity', label: 'Specificity', description: 'd' }]))
-    .toEqual({ engagement: { value: null, distribution: null, evidence: null }, specificity: { value: null, distribution: null, evidence: null } });
 });
 
 test('a changed applicability decision releases old coverage or a set-aside boundary', () => {

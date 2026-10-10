@@ -1,5 +1,4 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { emptyInterviewReadings } from '../../../core/interview';
 import type { Checkpoint, Lease } from '../../../interview-engine/interview/interview.server';
 import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
 import { capability, settle, waitFor } from '../simulator/session-fixture';
@@ -42,7 +41,7 @@ test('background work is handed to waitUntil', () => {
 const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 const graded = (revision: number, transcript: { id: string; speaker: string; text: string }[]) => {
   const passage = transcript.find(passage => passage.speaker === 'participant')!;
-  return { revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1, usage, answers: {},
+  return { revision, model: 'fixture', durationMs: 1, usage, answers: {},
     objectives: [{ id: 'project-delivery', level: 'explored' as const, levels: { 'not-yet': .01, touched: .03, explored: .95, 'set-aside': .01 }, achieved: true, probability: .95, evidence: { entryId: passage.id, speaker: passage.speaker, text: passage.text } }] };
 };
 // The frozen archive row records this summary without usage, as the fixture's earlier summary reported none.

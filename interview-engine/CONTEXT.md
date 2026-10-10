@@ -20,7 +20,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Wake**: a time at which the attempt has due work (pause-hold expiry, idle timeout, limit, partial archive, final archive retry, provider close retry, post-finish clear). The engine asks the store for a wake as a hint; a host with durable timers calls `wake()` then. Due work also runs on restore, and with `lazyWake` before each command, so a host without timers can ignore the hint.
 
-**Interview phase**: the live conversation that produces a transcript, coverage and readings. Lives in `interview/`.
+**Interview phase**: the live conversation that produces a transcript and topic coverage. Lives in `interview/`.
 
 **Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives in `narrative/`.
 
@@ -52,7 +52,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled, the silence check does not run, and producer notes to Sam are held until the typed answer is forwarded or composition ends; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
 
-**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
+**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective, with evidence by passage id.
 
 **Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior, and `run()` executes the same run headless for a host that persists the result itself.
 
@@ -76,7 +76,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 - **Sam**: the interviewer the participant hears, a realtime voice model.
 - **Sol**: the producer with the notepad; keeps the conversation map of what has been said and what is still open, and writes Sam's notes.
-- **Jev**: the producer's instincts; a judge model that reads coverage, readings and which thread to follow, and gives the final grade.
+- **Jev**: the producer's instincts; a judge model that reads coverage and which thread to follow, and gives the final grade.
 - **Luna**: the research assistant; looks up public background on organizations, products and terms the participant mentions.
 
 **Topic**: one recursive node with `id`, `label`, `learn`, optional `appliesWhen` and optional child `topics`. Only leaves are assessed. Parent learning intent scopes children, and parent conditions apply to descendants.

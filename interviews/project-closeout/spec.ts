@@ -2,8 +2,8 @@ import { resolveInterview } from '../../interview-engine/interview/definition.se
 import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../interview-engine/shared/timing';
 import { orientation, persona } from './brief.prompt';
 import { report } from './report';
-import { readingRubrics, topicCriteria, topicRules } from './rubric.prompt';
-import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewReadings, interviewTopics, interviewVoices } from './public';
+import { topicCriteria, topicRules } from './rubric.prompt';
+import { INTERVIEW_SCENARIO_ID, INTERVIEWER_NAME, interviewTopics, interviewVoices } from './public';
 
 /** The approved plan is plain data; the engine owns prompt construction. */
 export const spec = resolveInterview({
@@ -17,6 +17,5 @@ export const spec = resolveInterview({
   report,
 }, {
   interviewer: { name: INTERVIEWER_NAME, voices: [...interviewVoices], persona },
-  readings: interviewReadings.map(reading => ({ ...reading, rubric: { ...readingRubrics[reading.id], criteria: [...readingRubrics[reading.id].criteria] } })),
   limits: { durationSeconds: SESSION_LIMIT_SECONDS, idleWarningMs: SESSION_IDLE_WARNING_MS, idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS, pauseHoldMs: SESSION_PAUSE_HOLD_MS, maxResumes: SESSION_MAX_RESUMES },
 });

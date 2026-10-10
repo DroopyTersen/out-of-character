@@ -26,9 +26,6 @@ for (const fixture of fixtures) {
     const checks = [
       ...fixture.expected.heard.map(id => ({ name: `heard:${id}`, passed: heard.includes(id) })),
       ...fixture.expected.unheard.map(id => ({ name: `unheard:${id}`, passed: !heard.includes(id) })),
-      ...(fixture.expected.highReadings?.map(id => ({ name: `high:${id}`, passed: (participant.readings[id]!.value ?? -1) >= 2.5 })) ?? []),
-      ...(fixture.expected.lowReadings?.map(id => ({ name: `low:${id}`, passed: (participant.readings[id]!.value ?? 5) < 2 })) ?? []),
-      ...(fixture.expected.blankReadings?.map(id => ({ name: `blank:${id}`, passed: participant.readings[id]!.value == null })) ?? []),
       ...participant.objectives.filter(item => item.achieved).map(item => ({ name: `source:${item.id}`, passed: item.evidence?.speaker === 'participant' && fixture.transcript.some(entry => entry.id === item.evidence?.entryId && entry.text === item.evidence.text) })),
     ];
     rows.push({ fixtureId: fixture.id, participant, checks });

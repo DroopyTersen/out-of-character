@@ -1,8 +1,8 @@
 import { resolveInterview } from '../../interview-engine/interview/definition.server';
 import { orientation, persona } from './brief.prompt';
 import { report } from './report';
-import { SALES_WIN_LOSS_ID, SALES_WIN_LOSS_VERSION, salesInterviewerName, salesLimits, salesReadings, salesTopics, salesVoices } from './public';
-import { salesCriteria, salesRubrics, salesRules } from './rubric.prompt';
+import { SALES_WIN_LOSS_ID, SALES_WIN_LOSS_VERSION, salesInterviewerName, salesLimits, salesTopics, salesVoices } from './public';
+import { salesCriteria, salesRules } from './rubric.prompt';
 
 /** The approved plan is plain data; the engine owns prompt construction. */
 export const spec = resolveInterview({
@@ -16,6 +16,5 @@ export const spec = resolveInterview({
   report,
 }, {
   interviewer: { name: salesInterviewerName, voices: [...salesVoices], persona },
-  readings: salesReadings.map(reading => ({ ...reading, rubric: { ...salesRubrics[reading.id], criteria: [...salesRubrics[reading.id].criteria] } })),
   limits: salesLimits,
 });

@@ -1,6 +1,5 @@
-// What Jev reads from a project closeout: the criterion for each topic and the rubric for each reading. Server-only.
-import type { ReadingRubric } from '../../interview-engine/shared/spec';
-import type { InterviewReadingId, interviewTopics } from './public';
+// What Jev reads from a project closeout: the criterion for each topic. Server-only.
+import type { interviewTopics } from './public';
 
 type TopicId = (typeof interviewTopics)[number]['objectives'][number]['id'];
 /** What covering each closeout topic takes, as Jev judges it. Sol's map reads the same criteria. */
@@ -33,40 +32,4 @@ export const topicRules: Partial<Record<TopicId, { creditRule: string; explored:
     creditRule: 'Credit only the participant’s own stated responsibility or work. Watching or describing what teammates did, including “our team” or “our testers,” does not establish the participant’s role.',
     explored: 'The participant explicitly identifies their own project responsibility or work, and when they say they held several responsibilities, what each involved.',
   },
-};
-
-const readingCriteria = {
-  engagement: [
-    'The participant repeatedly gives unrelated or evasive replies to clear, answerable questions.',
-    'The participant sometimes responds but rarely develops a useful answer when there is an opportunity.',
-    'The participant follows the conversation and gives relevant answers, even when brief.',
-    'The participant builds on questions with useful context or a meaningful clarification.',
-    'The participant actively develops a productive thread, corrects misunderstandings, and helps establish what happened.',
-  ],
-  openness: [
-    'The participant repeatedly sidesteps clear questions without offering a perspective or stating a limit.',
-    'The participant shares little perspective despite clear opportunities; a stated boundary or honest uncertainty is not a fault.',
-    'The participant shares their perspective within reasonable limits, including honest uncertainty.',
-    'The participant discusses meaningful tradeoffs or limitations candidly while keeping appropriate boundaries.',
-    'The participant offers a nuanced firsthand account, including uncertainty or difficult aspects where they choose to share them.',
-  ],
-  specificity: [
-    'Only unsupported generalities or slogans are offered when concrete project detail is requested.',
-    'Some project context is present but few tangible facts, actions, people, or consequences are identified.',
-    'The participant gives at least one concrete fact or example that clarifies the project.',
-    'Several grounded details explain who did what, what changed, or why a result mattered.',
-    'Precise, useful examples connect actions, people, decisions, and consequences without claiming more than is known.',
-  ],
-} as const;
-
-const readingTask = {
-  engagement: 'How much does the participant follow and develop the conversation? A short expert answer can be strong. Length, emotional intensity, and profanity are not evidence of engagement.',
-  openness: 'How candidly does the participant share their own perspective when they choose to answer? Honest uncertainty and a stated boundary are appropriate; do not treat them as low openness.',
-  specificity: 'How concrete are the participant’s project facts and examples? A terse answer with a precise fact can be strong; a long vague rant is not.',
-} as const;
-
-export const readingRubrics: Record<InterviewReadingId, ReadingRubric> = {
-  engagement: { task: readingTask.engagement, criteria: readingCriteria.engagement },
-  openness: { task: readingTask.openness, criteria: readingCriteria.openness },
-  specificity: { task: readingTask.specificity, criteria: readingCriteria.specificity },
 };

@@ -1,5 +1,4 @@
-import type { CoverageLevel, InterviewObjectiveReading, ReadingValue } from '../../shared/snapshot';
-import type { Reading } from '../../shared/spec';
+import type { CoverageLevel, InterviewObjectiveReading } from '../../shared/snapshot';
 
 /**
  * Live coverage is re-judged every grade. A current explored or set-aside reading wins;
@@ -33,9 +32,4 @@ export const COVERAGE_LEVEL_LABELS: Record<CoverageLevel, string> = { 'not-yet':
 export function coverageConfidence(reading: Pick<InterviewObjectiveReading<string>, 'level' | 'levels'> | undefined): number | null {
   if (!reading?.levels || reading.level === 'not-yet') return null;
   return reading.level === 'touched' ? 1 - reading.levels['not-yet'] : reading.levels[reading.level];
-}
-
-/** Every reading of the spec, not yet read. */
-export function emptyReadings<const R extends readonly Reading[], S extends string = string>(readings: R): Record<R[number]['id'], ReadingValue<S>> {
-  return Object.fromEntries(readings.map(({ id }) => [id, { value: null, distribution: null, evidence: null }])) as Record<R[number]['id'], ReadingValue<S>>;
 }

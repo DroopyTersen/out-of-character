@@ -9,8 +9,6 @@ import { interviewerBrief, interviewOpening, interviewers } from './scenario.ser
 
 function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
   return Object.fromEntries(Object.entries(questions).map(([id, question]) => {
-    if (question.type === 'boolean') return [id, { type: 'boolean', probability: 0.02 }];
-    if (question.type === 'score') return [id, { type: 'score', score: 2 }];
     return [id, { type: 'choice', choice: /^objective:[^:]+$/.test(id) ? 'not-yet' : 'none' }];
   })) as InterviewAnswers;
 }
@@ -78,7 +76,6 @@ describe('project closeout interview contracts', () => {
     cover(answers, 'client-access', 'explored', .99, 'p2');
     const result = readInterviewAnswers(fixture.transcript, answers);
     expect(result.objectives.find(item => item.id === 'client-access')).toMatchObject({ level: 'not-yet', achieved: false, evidence: null });
-    expect(result.readings.specificity!.value).toBeNull();
   });
 
   test('a terse project fact is credited to its actual source passage', () => {
@@ -86,14 +83,10 @@ describe('project closeout interview contracts', () => {
     const answers = answersFor(interviewQuestions(fixture.transcript));
     cover(answers, 'project-delivery', 'explored', .97, 'p2');
     cover(answers, 'project-role', 'explored', .96, 'p2');
-    answers['reading:specificity:observable'] = { type: 'boolean', probability: .98 };
-    answers['reading:specificity'] = { type: 'score', score: 3.5 };
-    answers['reading:specificity:evidence'] = { type: 'choice', choice: 'p2' };
     const result = readInterviewAnswers(fixture.transcript, answers);
     expect(result.objectives.filter(item => item.achieved).map(item => item.id)).toEqual(['project-delivery', 'project-role']);
     expect(result.objectives.find(item => item.id === 'project-delivery')).toMatchObject({ level: 'explored', probability: .97, evidence: { entryId: 'p2', speaker: 'participant', text: fixture.transcript[1]!.text } });
     expect(result.objectives.find(item => item.id === 'project-reflection')).toMatchObject({ level: 'not-yet', achieved: false, evidence: null });
-    expect(result.readings.specificity).toMatchObject({ value: 3.5, evidence: { entryId: 'p2' } });
   });
 
   test('contextual two-word facts count while a vague yes does not', () => {

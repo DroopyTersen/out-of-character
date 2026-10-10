@@ -9,32 +9,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 547,
-        "readings": {
-          "engagement": {
-            "value": 2.18,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two client dispatchers tested the booking screen and sent comments. I do not know who else was on our delivery team."
-            }
-          },
-          "openness": {
-            "value": 2.03,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two client dispatchers tested the booking screen and sent comments. I do not know who else was on our delivery team."
-            }
-          },
-          "specificity": {
-            "value": 2.15,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two client dispatchers tested the booking screen and sent comments. I do not know who else was on our delivery team."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -230,32 +204,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 227,
-        "readings": {
-          "engagement": {
-            "value": 2.64,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "The client had no cloud environment and their IT team could not configure it. We needed their security lead to create our accounts before we could deploy. I cannot comment on our own staffing."
-            }
-          },
-          "openness": {
-            "value": 2.73,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "The client had no cloud environment and their IT team could not configure it. We needed their security lead to create our accounts before we could deploy. I cannot comment on our own staffing."
-            }
-          },
-          "specificity": {
-            "value": 2.97,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "The client had no cloud environment and their IT team could not configure it. We needed their security lead to create our accounts before we could deploy. I cannot comment on our own staffing."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -467,32 +415,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 148,
-        "readings": {
-          "engagement": {
-            "value": 2.63,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Priya told me our incoming developer lacked the runbook, so he spent two days rediscovering how to deploy. She handled the handoff; I was not present, so this is her account."
-            }
-          },
-          "openness": {
-            "value": 1.96,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Priya told me our incoming developer lacked the runbook, so he spent two days rediscovering how to deploy. She handled the handoff; I was not present, so this is her account."
-            }
-          },
-          "specificity": {
-            "value": 3.42,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Priya told me our incoming developer lacked the runbook, so he spent two days rediscovering how to deploy. She handled the handoff; I was not present, so this is her account."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -712,28 +634,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 184,
-        "readings": {
-          "engagement": {
-            "value": 1.88,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "The client lead said it was awkward. I was not around and do not know what happened."
-            }
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": 1.29,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "The client lead said it was awkward. I was not around and do not know what happened."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -929,32 +829,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 191,
-        "readings": {
-          "engagement": {
-            "value": 1.95,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "It took some senior client management. That made a big difference."
-            }
-          },
-          "openness": {
-            "value": 1.73,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "It took some senior client management. That made a big difference."
-            }
-          },
-          "specificity": {
-            "value": 1.1,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "It took some senior client management. That made a big difference."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -1150,32 +1024,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 172,
-        "readings": {
-          "engagement": {
-            "value": 2.76,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We agreed an example payload together and ran it in both systems before either team coded. That caught the mismatched date format early."
-            }
-          },
-          "openness": {
-            "value": 2.02,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We agreed an example payload together and ran it in both systems before either team coded. That caught the mismatched date format early."
-            }
-          },
-          "specificity": {
-            "value": 3.42,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We agreed an example payload together and ran it in both systems before either team coded. That caught the mismatched date format early."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -1383,32 +1231,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 154,
-        "readings": {
-          "engagement": {
-            "value": 2.57,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We built a working booking prototype in two days. The client staff had never worked with a software team and were surprised by our rough screen. I do not know how long their reviews took or how our environment access was arranged."
-            }
-          },
-          "openness": {
-            "value": 2.86,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We built a working booking prototype in two days. The client staff had never worked with a software team and were surprised by our rough screen. I do not know how long their reviews took or how our environment access was arranged."
-            }
-          },
-          "specificity": {
-            "value": 2.65,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We built a working booking prototype in two days. The client staff had never worked with a software team and were surprised by our rough screen. I do not know how long their reviews took or how our environment access was arranged."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -1604,32 +1426,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 162,
-        "readings": {
-          "engagement": {
-            "value": 2.13,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "No, there was no business analyst. I do not know whether having one would have changed anything. I am not saying that was a problem."
-            }
-          },
-          "openness": {
-            "value": 2.08,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "No, there was no business analyst. I do not know whether having one would have changed anything. I am not saying that was a problem."
-            }
-          },
-          "specificity": {
-            "value": 1.79,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "No, there was no business analyst. I do not know whether having one would have changed anything. I am not saying that was a problem."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -1821,32 +1617,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 182,
-        "readings": {
-          "engagement": {
-            "value": 2.67,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "There was something else. The other delivery team had never built an API before, and deciding which team should own each piece got awkward."
-            }
-          },
-          "openness": {
-            "value": 2.41,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "There was something else. The other delivery team had never built an API before, and deciding which team should own each piece got awkward."
-            }
-          },
-          "specificity": {
-            "value": 1.93,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "There was something else. The other delivery team had never built an API before, and deciding which team should own each piece got awkward."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -2050,32 +1820,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 173,
-        "readings": {
-          "engagement": {
-            "value": 3.06,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Actually, we had no analyst, so I was doing the requirements work and development. A planned handoff to Priya was coming in week six, and the requirements still only existed in my head. That made the last week pretty tense."
-            }
-          },
-          "openness": {
-            "value": 3.61,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Actually, we had no analyst, so I was doing the requirements work and development. A planned handoff to Priya was coming in week six, and the requirements still only existed in my head. That made the last week pretty tense."
-            }
-          },
-          "specificity": {
-            "value": 3.33,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Actually, we had no analyst, so I was doing the requirements work and development. A planned handoff to Priya was coming in week six, and the requirements still only existed in my head. That made the last week pretty tense."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -2287,32 +2031,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 269,
-        "readings": {
-          "engagement": {
-            "value": 3.16,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We had no analyst, so I was doing requirements and development. A planned handoff to Priya was coming in week six. The requirements still only existed in my head. Let me explain what we did about that."
-            }
-          },
-          "openness": {
-            "value": 3.24,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We had no analyst, so I was doing requirements and development. A planned handoff to Priya was coming in week six. The requirements still only existed in my head. Let me explain what we did about that."
-            }
-          },
-          "specificity": {
-            "value": 2.8,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We had no analyst, so I was doing requirements and development. A planned handoff to Priya was coming in week six. The requirements still only existed in my head. Let me explain what we did about that."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -2524,32 +2242,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 216,
-        "readings": {
-          "engagement": {
-            "value": 1.83,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "I do not know who approved it. I only know when my account started working."
-            }
-          },
-          "openness": {
-            "value": 2.03,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "I do not know who approved it. I only know when my account started working."
-            }
-          },
-          "specificity": {
-            "value": 1.9,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "I do not know who approved it. I only know when my account started working."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -2753,20 +2445,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 197,
-        "readings": {
-          "engagement": {
-            "value": null,
-            "evidence": null
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": null,
-            "evidence": null
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -2958,32 +2636,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 176,
-        "readings": {
-          "engagement": {
-            "value": 2.98,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "They spend most mornings outside cell coverage. We queued changes locally, then synced when they returned to the depot."
-            }
-          },
-          "openness": {
-            "value": 2.04,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "They spend most mornings outside cell coverage. We queued changes locally, then synced when they returned to the depot."
-            }
-          },
-          "specificity": {
-            "value": 3.54,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We replaced the paper inspection log with an offline iPad app for 42 field inspectors. I owned the sync API and migration."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -3183,32 +2835,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 184,
-        "readings": {
-          "engagement": {
-            "value": 0.22,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "Everything. Every single thing. That is what I am saying."
-            }
-          },
-          "openness": {
-            "value": 0.66,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "Everything. Every single thing. That is what I am saying."
-            }
-          },
-          "specificity": {
-            "value": 0,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "The whole thing was a mess. Everybody was terrible, meetings were a joke, and nobody ever knew what was going on. Honestly, it was just awful in every way."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -3404,20 +3030,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 146,
-        "readings": {
-          "engagement": {
-            "value": null,
-            "evidence": null
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": null,
-            "evidence": null
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -3609,32 +3221,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 162,
-        "readings": {
-          "engagement": {
-            "value": 2.12,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day."
-            }
-          },
-          "openness": {
-            "value": 2.01,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day."
-            }
-          },
-          "specificity": {
-            "value": 1.81,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I do not know. I was not in those steering meetings, so I cannot say who approved it. I can tell you the backlog changed the next day."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -3842,24 +3428,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 156,
-        "readings": {
-          "engagement": {
-            "value": 0.61,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I would rather not talk about that person. I can talk about how we changed our handoff process."
-            }
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": null,
-            "evidence": null
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -4059,32 +3627,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 162,
-        "readings": {
-          "engagement": {
-            "value": 3.02,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
-            }
-          },
-          "openness": {
-            "value": 1.93,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
-            }
-          },
-          "specificity": {
-            "value": 3.34,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We showed a working build every Friday. That caught access problems early. Actually, the client analyst said it was the first time their team had seen the approval flow end to end."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -4288,32 +3830,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 152,
-        "readings": {
-          "engagement": {
-            "value": 2.79,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
-            }
-          },
-          "openness": {
-            "value": 3.44,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
-            }
-          },
-          "specificity": {
-            "value": 3.39,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I personally held the release because no one owned the go-live decision. Operations and the client sponsor each thought the other had signed off. I had to get both in one room before we could ship."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -4533,32 +4049,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 165,
-        "readings": {
-          "engagement": {
-            "value": 2.81,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
-            }
-          },
-          "openness": {
-            "value": 2.28,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
-            }
-          },
-          "specificity": {
-            "value": 2.79,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Maya told me the client lead had requested another tester. I did not hear that request myself. What I saw was our two testers covering all three releases."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -4770,32 +4260,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 164,
-        "readings": {
-          "engagement": {
-            "value": 3.23,
-            "evidence": {
-              "entryId": "p6",
-              "speaker": "trainee",
-              "text": "We split the review into eligibility and completeness checks. That let staff send back only the missing documents."
-            }
-          },
-          "openness": {
-            "value": 3.15,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "The existing forms did not match the actual review steps. We learned that when Nia, a clerk at the client, walked us through three rejected applications."
-            }
-          },
-          "specificity": {
-            "value": 3.92,
-            "evidence": {
-              "entryId": "p6",
-              "speaker": "trainee",
-              "text": "We split the review into eligibility and completeness checks. That let staff send back only the missing documents."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -5003,32 +4467,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 175,
-        "readings": {
-          "engagement": {
-            "value": 2.81,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "We named one owner for every access request and checked the queue each morning."
-            }
-          },
-          "openness": {
-            "value": 2.06,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I would rather not discuss that person. I can explain how we changed the handoff."
-            }
-          },
-          "specificity": {
-            "value": 2.56,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "We named one owner for every access request and checked the queue each morning."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -5252,28 +4690,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 170,
-        "readings": {
-          "engagement": {
-            "value": 1.61,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We built a permit portal. I only worked on the API, so I cannot speak to the budget."
-            }
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": 1.99,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We built a permit portal. I only worked on the API, so I cannot speak to the budget."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -5473,32 +4889,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 195,
-        "readings": {
-          "engagement": {
-            "value": 3.42,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "That is not what happened. We postponed launch because our own import test found duplicate records."
-            }
-          },
-          "openness": {
-            "value": 1.95,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "That is not what happened. We postponed launch because our own import test found duplicate records."
-            }
-          },
-          "specificity": {
-            "value": 2.24,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "That is not what happened. We postponed launch because our own import test found duplicate records."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -5690,32 +5080,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 190,
-        "readings": {
-          "engagement": {
-            "value": 2.25,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I cannot say that. I only saw my access arrive three weeks late."
-            }
-          },
-          "openness": {
-            "value": 2.02,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I cannot say that. I only saw my access arrive three weeks late."
-            }
-          },
-          "specificity": {
-            "value": 1.95,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I cannot say that. I only saw my access arrive three weeks late."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -5915,32 +5279,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 181,
-        "readings": {
-          "engagement": {
-            "value": 2.72,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before."
-            }
-          },
-          "openness": {
-            "value": 1.82,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before."
-            }
-          },
-          "specificity": {
-            "value": 3.31,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -6160,32 +5498,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 155,
-        "readings": {
-          "engagement": {
-            "value": 2.4,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before."
-            }
-          },
-          "openness": {
-            "value": 1.61,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before."
-            }
-          },
-          "specificity": {
-            "value": 3.39,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Nia mapped the approval owners before kickoff, so every field team had access on day one. That had never happened for this client before."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -6413,32 +5725,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 161,
-        "readings": {
-          "engagement": {
-            "value": 2.52,
-            "evidence": {
-              "entryId": "p6",
-              "speaker": "trainee",
-              "text": "About an hour. The review stages were the useful part; we moved on once those were settled."
-            }
-          },
-          "openness": {
-            "value": 2.06,
-            "evidence": {
-              "entryId": "p6",
-              "speaker": "trainee",
-              "text": "About an hour. The review stages were the useful part; we moved on once those were settled."
-            }
-          },
-          "specificity": {
-            "value": 3.04,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "A permit portal. I led the API work and we shipped it in June."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -6642,32 +5928,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 164,
-        "readings": {
-          "engagement": {
-            "value": 3.11,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "We gave each inspection a stable device ID and reconciled it when coverage returned. Inspectors could keep working all morning."
-            }
-          },
-          "openness": {
-            "value": 3.09,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I designed a local queue so failed uploads could resume without duplicating inspections. That was the hard part."
-            }
-          },
-          "specificity": {
-            "value": 3.65,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "We gave each inspection a stable device ID and reconciled it when coverage returned. Inspectors could keep working all morning."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -6867,32 +6127,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 155,
-        "readings": {
-          "engagement": {
-            "value": 2.71,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We named one signoff owner. That ended the approval confusion, and the release went out the next day."
-            }
-          },
-          "openness": {
-            "value": 1.9,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We named one signoff owner. That ended the approval confusion, and the release went out the next day."
-            }
-          },
-          "specificity": {
-            "value": 3.31,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "We named one signoff owner. That ended the approval confusion, and the release went out the next day."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -7104,32 +6338,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 240,
-        "readings": {
-          "engagement": {
-            "value": 2.49,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two teams thought the other owned approval. I brought both leads together, got one written owner, and we released the next day."
-            }
-          },
-          "openness": {
-            "value": 1.98,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two teams thought the other owned approval. I brought both leads together, got one written owner, and we released the next day."
-            }
-          },
-          "specificity": {
-            "value": 3.67,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two teams thought the other owned approval. I brought both leads together, got one written owner, and we released the next day."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -7341,28 +6549,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 266,
-        "readings": {
-          "engagement": {
-            "value": 1.94,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two teams thought the other owned approval. I got them into a meeting."
-            }
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": 2.21,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Two teams thought the other owned approval. I got them into a meeting."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -7570,32 +6756,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 165,
-        "readings": {
-          "engagement": {
-            "value": 3.2,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I designed an identity flow around the EU eIDAS framework. Qualified electronic signatures have a specific public meaning under that framework; that distinction drove what we could accept. Could you check the public eIDAS definition of a qualified signature before I describe the choice?"
-            }
-          },
-          "openness": {
-            "value": 2.56,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I designed an identity flow around the EU eIDAS framework. Qualified electronic signatures have a specific public meaning under that framework; that distinction drove what we could accept. Could you check the public eIDAS definition of a qualified signature before I describe the choice?"
-            }
-          },
-          "specificity": {
-            "value": 2.04,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I designed an identity flow around the EU eIDAS framework. Qualified electronic signatures have a specific public meaning under that framework; that distinction drove what we could accept. Could you check the public eIDAS definition of a qualified signature before I describe the choice?"
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -7795,32 +6955,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 189,
-        "readings": {
-          "engagement": {
-            "value": 2.38,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "An inventory API. We used Microsoft Teams for standups. I owned the import job."
-            }
-          },
-          "openness": {
-            "value": 1.72,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "An inventory API. We used Microsoft Teams for standups. I owned the import job."
-            }
-          },
-          "specificity": {
-            "value": 2.19,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "An inventory API. We used Microsoft Teams for standups. I owned the import job."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -8024,32 +7158,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 207,
-        "readings": {
-          "engagement": {
-            "value": 2.51,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our client was REI. We built a returns portal on Azure. I owned the import job."
-            }
-          },
-          "openness": {
-            "value": 1.8,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our client was REI. We built a returns portal on Azure. I owned the import job."
-            }
-          },
-          "specificity": {
-            "value": 2.52,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our client was REI. We built a returns portal on Azure. I owned the import job."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -8249,32 +7357,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 158,
-        "readings": {
-          "engagement": {
-            "value": 2.93,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our client was REI, the member-owned outdoor retailer. They sell outdoor gear through stores and online. We built a returns portal to connect those channels. I owned the import job."
-            }
-          },
-          "openness": {
-            "value": 1.82,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our client was REI, the member-owned outdoor retailer. They sell outdoor gear through stores and online. We built a returns portal to connect those channels. I owned the import job."
-            }
-          },
-          "specificity": {
-            "value": 2.62,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our client was REI, the member-owned outdoor retailer. They sell outdoor gear through stores and online. We built a returns portal to connect those channels. I owned the import job."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -8474,32 +7556,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 150,
-        "readings": {
-          "engagement": {
-            "value": 2.23,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Mercury. I cannot remember their full name or industry. There are several companies with that name, so I cannot tell you which one it was."
-            }
-          },
-          "openness": {
-            "value": 2.07,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Mercury. I cannot remember their full name or industry. There are several companies with that name, so I cannot tell you which one it was."
-            }
-          },
-          "specificity": {
-            "value": 1.3,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Mercury. I cannot remember their full name or industry. There are several companies with that name, so I cannot tell you which one it was."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -8691,24 +7747,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 194,
-        "readings": {
-          "engagement": {
-            "value": 1.92,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I would rather not identify the client. We used Microsoft Teams, but I just want to talk about the handoff process."
-            }
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": null,
-            "evidence": null
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -8904,32 +7942,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 263,
-        "readings": {
-          "engagement": {
-            "value": 2.77,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our architect and I made the data model and hosting calls. I kept making most technical decisions until I rotated off; the incoming engineer mostly sat in on calls so the client would recognize him."
-            }
-          },
-          "openness": {
-            "value": 2.7,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our architect and I made the data model and hosting calls. I kept making most technical decisions until I rotated off; the incoming engineer mostly sat in on calls so the client would recognize him."
-            }
-          },
-          "specificity": {
-            "value": 3.13,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Our architect and I made the data model and hosting calls. I kept making most technical decisions until I rotated off; the incoming engineer mostly sat in on calls so the client would recognize him."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -9137,32 +8149,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 182,
-        "readings": {
-          "engagement": {
-            "value": 3.04,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their finance director owned the go-live call. She would not approve it until her clerks had reconciled a full week of test invoices, and she moved the launch back ten days to get that."
-            }
-          },
-          "openness": {
-            "value": 2.33,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their finance director owned the go-live call. She would not approve it until her clerks had reconciled a full week of test invoices, and she moved the launch back ten days to get that."
-            }
-          },
-          "specificity": {
-            "value": 3.88,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their finance director owned the go-live call. She would not approve it until her clerks had reconciled a full week of test invoices, and she moved the launch back ten days to get that."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -9370,32 +8356,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 213,
-        "readings": {
-          "engagement": {
-            "value": 2.81,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Hardly at all. Their IT manager told us they had nobody who could judge hosting options, so they would sign off on whatever we recommended. We picked the setup and they approved it the same day."
-            }
-          },
-          "openness": {
-            "value": 2.15,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Hardly at all. Their IT manager told us they had nobody who could judge hosting options, so they would sign off on whatever we recommended. We picked the setup and they approved it the same day."
-            }
-          },
-          "specificity": {
-            "value": 3.19,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Hardly at all. Their IT manager told us they had nobody who could judge hosting options, so they would sign off on whatever we recommended. We picked the setup and they approved it the same day."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -9603,32 +8563,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 166,
-        "readings": {
-          "engagement": {
-            "value": 2.78,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "For the last two weeks she ran the weekly client calls so they got used to her voice. I stayed on those calls in case anything came up."
-            }
-          },
-          "openness": {
-            "value": 1.77,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "For the last two weeks she ran the weekly client calls so they got used to her voice. I stayed on those calls in case anything came up."
-            }
-          },
-          "specificity": {
-            "value": 2.72,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "For the last two weeks she ran the weekly client calls so they got used to her voice. I stayed on those calls in case anything came up."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -9844,20 +8778,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 156,
-        "readings": {
-          "engagement": {
-            "value": null,
-            "evidence": null
-          },
-          "openness": {
-            "value": null,
-            "evidence": null
-          },
-          "specificity": {
-            "value": null,
-            "evidence": null
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -10053,32 +8973,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 207,
-        "readings": {
-          "engagement": {
-            "value": 2.39,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "I wrote a cutover checklist and walked the new lead through a rehearsal twice."
-            }
-          },
-          "openness": {
-            "value": 2.08,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "I do not know. I had moved to another account by then."
-            }
-          },
-          "specificity": {
-            "value": 2.47,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "I wrote a cutover checklist and walked the new lead through a rehearsal twice."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -10286,32 +9180,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 163,
-        "readings": {
-          "engagement": {
-            "value": 3.02,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "Their warehouse manager tested every release on the loading dock tablets herself. She rejected our first build because the buttons were too small to hit with gloves on. After we fixed that, she became our most useful reviewer."
-            }
-          },
-          "openness": {
-            "value": 2.37,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "Their warehouse manager tested every release on the loading dock tablets herself. She rejected our first build because the buttons were too small to hit with gloves on. After we fixed that, she became our most useful reviewer."
-            }
-          },
-          "specificity": {
-            "value": 3.95,
-            "evidence": {
-              "entryId": "p4",
-              "speaker": "trainee",
-              "text": "Their warehouse manager tested every release on the loading dock tablets herself. She rejected our first build because the buttons were too small to hit with gloves on. After we fixed that, she became our most useful reviewer."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -10543,32 +9411,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 194,
-        "readings": {
-          "engagement": {
-            "value": 2.65,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Moving the stock sync from nightly to hourly. Store managers finally trusted the counts, but the hosting bill tripled and their finance team started asking questions."
-            }
-          },
-          "openness": {
-            "value": 3.05,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Moving the stock sync from nightly to hourly. Store managers finally trusted the counts, but the hosting bill tripled and their finance team started asking questions."
-            }
-          },
-          "specificity": {
-            "value": 3.83,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Moving the stock sync from nightly to hourly. Store managers finally trusted the counts, but the hosting bill tripled and their finance team started asking questions."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -10776,32 +9618,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 173,
-        "readings": {
-          "engagement": {
-            "value": 2.87,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their dispatchers rated a sample of suggested routes every Friday, and we adjusted the rules against whatever they flagged. Some weeks the ratings dropped, and nobody could say whether that meant we should hold the release."
-            }
-          },
-          "openness": {
-            "value": 3.12,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their dispatchers rated a sample of suggested routes every Friday, and we adjusted the rules against whatever they flagged. Some weeks the ratings dropped, and nobody could say whether that meant we should hold the release."
-            }
-          },
-          "specificity": {
-            "value": 3.28,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their dispatchers rated a sample of suggested routes every Friday, and we adjusted the rules against whatever they flagged. Some weeks the ratings dropped, and nobody could say whether that meant we should hold the release."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",
@@ -11013,32 +9829,6 @@
       "participant": {
         "model": "jev-1.13.0",
         "durationMs": 219,
-        "readings": {
-          "engagement": {
-            "value": 2.78,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their support lead joined our Friday demo each week with one real customer complaint. We fixed the top one before the next demo, so support stopped escalating the same issues."
-            }
-          },
-          "openness": {
-            "value": 1.92,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their support lead joined our Friday demo each week with one real customer complaint. We fixed the top one before the next demo, so support stopped escalating the same issues."
-            }
-          },
-          "specificity": {
-            "value": 3.86,
-            "evidence": {
-              "entryId": "p2",
-              "speaker": "trainee",
-              "text": "Their support lead joined our Friday demo each week with one real customer complaint. We fixed the top one before the next demo, so support stopped escalating the same issues."
-            }
-          }
-        },
         "objectives": [
           {
             "id": "project-delivery",

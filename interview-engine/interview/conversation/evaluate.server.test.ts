@@ -9,11 +9,9 @@ import { dialogueState, evaluateInterview, readInterviewAnswers, type InterviewA
 import { interviewQuestions, type JudgedSpec } from './rubric.prompt';
 import { testFraming } from './testSpec';
 
-const criteria = ['zero', 'one', 'two', 'three', 'four'] as const;
 const spec = {
   interviewer: { name: 'Riley' },
   framing: testFraming,
-  readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria } }],
   topics: [{ objectives: [
     { id: 'scope', label: 'Scope', criterion: 'Names what was built.' },
     { id: 'role', label: 'Role', criterion: 'Names their own work. Only their own work counts.' },
@@ -28,17 +26,13 @@ const passages: Passage[] = [
 
 function answersFor(questions: Record<string, Experimental_EvaluationQuestion>): InterviewAnswers {
   return Object.fromEntries(Object.entries(questions).map(([id, question]) => {
-    if (question.type === 'boolean') return [id, { type: 'boolean', probability: .02 }];
-    if (question.type === 'score') return [id, { type: 'score', score: 2 }];
     return [id, { type: 'choice', choice: /^objective:[^:]+$/.test(id) ? 'not-yet' : 'none' }];
   })) as InterviewAnswers;
 }
 
 test('the questions come from the spec, and only participant passages are evidence choices', () => {
   const questions = interviewQuestions(spec, passages);
-  expect(Object.keys(questions)).toEqual(['reading:specificity:observable', 'reading:specificity', 'reading:specificity:evidence',
-    'objective:scope', 'objective:scope:evidence', 'objective:role', 'objective:role:evidence']);
-  expect(questions['reading:specificity']).toMatchObject({ type: 'score', instructions: { task: 'How concrete?' }, criteria: [...criteria] });
+  expect(Object.keys(questions)).toEqual(['objective:scope', 'objective:scope:evidence', 'objective:role', 'objective:role:evidence']);
   expect(questions['objective:scope']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names what was built.' } });
   expect(questions['objective:role']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names their own work. Only their own work counts.' } });
   const evidence = questions['objective:scope:evidence'];
@@ -49,19 +43,14 @@ test('the questions come from the spec, and only participant passages are eviden
   expect(JSON.stringify(evidence.instructions)).toContain('Do not select Riley’s wording');
 });
 
-test('answers become readings and coverage; a backchannel is never evidence', () => {
+test('answers become coverage; a backchannel is never evidence', () => {
   const answers = answersFor(interviewQuestions(spec, passages));
-  answers['reading:specificity:observable'] = { type: 'boolean', probability: .9 };
-  answers['reading:specificity'] = { type: 'score', score: 3 };
-  answers['reading:specificity:evidence'] = { type: 'choice', choice: 'p2' };
   answers['objective:scope'] = { type: 'choice', choice: 'explored', probabilities: { explored: .9 } };
   answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2' };
   answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { explored: .99 } };
   answers['objective:role:evidence'] = { type: 'choice', choice: 'p4' };
-  expect(() => readInterviewAnswers(spec, passages, { ...answers, 'reading:specificity': { type: 'score', score: 5 } })).toThrow('Invalid interview score: reading:specificity');
   expect(() => readInterviewAnswers(spec, passages, { ...answers, 'objective:scope:evidence': { type: 'choice', choice: 'p9' } })).toThrow('Invalid interview selection: objective:scope:evidence');
   const result = readInterviewAnswers(spec, passages, answers);
-  expect(result.readings.specificity).toEqual({ value: 3, distribution: null, evidence: { entryId: 'p2', speaker: 'participant', text: passages[1]!.text } });
   expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([['scope', 'explored', 'p2'], ['role', 'not-yet', null]]);
 });
 
@@ -79,7 +68,7 @@ test('Jev sees participant and the spec’s interviewer, and the grade runs on t
   const judge = { model, thresholds: { silenceContinue: .85, coverageExplored: .85 } };
   const result = await evaluateInterview({ spec, passages, revision: 4 }, { judge });
   expect(calls).toEqual([dialogueState(passages, 'riley')]);
-  expect(result).toMatchObject({ revision: 4, model: 'jev-test', readings: { specificity: { value: null } } });
+  expect(result).toMatchObject({ revision: 4, model: 'jev-test' });
   expect(result.objectives.every(item => item.level === 'not-yet')).toBe(true);
   await expect(evaluateInterview({ spec, passages: [], revision: 1 }, judge)).rejects.toThrow('Transcript is outside the interview limit.');
   await expect(evaluateInterview({ spec, passages: [passages[1]!, passages[1]!], revision: 1 }, judge)).rejects.toThrow('Transcript passage IDs must be unique.');
@@ -88,20 +77,13 @@ test('Jev sees participant and the spec’s interviewer, and the grade runs on t
 test('host-selected judges apply their coverage calibration without changing raw probabilities or evidence rules', async () => {
   // Only paid HTTP is replaced; both provider adapters, the SDK and the grade reader run normally.
   const answers = answersFor(interviewQuestions(spec, passages));
-  answers['reading:specificity'] = { type: 'score', score: 2, probabilities: { 0: 0, 1: 0, 2: 1, 3: 0, 4: 0 } };
-  answers['reading:specificity:evidence'] = { type: 'choice', choice: 'none', probabilities: { none: 1, p2: 0, p4: 0 } };
   answers['objective:scope'] = { type: 'choice', choice: 'explored', probabilities: { 'not-yet': 0, touched: .25, explored: .75, 'set-aside': 0 } };
   answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2', probabilities: { none: 0, p2: 1, p4: 0 } };
   answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { 'not-yet': 0, touched: .1, explored: .9, 'set-aside': 0 } };
   answers['objective:role:evidence'] = { type: 'choice', choice: 'p4', probabilities: { none: 0, p2: 0, p4: 1 } };
   const request: Fetch = async url => {
-    if (String(url).includes('typesafe.ai')) return Response.json({ model: 'jev-1.13.0', answers: {
-      ...answers, 'reading:specificity:observable': { type: 'noul', noul: .02 },
-    } });
+    if (String(url).includes('typesafe.ai')) return Response.json({ model: 'jev-1.13.0', answers });
     return Response.json({ model: 'gpt-6-luna', usage: { input_tokens: 100, output_tokens: 0 }, answers: [
-      { name: 'reading:specificity:observable', type: 'predicate', probability: .02 },
-      { name: 'reading:specificity', type: 'score', score: 2, confidence: 1,
-        probabilities: criteria.map((label, value) => ({ label: String(value), value, probability: value === 2 ? 1 : 0 })) },
       ...Object.entries(answers).filter(([, answer]) => answer.type === 'choice').map(([name, answer]) => {
         if (answer.type !== 'choice') throw new Error('Expected choice');
         const options = name.endsWith(':evidence') ? ['none', 'p2', 'p4'] : ['not-yet', 'touched', 'explored', 'set-aside'];
@@ -123,7 +105,7 @@ test('host-selected judges apply their coverage calibration without changing raw
 });
 
 test('conditional relevance needs participant evidence and is distinct from coverage depth', () => {
-  const conditional: JudgedSpec = { ...spec, readings: [], topics: [{ objectives: [{ id: 'handoff', label: 'Handoff', criterion: 'Describe the access handoff.', appliesWhen: 'The participant handled access.' }] }] };
+  const conditional: JudgedSpec = { ...spec, topics: [{ objectives: [{ id: 'handoff', label: 'Handoff', criterion: 'Describe the access handoff.', appliesWhen: 'The participant handled access.' }] }] };
   const answers: InterviewAnswers = {
     'objective:handoff': { type: 'choice', choice: 'explored', probabilities: { explored: .99 } },
     'objective:handoff:evidence': { type: 'choice', choice: 'p2', probabilities: { p2: .99 } },

@@ -18,7 +18,6 @@ import { resumeInstruction, typedAnswerCue } from './voice.prompt';
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the
 // network is substituted; timing, the lease, checkpoints, fencing and the archive are real.
 
-const criteria = ['zero', 'one', 'two', 'three', 'four'] as const;
 const topics = [{ id: 'project', label: 'The project', objectives: [{ id: 'scope', label: 'Scope', criterion: 'Names what was built.' }] }];
 const spec = resolveInterview({
   id: 'fixture-interview', version: 'fixture-v1', title: 'Recent project', goals: 'Learn what was built.',
@@ -26,7 +25,6 @@ const spec = resolveInterview({
   report: { audience: 'The delivery team', format: 'A Markdown account of what was learned.' },
 }, {
   interviewer: { name: 'Riley', persona: 'Curious and direct.', voices: [{ id: 'riley-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/riley.png' }] },
-  readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria: [...criteria] } }],
 });
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', planId: spec.id, voiceId: 'riley-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
@@ -88,7 +86,7 @@ function fixture({ record = memoryRecord(), voice = fakeVoice(), archive = memor
         graded.push(input.transcript.map(entry => entry.id));
         const passage = input.transcript.find(entry => entry.speaker === 'participant')!;
         return {
-          revision: input.revision, model: 'fixture', durationMs: 1, readings: {},
+          revision: input.revision, model: 'fixture', durationMs: 1,
           objectives: [{ id: 'scope', level: 'explored', achieved: true, probability: .9, levels: null, evidence: { entryId: passage.id, speaker: 'participant', text: passage.text } }],
         };
       },

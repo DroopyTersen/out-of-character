@@ -9,7 +9,7 @@ import type { SilenceRecord } from './silence.server';
 export type NarrativeStatus = { status: 'pending' | 'ready' | 'unavailable'; text: string | null };
 export type InterviewState = { evaluation: InterviewEvaluation | null; summary: NarrativeStatus | null };
 
-/** The actor's lifecycle and transcript, before current readings and public references are composed into it. */
+/** The actor's lifecycle and transcript, before current coverage and public references are composed into it. */
 export type SessionSnapshot = Omit<InterviewSnapshot, 'evaluation' | 'background' | 'pause'> & { pause?: SessionPause | null };
 
 /** Provider sessions still owed closure, in creation order. */

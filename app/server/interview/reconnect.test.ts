@@ -64,7 +64,7 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string; kind: string }) => record.source === 'note' && ['list', 'map'].includes(record.kind))).toHaveLength(4);
 });
 
-test('a restarted interview keeps its readings and summary state, stored inside the checkpoint snapshot', async () => {
+test('a restarted interview keeps its coverage and summary state, stored inside the checkpoint snapshot', async () => {
   const f = await live();
   await lose(f);
   const before = await poll(f);

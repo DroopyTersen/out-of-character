@@ -25,7 +25,7 @@ import { appendTranscript, settledTranscript } from './transcript';
 import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from './voice.prompt';
 import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
 
-/** Canonical participant readings and topic coverage. */
+/** Canonical topic coverage. */
 type Evaluate = (input: { transcript: Passage[]; revision: number; signal: AbortSignal }) => Promise<InterviewEvaluation>;
 /** The paid calls, replaceable for tests: Sol, Jev's turn reads, Luna, and Jev's coverage grade. */
 export type SessionServices = typeof producerServices & { evaluate: Evaluate; evaluateSilence: typeof evaluateSilence };
@@ -85,7 +85,7 @@ const digest = async (text: string) => {
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 12);
 };
 
-/** Coverage and readings from the host's injected decision model. */
+/** Coverage from the host's injected decision model. */
 function judgeWith(spec: ResolvedInterview, providers: Providers): Evaluate {
   return ({ transcript, revision, signal }) => evaluateInterview({ spec, passages: transcript, revision, signal }, providers);
 }
@@ -108,7 +108,7 @@ export class SessionActor {
   private readonly lazyWake: boolean;
   private lease: Lease | undefined;
   private state: SessionSnapshot | undefined;
-  /** Jev's latest readings and the narrative's status, kept beside the snapshot. */
+  /** The judge's latest coverage and the narrative's status, kept beside the snapshot. */
   private interview: InterviewState | undefined;
   private voice: VoiceConnection | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -953,7 +953,7 @@ export class SessionActor {
       // Live bands resist flicker; the final re-grade replaces them, so an unsupported checkmark is withdrawn.
       const objectives = final ? result.objectives : mergeCoverage(interview.evaluation?.objectives ?? [], result.objectives);
       this.grades.push({ ...log, outcome: 'graded', objectives: gradeObjectives(result.objectives, objectives) });
-      interview.evaluation = { revision: result.revision, readings: result.readings, model: result.model, durationMs: result.durationMs, objectives };
+      interview.evaluation = { revision: result.revision, model: result.model, durationMs: result.durationMs, objectives };
       snapshot.feedbackStatus = final || this.isFresh(transcript) ? 'current' : 'delayed';
     } catch (error) {
       this.grades.push({ ...diagnostic, completedAt: this.now(),

@@ -11,6 +11,7 @@ import { narrativeInstructions } from './narrative.prompt';
  */
 export function writeNarrative(input: NarrativeInput, model: LanguageModel, options: { signal?: AbortSignal; telemetry?: TelemetryOptions } = {}): NarrativeRun {
   const approved = narrativeRequestSchema.parse(input);
+  const context = approved.context && { background: approved.context.background, participant: approved.context.participant };
   if (!approved.transcript.some(passage => passage.speaker === 'participant' && passage.text.trim())) throw new Error('Interview summary unavailable.');
   let settle!: (narrative: Narrative) => void;
   const result = new Promise<Narrative>(resolve => { settle = resolve; });
@@ -19,7 +20,7 @@ export function writeNarrative(input: NarrativeInput, model: LanguageModel, opti
     providerOptions: { openai: { reasoningEffort: 'medium', forceReasoning: true, store: false } },
     output: Output.object({ schema: narrativeDocumentSchema }),
     system: narrativeInstructions,
-    prompt: JSON.stringify(approved),
+    prompt: JSON.stringify({ ...approved, context }),
     maxOutputTokens: 12_000, maxRetries: 0, abortSignal: options.signal,
     ...(options.telemetry ? { telemetry: options.telemetry } : {}),
     onError: () => { settle({ document: null, failure: 'provider', usage: null }); },

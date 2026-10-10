@@ -3,7 +3,7 @@ import { actorBrief, getClient, getScenario, openingInstruction } from '../../..
 import { SIMULATOR_VERSION, type ClientEnding, type PublicSnapshot, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
-import type { ProducerSummary } from '../../../interview-engine/interview/conversation/conversationRecords';
+import type { ProducerSummary } from '../../../interview-engine/interview/reasoning/conversationRecords';
 import type { NetworkRecord } from '../../../interview-engine/shared/network';
 import type { NarrativeProvenance } from '../../../interview-engine/shared/narrative';
 import type { ReportArchive } from './report';

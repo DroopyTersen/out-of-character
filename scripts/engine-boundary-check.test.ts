@@ -44,7 +44,7 @@ test('browser folders cannot reach server files, and the phases cannot reach eac
   expect(await engine({
     'client/live.ts': "import { x } from '../providers/gptLive.server';",
     'shared/s.ts': "import type { X } from '../interview/seams.server.ts';",
-    'narrative/n.server.ts': "import { y } from '../interview/conversation/conversationMap';",
+    'narrative/n.server.ts': "import { y } from '../interview/reasoning/conversationMap';",
     'interview/i.server.ts': "import { z } from '../narrative/narrative.server';\nexport type Host = { env: Env; db: D1Database; ctx: ExecutionContext; state: DurableObjectState };",
   }).then(items => items.toSorted())).toEqual([
     'client/live.ts:1 client/ imports a server file: ../providers/gptLive.server',
@@ -53,7 +53,7 @@ test('browser folders cannot reach server files, and the phases cannot reach eac
     'interview/i.server.ts:2 platform identifier DurableObjectState',
     'interview/i.server.ts:2 platform identifier Env',
     'interview/i.server.ts:2 platform identifier ExecutionContext',
-    'narrative/n.server.ts:1 the Interview and Narrative phases import each other: ../interview/conversation/conversationMap',
+    'narrative/n.server.ts:1 the Interview and Narrative phases import each other: ../interview/reasoning/conversationMap',
     'shared/s.ts:1 shared/ imports a server file: ../interview/seams.server.ts',
   ]);
 });

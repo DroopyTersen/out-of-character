@@ -45,7 +45,7 @@ The probe must establish:
 - Provider acknowledgments and rejections can be correlated with the submission ID.
 - Composing protection suppresses engine recovery nudges, with any autonomous provider speech observed separately.
 
-Listen to the result; an event acknowledgment does not prove a useful spoken response. Keep participant framing in `interview-engine/interview/session/voice.prompt.ts`, separate from producer notes, preserving the complete bounded answer. Resolve this provider boundary before building the full feature.
+Listen to the result; an event acknowledgment does not prove a useful spoken response. Keep participant framing in `interview-engine/interview/voice/voice.prompt.ts`, separate from producer notes, preserving the complete bounded answer. Resolve this provider boundary before building the full feature.
 
 ### 2 Add a small public contract
 
@@ -129,7 +129,7 @@ Once the engine contract works, expose its two methods through `app/simulator/us
 | Area | Files |
 | --- | --- |
 | Core protocol and client | `interview-engine/shared/protocol.ts`, `interview-engine/client/transport.ts`, `interview-engine/client/liveConnection.ts` |
-| Core transcript, persistence, and provider behavior | `interview-engine/interview/session/session.server.ts`, `interview-engine/interview/session/transcript.ts`, `interview-engine/interview/session/voice.prompt.ts` |
+| Core transcript, persistence, and provider behavior | `interview-engine/interview/session/session.server.ts`, `interview-engine/interview/session/transcript.ts`, `interview-engine/interview/voice/voice.prompt.ts` |
 | Host forwarding | `app/server/interview/routes.ts`; the existing socket adapter forwards through it |
 | The Debrief | `app/simulator/use-simulator.ts`, `app/routes/interview.tsx`, `app/interview/screens.tsx`, `app/interview/interview.css`, `app/storybook/interview-stories.tsx` |
 | Documentation | `interview-engine/README.md`, `interview-engine/CONTEXT.md` |

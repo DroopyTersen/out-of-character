@@ -1,12 +1,12 @@
 import type { Experimental_EvaluationQuestion } from 'ai';
-import { evaluateSilence } from '../../interview-engine/interview/session/silence.server';
-import { readTopicCoverage } from '../../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { judgeConversationSilence } from '../../interview-engine/interview/judging/judgeConversationSilence.server';
+import { readTopicCoverage } from '../../interview-engine/interview/judging/judgeTopicCoverage.server';
 import { dialogueState } from '../../interview-engine/shared/transcript';
-import { interviewQuestions } from '../../interview-engine/interview/grading/topicCoverage.prompt';
-import { turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/judgeConversationTurn.server';
-import { latestTurn } from '../../interview-engine/interview/conversation/turnTaking';
-import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/conversation/threadSelection';
-import type { ConversationMap } from '../../interview-engine/interview/conversation/conversationMap';
+import { interviewQuestions } from '../../interview-engine/interview/judging/topicCoverage.prompt';
+import { turnQuestions, readTurnAnswers } from '../../interview-engine/interview/judging/judgeConversationTurn.server';
+import { latestTurn } from '../../interview-engine/interview/reasoning/turnTaking';
+import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/reasoning/threadSelection';
+import type { ConversationMap } from '../../interview-engine/interview/reasoning/conversationMap';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { archivedTranscriptSchema } from '../../core/interview-transcript';
 import { spec } from '../../interviews/project-closeout/spec';
@@ -27,7 +27,7 @@ async function silenceRequest(transcript: Passage[]): Promise<Request> {
   const stop = new Error('capture');
   const model: Model = { specificationVersion: 'v4', provider: 'capture', modelId: 'capture', supportedQuestionTypes: ['choice', 'boolean', 'score'],
     doEvaluate(input) { captured = input; throw stop; } };
-  try { await evaluateSilence({ transcript, judge: model }); } catch (error) { if (error !== stop) throw error; }
+  try { await judgeConversationSilence({ transcript, judge: model }); } catch (error) { if (error !== stop) throw error; }
   if (!captured) throw new Error('No silence request captured');
   return captured;
 }

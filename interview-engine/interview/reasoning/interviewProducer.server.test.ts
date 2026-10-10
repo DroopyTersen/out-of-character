@@ -1,7 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import { inlineBackground } from '../adapters/memory.server';
 import { DirectorHttpError, DirectorOutputError } from '../../providers/structured.server';
-import { unpaidProviders } from '../../providers/testFoundry.server';
 import type { InterviewObjectiveReading as Reading } from '../../shared/snapshot';
 import type { PauseSpan } from '../../shared/timing';
 import type { Passage as TranscriptEntry, Speaker } from '../../shared/transcript';
@@ -9,13 +8,12 @@ import { emptyMap, type ConversationMap, type MapEntity, type MapThread } from '
 import { MapOutputError } from './conversationMap.server';
 import { NOTE_HEADERS } from './interviewerNotes';
 import * as engine from './interviewProducer.server';
-import { producerServices } from './interviewProducer.server';
+import type { ProducerCalls } from './interviewProducer.server';
 import { threadKey, type TurnReading } from './threadSelection';
 import { PRODUCER_LIMITS, type ProducerLogRecord, type ResearchRequest } from './conversationRecords';
 import { testSpec } from './testSpec';
 
 type InterviewObjectiveReading = Reading<Speaker>;
-const fixtureProviders = unpaidProviders({} as never, { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' });
 type Options = ConstructorParameters<typeof engine.InterviewProducer>[0];
 /** The producer with the test spec, as the session constructs it with its own. */
 class InterviewProducer extends engine.InterviewProducer {
@@ -31,7 +29,7 @@ const request = (name: string, clue: string | null = null): ResearchRequest => (
 const MINUTE = 'a minute has passed since your last call';
 const novelReason = (id: string) => `the participant's latest turn (${id}) adds facts or feedback the map lacks`;
 
-type Services = typeof producerServices;
+type Services = ProducerCalls;
 type Input<K extends keyof Services> = Parameters<Services[K]>[0];
 type Mapped = Awaited<ReturnType<Services['generateMap']>>;
 type Read = Awaited<ReturnType<Services['evaluateTurn']>>;
@@ -59,7 +57,7 @@ function deferred<T>() {
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setTimeout(done, 0)); };
 
 // Substitute only paid services: tests exercise real scheduling, ranking, validation, persistence and delivery.
-function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds }: { empty?: boolean; thresholds?: Partial<Options['providers']['judge']['thresholds']> } = {}) {
+function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds }: { empty?: boolean; thresholds?: Partial<Options['thresholds']> } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = empty ? [] : [
     { id: 'p1', speaker: 'interviewer', text: 'What did the team build?', startMs: 0, endMs: 1000 },
@@ -74,7 +72,7 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
   const background = inlineBackground();
   const producer = new InterviewProducer({
     attemptId: 'attempt-1', startedAt: epoch,
-    providers: { ...fixtureProviders, judge: { ...fixtureProviders.judge, thresholds: { ...fixtureProviders.judge.thresholds, ...thresholds } } },
+    models: { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' }, thresholds: thresholds ?? {},
     notesHeld: () => held, pauses: () => pauses, waitUntil: work => background.track(work),
     settled: () => transcript, coverage: () => coverage, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
@@ -473,6 +471,24 @@ test('all paid producer calls share a cap that survives a restart', async () => 
   await next.step(120_000);
   expect(next.calls.map).toHaveLength(0);
   expect(next.calls.turn).toHaveLength(0);
+});
+
+test('map, turn and research calls consume the same budget after restore', async () => {
+  const f = fixture({ generateMap: async () => mapped(mapWith([thread('t1')]), request('OpenStreetMap')) });
+  await f.step(60_000); await f.background.settle();
+  expect(f.calls.map).toHaveLength(1);
+  expect(f.calls.lookup).toHaveLength(1);
+  expect(f.calls.turn).toHaveLength(1);
+  // Freeze elapsed time so only distinct participant answers request more work.
+  for (let i = 0; i < 397; i++) {
+    f.say('interviewer', 'What happened next?'); f.say('participant', `The team completed part ${i}.`);
+    f.producer.tick(epoch + 60_000); await f.background.settle();
+  }
+  expect(f.calls.turn).toHaveLength(398);
+  expect(f.calls.map.length + f.calls.lookup.length + f.calls.turn.length).toBe(400);
+  const next = fixture(); next.producer.restore(structuredClone(f.producer.checkpoint())); next.producer.resume(epoch + 60_000);
+  await next.step(120_000);
+  expect(next.calls).toEqual({ map: [], turn: [], lookup: [] });
 });
 
 test('Jev re-reads grown and same-length corrected words, but not an unchanged turn or Sam alone', async () => {

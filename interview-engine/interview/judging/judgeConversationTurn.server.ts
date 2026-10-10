@@ -3,9 +3,9 @@ import { TRANSCRIPT_LIMIT, transcriptCharacters } from '../../shared/transcript'
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
 import { choice, type JudgeAnswers } from '../../providers/judgeProvider.server';
 import { dialogueState } from '../../shared/transcript';
-import type { ConversationMap, MapThread } from './conversationMap';
-import { THREAD_STATES, threadKey, type ThreadState, type TurnReading } from './threadSelection';
-import { latestTurn } from './turnTaking';
+import type { ConversationMap, MapThread } from '../reasoning/conversationMap';
+import { THREAD_STATES, threadKey, type ThreadState, type TurnReading } from '../reasoning/threadSelection';
+import { latestTurn } from '../reasoning/turnTaking';
 
 function probability(answers: JudgeAnswers, id: string): number {
   const answer = answers[id];

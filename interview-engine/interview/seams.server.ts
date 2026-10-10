@@ -1,5 +1,5 @@
 import type { Passage } from '../shared/transcript';
-import type { ProducerLogRecord, ProducerSummary } from './conversation/conversationRecords';
+import type { ProducerLogRecord, ProducerSummary } from './reasoning/conversationRecords';
 import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus } from './session/sessionCheckpoint';
 import type { InterviewSnapshot } from '../shared/snapshot';
 import type { NarrativeProvenance } from '../shared/narrative';

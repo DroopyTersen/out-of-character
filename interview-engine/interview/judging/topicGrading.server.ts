@@ -1,8 +1,8 @@
 import { callFailure } from '../../providers/diagnostics.server';
 import type { FeedbackStatus, InterviewEvaluation } from '../../shared/snapshot';
 import type { Passage } from '../../shared/transcript';
-import { gradeObjectives, type GradeRecord } from '../conversation/conversationRecords';
-import { upToParticipant } from '../conversation/turnTaking';
+import { gradeObjectives, type GradeRecord } from '../reasoning/conversationRecords';
+import { upToParticipant } from '../reasoning/turnTaking';
 import { mergeCoverage } from './topicCoverage';
 
 export type TopicGradeInput = { transcript: Passage[]; revision: number };

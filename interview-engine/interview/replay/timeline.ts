@@ -1,7 +1,7 @@
 import { COVERAGE_LEVELS } from '../../shared/snapshot';
 import type { TopicGroup } from '../../shared/spec';
-import { COVERAGE_LEVEL_LABELS } from '../grading/topicCoverage';
-import type { GradeObjective, ProducerLogRecord } from '../conversation/conversationRecords';
+import { COVERAGE_LEVEL_LABELS } from '../judging/topicCoverage';
+import type { GradeObjective, ProducerLogRecord } from '../reasoning/conversationRecords';
 import type { Passage as TranscriptEntry } from '../../shared/transcript';
 
 export const TIMELINE_LANES = ['dialogue', 'map', 'turn', 'traits', 'note', 'research', 'grade', 'delegation'] as const;

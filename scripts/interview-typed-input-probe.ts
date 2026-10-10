@@ -14,8 +14,8 @@
  */
 import { foundryConfig, foundryUrl } from '../ai/foundry.server';
 import { templates } from '../app/server/interview/debriefs';
-import { NO_EXTERNAL_TASK, typedAnswerCue } from '../interview-engine/interview/session/voice.prompt';
-import { interviewerBrief, interviewOpening } from '../interview-engine/interview/voice/brief.server';
+import { NO_EXTERNAL_TASK, typedAnswerCue } from '../interview-engine/interview/voice/voice.prompt';
+import { interviewerBrief, interviewOpening } from '../interview-engine/interview/voice/interviewerBrief.server';
 
 if (!Bun.argv.includes('--paid')) throw new Error('Pass --paid to open one voice session (about 40 seconds of GPT-Live).');
 const foundry = foundryConfig(process.env);

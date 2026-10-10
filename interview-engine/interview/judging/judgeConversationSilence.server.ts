@@ -17,7 +17,7 @@ export type SilenceRecord = {
 };
 
 /** Code times transcript inactivity; Jev judges whether the recent exchange leaves the next turn with the interviewer. */
-export async function evaluateSilence(input: { transcript: Passage[]; judge: Experimental_EvaluationModel; signal?: AbortSignal }) {
+export async function judgeConversationSilence(input: { transcript: Passage[]; judge: Experimental_EvaluationModel; signal?: AbortSignal }) {
   const result = await experimental_evaluate({
     model: input.judge,
     state: { recentDialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker: speaker === 'participant' ? 'participant' : 'interviewer', text })) },
@@ -44,4 +44,3 @@ export async function evaluateSilence(input: { transcript: Passage[]; judge: Exp
   return { probability, model: result.response.modelId, usage: result.usage };
 }
 
-export const CONTINUE_INTERVIEW = 'If the participant is still quiet and has finished their thought, take your next turn now: respond to their latest request, or ask one brief, grounded question to continue the interview. Respect any request to end or move on. Do not repeat an answered or declined question or apologize for the pause. If they are speaking or still thinking, keep listening.';

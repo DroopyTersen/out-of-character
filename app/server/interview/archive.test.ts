@@ -1,8 +1,8 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { interviewTopics } from '../../../core/interview';
-import type { MapEntity, MapThread } from '../../../interview-engine/interview/conversation/conversationMap';
-import type { GradeObjective, GradeRecord, MapRecord, NoteRecord, ProducerLogRecord, ResearchRecord, TraitRecord, TurnRecord } from '../../../interview-engine/interview/conversation/conversationRecords';
+import type { MapEntity, MapThread } from '../../../interview-engine/interview/reasoning/conversationMap';
+import type { GradeObjective, GradeRecord, MapRecord, NoteRecord, ProducerLogRecord, ResearchRecord, TraitRecord, TurnRecord } from '../../../interview-engine/interview/reasoning/conversationRecords';
 import type { InterviewArchiveWrite } from './archive.server';
 import { writeInterviewArchive } from './archive.server';
 

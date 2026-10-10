@@ -32,9 +32,9 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Accepted definition**: `InterviewPlan`, `InterviewConfig`, and optional `InterviewContext`. Context is explicit background, not participant evidence. The engine parses and copies these values and compiles its internal brief, framing and judging criteria.
 
-**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/grading/topicCoverage.prompt.ts`).
+**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/judging/topicCoverage.prompt.ts`).
 
-**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `interview/voice/brief.server.ts`).
+**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `interview/voice/interviewerBrief.server.ts`).
 
 **Framing**: what kind of interview a spec is, in the words Sol's map and Jev's grade use (`InterviewFraming`): the occasion, the name for one topic, the purpose and setting that open Sol's seed, the thread Sol keeps open by default, what the spec's terms mean, and whose words count toward a topic.
 
@@ -51,6 +51,12 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 **Typed passage**: the transcript passage a typed answer becomes, with id `typed-<id>` and the participant speaker. It is frozen when appended, so later speech starts a new passage. Its provider event uses the same `typed-` id, which is how a provider rejection of it is recognized.
 
 **Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled, the silence check does not run, and producer notes to Sam are held until the typed answer is forwarded or composition ends; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
+
+**Voice interviewer**: the module that owns provider sessions, segment diagnostics, receipts, usage and closure retries. Its recovery component owns greetings and transcript-silence checks. The coordinator supplies a narrow conversation view, registers provider IDs durably and accepts emitted transcript/lifecycle events.
+
+**Conversation producer**: the reasoning module that schedules map generation, turn judgments and background research under one shared budget and cancellation scope. Provider-bound callbacks do the paid work; the producer owns the map, ranking and current notes.
+
+**Session coordinator**: the attempt owner that mediates voice, grading and reasoning. It owns lifecycle, canonical transcript acceptance, typed-answer durability, fencing, persistence and archive completion.
 
 **Topic grading**: evidence-backed assessment of approved leaf topics during an attempt. The host's injected judge performs it; Sol receives coverage as conversation-map context. `TopicGrading` owns cadence, retry, cancellation, coverage state and history; the coordinator owns lifecycle and persistence. Grading does not decide whether the participant may end or supply input to the narrative writer.
 

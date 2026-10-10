@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { id, interviewContextSchema, interviewPlanSchema, text, type InterviewContext, type InterviewPlan, type InterviewTopic } from '../shared/plan';
 import type { InterviewLimits } from '../shared/spec';
 
-import type { BriefedSpec } from './voice/brief.server';
-import type { JudgedSpec } from './grading/topicCoverage.prompt';
-import type { MappedSpec } from './conversation/conversationMap.prompt';
+import type { BriefedSpec } from './voice/interviewerBrief.server';
+import type { JudgedSpec } from './judging/topicCoverage.prompt';
+import type { MappedSpec } from './reasoning/conversationMap.prompt';
 
 /** Host runtime choices, separate from the organizer's approved content. */
 export const interviewConfigSchema = z.object({

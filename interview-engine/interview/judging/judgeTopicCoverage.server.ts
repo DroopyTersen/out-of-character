@@ -4,7 +4,7 @@ import { choice, evidenceBatches, type Judge, type JudgeAnswers } from '../../pr
 import { COVERAGE_LEVELS, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../../shared/snapshot';
 import { dialogueState, findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
 import { interviewerToken, interviewQuestions, judgedObjectives, type JudgedSpec } from './topicCoverage.prompt';
-import { isBackchannel } from '../conversation/turnTaking';
+import { isBackchannel } from '../reasoning/turnTaking';
 
 export type EvaluationInput = {
   spec: JudgedSpec;

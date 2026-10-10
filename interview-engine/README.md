@@ -22,7 +22,7 @@ Sol alone edits the map. The first call needs participant speech. New informatio
 
 Sam receives a short thread note only when the lead or its wording changes, or a named alternative becomes unavailable. Map notes go when their content changes. Both use `session.thinking.append`; they are optional context, not instructions to speak. They are sent immediately, without another delivery timer. This intentionally changes production v22's held-note behavior; unit tests and archived replay cannot establish live interruption quality.
 
-A participant may type an answer instead of speaking. After its required save, the coordinator forwards it once to the same voice session as `session.thinking.append`, with `event_id: typed-<id>`, `delegation_id: null`, and content from `typedAnswerCue` in `interview/session/voice.prompt.ts`. Unlike a note, it asks Sam to respond. If the voice session changed or paused before the save completed, the answer reaches Sam through the resume context instead. The passage is frozen, so later speech starts a new passage rather than extending it. A provider `error` naming a `typed-` event pauses the attempt through the ordinary provider pause, with the message “Your answer is saved. Reconnect to continue.” When the last participant passage is typed, the resume instruction tells Sam it is a completed answer, not speech that may have been cut off.
+A participant may type an answer instead of speaking. After its required save, the coordinator forwards it once to the same voice session as `session.thinking.append`, with `event_id: typed-<id>`, `delegation_id: null`, and content from `typedAnswerCue` in `interview/voice/voice.prompt.ts`. Unlike a note, it asks Sam to respond. If the voice session changed or paused before the save completed, the answer reaches Sam through the resume context instead. The passage is frozen, so later speech starts a new passage rather than extending it. A provider `error` naming a `typed-` event pauses the attempt through the ordinary provider pause, with the message “Your answer is saved. Reconnect to continue.” When the last participant passage is typed, the resume instruction tells Sam it is a completed answer, not speech that may have been cut off.
 
 `composing` follows sequenced poll and `ready` reports and clears when a durably saved typed answer is forwarded. The browser keeps its microphone track disabled while composing (`track.enabled = !muted && !composing && !autoMuted`), so clearing or sending restores the participant's own mute choice. While the coordinator holds `composing`, the silence check does not run, and entering composition aborts a check already in flight. Leaving composition starts a fresh four-second silence interval. Idle and duration limits, coverage, producer work and Sam's own replies continue; an utterance already underway is not cancelled. While composing, the producer continues updating its map and ranking but emits no notes or delivery records. When composition ends or just before a typed answer is forwarded, it sends only the current changed notes. A resumed session receives the current notes even when the ordinary note cap was already reached.
 
@@ -58,11 +58,24 @@ The entry points a host uses are:
 - `setup/approve.server.ts` and `setup/draft.server.ts`
 - `shared/*` and `client/*`
 
-## Topic grading and session coordination
+## Conversation roles and session coordination
 
-`interview/grading/topicGrading.server.ts` owns grading cadence, input deduplication, the call budget, cancellation, retries, live coverage smoothing and the final grade. `judgeTopicCoverage.server.ts` makes one judgment through the supplied judge; `topicCoverage.prompt.ts` defines its questions and `topicCoverage.ts` holds the pure coverage rules. Grading can be tested with a transcript callback and a judge without opening a voice session.
+The live interview has three responsibilities, organized by role rather than provider name:
 
-`interview/session/sessionCoordinator.server.ts` coordinates that module with the voice session and conversation producer. It owns lifecycle, transcript settlement, persistence, fencing and closing order. Each module reports through typed values and callbacks; the coordinator controls when work starts and stops.
+| Folder | Owner | Responsibility |
+| --- | --- | --- |
+| `interview/voice/` | `VoiceInterviewer`, with `VoiceRecovery` | Provider sessions, briefs, receipts, usage, greeting recovery and transcript-silence recovery |
+| `interview/judging/` | `TopicGrading` and individual judgments | Coverage cadence and final grading; typed judgments of topic coverage, turns and silence |
+| `interview/reasoning/` | `InterviewProducer` | Conversation map, turn-reading schedule, research, thread selection and current interviewer notes |
+| `interview/session/` | `SessionCoordinator` | Attempt lifecycle, transcript acceptance, typed answers, durable ordering, fencing and archives |
+
+`VoiceInterviewer` receives a voice provider, a narrow conversation view and a bound silence judgment. It registers a new provider ID through the coordinator's required persistence callback before attaching. Captured-segment events return through a typed output callback; the coordinator decides which transcript and lifecycle changes to accept. Closure still delivers the participant's last words before its required save completes. Fencing detaches the connection without closing a successor's provider session.
+
+`VoiceRecovery` owns greeting and silence policy, including cancellation and stale-result checks. A provider receipt does not establish speech. Browser playback postpones greeting recovery, while transcript inactivity drives the silence judgment.
+
+`InterviewProducer` receives provider-bound callbacks, model labels and thresholds. Its map, turn and research calls retain one scheduler, cancellation scope and shared 400-call cap. Judging functions live together without creating a second scheduler for these calls. The coordinator binds model clients and mediates notes, provider receipts and committed transcript.
+
+`TopicGrading` owns coverage cadence, deduplication, its separate call budget, cancellation, retries, smoothing and final grade. Each module can be tested with concrete input/output callbacks; none receives the coordinator or a store. Checkpoint fields and host/browser contracts remain unchanged by this organization.
 
 ## The three seams
 

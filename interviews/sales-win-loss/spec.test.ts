@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { resolveInterview } from '../../interview-engine/interview/definition.server';
-import { mapSeed } from '../../interview-engine/interview/conversation/conversationMap.prompt';
-import { interviewQuestions } from '../../interview-engine/interview/grading/topicCoverage.prompt';
-import { interviewerBrief } from '../../interview-engine/interview/voice/brief.server';
+import { mapSeed } from '../../interview-engine/interview/reasoning/conversationMap.prompt';
+import { interviewQuestions } from '../../interview-engine/interview/judging/topicCoverage.prompt';
+import { interviewerBrief } from '../../interview-engine/interview/voice/interviewerBrief.server';
 import { spec as closeout } from '../project-closeout/spec';
 import { spec } from './spec';
 

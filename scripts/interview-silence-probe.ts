@@ -1,5 +1,5 @@
 // Paid semantic replay only: no voice session, audio, database writes or deployments.
-import { evaluateSilence, SILENCE_VERSION } from '../interview-engine/interview/session/silence.server';
+import { judgeConversationSilence, SILENCE_VERSION } from '../interview-engine/interview/judging/judgeConversationSilence.server';
 import { createJevJudge } from '../interview-engine/providers/jevJudge.server';
 import type { Passage } from '../interview-engine/shared/transcript';
 import { archivedTranscriptSchema } from '../core/interview-transcript';
@@ -12,7 +12,7 @@ const judge = createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY });
 const results = [];
 for (const item of cases) {
   const started = performance.now();
-  const result = await evaluateSilence({ transcript: archivedTranscriptSchema.parse(item.transcript).slice(-8), judge: judge.model, signal: AbortSignal.timeout(3000) });
+  const result = await judgeConversationSilence({ transcript: archivedTranscriptSchema.parse(item.transcript).slice(-8), judge: judge.model, signal: AbortSignal.timeout(3000) });
   const actual = result.probability >= judge.thresholds.silenceContinue;
   results.push({ id: item.id, passageIds: item.transcript.slice(-8).map(entry => entry.id), expected: item.expected, actual,
     ...result, durationMs: Math.round(performance.now() - started), pass: actual === item.expected });

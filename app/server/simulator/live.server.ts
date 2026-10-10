@@ -3,7 +3,7 @@ import { actorBrief, getClient, getScenario } from '../../../ai/simulator/scenar
 import { attachGptLiveSocket, gptLiveProvider, LIVE_MODEL } from '../../../interview-engine/providers/gptLive.server';
 
 export { LIVE_MODEL, LiveSessionGone, transcriptEvent } from '../../../interview-engine/providers/gptLive.server';
-export { NO_EXTERNAL_TASK } from '../../../interview-engine/interview/session/voice.prompt';
+export { NO_EXTERNAL_TASK } from '../../../interview-engine/interview/voice/voice.prompt';
 
 /** A resumed session appends the rebuilt conversation after the unchanged actor brief. */
 export function liveConfiguration(scenarioId: string, clientId: string, context?: string) {

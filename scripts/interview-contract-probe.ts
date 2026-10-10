@@ -4,7 +4,7 @@
  */
 import { foundryConfig } from '../ai/foundry.server';
 import { resolveInterview } from '../interview-engine/interview/definition.server';
-import { judgeTopicCoverage } from '../interview-engine/interview/grading/judgeTopicCoverage.server';
+import { judgeTopicCoverage } from '../interview-engine/interview/judging/judgeTopicCoverage.server';
 import { writeNarrative } from '../interview-engine/narrative/writeNarrative.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';

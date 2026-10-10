@@ -1,3 +1,4 @@
+import { inlineBackground } from '../interview-engine/interview/adapters/memory.server.ts';
 import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
@@ -6,9 +7,12 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server.ts';
 import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
-import { settledPrefix } from '../ai/interview/map.server.ts';
+import { generateMap, settledPrefix } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
-import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/interviewProducer.server.ts';
+import { InterviewProducer } from '../interview-engine/interview/reasoning/interviewProducer.server.ts';
+import { evaluateTurn } from '../interview-engine/interview/judging/judgeConversationTurn.server.ts';
+import { lookupInterviewBackground } from '../interview-engine/interview/reasoning/backgroundResearch.server.ts';
+import { modelName } from '../interview-engine/providers/providers.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
 import { appendTranscript, settledTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
@@ -102,10 +106,20 @@ let current = null, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded =
 let samSince = '', generating = false, closing = false, offersSeen = 0, coverage = [], grading = null, pacing, deadline;
 const inputMs = () => Date.now() - inputStartedAt;
 const startedAt = Date.now();
+const producerBackground = inlineBackground();
+const providers = foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) });
 const producer = new InterviewProducer({
   // Short: Sol's cache key, which includes it, is capped at 64 characters.
-  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec, providers: foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) }), services: producerServices,
-  settled: prefix, coverage: () => coverage, send,
+  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec,
+  models: { agent: modelName(providers.language.agent), fast: modelName(providers.language.fast) }, thresholds: providers.judge.thresholds,
+  services: {
+    generateMap: input => generateMap({ ...input, structured: providers.structured }),
+    evaluateTurn: input => evaluateTurn({ ...input, judge: providers.judge.model }),
+    lookupInterviewBackground: input => lookupInterviewBackground({ ...input, model: providers.language.fast, webSearch: providers.webSearch }),
+  },
+  settled: prefix, coverage: () => coverage,
+  send: note => send({ type: 'session.thinking.append', event_id: note.id, delegation_id: null, content: note.content }),
+  waitUntil: work => producerBackground.track(work),
 });
 const producerTimer = setInterval(() => producer.tick(), 100);
 const close = () => { if (closing) return; closing = true; clearTimeout(pacing); clearInterval(producerTimer); producer.close(); send({ type: 'session.close' }); };
@@ -240,7 +254,7 @@ await new Promise(resolve => {
 });
 clearTimeout(deadline); clearTimeout(pacing); clearInterval(producerTimer); ws.close();
 await grading;
-await producer.settle();
+await producerBackground.settle();
 const at = ms => Math.round(ms - startedAt + (startedAt - inputStartedAt));
 report.producer = producer.summary();
 report.notes = producer.records.filter(item => item.source === 'note').map(note => ({

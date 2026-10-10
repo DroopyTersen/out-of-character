@@ -1,4 +1,3 @@
-import { modelName, type Providers } from '../../providers/providers.server';
 import { callFailure } from '../../providers/diagnostics.server';
 import { DirectorOutputError, type ModelUsage } from '../../providers/structured.server';
 import type { InterviewBackground, InterviewObjectiveReading as Reading } from '../../shared/snapshot';
@@ -6,27 +5,33 @@ import { activeElapsed, type PauseSpan } from '../../shared/timing';
 import type { Passage as TranscriptEntry, Speaker } from '../../shared/transcript';
 import { emptyMap, type ConversationMap, type MapChanges } from './conversationMap';
 import {
-  appendMapLog, emptyMapLog, generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
+  appendMapLog, emptyMapLog, type generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, unloggedPassages,
   type MapLog, type MappedSpec, type MapTail,
 } from './conversationMap.server';
 import { emptyListState, emptyMapNote, mapNote, mapNoteKey, mapNoteResearch, nextListNote, type ListState } from './interviewerNotes';
 import { emptyRanking, observeMap, observeTurn, RANKING, threadKey, type Pick } from './threadSelection';
-import { evaluateTurn, RANKING_RUBRIC_VERSION } from './judgeConversationTurn.server';
+import { type evaluateTurn, RANKING_RUBRIC_VERSION } from '../judging/judgeConversationTurn.server';
 import { latestTurn, said, upToParticipant } from './turnTaking';
 import {
   deliveredBackground, PRODUCER_LIMITS, producerLatency, PRODUCER_VERSION,
   type MapRecord, type NoteRecord, type ProducerLogRecord, type ProducerSummary, type ResearchRecord, type ResearchRequest, type TurnRecord,
 } from './conversationRecords';
-import { lookupInterviewBackground, researchKey, validateResearchRequest } from './backgroundResearch.server';
+import { type lookupInterviewBackground, researchKey, validateResearchRequest } from './backgroundResearch.server';
 import { isBackchannel, yieldsTurn } from './turnTaking';
 
 type InterviewObjectiveReading = Reading<Speaker>;
-export const producerServices = { generateMap, evaluateTurn, lookupInterviewBackground };
+/** Provider-bound calls supplied by the coordinator; the producer owns their scheduling and shared budget. */
+export type ProducerCalls = {
+  generateMap: (input: Omit<Parameters<typeof generateMap>[0], 'structured'>) => ReturnType<typeof generateMap>;
+  evaluateTurn: (input: Omit<Parameters<typeof evaluateTurn>[0], 'judge'>) => ReturnType<typeof evaluateTurn>;
+  lookupInterviewBackground: (input: Omit<Parameters<typeof lookupInterviewBackground>[0], 'model' | 'webSearch'>) => ReturnType<typeof lookupInterviewBackground>;
+};
 type Options = {
   spec: MappedSpec;
   attemptId: string; startedAt: number;
-  providers: Omit<Providers, 'voice' | 'telemetry'>;
-  services: typeof producerServices;
+  models: { agent: string; fast: string };
+  thresholds: { novelInformation?: number; interviewFeedback?: number };
+  services: ProducerCalls;
   /** Settled passages in order, stopping at the first still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
   send: (note: { id: string; content: string }) => boolean; notesHeld?: () => boolean; waitUntil: (work: Promise<void>) => void;
@@ -125,7 +130,7 @@ export class InterviewProducer {
     this.lastMapStart = now;
     const record: MapRecord = {
       source: 'map', id: `map-${crypto.randomUUID()}`, reasons, startedAt: now, outcome: 'pending',
-      inputCount: settled.length, lastInputId: settled.at(-1)?.id ?? null, model: modelName(this.options.providers.language.agent),
+      inputCount: settled.length, lastInputId: settled.at(-1)?.id ?? null, model: this.options.models.agent,
     };
     this.records.push(record);
     for (const { researchId } of events) {
@@ -157,13 +162,13 @@ export class InterviewProducer {
   }
 
   private async generate(record: MapRecord, controller: AbortController, log: MapLog, settled: TranscriptEntry[], now: number) {
-    const { services, providers, attemptId } = this.options;
+    const { services, attemptId } = this.options;
     const signal = AbortSignal.any([this.abort.signal, controller.signal, AbortSignal.timeout(LIMITS.mapTimeout)]);
     const live = () => this.alive && this.call?.record === record;
     let result: Awaited<ReturnType<typeof services.generateMap>>;
     try {
       result = await services.generateMap({
-        spec: this.options.spec, structured: providers.structured, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
+        spec: this.options.spec, signal, attemptId, blocks: log.blocks, previous: this.map, tail: this.tail(settled, record.reasons, now), passages: settled,
         lookups: this.records.flatMap(item => item.source === 'research' && item.outcome === 'found' && item.eventId != null && item.loggedAt != null ? [item.eventId] : []),
       });
       if (!live()) return;
@@ -225,7 +230,7 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.turnTimeout)]);
     try {
-      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, judge: this.options.providers.judge.model, signal, atMs: this.elapsed(now) });
+      const result = await this.options.services.evaluateTurn({ transcript: settled, map: this.map, signal, atMs: this.elapsed(now) });
       if (scope.aborted) return;
       signal.throwIfAborted();
       if (Date.now() - record.startedAt >= LIMITS.turnTimeout) { record.outcome = 'timeout'; return; }
@@ -241,7 +246,7 @@ export class InterviewProducer {
       // Sol may have landed a different map while Jev read. The next tick reads against that map.
       if (record.mapId !== (this.mapRecord?.id ?? null)) return;
       this.ranking = observeTurn(this.ranking, this.map, reading, latestTurn(settled)[0]!.id);
-      const thresholds = this.options.providers.judge.thresholds;
+      const thresholds = this.options.thresholds;
       if ((reading.novel >= (thresholds.novelInformation ?? RANKING.novel) || (reading.feedback ?? 0) >= (thresholds.interviewFeedback ?? RANKING.novel)) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'participant')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
@@ -291,7 +296,7 @@ export class InterviewProducer {
   }
 
   private request(map: MapRecord, request: ResearchRequest, settled: TranscriptEntry[]) {
-    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map.id, request, model: modelName(this.options.providers.language.fast), requestedAt: Date.now(), outcome: 'pending' };
+    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map.id, request, model: this.options.models.fast, requestedAt: Date.now(), outcome: 'pending' };
     const refuse = (outcome: ResearchRecord['outcome'], reason: string) => { record.outcome = outcome; record.reason = reason; record.completedAt = Date.now(); this.records.push(record); };
     const valid = validateResearchRequest(request, settled);
     if (!valid.ok) return refuse('invalid', valid.reason);
@@ -313,7 +318,7 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.lookupTimeout)]);
     try {
-      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, model: this.options.providers.language.fast, webSearch: this.options.providers.webSearch, signal });
+      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, signal });
       if (scope.aborted) return;
       signal.throwIfAborted();
       const now = Date.now();
@@ -363,7 +368,7 @@ export class InterviewProducer {
 
   summary(): ProducerSummary {
     return {
-      model: modelName(this.options.providers.language.agent), effort: MAP_EFFORT, version: PRODUCER_VERSION,
+      model: this.options.models.agent, effort: MAP_EFFORT, version: PRODUCER_VERSION,
       mapPrompt: MAP_PROMPT_VERSION, rankingRubric: RANKING_RUBRIC_VERSION,
       ...this.counts, latency: producerLatency(this.records),
     };

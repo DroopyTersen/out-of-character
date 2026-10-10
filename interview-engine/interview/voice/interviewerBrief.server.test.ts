@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { testTechniques } from '../conversation/testSpec';
-import { interviewerBrief, interviewOpening, type BriefedSpec } from './brief.server';
+import { testTechniques } from '../reasoning/testSpec';
+import { interviewerBrief, interviewOpening, type BriefedSpec } from './interviewerBrief.server';
 
 const spec = {
   interviewer: {

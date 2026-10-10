@@ -58,3 +58,5 @@ export function resumeInstruction(interviewerName: string, transcript: Passage[]
     'Do not re-ask anything already answered in the conversation so far.',
   ].filter(Boolean).join(' ');
 }
+
+export const CONTINUE_INTERVIEW = 'If the participant is still quiet and has finished their thought, take your next turn now: respond to their latest request, or ask one brief, grounded question to continue the interview. Respect any request to end or move on. Do not repeat an answered or declined question or apologize for the pause. If they are speaking or still thinking, keep listening.';

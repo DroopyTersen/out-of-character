@@ -6,14 +6,14 @@ import type { VoiceHandlers, WebSocketLike } from '../../providers/voice.server'
 import type { Judge } from '../../providers/judgeProvider.server';
 import { createJevJudge } from '../../providers/jevJudge.server';
 import { createDecisionJudge, type Fetch } from '../../providers/decisionJudge.server';
-import { evaluateSilence } from './silence.server';
+import { judgeConversationSilence } from '../judging/judgeConversationSilence.server';
 import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type MemoryRecord } from '../adapters/memory.server';
-import { INTERVIEW_RUBRIC_VERSION } from '../grading/topicCoverage.prompt';
-import { testFraming, testTechniques } from '../conversation/testSpec';
+import { INTERVIEW_RUBRIC_VERSION } from '../judging/topicCoverage.prompt';
+import { testFraming, testTechniques } from '../reasoning/testSpec';
 import { FencedError, type InterviewArchiveRow } from '../seams.server';
 import type { InterviewSnapshot as PublicSnapshot } from '../../shared/snapshot';
 import { SessionCoordinator, type SessionOptions, type SessionServices } from './sessionCoordinator.server';
-import { resumeInstruction, typedAnswerCue } from './voice.prompt';
+import { resumeInstruction, typedAnswerCue } from '../voice/voice.prompt';
 
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the
 // network is substituted; timing, the lease, checkpoints, fencing and the archive are real.
@@ -719,10 +719,10 @@ test.each(['empty coverage', 'failed final grade'] as const)('End saves particip
 const silenceResult = (probability: number) => ({ probability, model: 'fixture', usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } });
 const reminders = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('silence-'));
 
-async function stranded(check: SessionServices['evaluateSilence'], judge?: Judge) {
+async function stranded(check: SessionServices['judgeConversationSilence'], judge?: Judge) {
   const f = fixture();
   if (judge) f.options.providers.judge = judge;
-  f.options.services!.evaluateSilence = check;
+  f.options.services!.judgeConversationSilence = check;
   const { actor, socket } = await conversation(f);
   f.at(4000);
   say(socket, 'output', 'ack', 'That sounds useful.', 4000);
@@ -741,7 +741,7 @@ test('the host-selected judge controls whether a .75 silence result sends a cont
   const jev = createJevJudge({ apiKey: 'fixture', fetch: request as typeof fetch });
   const decisions = createDecisionJudge({ apiKey: 'fixture', fetch: request });
   for (const [judge, expected] of [[jev, 0], [decisions, 1]] as const) {
-    const f = await stranded(evaluateSilence, judge);
+    const f = await stranded(judgeConversationSilence, judge);
     try {
       await f.send(f.actor, 'poll');
       await f.background.settle();
@@ -1203,7 +1203,7 @@ test('an unnumbered poll cannot open a draft', async () => {
 test('a ready carrying an open draft protects the session from its first moment live', async () => {
   let calls = 0;
   const f = fixture();
-  f.options.services!.evaluateSilence = async () => { calls++; return silenceResult(.97); };
+  f.options.services!.judgeConversationSilence = async () => { calls++; return silenceResult(.97); };
   const actor = await f.restore();
   await f.send(actor, 'start', start);
   expect((await f.send(actor, 'ready', JSON.stringify({ active: false }))).status).toBe(400);

@@ -9,7 +9,7 @@ import { judgeTopicCoverage, readTopicCoverage } from './judgeTopicCoverage.serv
 import { dialogueState } from '../../shared/transcript';
 import { type JudgeAnswers } from '../../providers/judgeProvider.server';
 import { interviewQuestions, type JudgedSpec } from './topicCoverage.prompt';
-import { testFraming } from '../conversation/testSpec';
+import { testFraming } from '../reasoning/testSpec';
 
 const spec = {
   interviewer: { name: 'Riley' },

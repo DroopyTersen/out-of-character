@@ -1,9 +1,7 @@
 import type { EngineEvent } from '../../providers/diagnostics.server';
-import { callFailure } from '../../providers/diagnostics.server';
-import type { Providers } from '../../providers/providers.server';
-import type { VoiceConnection, VoiceEvent, VoiceInput } from '../../providers/voice.server';
+import { modelName, type Providers } from '../../providers/providers.server';
+import type { VoiceEvent } from '../../providers/voice.server';
 import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, submitTextSchema, type Activity, type SubmitTextInput, type SubmitTextReply } from '../../shared/protocol';
-import { NETWORK_SAMPLES } from '../../shared/network';
 import type { InterviewSnapshot, SessionPause, SessionWarning } from '../../shared/snapshot';
 import type { InterviewLimits } from '../../shared/spec';
 import { resolveInterview, type InterviewDefinition, type ResolvedInterview } from '../definition.server';
@@ -11,20 +9,31 @@ import {
   SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, within, type PauseSpan,
 } from '../../shared/timing';
 import { TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../../shared/transcript';
-import { TopicGrading, type Evaluate } from '../grading/topicGrading.server';
-import { judgeTopicCoverage } from '../grading/judgeTopicCoverage.server';
-import { settledPrefix } from '../conversation/conversationMap.server';
-import { InterviewProducer, producerServices } from '../conversation/interviewProducer.server';
-import { INTERVIEW_RUBRIC_VERSION } from '../grading/topicCoverage.prompt';
+import { TopicGrading, type Evaluate } from '../judging/topicGrading.server';
+import { judgeTopicCoverage } from '../judging/judgeTopicCoverage.server';
+import { generateMap, settledPrefix } from '../reasoning/conversationMap.server';
+import { InterviewProducer } from '../reasoning/interviewProducer.server';
+import { evaluateTurn } from '../judging/judgeConversationTurn.server';
+import { lookupInterviewBackground } from '../reasoning/backgroundResearch.server';
+import { INTERVIEW_RUBRIC_VERSION } from '../judging/topicCoverage.prompt';
 import { FencedError, type Archive, type Background, type InterviewArchiveRow, type NarrativeProvenance, type SessionStore } from '../seams.server';
-import { interviewerBrief, interviewOpening } from '../voice/brief.server';
-import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus, PauseRecord, Segment, SessionSnapshot } from './sessionCheckpoint';
+import { interviewerBrief, interviewOpening } from '../voice/interviewerBrief.server';
+import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus, PauseRecord, SessionSnapshot } from './sessionCheckpoint';
 import { appendTranscript, settledTranscript } from './sessionTranscript';
-import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from './voice.prompt';
-import { CONTINUE_INTERVIEW, evaluateSilence, MAX_SILENCE_CHECKS, SILENCE_MS, SILENCE_VERSION, type SilenceRecord } from './silence.server';
+import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from '../voice/voice.prompt';
+import { judgeConversationSilence } from '../judging/judgeConversationSilence.server';
+import { VoiceInterviewer, type VoiceOutput } from '../voice/voiceInterviewer.server';
+import { UNRESPONSIVE } from '../voice/voiceRecovery.server';
+import type { VoiceSegment } from '../voice/voiceSession';
 
 /** The paid calls, replaceable for tests: Sol, Jev's turn reads, Luna, and Jev's coverage grade. */
-export type SessionServices = typeof producerServices & { evaluate: Evaluate; evaluateSilence: typeof evaluateSilence };
+export type SessionServices = {
+  generateMap: typeof generateMap;
+  evaluateTurn: typeof evaluateTurn;
+  lookupInterviewBackground: typeof lookupInterviewBackground;
+  evaluate: Evaluate;
+  judgeConversationSilence: typeof judgeConversationSilence;
+};
 
 export type SessionOptions = InterviewDefinition & {
   /** Every paid client, credentials bound: nothing else in the options can reach a provider. */
@@ -51,10 +60,6 @@ export type Command = { action: string; capability: string; body?: string };
  */
 export type Reply = { status: number; body: unknown; terminal?: true; report?: true };
 
-// The provider has no command that guarantees speech, and it can accept the greeting and stay silent.
-const GREETING_RETRY_MS = 10_000;
-const GREETING_REPLACE_MS = 25_000;
-const UNRESPONSIVE = 'The voice service is not responding. You can end this attempt and try again.';
 const FENCED = 'Another owner has taken over this attempt.';
 const INVALID = 'Invalid interview request.';
 const CANCELLED = 'The attempt was cancelled.';
@@ -99,7 +104,7 @@ export class SessionCoordinator {
   private state: SessionSnapshot | undefined;
   private readonly grading: TopicGrading;
   private narrativeStatus: NarrativeStatus | null = null;
-  private voice: VoiceConnection | undefined;
+  private readonly voice: VoiceInterviewer;
   private timer: ReturnType<typeof setInterval> | undefined;
   private finishing: Promise<void> | undefined;
   /** Original end intent while closing is pending, including after a failed store write. */
@@ -109,15 +114,11 @@ export class SessionCoordinator {
   private pausing: Promise<void> | undefined;
   private lastSeen: number;
   private lastActivity: number;
-  /** When the browser last heard Sam's playback; the participant's speech is known only from their transcript. */
-  private lastAudio: number;
   private connectingSince: number | undefined;
   private capacityDeadline: number | null = null;
   private passageUpdatedAt = new Map<string, number>();
   private frozenPassages = new Set<string>();
   private reachedLive = false;
-  private epoch = 0;
-  private segments: Segment[] = [];
   private pauses: PauseRecord[] = [];
   private resumes = 0;
   /** Restored from a checkpoint too close to its limit to resume; finished on first contact. */
@@ -125,14 +126,6 @@ export class SessionCoordinator {
   private producer: InterviewProducer | undefined;
   private activitySequence = -1;
   private seenEvents = new Set<string>();
-  /** The current provider session's instruction to speak, kept to ask once more if it is met with silence. */
-  private greeting: { eventId: string; content: string } | undefined;
-  /** When either side's transcript last grew. */
-  private lastSpeech = 0;
-  private silenceCheckedRevision = -1;
-  private silenceCheck: Promise<void> | undefined;
-  private silenceAbort: AbortController | undefined;
-  private replacedSilent = false;
   /** When the attempt ended, while the archive has not acknowledged its final row. Its terminal checkpoint is kept until then. */
   private unarchived: number | null = null;
   private narrativeArchive = Promise.resolve();
@@ -158,14 +151,27 @@ export class SessionCoordinator {
     this.archive = options.archive;
     this.now = options.now ?? Date.now;
     this.report = options.log ?? (() => {});
-    this.paid = { ...producerServices, evaluate: judgeWith(this.spec, options.providers), evaluateSilence, ...options.services };
+    this.paid = { generateMap, evaluateTurn, lookupInterviewBackground, evaluate: judgeWith(this.spec, options.providers), judgeConversationSilence, ...options.services };
     this.grading = new TopicGrading({
       evaluate: this.paid.evaluate, now: this.now,
       current: () => ({ transcript: settledTranscript(this.state!.transcript, this.passageUpdatedAt, this.now()), revision: this.state!.revision }),
       freeze: passages => { for (const passage of passages) this.frozenPassages.add(passage.id); },
     });
+    this.voice = new VoiceInterviewer({
+      spec: this.spec, provider: this.providers.voice, now: this.now,
+      conversation: () => this.fenced || !this.state || this.ended() ? null : {
+        status: this.state.status, transcript: this.state.transcript, revision: this.state.revision, composing: this.composing,
+      },
+      judgeSilence: input => this.paid.judgeConversationSilence({ ...input, judge: this.providers.judge.model }),
+      silenceContinue: this.providers.judge.thresholds.silenceContinue,
+      admit: () => {
+        if (this.fenced) throw new FencedError();
+        if (this.finishing || this.state?.status === 'ending') throw new Cancelled();
+      },
+      persist: () => this.persistLease(), output: message => this.voiceOutput(message),
+    });
     this.lazyWake = options.lazyWake ?? false;
-    this.lastSeen = this.lastActivity = this.lastAudio = this.now();
+    this.lastSeen = this.lastActivity = this.now();
   }
 
   /**
@@ -189,7 +195,7 @@ export class SessionCoordinator {
   /** Finishes through the first final archive write, resuming a failed close before the host starts its report. */
   get closing(): Promise<void> | undefined { return this.endingInterrupted !== undefined ? this.end() : this.finishing; }
 
-  private get segment(): Segment | undefined { return this.segments.at(-1); }
+  private get segment(): Readonly<VoiceSegment> | undefined { return this.voice.current; }
 
   async handle(command: Command): Promise<Reply> {
     if (this.fenced) return reply({ error: FENCED }, 409);
@@ -252,12 +258,15 @@ export class SessionCoordinator {
         this.state.status = 'live';
         this.reachedLive = true;
         this.lastActivity = this.now();
-        this.greet('opening', interviewOpening(this.spec, this.state.voiceId));
+        this.voice.greet('opening', interviewOpening(this.spec, this.state.voiceId));
       }
     }
     if (action === 'end') await this.end();
     this.checkLifetime();
-    if (action === 'poll' && this.state.status === 'live') this.checkSilence(this.now());
+    if (action === 'poll' && this.state.status === 'live') {
+      const recovery = this.voice.checkSilence(this.now());
+      if (recovery) this.background.track(recovery);
+    }
     return reply(this.publicSnapshot());
   }
 
@@ -266,9 +275,8 @@ export class SessionCoordinator {
     if (activity.sequence != null && activity.sequence <= this.activitySequence) return;
     if (activity.sequence != null) this.activitySequence = activity.sequence;
     if (activity.active || activity.audio) this.lastActivity = now;
-    if (activity.audio) this.lastAudio = now;
-    const segment = this.segment;
-    if (activity.network && segment && (segment.network?.length ?? 0) < NETWORK_SAMPLES) (segment.network ??= []).push({ at: now, ...activity.network });
+    if (activity.audio) this.voice.playback(now);
+    if (activity.network) this.voice.network({ at: now, ...activity.network });
     if (activity.sequence != null && activity.composing !== undefined) this.setComposing(activity.composing, now);
   }
 
@@ -276,14 +284,8 @@ export class SessionCoordinator {
   private setComposing(value: boolean, now: number) {
     if (value === this.composing) return;
     this.composing = value;
-    if (value) {
-      // A judgment aborted by typing may be reconsidered; a completed one keeps its once-per-exchange bound.
-      if (this.silenceCheck) this.silenceCheckedRevision = -1;
-      this.silenceAbort?.abort();
-    } else {
-      this.lastSpeech = now;
-      this.producer?.flushNotes(now);
-    }
+    this.voice.composing(value, now);
+    if (!value) this.producer?.flushNotes(now);
   }
 
   /**
@@ -339,7 +341,7 @@ export class SessionCoordinator {
       this.typedUnforwarded.delete(id);
       // Context first, so Sam answers the typed turn knowing what the producer learned meanwhile.
       this.setComposing(false, this.now());
-      this.send({ kind: 'context', id, content: typedAnswerCue(input.text) });
+      this.voice.send({ kind: 'context', id, content: typedAnswerCue(input.text) });
     }
     return reply({ acceptedId: input.id, snapshot: this.publicSnapshot() } satisfies SubmitTextReply);
   }
@@ -419,7 +421,7 @@ export class SessionCoordinator {
   private stopClock() {
     clearInterval(this.timer);
     this.timer = undefined;
-    this.silenceAbort?.abort();
+    void this.voice.stopRecovery();
   }
 
   /** Runs a checkpoint write or deletion after every earlier one. Its failure is the caller's; the chain continues. */
@@ -437,8 +439,8 @@ export class SessionCoordinator {
   private checkpoint(savedAt = this.now()): Checkpoint {
     const { evaluation, feedbackStatus, grades, gradeCalls } = this.grading.snapshot();
     return structuredClone({
-      definition: this.definition, savedAt, snapshot: { ...this.state!, feedbackStatus, interview: { evaluation, summary: this.narrativeStatus } }, reachedLive: this.reachedLive, epoch: this.epoch, resumes: this.resumes,
-      segments: this.segments, pauses: this.pauses, grades, gradeCalls,
+      definition: this.definition, savedAt, snapshot: { ...this.state!, feedbackStatus, interview: { evaluation, summary: this.narrativeStatus } }, reachedLive: this.reachedLive, epoch: this.voice.epoch, resumes: this.resumes,
+      segments: [...this.voice.segments], pauses: this.pauses, grades, gradeCalls,
       ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
     });
   }
@@ -450,10 +452,8 @@ export class SessionCoordinator {
     this.stopClock();
     void this.grading.stop();
     this.producer?.close();
-    // The provider session stays open: the new owner knows it from the lease and closes it.
-    const voice = this.voice;
-    this.voice = undefined;
-    voice?.detach();
+    // The successor owns the provider IDs retained in the durable lease.
+    this.voice.detach();
     this.report({ type: 'session', event: 'fenced', id: this.state?.id ?? '' });
   }
 
@@ -494,7 +494,7 @@ export class SessionCoordinator {
   private async connect(input: { voiceId: string; sdp: string }) {
     await this.save({ lease: this.lease! });
     await this.setWake(this.now() + 30_000);
-    return this.openLive(input);
+    return this.voice.open(input);
   }
 
   private createProducer() {
@@ -504,55 +504,40 @@ export class SessionCoordinator {
     const prefix = () => { const ready = new Set(settled()); return settledPrefix(this.state!.transcript, entry => ready.has(entry)); };
     this.producer = new InterviewProducer({
       spec: this.spec, attemptId: snapshot.id, startedAt: snapshot.startedAt,
-      providers: this.providers, services: this.paid,
-      settled: prefix, coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
+      models: { agent: modelName(this.providers.language.agent), fast: modelName(this.providers.language.fast) },
+      thresholds: this.providers.judge.thresholds,
+      services: {
+        generateMap: input => this.paid.generateMap({ ...input, structured: this.providers.structured }),
+        evaluateTurn: input => this.paid.evaluateTurn({ ...input, judge: this.providers.judge.model }),
+        lookupInterviewBackground: input => this.paid.lookupInterviewBackground({ ...input, model: this.providers.language.fast, webSearch: this.providers.webSearch }),
+      },
+      settled: prefix, coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.voice.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
     });
   }
 
-  private voiceName(voiceId: string) {
-    return this.spec.interviewer.voices.find(voice => voice.id === voiceId)!.voice;
+  private voiceOutput(message: VoiceOutput) {
+    if (this.fenced) return;
+    if (message.type === 'event') return this.onEvent(message.event, message.segment);
+    if (message.type === 'dropped') return this.dropped(message.segment);
+    if (message.epoch !== this.segment?.epoch) return;
+    if (message.type === 'replace') this.background.track(this.pause('provider'));
+    if (message.type === 'unresponsive') this.state!.message = UNRESPONSIVE;
+    if (message.type === 'responded' && this.state?.message === UNRESPONSIVE) this.state.message = null;
   }
 
-  /** A resumed session appends the rebuilt conversation after the unchanged brief. */
-  private async openLive(input: { voiceId: string; sdp: string }, offsetMs = 0, context?: string) {
-    // Checked last thing before the paid call: an end or a fence that arrived during the writes above must not open a session.
-    if (this.fenced) throw new FencedError();
-    if (this.finishing || this.state?.status === 'ending') throw new Cancelled();
-    const instructions = [interviewerBrief(this.spec, input.voiceId), context].filter(Boolean).join('\n\n');
-    const created = await this.providers.voice.create({ sdp: input.sdp, voice: this.voiceName(input.voiceId), instructions });
-    const segment: Segment = { epoch: ++this.epoch, providerId: created.id, offsetMs, startedAt: this.now(), endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null };
-    this.segments.push(segment);
-    try { await this.persistLease(); }
-    catch (error) {
-      // The lease never recorded this session, so no owner will ever close it from the store: close it now, best effort.
-      await this.providers.voice.close(created.id).catch(() => {});
-      throw error;
-    }
-    this.voice = await this.providers.voice.attach(created.id, { event: event => this.onEvent(event, segment), dropped: () => this.dropped(segment) });
-    return { sdp: created.sdp };
-  }
-
-  private dropped(segment: Segment) {
+  private dropped(segment: Readonly<VoiceSegment>) {
     const status = this.state?.status;
     if (this.fenced || this.finishing || segment !== this.segment || segment.finalization === 'confirmed' || status === 'paused') return;
     if (this.reachedLive && (status === 'live' || status === 'connecting')) this.background.track(this.pause('provider'));
     else this.background.track(this.end(true));
   }
 
-  private send(input: VoiceInput): boolean {
-    return this.voice?.send(input) ?? false;
-  }
-
-  private onEvent(event: VoiceEvent, segment: Segment) {
+  private onEvent(event: VoiceEvent, segment: Readonly<VoiceSegment>) {
     const snapshot = this.state;
     if (this.fenced || !snapshot || this.ended()) return;
     if (event.type === 'closed') {
-      segment.finalization = 'confirmed';
-      segment.endedAt ??= this.now();
-      segment.closeReason = event.reason;
-      if (event.usageSeconds != null) segment.usageSeconds = event.usageSeconds;
-      snapshot.usageSeconds = this.usageSeconds();
+      snapshot.usageSeconds = this.voice.usageSeconds();
       if (segment !== this.segment) return;
       if (this.finishing || snapshot.status === 'paused') return;
       // A lost connection holds a conversation that has started; policy and limit closures still end it.
@@ -585,29 +570,23 @@ export class SessionCoordinator {
     }
     if (snapshot.status === 'ending' || snapshot.status === 'paused') return;
     if (event.type === 'acknowledged') {
-      if (segment.greeting && this.greeting && [this.greeting.eventId, `${this.greeting.eventId}-again`].includes(event.id)) segment.greeting.acknowledgedAt ??= this.now();
       this.producer?.providerEvent(event.id, true, {
         ...(event.startMs != null ? { startMs: event.startMs + segment.offsetMs } : {}),
         ...(event.endMs != null ? { endMs: event.endMs + segment.offsetMs } : {}),
       });
-      const reminder = segment.silence?.find(item => item.id === event.id && item.outcome === 'sent');
-      if (reminder) reminder.acknowledgedAt ??= this.now();
     }
     if (event.type === 'delegation') {
-      const replied = event.target === 'client' && this.send({ kind: 'context', id: crypto.randomUUID(), delegationId: event.id, content: NO_EXTERNAL_TASK });
+      const replied = event.target === 'client' && this.voice.send({ kind: 'context', id: crypto.randomUUID(), delegationId: event.id, content: NO_EXTERNAL_TASK });
       // Research belongs to the producer; Sam's own delegation attempts are logged, never run.
       this.producer?.delegation(event.id, event.target, replied);
     }
     if (event.type === 'error') {
       // A typed answer is already saved; a rejected delivery is recovered by reconnecting with it in the resume context.
       if (typeof event.id === 'string' && isTypedItem(event.id)) {
-        (segment.typedErrors ??= []).push({ id: event.id, at: this.now() });
         snapshot.message = 'Your answer is saved. Reconnect to continue.';
         this.background.track(this.pause('provider'));
         return;
       }
-      const reminder = segment.silence?.find(item => item.id === event.id);
-      if (reminder) { reminder.outcome = 'rejected'; return; }
       // A declined optional note need not interrupt an otherwise-working interview.
       if (typeof event.id === 'string' && /^(cue|note)-/.test(event.id)) {
         this.producer?.providerEvent(event.id, false);
@@ -619,16 +598,10 @@ export class SessionCoordinator {
 
   /** Speech and typed answers alike: the transcript grew by `changed` on the current segment. */
   private committed(next: Passage[], changed: Passage, now: number) {
-    const snapshot = this.state!, segment = this.segment!;
+    const snapshot = this.state!;
     this.passageUpdatedAt.set(changed.id, now);
-    this.lastActivity = this.lastSpeech = now;
-    this.silenceAbort?.abort();
-    const reminder = segment.silence?.findLast(item => item.outcome === 'sent' && !item.nextSpeech);
-    if (reminder) reminder.nextSpeech = { at: now, passageId: changed.id, speaker: changed.speaker };
-    if (changed.speaker === 'interviewer' && segment.greeting && segment.greeting.repliedAt == null) {
-      segment.greeting.repliedAt = now;
-      if (snapshot.message === UNRESPONSIVE) snapshot.message = null;
-    }
+    this.lastActivity = now;
+    this.voice.transcript(changed, now);
     snapshot.transcript = next;
     snapshot.revision++;
     this.producer?.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null, now);
@@ -640,69 +613,11 @@ export class SessionCoordinator {
     if (this.fenced || !snapshot || snapshot.status !== 'live') return;
     const now = this.now();
     if (this.checkLifetime()) return;
-    this.unanswered(now);
-    this.checkSilence(now);
+    const recovery = this.voice.tick(now);
+    if (recovery) this.background.track(recovery);
     this.producer?.tick(now);
     const grading = this.grading.tick();
     if (grading) this.background.track(grading);
-  }
-
-  /** Transcript inactivity triggers the check; Jev decides whose turn it is. Audio levels are irrelevant. */
-  private checkSilence(now: number) {
-    const snapshot = this.state!, segment = this.segment;
-    if (snapshot.status !== 'live' || this.composing || this.silenceCheck || segment?.greeting?.repliedAt == null || this.silenceCheckedRevision === snapshot.revision || now - this.lastSpeech < SILENCE_MS) return;
-    if (!snapshot.transcript.some(entry => entry.speaker === 'participant') || this.segments.reduce((n, item) => n + (item.silence?.length ?? 0), 0) >= MAX_SILENCE_CHECKS) return;
-    const transcript = snapshot.transcript.slice(-8);
-    const record: SilenceRecord = { id: `silence-${crypto.randomUUID()}`, version: SILENCE_VERSION, revision: snapshot.revision,
-      passageIds: transcript.map(entry => entry.id), startedAt: now, quietMs: now - this.lastSpeech, outcome: 'pending' };
-    (segment.silence ??= []).push(record);
-    this.silenceCheckedRevision = snapshot.revision;
-    const abort = this.silenceAbort = new AbortController();
-    this.silenceCheck = this.judgeSilence(transcript, segment, record, abort).finally(() => { this.silenceCheck = undefined; });
-    this.background.track(this.silenceCheck);
-  }
-
-  private async judgeSilence(transcript: Passage[], segment: Segment, record: SilenceRecord, abort: AbortController) {
-    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(3000)]);
-    try {
-      const result = await this.paid.evaluateSilence({ transcript, judge: this.providers.judge.model, signal });
-      Object.assign(record, result);
-      signal.throwIfAborted();
-      if (this.fenced || this.composing || this.state?.status !== 'live' || this.segment !== segment || this.state.revision !== record.revision) record.outcome = 'stale';
-      else if (result.probability < this.providers.judge.thresholds.silenceContinue) record.outcome = 'wait';
-      else {
-        record.outcome = 'sent';
-        if (!this.send({ kind: 'instruction', id: record.id, content: CONTINUE_INTERVIEW })) record.outcome = 'error';
-      }
-    } catch (error) {
-      record.outcome = abort.signal.aborted ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'error';
-      record.failure = callFailure(error);
-    } finally { record.completedAt = this.now(); }
-  }
-
-  /** Asks the interviewer to speak on the current provider session; the live tick watches for a reply. */
-  private greet(eventId: string, content: string) {
-    this.greeting = { eventId, content };
-    this.segment!.greeting = { sentAt: this.now(), acknowledgedAt: null, retriedAt: null, repliedAt: null, abandonedAt: null };
-    this.send({ kind: 'instruction', id: eventId, content });
-  }
-
-  /** A greeting met with silence is sent once more, then the provider session is replaced once per attempt. */
-  private unanswered(now: number) {
-    const greeting = this.segment?.greeting;
-    if (!greeting || !this.greeting || greeting.repliedAt != null || greeting.abandonedAt != null) return;
-    // Speech, or Sam audible in the browser, is not silence.
-    const quiet = now - Math.max(greeting.sentAt, this.lastSpeech, this.lastAudio);
-    if (quiet >= GREETING_REPLACE_MS) {
-      greeting.abandonedAt = now;
-      if (this.replacedSilent) { this.state!.message = UNRESPONSIVE; return; }
-      this.replacedSilent = true;
-      // The browser resumes a server pause on its own, which opens a fresh provider session.
-      this.background.track(this.pause('provider'));
-    } else if (quiet >= GREETING_RETRY_MS && greeting.retriedAt == null) {
-      greeting.retriedAt = now;
-      this.send({ kind: 'instruction', id: `${this.greeting.eventId}-again`, content: this.greeting.content });
-    }
   }
 
   /** Shared by polls, the live tick and the wake; browser contact is not conversation activity. */
@@ -748,7 +663,7 @@ export class SessionCoordinator {
     snapshot.warning = warning;
     if (!warning || now < warning.endsAt) return false;
     // Automatic limits give current speech a short bounded drain. Explicit End remains immediate.
-    if (warning.kind !== 'idle' && now < warning.endsAt + 20_000 && (now < warning.endsAt + 3000 || now - Math.max(this.lastAudio, this.lastSpeech) < 2500)) return true;
+    if (warning.kind !== 'idle' && now < warning.endsAt + 20_000 && (now < warning.endsAt + 3000 || now - this.voice.lastActivityAt < 2500)) return true;
     snapshot.message = warning.kind === 'idle' ? 'Interview ended after five minutes without activity.' : warning.kind === 'limit' ? 'Interview reached the 60-minute safety limit.' : 'Interview reached its transcript capacity.';
     this.background.track(this.end());
     return true;
@@ -791,7 +706,7 @@ export class SessionCoordinator {
     // A failed resume continues the pause it was resuming.
     let record = this.openPause();
     if (!record) {
-      record = { epoch: this.epoch, reason, pausedAt: now, resumedAt: null, endedAt: null };
+      record = { epoch: this.voice.epoch, reason, pausedAt: now, resumedAt: null, endedAt: null };
       this.pauses.push(record);
     }
     snapshot.pause ??= { reason: record.reason, pausedAt: record.pausedAt, resumeBy: Math.min(record.pausedAt + this.limits.pauseHoldMs, snapshot.startedAt + SESSION_WALL_LIMIT_MS), resumes: this.resumes, maxResumes: this.limits.maxResumes };
@@ -803,9 +718,9 @@ export class SessionCoordinator {
     const grading = this.grading.stop();
     this.producer?.pause();
     try { await this.connecting; } catch { /* A failed resume is reported by resume. */ }
-    await this.closeSegment();
+    await this.voice.closeCurrent();
     await grading;
-    await this.silenceCheck;
+    await this.voice.stopRecovery();
     if (this.finishing) return;
     await this.saveCheckpoint();
     await this.setWake(this.now() + 30_000);
@@ -837,11 +752,11 @@ export class SessionCoordinator {
     snapshot.status = 'connecting';
     snapshot.message = null;
     this.connectingSince = now;
-    const epoch = this.epoch;
+    const epoch = this.voice.epoch;
     try {
       // Until the interviewer has spoken there is no conversation to rebuild; the new session opens it instead.
-      this.connecting = this.openLive({ voiceId: snapshot.voiceId, sdp: input.sdp }, offsetMs,
-        interviewerSpoke(snapshot.transcript) ? conversationSoFar(this.spec.interviewer.name, snapshot.transcript) : undefined);
+      this.connecting = this.voice.open({ voiceId: snapshot.voiceId, sdp: input.sdp, offsetMs,
+        context: interviewerSpoke(snapshot.transcript) ? conversationSoFar(this.spec.interviewer.name, snapshot.transcript) : undefined });
       const created = await this.connecting;
       if (this.finishing || snapshot.status !== 'connecting') return reply({ error: 'The attempt changed while reconnecting.', snapshot: this.publicSnapshot() }, 409);
       this.lastSeen = this.now();
@@ -854,7 +769,7 @@ export class SessionCoordinator {
       snapshot.status = 'paused';
       snapshot.message = 'The voice connection could not be re-established. Try again.';
       // Creation may have succeeded before attachment failed.
-      if (this.epoch !== epoch) await this.closeSegment();
+      if (this.voice.epoch !== epoch) await this.voice.closeCurrent();
       await this.saveCheckpoint();
       return reply({ error: snapshot.message, snapshot: this.publicSnapshot() }, 502);
     }
@@ -877,42 +792,17 @@ export class SessionCoordinator {
     this.typedUnforwarded.clear();
     snapshot.message = null;
     this.connectingSince = undefined;
-    this.lastActivity = this.lastAudio = now;
+    this.lastActivity = now;
+    this.voice.playback(now);
     this.producer?.resume(now);
-    if (interviewerSpoke(snapshot.transcript)) this.greet(`resume-${this.epoch}`, resumeInstruction(this.spec.interviewer.name, snapshot.transcript, pausedMs));
-    else this.greet(`opening-${this.epoch}`, interviewOpening(this.spec, snapshot.voiceId));
+    if (interviewerSpoke(snapshot.transcript)) this.voice.greet(`resume-${this.voice.epoch}`, resumeInstruction(this.spec.interviewer.name, snapshot.transcript, pausedMs));
+    else this.voice.greet(`opening-${this.voice.epoch}`, interviewOpening(this.spec, snapshot.voiceId));
   }
 
-  /** Closes the current provider session, reattaching if its control socket is gone. */
-  private async closeSegment() {
-    const segment = this.segment;
-    if (!segment) return;
-    if (segment.finalization === 'pending') {
-      try {
-        if (this.voice) await this.voice.close();
-        else await this.providers.voice.close(segment.providerId, { event: event => this.onEvent(event, segment), dropped: () => this.dropped(segment) });
-        segment.finalization = 'confirmed';
-      } catch { segment.finalization = 'unconfirmed'; /* The lease retains closure responsibility. */ }
-    }
-    segment.endedAt ??= this.now();
-    this.voice?.detach();
-    this.voice = undefined;
-    await this.persistLease();
-  }
-
-  private outstanding(): string[] {
-    return this.segments.filter(segment => segment.finalization !== 'confirmed').map(segment => segment.providerId);
-  }
-
-  private async persistLease(ids = this.outstanding(), checkpoint?: Checkpoint | null) {
+  private async persistLease(ids = this.voice.outstanding(), checkpoint?: Checkpoint | null) {
     const lease = this.lease!;
     lease.providerIds = ids;
     await this.save({ lease, ...(checkpoint !== undefined ? { checkpoint } : {}) });
-  }
-
-  private usageSeconds(): number | null {
-    const known = this.segments.filter(segment => segment.usageSeconds != null);
-    return known.length ? known.reduce((total, segment) => total + segment.usageSeconds!, 0) : null;
   }
 
   private end(interrupted = false): Promise<void> {
@@ -938,23 +828,21 @@ export class SessionCoordinator {
       try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
       await this.pausing?.catch(() => {});
       await grading;
-      await this.silenceCheck;
+      await this.voice.stopRecovery();
       const current = this.segment;
-      // Only the newest session can still be open; any other unclosed one is left to the closure lease.
-      for (const segment of this.segments) if (segment !== current && segment.finalization === 'pending') segment.finalization = 'unconfirmed';
       // The browser sends silence while the final participant audio and transcript arrive.
       if (current?.finalization === 'pending' && drain) await new Promise(resolve => setTimeout(resolve, 1000));
       // Even a confirmed segment must persist its lease before final grading, including on a closing retry.
-      await this.closeSegment();
+      await this.voice.closeCurrent();
       if (this.fenced) throw new FencedError();
       await this.grading.final({ transcript: snapshot.transcript, revision: snapshot.revision });
       snapshot.status = interrupted ? 'interrupted' : 'ended';
       const now = this.now();
       for (const pause of this.pauses) if (pause.resumedAt === null) pause.endedAt ??= now;
       snapshot.pause = null;
-      snapshot.usageSeconds = this.usageSeconds();
-      const outstanding = this.outstanding();
-      snapshot.finalization = this.segments.length && !outstanding.length ? 'confirmed' : 'unconfirmed';
+      snapshot.usageSeconds = this.voice.usageSeconds();
+      const outstanding = this.voice.outstanding();
+      snapshot.finalization = this.voice.segments.length && !outstanding.length ? 'confirmed' : 'unconfirmed';
       if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
       this.lease!.closed = !outstanding.length;
       if (this.reachedLive) {
@@ -964,7 +852,7 @@ export class SessionCoordinator {
     }
     // One write with the lease, behind any typed answer's whether or not it succeeded. A conversation keeps a terminal
     // checkpoint until its final row is acknowledged, so a later owner can archive it again without any paid work.
-    await this.ordered(() => this.persistLease(this.outstanding(), this.unarchived != null ? this.checkpoint(this.unarchived) : null));
+    await this.ordered(() => this.persistLease(this.voice.outstanding(), this.unarchived != null ? this.checkpoint(this.unarchived) : null));
     if (this.reachedLive) await this.archiveFinal();
     await this.holdFinished();
     this.endingInterrupted = undefined;
@@ -1003,15 +891,9 @@ export class SessionCoordinator {
     this.narrativeStatus = interview?.summary ?? null;
     this.grading.restore({ evaluation: interview?.evaluation ?? null, feedbackStatus, grades: checkpoint.grades, gradeCalls: checkpoint.gradeCalls });
     this.reachedLive = checkpoint.reachedLive;
-    this.epoch = checkpoint.epoch;
     this.resumes = checkpoint.resumes;
-    this.segments = checkpoint.segments;
     this.pauses = checkpoint.pauses;
-    // A provider session opened after the checkpoint is known only to the lease; it is the newest.
-    const known = new Set(this.segments.map(segment => segment.providerId));
-    for (const id of this.lease!.providerIds) if (!known.has(id)) {
-      this.segments.push({ epoch: ++this.epoch, providerId: id, offsetMs: 0, startedAt: checkpoint.savedAt, endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null });
-    }
+    this.voice.restore({ segments: checkpoint.segments, epoch: checkpoint.epoch, providerIds: this.lease!.providerIds, savedAt: checkpoint.savedAt });
     for (const entry of this.state.transcript) {
       this.passageUpdatedAt.set(entry.id, checkpoint.savedAt);
       this.frozenPassages.add(entry.id);
@@ -1030,10 +912,7 @@ export class SessionCoordinator {
       return;
     }
     // Their control sockets were lost with the previous owner; the wake closes them.
-    for (const segment of this.segments) if (segment.finalization === 'pending') {
-      segment.finalization = 'unconfirmed';
-      segment.endedAt ??= now;
-    }
+    this.voice.disconnected(now);
     this.hold('restart', now);
     snapshot.message = null;
     await this.saveCheckpoint();
@@ -1063,7 +942,7 @@ export class SessionCoordinator {
     if (!ids.length) { await this.clearStore(); return; }
     const failed: string[] = [];
     for (const id of ids) {
-      try { await this.providers.voice.close(id); } catch { failed.push(id); }
+      try { await this.voice.closeOrphan(id); } catch { failed.push(id); }
     }
     if (failed.length) {
       await this.persistLease(failed);
@@ -1078,16 +957,6 @@ export class SessionCoordinator {
     lease.closed = true;
     await this.persistLease([]);
     await this.setWake(this.now() + 300_000);
-  }
-
-  /** Keeps retrying superseded provider sessions whose closure was not confirmed. */
-  private async retryClosures() {
-    const open = this.segments.filter(segment => segment.finalization === 'unconfirmed');
-    if (!open.length) return;
-    for (const segment of open) {
-      try { await this.providers.voice.close(segment.providerId); segment.finalization = 'confirmed'; } catch { /* The next wake retries. */ }
-    }
-    await this.persistLease();
   }
 
   /** The time given to the store's `wake` has come. A refused write means another owner holds the attempt; this one stops. */
@@ -1125,13 +994,13 @@ export class SessionCoordinator {
       this.background.track(this.saveArchive('partial'));
     }
     // Includes sessions orphaned by a restart, which a resumed conversation leaves behind.
-    if (!this.pausing) await this.retryClosures();
+    if (!this.pausing) await this.voice.retryClosures();
   }
 
   private connectionLog(): ConnectionLog {
     const now = this.now();
     return {
-      segments: this.segments.map(({ providerId: _private, ...segment }) => segment),
+      segments: this.voice.segments.map(({ providerId: _private, ...segment }) => segment),
       pauses: this.pauses.map(pause => ({ reason: pause.reason, pausedAt: pause.pausedAt, resumedAt: pause.resumedAt, durationMs: (pause.resumedAt ?? pause.endedAt ?? now) - pause.pausedAt })),
     };
   }
@@ -1153,7 +1022,7 @@ export class SessionCoordinator {
       const row: InterviewArchiveRow = {
         id: snapshot.id, specId: this.spec.id, specVersion: this.spec.version, voiceId: snapshot.voiceId, state, capturedAt, snapshot,
         transcript: snapshot.transcript, producerLog, narrative: structuredClone(this.narrativeStatus),
-        provenance: { voice: this.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection, ...(narrative ? { narrative } : {}) },
+        provenance: { voice: this.voice.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection, ...(narrative ? { narrative } : {}) },
       };
       if (this.fenced) return false;
       await this.archive.write(row);

@@ -59,7 +59,7 @@ function deferred<T>() {
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setTimeout(done, 0)); };
 
 // Substitute only paid services: tests exercise real scheduling, ranking, validation, persistence and delivery.
-function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?: boolean } = {}) {
+function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds }: { empty?: boolean; thresholds?: Partial<Options['providers']['judge']['thresholds']> } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = empty ? [] : [
     { id: 'p1', speaker: 'interviewer', text: 'What did the team build?', startMs: 0, endMs: 1000 },
@@ -72,7 +72,9 @@ function fixture(overrides: Partial<Services> = {}, { empty = false }: { empty?:
   const pauses: PauseSpan[] = [];
   const background = inlineBackground();
   const producer = new InterviewProducer({
-    attemptId: 'attempt-1', startedAt: epoch, providers: fixtureProviders, pauses: () => pauses, waitUntil: work => background.track(work),
+    attemptId: 'attempt-1', startedAt: epoch,
+    providers: { ...fixtureProviders, judge: { ...fixtureProviders.judge, thresholds: { ...fixtureProviders.judge.thresholds, ...thresholds } } },
+    pauses: () => pauses, waitUntil: work => background.track(work),
     settled: () => transcript, coverage: () => coverage, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
@@ -561,4 +563,25 @@ test('unsaved interview feedback wakes Sol at the existing floor even without ne
   expect(f.of('turn')[0]!.reading).toMatchObject({ novel: .05, feedback: .95 });
   await f.step(40_000);
   expect(f.calls.map).toHaveLength(1); // No repeated wake without an unlogged participant turn.
+});
+
+test.each([
+  { name: 'calibrated novel information', thresholds: { novelInformation: .7 }, novel: .75, feedback: 0, wakes: true },
+  { name: 'feedback below its default despite a lower novelty threshold', thresholds: { novelInformation: .7 }, novel: 0, feedback: .75, wakes: false },
+  { name: 'feedback at its default with a lower novelty threshold', thresholds: { novelInformation: .7 }, novel: 0, feedback: .8, wakes: true },
+  { name: 'calibrated interview feedback', thresholds: { interviewFeedback: .7 }, novel: 0, feedback: .75, wakes: true },
+  { name: 'novelty below its default despite a lower feedback threshold', thresholds: { interviewFeedback: .7 }, novel: .75, feedback: 0, wakes: false },
+  { name: 'novelty below the omitted default', thresholds: {}, novel: .75, feedback: 0, wakes: false },
+  { name: 'novelty at the omitted default', thresholds: {}, novel: .8, feedback: 0, wakes: true },
+  { name: 'feedback below the omitted default', thresholds: {}, novel: 0, feedback: .75, wakes: false },
+  { name: 'feedback at the omitted default', thresholds: {}, novel: 0, feedback: .8, wakes: true },
+])('$name independently gates an early map wake without changing the probabilities', async ({ thresholds, novel, feedback, wakes }) => {
+  const f = fixture({ evaluateTurn: async input => reading(input, { novel, feedback }) }, { thresholds });
+  await f.step(0);
+  await f.step(19_999);
+  expect(f.calls.map).toHaveLength(0);
+  await f.step(20_000);
+  expect(f.calls.map).toHaveLength(wakes ? 1 : 0);
+  expect(f.of('turn')[0]!.reading).toMatchObject({ novel, feedback });
+  if (wakes) expect(f.calls.map[0]!.tail.reasons).toEqual([novelReason('p2')]);
 });

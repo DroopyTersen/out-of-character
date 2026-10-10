@@ -241,7 +241,8 @@ export class InterviewProducer {
       // Sol may have landed a different map while Jev read. The next tick reads against that map.
       if (record.mapId !== (this.mapRecord?.id ?? null)) return;
       this.ranking = observeTurn(this.ranking, this.map, reading, latestTurn(settled)[0]!.id);
-      if ((reading.novel >= RANKING.novel || (reading.feedback ?? 0) >= RANKING.novel) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'participant')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
+      const thresholds = this.options.providers.judge.thresholds;
+      if ((reading.novel >= (thresholds.novelInformation ?? RANKING.novel) || (reading.feedback ?? 0) >= (thresholds.interviewFeedback ?? RANKING.novel)) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'participant')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
     } catch (error) {
       if (scope.aborted) return;

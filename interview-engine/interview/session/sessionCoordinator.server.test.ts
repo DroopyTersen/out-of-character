@@ -676,6 +676,58 @@ test('the actor timer publishes grading and freezes its quoted transcript passag
   } finally { await f.send(actor, 'end'); }
 });
 
+test('a late coverage result wakes one map call at the next permitted start without more speech', async () => {
+  const f = fixture();
+  const evaluate = f.options.services!.evaluate!;
+  const gradeStarted = Promise.withResolvers<void>();
+  const releaseGrade = Promise.withResolvers<void>();
+  const firstMap = Promise.withResolvers<void>();
+  const secondMap = Promise.withResolvers<void>();
+  const maps: Parameters<SessionServices['generateMap']>[0][] = [];
+  f.options.services!.evaluate = async input => {
+    gradeStarted.resolve();
+    await releaseGrade.promise;
+    return evaluate(input);
+  };
+  f.options.services!.evaluateTurn = async input => {
+    const result = await services.evaluateTurn!(input);
+    return { ...result, reading: { ...result.reading, novel: 1 } };
+  };
+  f.options.services!.generateMap = async input => {
+    maps.push(input);
+    (maps.length === 1 ? firstMap : secondMap).resolve();
+    return services.generateMap!(input);
+  };
+  const { actor } = await conversation(f);
+  try {
+    f.at(5000);
+    await gradeStarted.promise;
+    f.at(20_000);
+    await f.send(actor, 'poll', quietPoll);
+    await firstMap.promise;
+    expect(maps[0]!.tail.coverage).toEqual([]);
+    releaseGrade.resolve();
+    await f.background.settle();
+    expect(actor.snapshot()!.evaluation!.objectives[0]!.level).toBe('explored');
+
+    f.at(39_999);
+    await f.send(actor, 'poll', quietPoll);
+    await Bun.sleep(550);
+    expect(maps).toHaveLength(1);
+    f.at(40_000);
+    await f.send(actor, 'poll', quietPoll);
+    await secondMap.promise;
+    await f.background.settle();
+    expect(maps[1]!.tail.coverage).toMatchObject([{ id: 'scope', level: 'explored' }]);
+    f.at(60_000);
+    await f.send(actor, 'poll', quietPoll);
+    await Bun.sleep(550);
+    await f.background.settle();
+    expect(maps).toHaveLength(2);
+    expect(actor.snapshot()!.revision).toBe(2);
+  } finally { releaseGrade.resolve(); await f.send(actor, 'end'); }
+});
+
 test('pause closes voice before settling cancelled grading and checkpoints no late result', async () => {
   const f = fixture();
   const evaluate = f.options.services!.evaluate!;

@@ -56,11 +56,15 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Conversation producer**: the reasoning module that schedules map generation, turn judgments and background research under one shared budget and cancellation scope. Provider-bound callbacks do the paid work; the producer owns the map, ranking and current notes.
 
-**Session coordinator**: the attempt owner that mediates voice, grading and reasoning. It owns lifecycle, canonical transcript acceptance, typed-answer durability, fencing, persistence and archive completion.
+**Session coordinator**: the attempt owner that mediates voice, grading and reasoning. It owns lifecycle, input admission, typed-answer durability, fencing, persistence and archive completion. It applies the pure lifetime policy and delegates canonical passage state to `SessionTranscript`.
+
+**Canonical transcript**: one ordered set of passages and its revision, owned by `SessionTranscript`. It coalesces speech, deduplicates segment events, freezes typed or judged passages, and supplies settled grading input and the settled prefix used by the append-only map log.
+
+**Lifetime policy**: pure decisions about browser contact, connection establishment, warnings, bounded automatic drain, pause holds and resume eligibility. It does no paid work or persistence; the coordinator applies its decisions.
 
 **Topic grading**: evidence-backed assessment of approved leaf topics during an attempt. The host's injected judge performs it; Sol receives coverage as conversation-map context. `TopicGrading` owns cadence, retry, cancellation, coverage state and history; the coordinator owns lifecycle and persistence. Grading does not decide whether the participant may end or supply input to the narrative writer.
 
-**Topic coverage**: the depth and applicability recorded for each approved leaf topic, with supporting participant passages. It informs topic marks and the conversation producer, not interview completion.
+**Topic coverage**: the depth and applicability recorded for each approved leaf topic, with supporting participant passages. It informs topic marks and the conversation producer, not interview completion. Changed depth or applicability wakes the next permitted map call even without new speech; changing probability or evidence alone does not.
 
 **Final grade**: the injected judge's assessment of the completed transcript against the judged spec. It replaces live coverage smoothing and is preserved across terminal archive retries.
 

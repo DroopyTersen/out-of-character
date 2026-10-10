@@ -78,7 +78,7 @@ test('the report receives full reference context without the voice-only view', a
     background: 'Atlas for Harbor Labs. Priya (Engineer), 240 h. Hours by month: 2026-09 240 h.',
     voiceBackground: 'VOICE_ONLY: Atlas for Harbor Labs. Team: Priya (Engineer).',
     participant: { name: 'Priya', background: 'Engineer' },
-  } }, providers((async (_url, options) => {
+  } }, model((async (_url, options) => {
     body = JSON.parse(String(options?.body));
     return response([start, added, delta(JSON.stringify(summary)), complete]);
   }) as typeof fetch));

@@ -24,20 +24,13 @@ test('real SDK accepts named out-of-order answers, probability and a nonuniform 
 });
 
 test('translation retains structured instructions, both predicate criteria and score order', () => {
-  const payload = decisionPayload({ state: { transcript: 'Evidence' }, questions }, 'literal');
+  const payload = decisionPayload({ state: { transcript: 'Evidence' }, questions });
   expect(payload.input).toBe('{"transcript":"Evidence"}');
   const predicate = payload.questions.find(q => q.name === 'visible')!;
   expect(predicate.instructions).toContain('Ignore packaging.');
   expect(predicate.instructions).toContain('The item is broken.');
   expect(predicate.instructions).toContain('The item is intact.');
   expect(payload.questions.find(q => q.name === 'severity')).toMatchObject({ levels: [{ label: '0', description: 'Intact' }, { label: '1', description: 'Cosmetic' }, { label: '2', description: 'Broken' }] });
-});
-
-test('dialogue rendering preserves every source ID, speaker and quoted text, retaining other state when present', () => {
-  const state = { dialogueColumns: ['id', 'speaker', 'text'], dialogue: [['p1', 'participant', 'Yes.\nThen “no”.'], ['p2', 'sam', 'Why?']] };
-  const payload = decisionPayload({ state, questions }, 'dialogue');
-  expect(payload.input).toBe('["p1"] participant: "Yes.\\nThen “no”."\n["p2"] sam: "Why?"');
-  expect(decisionPayload({ state: { ...state, earlierDialogueOmitted: true }, questions }, 'dialogue').input).toContain('"earlierDialogueOmitted":true');
 });
 
 test.each(['refusal', 'missing', 'duplicate', 'unknown', 'bad-sum', 'wrong-mean', 'wrong-option', 'duplicate-option'])('rejects %s without fabricating an answer', async failure => {

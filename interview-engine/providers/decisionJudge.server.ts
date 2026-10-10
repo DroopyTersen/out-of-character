@@ -6,7 +6,6 @@ export type Model = Exclude<Experimental_EvaluationModel, string>;
 export type Request = Parameters<Model['doEvaluate']>[0];
 export type Result = Awaited<ReturnType<Model['doEvaluate']>>;
 export type Fetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
-export type Format = 'literal' | 'readable' | 'dialogue';
 const DECISIONS_MODEL = 'gpt-6-luna';
 
 export function createDecisionJudge(options: { apiKey?: string; fetch?: Fetch }): Judge {
@@ -32,35 +31,22 @@ export class DecisionFailure extends Error {
   }
 }
 
-// Literal preserves structure and wording. Readable changes only presentation, never the evidence or criteria.
-export function render(value: unknown, format: Format): string {
-  if (typeof value === 'string') return value;
-  if (format !== 'readable') return JSON.stringify(value);
-  if (Array.isArray(value)) return value.map(item => render(item, format)).join('\n');
-  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${render(item, format)}`).join('\n');
-  return String(value);
-}
+const render = (value: unknown): string => typeof value === 'string' ? value : JSON.stringify(value);
 
-export function decisionPayload(request: Request, format: Format) {
+export function decisionPayload(request: Request) {
   type Question = { name: string; type: string; instructions: string; choices?: { value: string; description?: string }[]; levels?: { label: string; description?: string }[] };
   const questions = Object.entries(request.questions).flatMap<Question>(([name, question]) => {
-    const instructions = render(question.instructions, format);
+    const instructions = render(question.instructions);
     if (question.type === 'boolean') return [{ name, type: 'predicate', instructions: question.criteria
-      ? `${instructions}\nTrue criteria: ${render(question.criteria.true ?? '', format)}\nFalse criteria: ${render(question.criteria.false ?? '', format)}` : instructions }];
+      ? `${instructions}\nTrue criteria: ${render(question.criteria.true ?? '')}\nFalse criteria: ${render(question.criteria.false ?? '')}` : instructions }];
     if (question.type === 'choice') {
       return [{ name, type: 'choice', instructions, choices: Object.entries(question.criteria).map(([value, description]) => ({ value,
-        ...(description == null ? {} : { description: render(description, format) }) })) }];
+        ...(description == null ? {} : { description: render(description) }) })) }];
     }
     return [{ name, type: 'score', instructions, levels: question.criteria.map((description, index) => ({ label: String(index),
-      ...(description == null ? {} : { description: render(description, format) }) })) }];
+      ...(description == null ? {} : { description: render(description) }) })) }];
   });
-  const state = request.state;
-  const dialogue = typeof state === 'object' && state !== null && 'dialogue' in state ? state.dialogue : null;
-  const input = format === 'dialogue' && Array.isArray(dialogue) && Object.keys(state).length === 2
-    && dialogue.every(row => Array.isArray(row) && row.length === 3 && row.every(value => typeof value === 'string'))
-    ? dialogue.map(row => `[${JSON.stringify(row[0])}] ${row[1]}: ${JSON.stringify(row[2])}`).join('\n')
-    : render(state, 'literal');
-  return { model: DECISIONS_MODEL, input, questions };
+  return { model: DECISIONS_MODEL, input: render(request.state), questions };
 }
 
 function normalizeResponse(raw: unknown, questions: Request['questions']): Result {
@@ -107,7 +93,7 @@ export function singletons(model: Model): Model {
   } };
 }
 
-export function decisionsModel(options: { apiKey?: string; format?: Format; fetch?: Fetch }): Model {
+export function decisionsModel(options: { apiKey?: string; fetch?: Fetch }): Model {
   const request = options.fetch ?? fetch;
   return singletons({
     specificationVersion: 'v4', provider: 'openai.decisions', modelId: DECISIONS_MODEL,
@@ -116,7 +102,7 @@ export function decisionsModel(options: { apiKey?: string; format?: Format; fetc
       if (!options.apiKey) throw new Error('Interview judging is not configured.');
       const response = await request('https://api.openai.com/v1/decisions', { method: 'POST',
         headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(decisionPayload(input, options.format ?? 'literal')), signal: input.abortSignal });
+        body: JSON.stringify(decisionPayload(input)), signal: input.abortSignal });
       if (!response.ok) throw new DecisionFailure('http', response.status);
       const result = normalizeResponse(await response.json(), input.questions);
       return { ...result, response: { ...result.response, id: response.headers.get('x-request-id') ?? undefined } };

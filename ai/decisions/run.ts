@@ -2,7 +2,8 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { experimental_evaluate as evaluate } from 'ai';
 import { judgeModel } from '../../interview-engine/providers/jevJudge.server';
 import { hash, interpret, type EvalCase } from './cases';
-import { decisionsModel, DecisionFailure, singletons, type Fetch, type Format } from '../../interview-engine/providers/decisionJudge.server';
+import { decisionsModel, DecisionFailure, singletons, type Fetch } from '../../interview-engine/providers/decisionJudge.server';
+import { evaluationRequest, type Format } from './payload';
 
 const directory = '.data/openai-decisions-evals';
 const option = (name: string, fallback: string) => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
@@ -38,7 +39,7 @@ const path = `${directory}/runs/${runId}`;
 await mkdir(path, { mode: 0o700 }); // Fails rather than overwriting an existing run.
 await writeFile(`${path}/manifest.json`, JSON.stringify({ runId, corpusHash: corpus.hash, arms, split, lanes, repeats, createdAt: new Date().toISOString(),
   ratesUsdPerMillionInput: { jev: .042, decisions: .1 }, maxUsd: 5, maxAttempts: 468, sdkRetries: 0,
-  sourceHashes: Object.fromEntries(await Promise.all(['interview-engine/providers/decisionJudge.server.ts', 'ai/decisions/cases.ts', 'ai/decisions/run.ts'].map(async file => [file, hash(await Bun.file(file).text())]))),
+  sourceHashes: Object.fromEntries(await Promise.all(['interview-engine/providers/decisionJudge.server.ts', 'ai/decisions/cases.ts', 'ai/decisions/run.ts', 'ai/decisions/payload.ts'].map(async file => [file, hash(await Bun.file(file).text())]))),
   plan: plan.map(({ item, arm, repeat }) => ({ caseId: item.id, inputHash: hash({ state: item.state, questions: item.questions }), arm, repeat })) }, null, 2), { mode: 0o600 });
 const save = (file: string, value: unknown) => appendFile(file, `${JSON.stringify(value)}\n`, { mode: 0o600 });
 
@@ -61,13 +62,14 @@ for (const [index, { item, arm, repeat }] of plan.entries()) {
     return response;
   };
   const model = arm === 'jev' ? singletons(judgeModel({ apiKey: process.env.TYPESAFE_API_KEY!, fetch: auditedFetch as typeof fetch }))
-    : decisionsModel({ apiKey: process.env.OPENAI_API_KEY!, format: arm as Format, fetch: auditedFetch });
+    : decisionsModel({ apiKey: process.env.OPENAI_API_KEY!, fetch: auditedFetch });
   const startedAt = new Date().toISOString();
   const start = performance.now();
   const signal = AbortSignal.timeout(item.deadlineMs);
   let result: Record<string, unknown>;
   try {
-    const response = await evaluate({ model, state: item.state, questions: item.questions, abortSignal: signal, maxRetries: 0 });
+    const request = evaluationRequest({ state: item.state, questions: item.questions }, arm === 'jev' ? 'literal' : arm as Format);
+    const response = await evaluate({ ...request, model, abortSignal: signal, maxRetries: 0 });
     const durationMs = performance.now() - start;
     const output = interpret(item, response.answers);
     const inputTokens = response.usage.inputTokens;

@@ -12,8 +12,8 @@ export type InterviewState = { evaluation: InterviewEvaluation | null; summary: 
 /** The actor's lifecycle and transcript, before current readings and public references are composed into it. */
 export type SessionSnapshot = Omit<InterviewSnapshot, 'evaluation' | 'background' | 'pause'> & { pause?: SessionPause | null };
 
-/** The closure lease: `providerId` is the newest provider session not yet confirmed closed; `unconfirmed` holds any older ones. */
-export type Lease = { capability: string; providerId?: string; unconfirmed?: string[]; deadline: number; closed: boolean };
+/** Provider sessions still owed closure, in creation order. */
+export type Lease = { capability: string; providerIds: string[]; deadline: number; closed: boolean };
 /** When a provider session was asked to speak, acknowledged it, was asked again, first spoke, and was given up on. */
 export type GreetingLog = { sentAt: number; acknowledgedAt: number | null; retriedAt: number | null; repliedAt: number | null; abandonedAt: number | null };
 /** One provider session. A resume opens a new one; its timestamps restart at 0, so `offsetMs` keeps the transcript clock monotonic. */

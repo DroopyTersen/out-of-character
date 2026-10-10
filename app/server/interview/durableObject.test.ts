@@ -9,7 +9,7 @@ import { fakeStorage, interviewAttempt, objectFixture } from './durableObjectFix
 const { durableStore, durableBackground } = await import('./durableObject');
 afterEach(() => setSystemTime());
 
-const lease: Lease = { capability, deadline: 5, closed: false } as Lease;
+const lease: Lease = { capability, providerIds: [], deadline: 5, closed: false } as Lease;
 const checkpoint = { id: 'checkpoint' } as unknown as Checkpoint;
 
 test('the storage store keeps the lease and checkpoint under the practice simulator’s keys', async () => {
@@ -146,6 +146,41 @@ test('the report waits for an end and is refused without participant speech', as
   expect(report.status).toBe(422);
   expect(await report.json() as unknown).toEqual({ error: 'There is not enough scored conversation to review.' });
   expect((await (await send(next.session, 'poll')).json() as { report: { status: string } }).report.status).toBe('ineligible');
+});
+
+test('a report resumes failed terminal persistence before starting its narrative', async () => {
+  const values = new Map<string, unknown>();
+  const set = values.set.bind(values);
+  let failed = false;
+  let narrations = 0;
+  let checkpointAtNarration: unknown;
+  values.set = (key, value) => {
+    if (key === 'checkpoint' && (value as Checkpoint).snapshot.status === 'ended' && !failed) {
+      failed = true;
+      throw new Error('one terminal save outage');
+    }
+    return set(key, value);
+  };
+  const next = await objectFixture({ values, overrides: { narrate: () => {
+    narrations++;
+    checkpointAtNarration = values.get('checkpoint');
+    return summary();
+  } } });
+  await send(next.session, 'start');
+  await send(next.session, 'ready');
+  next.socket.emit({ type: 'session.output_transcript.delta', event_id: 'o1', delta: 'What did you build?', start_ms: 0, end_ms: 900 });
+  next.socket.emit({ type: 'session.input_transcript.delta', event_id: 'i1', delta: 'A permit intake portal.', start_ms: 1500, end_ms: 2400 });
+  await next.session.alarm();
+  await settle(next);
+  await expect(send(next.session, 'end')).rejects.toThrow('one terminal save outage');
+  expect(narrations).toBe(0);
+  expect(values.has('checkpoint')).toBe(true);
+  expect((await send(next.session, 'report')).status).toBe(200);
+  await settle(next);
+  expect(narrations).toBe(1);
+  expect(checkpointAtNarration).toBeUndefined();
+  expect(next.interviewJudged).toHaveLength(1);
+  expect(next.interviewRow()).toMatchObject({ archive_state: 'final', summary_status: 'ready' });
 });
 
 // --- An approved ad hoc debrief: the object resolves its spec at start and pins it for every later owner. ---

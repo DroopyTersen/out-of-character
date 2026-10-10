@@ -113,6 +113,8 @@ export class SessionActor {
   private voice: VoiceConnection | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private finishing: Promise<void> | undefined;
+  /** Original end intent while closing is pending, including after a failed store write. */
+  private endingInterrupted: boolean | undefined;
   private orphaning: Promise<void> | undefined;
   private connecting: Promise<{ sdp: string }> | undefined;
   private pausing: Promise<void> | undefined;
@@ -198,8 +200,8 @@ export class SessionActor {
     return structuredClone({ plan: this.spec.plan, config: this.spec.config, ...(this.spec.context ? { context: this.spec.context } : {}) });
   }
 
-  /** The end of the attempt while it is being finished, through the first write of its final row: a host serving the report waits for it. */
-  get closing(): Promise<void> | undefined { return this.finishing; }
+  /** Finishes through the first final archive write, resuming a failed close before the host starts its report. */
+  get closing(): Promise<void> | undefined { return this.endingInterrupted !== undefined ? this.end() : this.finishing; }
 
   private get segment(): Segment | undefined { return this.segments.at(-1); }
 
@@ -221,7 +223,7 @@ export class SessionActor {
     if (!this.lease) {
       // A cancelled browser may send end before its creation request arrives.
       if (action === 'end') {
-        this.lease = { capability, deadline: this.now(), closed: true };
+        this.lease = { capability, providerIds: [], deadline: this.now(), closed: true };
         await this.save({ lease: this.lease });
         await this.setWake(this.now() + 60_000);
         return reply({ ended: true });
@@ -234,6 +236,7 @@ export class SessionActor {
       return reply({ error: 'This interview session was interrupted. Start a new attempt.' }, 410);
     }
     if (action === 'report') return { status: 200, body: null, report: true };
+    if (action === 'end' && this.endingInterrupted !== undefined) await this.end();
     // A terminal snapshot is not an acceptance receipt.
     // A retry of a turn already in the transcript is still acknowledged after the end; a new one is not.
     if (action === 'submitText' && this.ended()) return this.submitText(body);
@@ -473,7 +476,7 @@ export class SessionActor {
     const input = parsed.data;
     if (this.lease) return reply({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
     const now = this.now();
-    this.lease = { capability, deadline: now + this.limits.durationSeconds * 1000, closed: false };
+    this.lease = { capability, providerIds: [], deadline: now + this.limits.durationSeconds * 1000, closed: false };
     this.state = {
       id: input.id, planId: input.planId, voiceId: input.voiceId,
       status: 'connecting', startedAt: now, limitSeconds: this.limits.durationSeconds, warning: null,
@@ -925,10 +928,7 @@ export class SessionActor {
 
   private async persistLease(ids = this.outstanding(), checkpoint?: Checkpoint | null) {
     const lease = this.lease!;
-    delete lease.providerId;
-    delete lease.unconfirmed;
-    if (ids.length) lease.providerId = ids.at(-1);
-    if (ids.length > 1) lease.unconfirmed = ids.slice(0, -1);
+    lease.providerIds = ids;
     await this.save({ lease, ...(checkpoint !== undefined ? { checkpoint } : {}) });
   }
 
@@ -975,50 +975,56 @@ export class SessionActor {
 
   private end(interrupted = false): Promise<void> {
     if (this.fenced) return Promise.resolve();
-    return this.finishing ??= this.finish(interrupted);
+    if (this.finishing) return this.finishing;
+    this.endingInterrupted ??= interrupted;
+    return this.finishing = this.finish(this.endingInterrupted).catch(async error => {
+      // A transient store failure must leave closing retryable, including for hosts without platform retries.
+      if (!this.fenced) await this.setWake(this.now() + 15_000).catch(() => {});
+      this.finishing = undefined;
+      throw error;
+    });
   }
 
   private async finish(interrupted: boolean) {
     const snapshot = this.state!;
-    const drain = snapshot.status === 'live' && !interrupted;
-    snapshot.status = 'ending';
-    this.producer?.close();
-    this.stopClock();
-    try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
-    await this.pausing?.catch(() => {});
-    await this.grading;
-    await this.silenceCheck;
-    this.gradeAbort = new AbortController();
-    const current = this.segment;
-    // Only the newest session can still be open; any other unclosed one is left to the closure lease.
-    for (const segment of this.segments) if (segment !== current && segment.finalization === 'pending') segment.finalization = 'unconfirmed';
-    if (current?.finalization === 'pending') {
+    if (!this.ended()) {
+      const drain = snapshot.status === 'live' && !interrupted;
+      snapshot.status = 'ending';
+      this.producer?.close();
+      this.stopClock();
+      try { await this.connecting; } catch { /* Creation failure is surfaced by start or resume. */ }
+      await this.pausing?.catch(() => {});
+      await this.grading;
+      await this.silenceCheck;
+      this.gradeAbort = new AbortController();
+      const current = this.segment;
+      // Only the newest session can still be open; any other unclosed one is left to the closure lease.
+      for (const segment of this.segments) if (segment !== current && segment.finalization === 'pending') segment.finalization = 'unconfirmed';
       // The browser sends silence while the final participant audio and transcript arrive.
-      if (drain) await new Promise(resolve => setTimeout(resolve, 1000));
+      if (current?.finalization === 'pending' && drain) await new Promise(resolve => setTimeout(resolve, 1000));
+      // Even a confirmed segment must persist its lease before final grading, including on a closing retry.
       await this.closeSegment();
-    } else {
-      this.voice?.detach();
-      this.voice = undefined;
-    }
-    if (snapshot.transcript.some(item => item.speaker === 'participant')) await this.grade(snapshot.transcript, snapshot.revision, true);
-    snapshot.status = interrupted ? 'interrupted' : 'ended';
-    const now = this.now();
-    for (const pause of this.pauses) if (pause.resumedAt === null) pause.endedAt ??= now;
-    snapshot.pause = null;
-    snapshot.usageSeconds = this.usageSeconds();
-    const outstanding = this.outstanding();
-    snapshot.finalization = this.segments.length && !outstanding.length ? 'confirmed' : 'unconfirmed';
-    if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
-    this.lease!.closed = !outstanding.length;
-    if (this.reachedLive) {
-      this.interview!.summary = { status: snapshot.transcript.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
-      this.unarchived = now;
+      if (snapshot.transcript.some(item => item.speaker === 'participant')) await this.grade(snapshot.transcript, snapshot.revision, true);
+      snapshot.status = interrupted ? 'interrupted' : 'ended';
+      const now = this.now();
+      for (const pause of this.pauses) if (pause.resumedAt === null) pause.endedAt ??= now;
+      snapshot.pause = null;
+      snapshot.usageSeconds = this.usageSeconds();
+      const outstanding = this.outstanding();
+      snapshot.finalization = this.segments.length && !outstanding.length ? 'confirmed' : 'unconfirmed';
+      if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
+      this.lease!.closed = !outstanding.length;
+      if (this.reachedLive) {
+        this.interview!.summary = { status: snapshot.transcript.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
+        this.unarchived = now;
+      }
     }
     // One write with the lease, behind any typed answer's whether or not it succeeded. A conversation keeps a terminal
     // checkpoint until its final row is acknowledged, so a later owner can archive it again without any paid work.
-    await this.ordered(() => this.persistLease(outstanding, this.reachedLive ? this.checkpoint(now) : null));
+    await this.ordered(() => this.persistLease(this.outstanding(), this.unarchived != null ? this.checkpoint(this.unarchived) : null));
     if (this.reachedLive) await this.archiveFinal();
     await this.holdFinished();
+    this.endingInterrupted = undefined;
   }
 
   /** A settled attempt is held for five minutes before it is forgotten; an unacknowledged row or open session is retried sooner. */
@@ -1030,8 +1036,8 @@ export class SessionActor {
   private async archiveFinal() {
     const endedAt = this.unarchived;
     if (!(await this.saveArchive('final', endedAt ?? this.now())) || endedAt == null) return;
-    this.unarchived = null;
     await this.ordered(() => this.save({ checkpoint: null }));
+    this.unarchived = null;
   }
 
   private async saveCheckpoint() {
@@ -1061,7 +1067,7 @@ export class SessionActor {
     this.gradeCalls = checkpoint.gradeCalls;
     // A provider session opened after the checkpoint is known only to the lease; it is the newest.
     const known = new Set(this.segments.map(segment => segment.providerId));
-    for (const id of [...(this.lease!.unconfirmed ?? []), ...(this.lease!.providerId ? [this.lease!.providerId] : [])]) if (!known.has(id)) {
+    for (const id of this.lease!.providerIds) if (!known.has(id)) {
       this.segments.push({ epoch: ++this.epoch, providerId: id, offsetMs: 0, startedAt: checkpoint.savedAt, endedAt: null, closeReason: null, finalization: 'pending', usageSeconds: null });
     }
     for (const entry of this.state.transcript) {
@@ -1111,7 +1117,7 @@ export class SessionActor {
     if (!lease || lease.closed) return;
     // No provider id survives a process loss during creation. There is no lookup by attempt; do not leave this
     // lease retrying forever.
-    const ids = [...new Set([...(lease.unconfirmed ?? []), ...(lease.providerId ? [lease.providerId] : [])])];
+    const ids = lease.providerIds;
     if (!ids.length) { await this.clearStore(); return; }
     const failed: string[] = [];
     for (const id of ids) {
@@ -1154,6 +1160,10 @@ export class SessionActor {
     if (this.recovered) {
       this.recoverCheckpoint();
       await this.finishing;
+      return;
+    }
+    if (this.endingInterrupted !== undefined) {
+      await this.end();
       return;
     }
     if (!this.state || this.ended()) {

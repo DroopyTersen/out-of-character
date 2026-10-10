@@ -154,7 +154,7 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   expect(f.voice.created[0]!.instructions).toContain('Recent project');
   expect(f.voice.created[0]!.instructions).toContain('Learn what was built.');
   expect(socket.sent[0]).toMatchObject({ type: 'session.instructions.append', event_id: 'opening', content: expect.stringContaining('Riley') });
-  expect(f.record.lease).toEqual({ capability, providerId: 'provider-1', deadline: EPOCH + 3_600_000, closed: false });
+  expect(f.record.lease).toEqual({ capability, providerIds: ['provider-1'], deadline: EPOCH + 3_600_000, closed: false });
   expect(f.record.wakeAt).toBe(EPOCH + 30_000);
 
   const live = body(await f.send(actor, 'poll', quietPoll));
@@ -167,7 +167,7 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   expect(body(ending).status).toBe('ended');
   expect(body(ending)).toMatchObject({ finalization: 'confirmed', usageSeconds: 12, feedbackStatus: 'current' });
   expect(body(ending).evaluation!.objectives[0]).toMatchObject({ id: 'scope', level: 'explored', evidence: { speaker: 'participant' } });
-  expect(f.record.lease).toEqual({ capability, deadline: EPOCH + 3_600_000, closed: true });
+  expect(f.record.lease).toEqual({ capability, providerIds: [], deadline: EPOCH + 3_600_000, closed: true });
   expect(f.record.checkpoint).toBeUndefined();
   expect(f.record.wakeAt).toBe(EPOCH + 10_000 + 300_000);
 
@@ -198,6 +198,102 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   await actor.wake();
   expect(f.record.lease).toBeUndefined();
   expect(f.record.clears).toBe(1);
+});
+
+test.each([
+  { stage: 'closing lease', lazyWake: false, retryEnd: false },
+  { stage: 'closing lease', lazyWake: true, retryEnd: false },
+  { stage: 'terminal checkpoint', lazyWake: false, retryEnd: false },
+  { stage: 'terminal checkpoint', lazyWake: false, retryEnd: true },
+  { stage: 'checkpoint deletion', lazyWake: false, retryEnd: false },
+  { stage: 'checkpoint deletion', lazyWake: false, retryEnd: true },
+])('closing recovers from one $stage save failure (lazy wake: $lazyWake, retry End: $retryEnd)', async ({ stage, lazyWake, retryEnd }) => {
+  const f = fixture({ lazyWake });
+  const { actor, socket } = await conversation(f);
+  const save = f.store.save;
+  let failed = false;
+  f.store.save = async patch => {
+    const target = stage === 'closing lease'
+      ? patch.lease && !patch.lease.closed && !patch.lease.providerIds.length
+      : stage === 'terminal checkpoint' ? patch.checkpoint?.snapshot.status === 'ended' : patch.checkpoint === null;
+    if (target && !failed) { failed = true; throw new Error('one save outage'); }
+    await save(patch);
+  };
+  f.at(10_000);
+  await expect(f.send(actor, 'end')).rejects.toThrow('one save outage');
+  expect(actor.snapshot()!.status).toBe(stage === 'closing lease' ? 'ending' : 'ended');
+  expect(f.record.wakeAt).toBe(EPOCH + 25_000);
+  expect(f.graded).toHaveLength(stage === 'closing lease' ? 0 : 1);
+
+  f.at(25_000);
+  if (retryEnd) expect((await f.send(actor, 'end')).terminal).toBe(true);
+  else if (lazyWake) expect((await f.send(actor, 'poll', quietPoll)).terminal).toBe(true);
+  else await actor.wake();
+  await f.background.settle();
+  expect(actor.snapshot()).toMatchObject({ status: 'ended', finalization: 'confirmed', usageSeconds: 12, feedbackStatus: 'current' });
+  expect(f.record.lease).toEqual({ capability, providerIds: [], deadline: EPOCH + 3_600_000, closed: true });
+  expect(f.record.checkpoint).toBeUndefined();
+  expect(f.record.wakeAt).toBe(EPOCH + 25_000 + 300_000);
+  expect(f.graded).toEqual([['p1', 'p2']]);
+  expect(socket.sent.filter(event => event.type === 'session.close')).toHaveLength(1);
+  const row = f.archive.rows.get(attempt.id)!;
+  expect(row.state).toBe('final');
+  expect(row.capturedAt).toBe(EPOCH + (stage === 'closing lease' ? 25_000 : 10_000));
+  expect(row.transcript.map(entry => [entry.speaker, entry.text])).toEqual(dialogue);
+  expect(row.producerLog.filter(record => record.source === 'grade' && record.final)).toHaveLength(1);
+});
+
+test('a recovered interrupted closing retains its intent when End retries its failed save', async () => {
+  const first = fixture();
+  const { actor: lost } = await conversation(first);
+  first.at(30_000);
+  await lost.wake();
+  const f = fixture({ record: first.record, voice: first.voice, archive: first.archive });
+  f.at(3_590_000);
+  const actor = await f.restore();
+  const save = f.store.save;
+  let failed = false;
+  f.store.save = async patch => {
+    if (!failed && patch.lease && !patch.lease.closed && !patch.lease.providerIds.length) {
+      failed = true;
+      throw new Error('one save outage');
+    }
+    await save(patch);
+  };
+  await expect(actor.wake()).rejects.toThrow('one save outage');
+  expect(actor.snapshot()!.status).toBe('ending');
+  expect(body(await f.send(actor, 'end')).status).toBe('interrupted');
+  expect(f.archive.rows.get(attempt.id)).toMatchObject({ state: 'final', snapshot: { status: 'interrupted' } });
+  expect(f.record.checkpoint).toBeUndefined();
+  expect(f.graded).toHaveLength(1);
+  await lost.close('fenced');
+});
+
+test('a closing retry is fenced before final grading when another owner has taken over', async () => {
+  const f = fixture();
+  const { actor } = await conversation(f);
+  f.at(30_000);
+  await actor.wake();
+  const save = f.store.save;
+  let failed = false;
+  f.store.save = async patch => {
+    if (!failed && patch.lease && !patch.lease.closed && !patch.lease.providerIds.length) {
+      failed = true;
+      throw new Error('one save outage');
+    }
+    await save(patch);
+  };
+  await expect(f.send(actor, 'end')).rejects.toThrow('one save outage');
+  const successor = fixture({ record: f.record, voice: f.voice, archive: f.archive });
+  successor.at(31_000);
+  const replacement = await successor.restore();
+  const stored = structuredClone(f.record);
+  await actor.wake();
+  expect(await f.send(actor, 'end')).toEqual({ status: 409, body: { error: 'Another owner has taken over this attempt.' } });
+  expect(f.record).toEqual(stored);
+  expect(f.graded).toEqual([]);
+  expect(f.archive.rows.get(attempt.id)!.state).toBe('partial');
+  await successor.send(replacement, 'end');
 });
 
 /** An archive that refuses final rows while `refusing` is set, over the in-memory upsert rules. */
@@ -285,7 +381,7 @@ test('the capability is checked before anything else, and an end before start le
   expect(await f.send(actor, 'poll')).toEqual({ status: 404, body: { error: 'This interview session was not found.' } });
   expect(await f.send(actor, 'start', JSON.stringify({ ...attempt, planId: 'other' }))).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
   expect(await f.send(actor, 'end')).toEqual({ status: 200, body: { ended: true } });
-  expect(f.record.lease).toEqual({ capability, deadline: EPOCH, closed: true });
+  expect(f.record.lease).toEqual({ capability, providerIds: [], deadline: EPOCH, closed: true });
   expect(f.record.wakeAt).toBe(EPOCH + 60_000);
   expect(await f.send(actor, 'start', start, `Bearer ${'b'.repeat(64)}`)).toEqual({ status: 403, body: { error: 'Session ownership did not match.' } });
   expect(await f.send(actor, 'start', start)).toEqual({ status: 409, body: { error: 'This attempt has already been used. Start a new attempt.' } });
@@ -346,7 +442,7 @@ test('a stale owner is fenced on its next save, and the new owner holds the atte
   b.at(33_000);
   expect(body(await b.send(second, 'ready')).status).toBe('live');
   expect(voice.sockets.get('provider-2')!.sent[0]).toMatchObject({ event_id: 'resume-2' });
-  expect(record.lease).toMatchObject({ providerId: 'provider-2', deadline: EPOCH + 3_600_000 + 2000 });
+  expect(record.lease).toMatchObject({ providerIds: ['provider-2'], deadline: EPOCH + 3_600_000 + 2000 });
   expect(body(await b.send(second, 'end')).status).toBe('ended');
   await b.background.settle();
   expect(archive.rows.get(attempt.id)!.provenance.connection.pauses).toEqual([{ reason: 'restart', pausedAt: EPOCH + 31_000, resumedAt: EPOCH + 33_000, durationMs: 2000 }]);
@@ -429,7 +525,7 @@ test('an end that arrives while the lease is being saved waits for it and opens 
   expect(started).toEqual({ status: 409, body: { error: 'The attempt was cancelled.' } });
   expect(body(ended).status).toBe('ended');
   expect(f.voice.created).toHaveLength(0);
-  expect(f.record.lease).toEqual({ capability, deadline: EPOCH + 3_600_000, closed: true });
+  expect(f.record.lease).toEqual({ capability, providerIds: [], deadline: EPOCH + 3_600_000, closed: true });
   expect(f.record.wakeAt).toBe(EPOCH + 300_000);
   await f.background.settle();
   expect(f.archive.rows.size).toBe(0);
@@ -463,7 +559,7 @@ test('an end that arrives after creation began is answered once the session is r
   expect(body(ended)).toMatchObject({ status: 'ended', finalization: 'confirmed' });
   expect(f.voice.created).toHaveLength(1);
   expect(f.voice.sockets.get('provider-1')!.sent).toContainEqual({ type: 'session.close' });
-  expect(f.record.lease).toEqual({ capability, deadline: EPOCH + 3_600_000, closed: true });
+  expect(f.record.lease).toEqual({ capability, providerIds: [], deadline: EPOCH + 3_600_000, closed: true });
 });
 
 test('a provider session created after another owner took over is closed by the owner that created it', async () => {
@@ -478,26 +574,26 @@ test('a provider session created after another owner took over is closed by the 
   // The successor restores a lease that names no provider session, so it can never close this one from the store.
   const other = fixture({ record: f.record, voice: f.voice, archive: f.archive });
   const successor = await other.restore();
-  expect(f.record.lease?.providerId).toBeUndefined();
+  expect(f.record.lease?.providerIds).toEqual([]);
   held.resolve();
   expect(await opening).toEqual({ status: 409, body: { error: 'Another owner has taken over this attempt.' } });
   expect(f.voice.created).toHaveLength(1);
   expect(f.voice.closed).toEqual(['provider-1']);
-  expect(f.record.lease?.providerId).toBeUndefined();
+  expect(f.record.lease?.providerIds).toEqual([]);
   await successor.wake();
   expect(f.record.lease).toBeUndefined();
 });
 
 test('a closure the provider refuses is retried on a scheduled wake, then given up once the attempt is long over', async () => {
   const f = fixture();
-  f.record.lease = { capability, providerId: 'orphan-1', unconfirmed: ['orphan-0'], deadline: EPOCH + 3_600_000, closed: false };
+  f.record.lease = { capability, providerIds: ['orphan-0', 'orphan-1'], deadline: EPOCH + 3_600_000, closed: false };
   const wakes = wakesOf(f);
   let refusals = 0;
   f.options.providers.voice.close = async id => { if (id === 'orphan-1') { refusals++; throw new Error('provider outage'); } f.voice.closed.push(id); };
   const actor = await f.restore();
   await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
   expect(f.voice.closed).toEqual(['orphan-0']);
-  expect(f.record.lease).toEqual({ capability, providerId: 'orphan-1', deadline: EPOCH + 3_600_000, closed: false });
+  expect(f.record.lease).toEqual({ capability, providerIds: ['orphan-1'], deadline: EPOCH + 3_600_000, closed: false });
   expect(wakes).toEqual([EPOCH + 15_000]);
   f.at(15_000);
   await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
@@ -507,7 +603,7 @@ test('a closure the provider refuses is retried on a scheduled wake, then given 
   f.at(3_600_000 + 60 * 60_000);
   await actor.wake();
   expect(f.record.lease).toMatchObject({ closed: true });
-  expect(f.record.lease!.providerId).toBeUndefined();
+  expect(f.record.lease!.providerIds).toEqual([]);
   expect(f.events).toContainEqual({ type: 'session', event: 'closure.abandoned', id: '' });
   await actor.wake();
   expect(f.record.lease).toBeUndefined();
@@ -522,7 +618,7 @@ test('a start whose attachment fails ends the attempt, and every later wake sche
   const started = await f.send(actor, 'start', start);
   expect(started.status).toBe(502);
   expect(actor.snapshot()).toMatchObject({ status: 'interrupted', finalization: 'unconfirmed' });
-  expect(f.record.lease).toMatchObject({ providerId: 'provider-1', closed: false });
+  expect(f.record.lease).toMatchObject({ providerIds: ['provider-1'], closed: false });
   expect(f.record.wakeAt).toBe(EPOCH + 15_000);
   f.at(15_000);
   await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');

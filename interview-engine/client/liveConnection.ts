@@ -354,8 +354,8 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     if (this.ending || this.link.state !== 'paused') return;
     clearTimeout(this.heartbeatTimer);
     if (automatic) this.autoResumed = true;
-    await this.reported;
     this.setLink({ state: 'resuming', reach: 'answered' });
+    await this.reported;
     let accepted = false;
     try {
       const connected = await this.connect(async sdp => {

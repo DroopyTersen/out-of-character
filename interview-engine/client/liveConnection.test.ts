@@ -553,3 +553,36 @@ test('an unreachable server gives up with a readable message, and a closed attem
   await connection.end();
   await expect(connection.submitText('Late.')).rejects.toThrow('The interview is not live.');
 });
+
+test('repeated resume calls wait for the pause acknowledgment and negotiate one connection', async () => {
+  const { connection, peer, links } = await connected();
+  const fixtureFetch = globalThis.fetch;
+  let releasePause!: () => void;
+  const pauseHeld = new Promise<void>(resolve => { releasePause = resolve; });
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).endsWith('/pause')) await pauseHeld;
+    return fixtureFetch(input, init);
+  }) as typeof fetch;
+  try {
+    peer().set('failed');
+    await flush();
+    const beforePeers = FakePeer.all.length;
+    const first = connection.resume();
+    const second = connection.resume();
+    await flush();
+    // Negotiation must wait until the earlier pause cannot arrive late at the server.
+    expect(FakePeer.all).toHaveLength(beforePeers);
+    expect(server.calls).not.toContain('resume');
+    const pendingLink = links.at(-1)?.state;
+    releasePause();
+    await Promise.all([first, second]);
+    expect(FakePeer.all).toHaveLength(beforePeers + 1);
+    expect(server.calls.filter(action => action === 'resume')).toHaveLength(1);
+    expect(pendingLink).toBe('resuming');
+    expect(links.at(-1)?.state).toBe('stable');
+  } finally {
+    releasePause();
+    globalThis.fetch = fixtureFetch;
+    await connection.end();
+  }
+});

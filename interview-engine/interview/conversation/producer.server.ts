@@ -28,7 +28,7 @@ type Options = {
   services: typeof producerServices;
   /** Settled passages in order, stopping at the first still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
-  send: (event: Record<string, unknown>) => boolean; waitUntil?: (work: Promise<void>) => void;
+  send: (event: Record<string, unknown>) => boolean; waitUntil: (work: Promise<void>) => void;
   pauses?: () => PauseSpan[];
 };
 /** Keep the map, its cached input, and the audit log. Re-read the current turn after a restart. */
@@ -52,7 +52,6 @@ const RESEARCH_STATUS: Record<ResearchRecord['outcome'], string> = {
 export class InterviewProducer {
   readonly records: ProducerLogRecord[] = [];
   private abort = new AbortController();
-  private work = new Set<Promise<void>>();
   private map: ConversationMap = emptyMap();
   private mapRecord: MapRecord | null = null;
   private log: MapLog = emptyMapLog();
@@ -75,8 +74,6 @@ export class InterviewProducer {
   constructor(private options: Options) { this.lastMapStart = options.startedAt; }
   private get alive() { return !this.abort.signal.aborted; }
   private elapsed(now: number) { return activeElapsed(this.options.startedAt, now, this.options.pauses?.()); }
-  get conversationMap() { return this.map; }
-  get rankingState() { return this.ranking; }
   publicBackground(): InterviewBackground[] { return deliveredBackground(this.records); }
 
   private get counts() {
@@ -88,12 +85,6 @@ export class InterviewProducer {
     };
   }
   private get budgetLeft() { const { maps, turns, research } = this.counts; return LIMITS.calls - maps - turns - research; }
-  async settle() { while (this.work.size) await Promise.all([...this.work]); }
-  private track(work: Promise<void>) {
-    this.work.add(work);
-    work.then(() => this.work.delete(work), () => this.work.delete(work));
-    this.options.waitUntil?.(work);
-  }
 
   tick(now = Date.now()) {
     if (!this.alive) return;
@@ -143,7 +134,7 @@ export class InterviewProducer {
     const controller = new AbortController();
     const unmapped = fresh || this.behind || events.length > 0;
     this.call = { record, controller, unmapped };
-    this.track(this.generate(record, controller, log, settled, now, unmapped)
+    this.options.waitUntil(this.generate(record, controller, log, settled, now, unmapped)
       .finally(() => { if (this.call?.record === record) this.call = null; }));
   }
 
@@ -227,7 +218,7 @@ export class InterviewProducer {
     this.turnBusy = true;
     const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId, startedAt: now, outcome: 'pending' };
     this.records.push(record);
-    this.track(this.evaluate(record, settled, now));
+    this.options.waitUntil(this.evaluate(record, settled, now));
   }
 
   private async evaluate(record: TurnRecord, settled: TranscriptEntry[], now: number) {
@@ -311,7 +302,7 @@ export class InterviewProducer {
     this.records.push(record);
     this.lookupBusy = true;
     const scope = this.abort.signal;
-    this.track(this.research(record).finally(() => { if (!scope.aborted) this.lookupBusy = false; }));
+    this.options.waitUntil(this.research(record).finally(() => { if (!scope.aborted) this.lookupBusy = false; }));
   }
 
   /** A found lookup wakes Sol; one that found nothing waits in the log for Sol's next call. */

@@ -60,6 +60,30 @@ test('rows land in interview_attempts with the archive upsert rules', async () =
   expect(JSON.parse(f.row()!.provenance_json).model).toBe('gpt-live');
 });
 
+test('an unanswered partial remains pending, and a later answer stays eligible for a report', async () => {
+  const f = fixture();
+  const archive = d1Archive(f.db, host);
+  const partial = archiveRow('partial', 2000);
+  partial.transcript = [{ id: 'greeting', speaker: 'interviewer', text: 'Tell me about the project.', startMs: 0, endMs: 500 }];
+  partial.snapshot.transcript = partial.transcript;
+  await archive.write(partial);
+  expect(f.row()).toMatchObject({ archive_state: 'partial', summary_status: 'pending' });
+  await archive.write(archiveRow('partial', 2500));
+  expect(f.row()).toMatchObject({ archive_state: 'partial', summary_status: 'pending' });
+  await archive.write(archiveRow('final', 3000));
+  expect(f.row()).toMatchObject({ archive_state: 'final', summary_status: 'pending' });
+});
+
+test('an unanswered final interview has no report available', async () => {
+  const f = fixture();
+  const archive = d1Archive(f.db, host);
+  const final = archiveRow('final', 3000);
+  final.transcript = [];
+  final.snapshot.transcript = [];
+  await archive.write(final);
+  expect(f.row()).toMatchObject({ archive_state: 'final', summary_status: 'unavailable', summary_text: null });
+});
+
 test('a recovered narrative retains the failed attempt and successful token usage in D1', async () => {
   const f = fixture();
   const archive = d1Archive(f.db, host);
@@ -80,6 +104,19 @@ test('a recovered narrative retains the failed attempt and successful token usag
     { startedAt: 3000, endedAt: 3500, failure: 'timeout', usage: null },
     { startedAt: 3600, endedAt: 4900, failure: null, usage: { inputTokens: 120, outputTokens: 45, reasoningTokens: 20, cachedTokens: 80 } },
   ]);
+});
+
+test('archive retries retain explicit null provenance alongside the saved report provenance', async () => {
+  const f = fixture();
+  const archive = d1Archive(f.db, { ...host, workerId: null, workerTag: null });
+  await archive.write(archiveRow('final', 3000));
+  await archive.writeReport('interview-1', { status: 'ready', text: 'Summary.' }, { model: 'agent', version: 'report-v1', attempts: [] });
+  await archive.write(archiveRow('final', 4000));
+  const provenance = JSON.parse(f.row()!.provenance_json);
+  expect(provenance).toHaveProperty('workerId', null);
+  expect(provenance).toHaveProperty('workerTag', null);
+  expect(provenance).toHaveProperty('contextualDirector', null);
+  expect(provenance.interviewSummary).toEqual({ model: 'agent', version: 'report-v1', attempts: [] });
 });
 
 test('each row carries its own spec identity, so attempts under different specs archive side by side', async () => {

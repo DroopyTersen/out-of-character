@@ -26,7 +26,7 @@ export async function writeInterviewArchive(db: D1Database, { specId, specVersio
     state === 'final' ? capturedAt : null, state, snapshot.status, snapshot.finalization,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.evaluation ? JSON.stringify(snapshot.evaluation) : null,
-    narrative?.status ?? (snapshot.transcript.some(passage => passage.speaker === 'participant') ? 'pending' : 'unavailable'), narrative?.text ?? null,
+    narrative?.status ?? (state === 'final' && !snapshot.transcript.some(passage => passage.speaker === 'participant') ? 'unavailable' : 'pending'), narrative?.text ?? null,
     JSON.stringify(provenance), '[]', specId, specVersion,
   ];
   // Producer records take whatever the rest of the row leaves.
@@ -48,7 +48,11 @@ export async function writeInterviewArchive(db: D1Database, { specId, specVersio
       evaluation_json = excluded.evaluation_json,
       summary_status = CASE WHEN excluded.summary_status = 'pending' THEN interview_attempts.summary_status ELSE excluded.summary_status END,
       summary_text = CASE WHEN excluded.summary_status = 'pending' THEN interview_attempts.summary_text ELSE excluded.summary_text END,
-      provenance_json = json_patch(interview_attempts.provenance_json, excluded.provenance_json),
+      provenance_json = CASE
+        WHEN json_type(excluded.provenance_json, '$.interviewSummary') IS NULL
+          AND json_type(interview_attempts.provenance_json, '$.interviewSummary') IS NOT NULL
+        THEN json_set(excluded.provenance_json, '$.interviewSummary', json_extract(interview_attempts.provenance_json, '$.interviewSummary'))
+        ELSE excluded.provenance_json END,
       cues_json = excluded.cues_json, spec_id = excluded.spec_id, spec_version = excluded.spec_version,
       interventions_json = excluded.interventions_json
     WHERE (interview_attempts.archive_state = 'partial' OR excluded.archive_state = 'final')

@@ -1,7 +1,8 @@
-import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../shared/network';
 import type { SubmitTextReply } from '../shared/protocol';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
-import { readAudio, silentLevels, type AudioLevels } from './audioLevels';
+import type { AudioLevels } from './audioLevels';
+import { BrowserMedia, type MediaCallbacks, type MediaConnection } from './browserMedia';
+import { deliverTypedAnswer } from './typedAnswerDelivery';
 import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolAction, type ProtocolTransport } from './transport';
 
 export type { Attempt } from './transport';
@@ -48,22 +49,12 @@ const POLL_GRACE_MS = 10_000;
 const HEARTBEAT_MS = 5000;
 /** A pause younger than this reconnects by itself once, when the server answers again. */
 const AUTO_RESUME_MS = 60_000;
-/** A typed answer is retried under its one id for at most this long. */
-const SUBMIT_GIVE_UP_MS = 30_000;
-const SUBMIT_UNSENT = 'Your answer could not be sent. Check your connection and try again.';
-const NOT_LIVE = 'The interview is not live.';
 
-/** Browser media only. The server owns transcripts, judgments, actor context, and the paused hold. */
+/** Browser attempt commands and connection policy. BrowserMedia owns hardware; the server owns interview evidence and holds. */
 export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private id: string = crypto.randomUUID();
   private capability = [...crypto.getRandomValues(new Uint8Array(32))].map(value => value.toString(16).padStart(2, '0')).join('');
-  private pc: RTCPeerConnection | undefined;
-  private stream: MediaStream | undefined;
-  private audio = new Audio();
-  private context: AudioContext | undefined;
-  private inputMeter: AnalyserNode | undefined;
-  private outputMeter: AnalyserNode | undefined;
-  private meterTimer: ReturnType<typeof setInterval> | undefined;
+  private media: MediaConnection;
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
   private disconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
@@ -85,8 +76,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private activeSincePoll = false;
   private lastAudioAt = 0;
   private activitySequence = 0;
-  /** The current media connection's last stats read; reports carry the change since. */
-  private networkCounters: NetworkCounters | undefined;
   private muted = false;
   private autoMuted = false;
   /** The host has an unsent typed draft: the microphone is off and the server holds its silence nudges. */
@@ -94,14 +83,19 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   /** The single closure for end, failure, and disposal; every pending startup or poll step stops once it exists. */
   private ending: Promise<void> | undefined;
 
-  constructor(private transport: ProtocolTransport, private callbacks: Callbacks<S>, existing?: Attempt) {
-    this.audio.autoplay = true;
+  constructor(private transport: ProtocolTransport, private callbacks: Callbacks<S>, existing?: Attempt,
+    media: (callbacks: MediaCallbacks) => MediaConnection = callbacks => new BrowserMedia(callbacks)) {
+    this.media = media({
+      state: state => this.mediaChanged(state),
+      levels: (levels, audible) => this.mediaLevels(levels, audible),
+      error: message => this.callbacks.error(message),
+    });
     if (existing) ({ id: this.id, capability: this.capability } = existing);
   }
 
   get attempt(): Attempt { return { id: this.id, capability: this.capability }; }
   private request(action: ProtocolAction, body?: unknown, { keepalive = false, signal = this.controller.signal }: { keepalive?: boolean; signal?: AbortSignal } = {}): Promise<unknown> {
-    const timeoutMs = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : action === 'submitText' ? 10_000 : 30_000;
+    const timeoutMs = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : 30_000;
     return this.transport.request(action, body, { attempt: this.attempt, timeoutMs, keepalive, signal });
   }
 
@@ -146,52 +140,22 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
    */
   private async connect(exchange: (sdp: string) => Promise<string | null>): Promise<boolean> {
     const segment = this.segment = new AbortController();
-    const stopped = () => {
-      if (this.ending) return true;
-      if (segment.signal.aborted) throw new Error('The voice connection was interrupted.');
-      return false;
-    };
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    if (this.ending || segment.signal.aborted) { stream.getTracks().forEach(track => track.stop()); stopped(); return false; }
-    this.stream = stream;
     this.applyMute();
-    const pc = this.pc = new RTCPeerConnection();
-    this.networkCounters = undefined;
-    for (const track of stream.getTracks()) pc.addTrack(track, stream);
-    // The audio context survives pauses: a resume may not have a user gesture to start a new one.
-    this.context ??= new AudioContext();
-    this.inputMeter = this.meter(stream);
-    pc.addEventListener('track', event => {
-      if (this.ending || pc !== this.pc) return;
-      const remote = event.streams[0] ?? new MediaStream([event.track]);
-      this.audio.srcObject = remote;
-      void this.audio.play().catch(() => this.callbacks.error('Audio playback was blocked. Use Enable audio to listen.'));
-      this.outputMeter = this.meter(remote);
-    }, { signal: segment.signal });
-    pc.addEventListener('connectionstatechange', () => this.mediaChanged(pc, segment), { signal: segment.signal });
-    // Audio only: session events and private actor context stay on the server's sideband.
-    await pc.setLocalDescription(await pc.createOffer());
-    await this.until(pc, 'icegatheringstatechange', () => pc.iceGatheringState === 'complete', 8000, 'Network negotiation timed out.', segment.signal);
-    if (stopped()) return false;
-    const answer = await exchange(pc.localDescription!.sdp);
-    if (answer == null || stopped()) return false;
-    await pc.setRemoteDescription({ type: 'answer', sdp: answer });
-    await this.until(pc, 'connectionstatechange', () => pc.connectionState === 'connected', 15_000, 'The voice connection timed out.', segment.signal);
-    if (stopped()) return false;
+    const connected = await this.media.connect(exchange, segment.signal);
+    if (!connected || this.ending || segment.signal.aborted) return false;
     // The server applies the current activity, including an open draft, before going live.
     const ready = await this.request('ready', this.activity(false)) as S;
-    if (stopped()) return false;
+    if (this.ending || segment.signal.aborted) return false;
     this.callbacks.snapshot(ready);
     return true;
   }
 
   /** Before the conversation starts, lost media fails the attempt; after, it reconnects in place or pauses. */
-  private mediaChanged(pc: RTCPeerConnection, segment: AbortController) {
-    if (this.ending || pc !== this.pc || segment.signal.aborted) return;
+  private mediaChanged(state: RTCPeerConnectionState) {
+    if (this.ending || this.segment.signal.aborted) return;
     clearTimeout(this.disconnectTimer);
-    const state = pc.connectionState;
     if (this.link.state === 'resuming') {
-      if (state === 'failed') segment.abort();
+      if (state === 'failed') this.segment.abort();
       return;
     }
     if (!this.reachedLive) {
@@ -206,37 +170,10 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.updateLink();
   }
 
-  /** Waits for a negotiation event, rejecting on its timeout or once its connection is closing. */
-  private async until(target: EventTarget, event: string, ready: () => boolean, ms: number, message: string, signal: AbortSignal) {
-    if (ready()) return;
-    await new Promise<void>((resolve, reject) => {
-      const finish = (error?: Error) => {
-        clearTimeout(timeout);
-        target.removeEventListener(event, changed);
-        signal.removeEventListener('abort', abort);
-        if (error) reject(error); else resolve();
-      };
-      const changed = () => { if (ready()) finish(); };
-      const abort = () => finish(new DOMException('Aborted', 'AbortError'));
-      const timeout = setTimeout(() => finish(new Error(message)), ms);
-      target.addEventListener(event, changed);
-      signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
-    });
-  }
-
   private describe(error: unknown, fallback: string) {
     if (error instanceof DOMException && error.name === 'NotAllowedError') return 'Microphone access was denied. Allow access in your browser, then try again.';
     if (error instanceof DOMException && error.name === 'AbortError') return fallback;
     return error instanceof Error ? error.message : fallback;
-  }
-
-  private meter(stream: MediaStream) {
-    const meter = this.context!.createAnalyser();
-    meter.fftSize = 1024;
-    meter.smoothingTimeConstant = .65;
-    this.context!.createMediaStreamSource(stream).connect(meter);
-    return meter;
   }
 
   private activity(active: boolean) {
@@ -246,19 +183,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing };
   }
 
-  /** Media quality since the last read, at most every few seconds. A slow or failed read is skipped, never waited on. */
-  private async network(): Promise<NetworkSample | undefined> {
-    const pc = this.pc;
-    if (!pc || pc.connectionState !== 'connected' || Date.now() - (this.networkCounters?.at ?? 0) < NETWORK_SAMPLE_MS) return;
-    try {
-      const report = await Promise.race([pc.getStats(), new Promise<undefined>(resolve => setTimeout(resolve, 300))]);
-      if (!report || pc !== this.pc) return;
-      const { counters, sample } = readNetwork(report.values(), this.networkCounters, Date.now());
-      this.networkCounters = counters;
-      return sample;
-    } catch { return; }
-  }
-
   /** Starts the live loops for the current media connection. */
   private live() {
     this.reloaded = false;
@@ -266,32 +190,23 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.pollFailingSince = undefined;
     this.setLink(stableLink);
     this.poll(this.segment);
-    clearInterval(this.meterTimer);
-    this.meterTimer = setInterval(() => {
-      const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
-      const now = Date.now();
-      const running = this.context?.state === 'running';
-      // Only Sam's playback extends the session's idle lease; microphone noise does not.
-      const samAudible = running && output.level > .03 && !this.audio.paused;
-      const outputStarted = samAudible && now - this.lastAudioAt >= 1500;
-      if (samAudible) {
-        this.keepActive();
-        this.lastAudioAt = now;
-      }
-      // Report new playback promptly so it extends the server's idle and ending grace.
-      // An older periodic report is ignored on the server.
-      if (outputStarted && !this.ending) {
-        void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
-      }
-      this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
-    }, 80);
+    this.media.startMetering();
+  }
+
+  private mediaLevels(levels: AudioLevels, audible: boolean) {
+    const now = Date.now();
+    // Only the interviewer's playback extends the idle lease; microphone noise does not.
+    const outputStarted = audible && now - this.lastAudioAt >= 1500;
+    if (audible) { this.keepActive(); this.lastAudioAt = now; }
+    if (outputStarted && !this.ending) void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
+    this.callbacks.levels(levels);
   }
 
   private poll(segment: AbortController) {
     if (this.ending || segment.signal.aborted) return;
     this.pollTimer = setTimeout(async () => {
       try {
-        const network = await this.network();
+        const network = await this.media.network();
         if (this.ending || segment.signal.aborted) return;
         const active = this.activeSincePoll;
         this.activeSincePoll = false;
@@ -405,7 +320,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   keepActive = () => { this.activeSincePoll = true; };
   mute(muted: boolean) { this.muted = muted; this.applyMute(); }
-  private applyMute() { this.stream?.getAudioTracks().forEach(track => { track.enabled = !this.muted && !this.composing && !this.autoMuted; }); }
+  private applyMute() { this.media.mute(this.muted || this.composing || this.autoMuted); }
 
   /** Whether polls run for the current media connection; otherwise the next `ready` carries the state. */
   private polling() {
@@ -426,38 +341,13 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
    * so a lost reply never creates a second turn. Resolves once the server saved it.
    */
   async submitText(text: string): Promise<SubmitTextReply> {
-    const id = crypto.randomUUID();
-    const giveUpAt = Date.now() + SUBMIT_GIVE_UP_MS;
-    let delay = 1000;
-    for (;;) {
-      if (this.ending) throw new Error(NOT_LIVE);
-      try {
-        const reply = await this.request('submitText', { id, text }) as SubmitTextReply;
-        // Saved even if the attempt is closing; only a live page shows the snapshot.
-        if (!this.ending) this.callbacks.snapshot(reply.snapshot as unknown as S);
-        return reply;
-      } catch (error) {
-        if (this.ending) throw new Error(NOT_LIVE);
-        const retryable = error instanceof SessionUnanswered || (error instanceof SessionRequestError && error.status === 503);
-        if (!retryable) throw new Error(error instanceof SessionRequestError ? error.message : SUBMIT_UNSENT);
-        if (Date.now() + delay >= giveUpAt) throw new Error(SUBMIT_UNSENT);
-        await this.wait(delay);
-        delay = Math.min(delay * 2, 5000);
-      }
-    }
+    const reply = await deliverTypedAnswer({ text, transport: this.transport, attempt: this.attempt, signal: this.controller.signal });
+    // Saved even if the attempt is closing; only a live page shows the snapshot.
+    if (!this.ending) this.callbacks.snapshot(reply.snapshot as unknown as S);
+    return reply;
   }
 
-  /** Waits, rejecting once the attempt closes. */
-  private wait(ms: number) {
-    const signal = this.controller.signal;
-    return new Promise<void>((resolve, reject) => {
-      const abort = () => { clearTimeout(timer); reject(new Error(NOT_LIVE)); };
-      const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, ms);
-      signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
-    });
-  }
-  async playAudio() { await this.context?.resume(); await this.audio.play(); }
+  async playAudio() { await this.media.playAudio(); }
 
   private async fail(message: string) {
     if (this.ending) return;
@@ -486,7 +376,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   /** Ends the attempt. `closed` then says whether the server confirmed it; an unanswered end can be reconciled by reattaching. */
   end(): Promise<void> {
     if (this.ending) return this.ending;
-    const drain = this.link.state !== 'paused' && this.pc?.connectionState === 'connected';
+    const drain = this.link.state !== 'paused' && this.media.connected;
     this.ending = (async () => {
       let outcome: Closure['outcome'] = 'ended';
       // Silence lets the server finish the last utterance during its short grace.
@@ -531,34 +421,23 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   /** Stops the current media connection and its loops; the attempt itself continues. */
   private teardown() {
     this.stopSegment();
-    this.closeMedia();
+    this.media.close();
     this.mediaUnstable = false;
     this.pollFailingSince = undefined;
     this.autoMuted = false;
+    this.applyMute();
   }
 
-  /** Stops one connection's work and playback without cutting off its final microphone drain. */
+  /** Stops one connection's polls, negotiation and disconnect timers. Media release is ordered by the caller. */
   private stopSegment() {
     this.segment.abort();
-    clearInterval(this.meterTimer);
     clearTimeout(this.pollTimer);
     clearTimeout(this.disconnectTimer);
-    this.audio.pause();
-    this.audio.srcObject = null;
-    this.inputMeter = this.outputMeter = undefined;
-    this.callbacks.levels(silentLevels);
-  }
-
-  private closeMedia() {
-    this.stream?.getTracks().forEach(track => track.stop());
-    this.pc?.close();
-    this.stream = undefined;
-    this.pc = undefined;
   }
 
   private release() {
     this.silence();
-    this.closeMedia();
+    this.media.dispose();
   }
 
   private silence() {
@@ -567,13 +446,12 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.mute(true);
     this.controller.abort();
     this.stopSegment();
+    this.media.silence();
     clearTimeout(this.heartbeatTimer);
     window.removeEventListener('pointerdown', this.keepActive);
     window.removeEventListener('keydown', this.keepActive);
     window.removeEventListener('offline', this.offline);
     window.removeEventListener('online', this.retry);
     document.removeEventListener('visibilitychange', this.retry);
-    void this.context?.close().catch(() => {});
-    this.context = undefined;
   }
 }

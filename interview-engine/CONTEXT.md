@@ -74,6 +74,12 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Closure**: how an attempt closed for one page, which `LiveConnection` reports once through `closed`: `ended` (the server ended it or confirmed the end, or it never reached the server), `unconfirmed` (the end went unanswered; the host reattaches with the same attempt to reconcile it) or `lost` (the server no longer has it), with whether the conversation had started.
 
+**Browser media**: microphone, peer connection, playback, audio context, meters and network statistics, owned together by `BrowserMedia`. It reports media observations; `LiveConnection` owns attempt commands and reconnect policy. Pause preserves the audio context. End silences immediately and releases the peer after its bounded drain.
+
+**Typed answer delivery**: the browser operation that keeps one answer ID through bounded retries until it receives a durable receipt or fails. It can run without browser media. A saved receipt remains valid after End, but cannot publish a live snapshot to a closed page.
+
+**Archive capture**: construction of an immutable archive row from one captured moment. It excludes provider IDs and preserves private diagnostic records and prompt fingerprints. The coordinator still owns archive writes, retries and terminal-checkpoint retention.
+
 **Transport**: how the browser client delivers its commands. The poll transport sends one HTTP request per command; the socket transport (`client/socketTransport.ts`) sends the same commands over one WebSocket per attempt, as `{ id, action, capability, body }`, and receives `{ id, status, body }` replies equal to the HTTP replies. The report, which streams, stays on HTTP; a socket start must name the socket's own attempt. The socket is opt-in on the host.
 
 ## Hosts

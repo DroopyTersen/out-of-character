@@ -15,10 +15,10 @@ import { generateMap } from '../reasoning/conversationMap.server';
 import { InterviewProducer } from '../reasoning/interviewProducer.server';
 import { evaluateTurn } from '../judging/judgeConversationTurn.server';
 import { lookupInterviewBackground } from '../reasoning/backgroundResearch.server';
-import { INTERVIEW_RUBRIC_VERSION } from '../judging/topicCoverage.prompt';
-import { FencedError, type Archive, type Background, type InterviewArchiveRow, type SessionStore } from '../seams.server';
-import { interviewerBrief, interviewOpening } from '../voice/interviewerBrief.server';
-import type { Checkpoint, ConnectionLog, Lease, PauseRecord, SessionSnapshot } from './sessionCheckpoint';
+import { FencedError, type Archive, type Background, type SessionStore } from '../seams.server';
+import { interviewOpening } from '../voice/interviewerBrief.server';
+import type { Checkpoint, Lease, PauseRecord, SessionSnapshot } from './sessionCheckpoint';
+import { captureArchiveRecord } from './sessionArchiveRecord.server';
 import { SessionTranscript } from './sessionTranscript';
 import { attemptDeadline, canHold, lifetimeDecision, pauseDeadline, resumeRefusal } from './sessionLifetime';
 import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from '../voice/voice.prompt';
@@ -74,10 +74,6 @@ const defaultLimits: InterviewLimits = {
   durationSeconds: SESSION_LIMIT_SECONDS, idleWarningMs: SESSION_IDLE_WARNING_MS, idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
   pauseHoldMs: SESSION_PAUSE_HOLD_MS, maxResumes: SESSION_MAX_RESUMES,
 };
-const digest = async (text: string) => {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 12);
-};
 
 /** Coverage from the host's injected decision model. */
 function judgeWith(spec: ResolvedInterview, providers: Providers): Evaluate {
@@ -125,7 +121,6 @@ export class SessionCoordinator {
   private activitySequence = -1;
   /** When the attempt ended, while the archive has not acknowledged its final row. Its terminal checkpoint is kept until then. */
   private unarchived: number | null = null;
-  private digests: Promise<[string, string]> | undefined;
   private wakeAt: number | null = null;
   private fenced = false;
   /** The browser holds a typed draft: silence nudges wait. Reported by sequenced activity; never stored. */
@@ -913,32 +908,16 @@ export class SessionCoordinator {
     if (!this.pausing) await this.voice.retryClosures();
   }
 
-  private connectionLog(): ConnectionLog {
-    const now = this.now();
-    return {
-      segments: this.voice.segments.map(({ providerId: _private, ...segment }) => segment),
-      pauses: this.pauses.map(pause => ({ reason: pause.reason, pausedAt: pause.pausedAt, resumedAt: pause.resumedAt, durationMs: (pause.resumedAt ?? pause.endedAt ?? now) - pause.pausedAt })),
-    };
-  }
-
   /** Whether the archive acknowledged the row. */
   private async saveArchive(state: 'partial' | 'final', capturedAt = this.now()): Promise<boolean> {
     if (this.fenced) return false;
     const id = this.state?.id ?? '';
     try {
-      // Freeze the data and its timestamp before any asynchronous work.
-      const snapshot = structuredClone(this.publicSnapshot());
-      // Grade diagnostics ride with the private producer records; they are never part of the public snapshot.
-      const producerLog = structuredClone([...(this.producer?.records ?? []), ...this.grading.snapshot().grades]);
-      const producer = this.producer?.summary() ?? null;
-      const connection = this.connectionLog();
-      this.digests ??= Promise.all([digest(interviewerBrief(this.spec, snapshot.voiceId)), digest(interviewOpening(this.spec, snapshot.voiceId))]);
-      const [actorDigest, openingDigest] = await this.digests;
-      const row: InterviewArchiveRow = {
-        id: snapshot.id, specId: this.spec.id, specVersion: this.spec.version, voiceId: snapshot.voiceId, state, capturedAt, snapshot,
-        transcript: snapshot.transcript, producerLog,
-        provenance: { voice: this.voice.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection },
-      };
+      const row = await captureArchiveRecord({
+        spec: this.spec, snapshot: this.publicSnapshot(), state, capturedAt,
+        producerLog: [...(this.producer?.records ?? []), ...this.grading.snapshot().grades],
+        producer: this.producer?.summary() ?? null, segments: this.voice.segments, pauses: this.pauses,
+      });
       if (this.fenced) return false;
       await this.archive.write(row);
       return true;

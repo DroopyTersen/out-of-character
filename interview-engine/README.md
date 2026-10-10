@@ -8,6 +8,8 @@ The engine is one folder that knows nothing about the app around it. A host give
 - ready-made model clients (the providers)
 - three small adapters over its own platform (the seams)
 
+`InterviewContext.background` is the full reference for the producer and report. A host may also supply `voiceBackground` as a compact view for the voice interviewer. Both views share the participant's name and background and are frozen in the accepted definition for resume. When a host supplies only `background`, the voice interviewer uses that background too. Neither view establishes participant testimony.
+
 The host then forwards the browser's commands. This repository hosts the engine on Cloudflare and in a Bun reference host. The host app plans to copy the same folder in as `app/debrief/engine/`.
 
 Terms used here are defined in [CONTEXT.md](CONTEXT.md). For why the design looks like this, see `docs/solutioning/interview-engine-api-design.html`.

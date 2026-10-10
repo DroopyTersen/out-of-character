@@ -38,6 +38,8 @@ export function resolveInterview(input: InterviewPlan, supplied: InterviewConfig
   const plan = interviewPlanSchema.parse(input);
   const config = interviewConfigSchema.parse(supplied);
   const background = context ? interviewContextSchema.parse(context) : undefined;
+  const reference = background && { background: background.background, participant: background.participant };
+  const voiceContext = background && { ...reference, background: background.voiceBackground ?? background.background };
   const sourceRule = 'Only the participant establishes their experience. Supplied background helps interpret names and circumstances, but it is not something the participant said or confirmed. Do not use it to infer their responsibilities, complete their account, or grant coverage. Distinguish firsthand knowledge, attributed accounts, inference and public research.';
   return {
     id: plan.id, version: plan.version, plan, config, ...(background ? { context: background } : {}), limits: config.limits,
@@ -49,7 +51,7 @@ export function resolveInterview(input: InterviewPlan, supplied: InterviewConfig
         `Learning goals: ${plan.goals}`,
         'First orient the participant: introduce yourself, explain the purpose and ground the subject before asking for their role or lessons. Use explicitly supplied names and circumstances; ask for missing context instead of assuming it. If they ask what the interview is about, explain plainly and clarify the missing subject rather than repeating the plan label. Discover their actual responsibilities, including multiple or changing roles. Let their experience guide the conversation. Never re-ask what they have already answered. Keep it a conversation, not a questionnaire.',
         ...(plan.guidance ? [`Approved interviewing guidance: ${plan.guidance}`] : []),
-        ...(background ? [`Supplied background, not participant evidence: ${JSON.stringify(background)}`] : []),
+        ...(voiceContext ? [`Supplied background, not participant evidence: ${JSON.stringify(voiceContext)}`] : []),
       ],
       boundaries: [sourceRule, 'Respect uncertainty and explicit boundaries immediately. Do not press the same point in other words. A short, precise answer may be complete. Do not invent events, causes, names or outcomes, or claim shared experiences.'],
       techniques: {
@@ -59,7 +61,7 @@ export function resolveInterview(input: InterviewPlan, supplied: InterviewConfig
     },
     framing: {
       occasion: `an interview about ${plan.title}`, topic: 'topic', purpose: plan.goals,
-      setting: [sourceRule, `Approved topic tree (parents supply learning intent; only leaves are assessed): ${JSON.stringify(plan.topics)}`, 'For conditional topics, establish relevance from the participant’s own account. Unknown relevance is not failure or not applicable. A parent condition applies to every descendant. Do not pursue a branch that does not apply.', background ? `Supplied context: ${JSON.stringify(background)}` : '', plan.guidance ? `Approved interviewing guidance: ${plan.guidance}` : ''].filter(Boolean).join('\n\n'),
+      setting: [sourceRule, `Approved topic tree (parents supply learning intent; only leaves are assessed): ${JSON.stringify(plan.topics)}`, 'For conditional topics, establish relevance from the participant’s own account. Unknown relevance is not failure or not applicable. A parent condition applies to every descendant. Do not pursue a branch that does not apply.', reference ? `Supplied context: ${JSON.stringify(reference)}` : '', plan.guidance ? `Approved interviewing guidance: ${plan.guidance}` : ''].filter(Boolean).join('\n\n'),
       defaultThread: 'Ground the concrete situation relevant to the approved goals and guidance: what it was, who was involved, and the participant’s own experience. Clarify the first missing piece; a plan label is not a project or organization name. Supplied context can identify the subject, but only the participant establishes their responsibilities and vantage. This thread is a default, not a reason to interrupt a richer story.',
       terms: 'A topic is one specific thing the approved plan seeks to learn. Parent topics organize the conversation; coverage is assessed only for leaves.',
       party: sourceRule,

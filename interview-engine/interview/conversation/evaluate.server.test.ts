@@ -16,7 +16,7 @@ const spec = {
   readings: [{ id: 'specificity', label: 'Specificity', description: 'Concrete detail.', rubric: { task: 'How concrete?', criteria } }],
   topics: [{ objectives: [
     { id: 'scope', label: 'Scope', criterion: 'Names what was built.' },
-    { id: 'role', label: 'Role', criterion: 'Names their own work.', creditRule: 'Only their own work counts.', explored: 'They state their own work.' },
+    { id: 'role', label: 'Role', criterion: 'Names their own work. Only their own work counts.' },
   ] }],
 } satisfies JudgedSpec;
 const passages: Passage[] = [
@@ -40,7 +40,7 @@ test('the questions come from the spec, and only participant passages are eviden
     'objective:scope', 'objective:scope:evidence', 'objective:role', 'objective:role:evidence']);
   expect(questions['reading:specificity']).toMatchObject({ type: 'score', instructions: { task: 'How concrete?' }, criteria: [...criteria] });
   expect(questions['objective:scope']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names what was built.' } });
-  expect(questions['objective:role']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names their own work. Only their own work counts.' }, criteria: { explored: 'They state their own work.' } });
+  expect(questions['objective:role']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names their own work. Only their own work counts.' } });
   const evidence = questions['objective:scope:evidence'];
   if (evidence?.type !== 'choice') throw new Error('Expected a choice.');
   expect(Object.keys(evidence.criteria ?? {})).toEqual(['none', 'p2', 'p4']);

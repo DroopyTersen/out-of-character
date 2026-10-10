@@ -65,7 +65,7 @@ export function interviewQuestions(spec: JudgedSpec, passages: Passage[]): Recor
     questions[`objective:${objective.id}`] = {
       type: 'choice',
       instructions: {
-        task: `How far has the participant covered this ${spec.framing.topic}? ${objective.criterion} ${objective.creditRule ?? ''} ${objective.appliesWhen ? `Only relevant when: ${objective.appliesWhen}` : ''}`.trim(),
+        task: `How far has the participant covered this ${spec.framing.topic}? ${objective.criterion} ${objective.appliesWhen ? `Only relevant when: ${objective.appliesWhen}` : ''}`.trim(),
         party: spec.framing.party,
         depth: `Judge the whole dialogue, including earlier passages. Explored means the stated topic criterion is answered, not that ${name} has exhausted every follow-up or obtained a complete story. A concise concrete fact can answer it. ${name} mentioning the topic, offering an example, or paraphrasing does not cover it; neither does a vague agreement or “mm.”`,
         limits: 'A qualifier about hearsay, unknown motives, or an unrelated detail does not erase facts the participant did supply. Set aside applies when they cannot or will not address this topic itself, not just when part of their answer is uncertain.',
@@ -74,7 +74,7 @@ export function interviewQuestions(spec: JudgedSpec, passages: Passage[]): Recor
       criteria: {
         'not-yet': 'No participant passage addresses this topic yet.',
         touched: 'The participant mentions or begins this topic, but their own words do not yet answer it. A passing mention counts here.',
-        explored: objective.explored ?? 'The participant’s own words answer this topic for the right party. One clear firsthand fact or explicitly attributed account may suffice; every possible detail is unnecessary.',
+        explored: 'The participant’s own words answer this topic for the right party. One clear firsthand fact or explicitly attributed account may suffice; every possible detail is unnecessary.',
         'set-aside': 'The participant declines this topic, says they do not know or cannot remember, or says it does not apply to this project.',
       } satisfies Record<CoverageLevel, string>,
     };

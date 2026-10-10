@@ -1,7 +1,6 @@
 import { NETWORK_SAMPLE_MS, readNetwork, type NetworkCounters, type NetworkSample } from '../shared/network';
 import type { SubmitTextReply } from '../shared/protocol';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
-import { SPEECH_QUIET_MS } from '../shared/timing';
 import { readAudio, silentLevels, type AudioLevels } from './audioLevels';
 import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolAction, type ProtocolTransport } from './transport';
 
@@ -85,9 +84,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private reported: Promise<void> = Promise.resolve();
   private activeSincePoll = false;
   private lastAudioAt = 0;
-  private outputQuietSince: number | undefined;
-  private outputQuietSent = true;
-  private meterUpdatedAt = 0;
   private activitySequence = 0;
   /** The current media connection's last stats read; reports carry the change since. */
   private networkCounters: NetworkCounters | undefined;
@@ -236,18 +232,11 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     return meter;
   }
 
-  private canMeasureOutput() {
-    return !!this.outputMeter && this.context?.state === 'running' && !this.audio.paused && this.pc?.connectionState === 'connected';
-  }
-
   private activity(active: boolean) {
     const now = Date.now();
-    const fresh = now - this.meterUpdatedAt < 250;
-    // Sam audible is quiet for 0 ms; null only when the playback can't be measured.
     // Time-based, so a reloaded page never repeats a number the server already saw.
     this.activitySequence = Math.max(this.activitySequence + 1, now);
-    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing,
-      outputQuietMs: fresh && this.canMeasureOutput() ? Math.min(60_000, now - (this.outputQuietSince ?? now)) : null };
+    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing };
   }
 
   /** Media quality since the last read, at most every few seconds. A slow or failed read is skipped, never waited on. */
@@ -274,23 +263,17 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.meterTimer = setInterval(() => {
       const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
       const now = Date.now();
-      const previousQuiet = this.outputQuietSince;
       const running = this.context?.state === 'running';
       // Only Sam's playback extends the session's idle lease; microphone noise does not.
       const samAudible = running && output.level > .03 && !this.audio.paused;
-      this.meterUpdatedAt = now;
-      this.outputQuietSince = this.canMeasureOutput() && output.level <= .03 ? this.outputQuietSince ?? now : undefined;
+      const outputStarted = samAudible && now - this.lastAudioAt >= 1500;
       if (samAudible) {
         this.keepActive();
         this.lastAudioAt = now;
       }
-      // Report playback changes promptly for activity and connection diagnostics.
-      const outputStarted = previousQuiet != null && now - previousQuiet >= 600 && this.outputQuietSince == null;
-      const outputStopped = !this.outputQuietSent && this.outputQuietSince != null && now - this.outputQuietSince >= SPEECH_QUIET_MS;
-      if (this.outputQuietSince == null) this.outputQuietSent = false;
-      if (outputStopped) this.outputQuietSent = true;
+      // Report new playback promptly so it extends the server's idle and ending grace.
       // An older periodic report is ignored on the server.
-      if ((outputStarted || outputStopped) && !this.ending) {
+      if (outputStarted && !this.ending) {
         void this.request('poll', this.activity(this.activeSincePoll)).catch(() => {});
       }
       this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands });
@@ -554,8 +537,6 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.stream = undefined;
     this.pc = undefined;
     this.inputMeter = this.outputMeter = undefined;
-    this.outputQuietSince = undefined;
-    this.outputQuietSent = true;
     this.callbacks.levels(silentLevels);
   }
 

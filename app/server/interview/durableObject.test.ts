@@ -51,7 +51,7 @@ const summary = (): NarrativeRun => {
   return { stream: new ReadableStream<string>({ start(controller) { controller.enqueue(JSON.stringify(document)); controller.close(); } }), result: Promise.resolve({ document, failure: null, usage: null } as unknown as Narrative) };
 };
 
-const body = (action: string) => action === 'start' ? JSON.stringify(interviewAttempt) : action === 'poll' ? JSON.stringify({ active: false, audio: false, outputQuietMs: 60_000 }) : undefined;
+const body = (action: string) => action === 'start' ? JSON.stringify(interviewAttempt) : action === 'poll' ? JSON.stringify({ active: false, audio: false }) : undefined;
 const send = (target: { fetch(request: Request): Promise<Response> }, action: string, cap = capability) =>
   target.fetch(new Request(`https://session/${action}`, { method: 'POST', headers: { Authorization: cap }, body: body(action) }));
 

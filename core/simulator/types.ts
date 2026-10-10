@@ -3,7 +3,7 @@ import type { InterviewSession } from '../interview';
 
 export const SIMULATOR_VERSION = 'simulator-v1';
 export {
-  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS, SPEECH_QUIET_MS,
+  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, SESSION_WALL_LIMIT_MS,
 } from '../../interview-engine/shared/timing';
 /** client: the client walked out; the session ends once its closing line finishes. */
 export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity' | 'client'; endsAt: number };

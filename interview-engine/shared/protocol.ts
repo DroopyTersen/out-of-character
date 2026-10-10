@@ -6,13 +6,11 @@ import type { InterviewSnapshot } from './snapshot';
 // Interview commands shared by HTTP and socket transports.
 
 const uuid = z.string().uuid();
-const quietDuration = z.number().int().min(0).max(60_000).nullable().optional();
 const packets = z.number().int().min(0).max(1_000_000);
 const delay = z.number().int().min(0).max(60_000).nullable();
 const network = z.object({ ms: z.number().int().min(0).max(600_000), received: packets, lost: packets, concealed: z.number().min(0).max(1).nullable(), jitterMs: delay, sentLost: packets.nullable(), rttMs: delay }).strict();
-/** `active`: a click or key press since the last report. `audio`: Sam's playback was audible in the last 1.5 s.
- * inputQuietMs remains accepted for older clients; it no longer controls interview behavior. */
-export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), outputQuietMs: quietDuration, inputQuietMs: quietDuration, sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+/** `active`: a click or key press since the last report. `audio`: Sam's playback was audible in the last 1.5 s. */
+export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   /** The participant has a typed draft open; only sequenced reports may change it. */
   composing: z.boolean().optional(),
   // Diagnostics only: a report this server cannot read is dropped, never a failed poll.

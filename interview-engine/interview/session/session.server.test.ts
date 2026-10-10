@@ -29,7 +29,7 @@ const spec = resolveInterview({
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', planId: spec.id, voiceId: 'riley-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
 const start = JSON.stringify(attempt);
-const quietPoll = JSON.stringify({ active: false, audio: false, outputQuietMs: 60_000 });
+const quietPoll = JSON.stringify({ active: false, audio: false });
 const EPOCH = 1_800_000_000_000;
 
 class ProviderSocket extends EventTarget {
@@ -698,13 +698,13 @@ test('four seconds without transcript growth starts Jev even when the browser re
   const f = await stranded(async () => { calls++; return silenceResult(.97); });
   try {
     f.at(5000);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true, inputQuietMs: 1000, outputQuietMs: 1000 }));
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true }));
     expect(calls).toBe(0);
     f.at(7999);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: true, audio: true, inputQuietMs: 0, outputQuietMs: 0 }));
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: true, audio: true }));
     expect(calls).toBe(0);
     f.at(8000);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 3, active: true, audio: true, inputQuietMs: 0, outputQuietMs: 0 }));
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 3, active: true, audio: true }));
     await f.background.settle();
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(1);
@@ -762,15 +762,15 @@ test.each(['input', 'output'] as const)('a pending silence decision is discarded
   } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
 });
 
-test('room noise, playback and missing meters cannot cancel a pending transcript judgment', async () => {
+test('playback activity changes cannot cancel a pending transcript judgment', async () => {
   const result = deferred<ReturnType<typeof silenceResult>>();
   let calls = 0;
   const f = await stranded(async () => { calls++; return result.promise; });
   try {
     await f.send(f.actor, 'poll');
     expect(calls).toBe(1);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true, inputQuietMs: 0, outputQuietMs: 0 }));
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: false, audio: false, inputQuietMs: null, outputQuietMs: null }));
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true }));
+    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: false, audio: false }));
     f.at(10_500);
     result.resolve(silenceResult(.99));
     await f.background.settle();

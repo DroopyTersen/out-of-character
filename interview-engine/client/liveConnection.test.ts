@@ -374,36 +374,20 @@ test('polls carry media quality every few seconds, and a failing stats read neve
   await connection.end();
 });
 
-test("Sam's playback starting and going quiet is reported at once with how long Sam has been quiet", async () => {
+test("Sam's playback reports activity promptly and stays recent for a short silence", async () => {
   const { connection, peer } = await connected();
-  const quiet = () => server.polls.map(poll => (poll as { outputQuietMs?: number | null }).outputQuietMs);
-  await advance(1000);
-  // No playback yet: the server can't tell whether Sam is audible.
-  expect(new Set(quiet())).toEqual(new Set([null]));
+  await advance(3000);
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
   peer().dispatchEvent(Object.assign(new Event('track'), { streams: [new FakeStream()], track: new FakeTrack() }));
-  let seen = server.polls.length;
-  await advance(500);
-  const settled = quiet().slice(seen);
-  expect(settled).toHaveLength(1);
-  expect(settled[0]).toBeGreaterThanOrEqual(300);
-  expect(settled[0]).toBeLessThan(400);
-  // The regular poll carries the growing quiet.
-  await advance(1000);
-  expect(quiet().at(-1)).toBeGreaterThan(settled[0]!);
-  seen = server.polls.length;
+  const seen = server.polls.length;
   FakeAudioContext.loud = true;
   await advance(100);
-  expect(quiet().slice(seen)).toEqual([0]);
-  await advance(400);
-  seen = server.polls.length;
+  expect(server.polls.slice(seen)).toEqual([expect.objectContaining({ active: true, audio: true })]);
   FakeAudioContext.loud = false;
-  await advance(200);
-  expect(quiet().slice(seen)).toEqual([]);
-  await advance(300);
-  const stopped = quiet().slice(seen);
-  expect(stopped).toHaveLength(1);
-  expect(stopped[0]).toBeGreaterThanOrEqual(300);
-  expect(stopped[0]).toBeLessThan(400);
+  await advance(1000);
+  expect(server.polls.at(-1)).toMatchObject({ audio: true });
+  await advance(2000);
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
   await connection.end();
 });
 
@@ -431,7 +415,6 @@ test('microphone noise sends no extra activity reports and never reports Sam as 
   expect(server.polls.length).toBe(seen);
   await advance(1500);
   expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
-  expect(server.polls.at(-1)).not.toHaveProperty('inputQuietMs');
   connection.mute(true);
   await advance(1500);
   expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });

@@ -90,6 +90,16 @@ test('closure delivers participant tail and usage before the final required save
   expect(f.detached).toEqual(['voice-1']);
 });
 
+for (const status of ['ending', 'paused'] as const) test(`${status} accepts the final transcript but suppresses provider control events`, async () => {
+  const f = fixture(); await f.open(); f.conversation.status = status;
+  const events = f.handlers.get('voice-1')!;
+  events.event({ type: 'acknowledged', id: 'note-1' });
+  events.event({ type: 'delegation', id: 'delegation-1', target: 'client' });
+  events.event({ type: 'error' });
+  events.event(tail);
+  expect(f.output).toMatchObject([{ type: 'event', event: tail }]);
+});
+
 test('restored closure retries preserve outstanding IDs until provider confirmation', async () => {
   let unavailable = true;
   const f = fixture({ close: async () => { if (unavailable) throw new Error('offline'); } });

@@ -43,9 +43,9 @@ test('receipts do not count as speech: retry once, replace once, then report unr
   expect(f.sent.map(input => input.id)).toEqual(['greeting-1', 'greeting-1-again']);
   expect(f.segments[0]!.greeting!.repliedAt).toBeNull();
   f.at(26_000); await f.recovery.tick(26_000); await f.recovery.tick(27_000);
-  expect(f.output).toEqual([{ type: 'replace', epoch: 1 }]);
+  expect(f.output).toEqual([{ type: 'replace' }]);
   f.segment(); f.at(51_000); await f.recovery.tick(51_000); await f.recovery.tick(52_000);
-  expect(f.output).toEqual([{ type: 'replace', epoch: 1 }, { type: 'unresponsive', epoch: 2 }]);
+  expect(f.output).toEqual([{ type: 'replace' }, { type: 'unresponsive' }]);
 });
 
 test('audio delays greeting recovery while real interviewer speech completes it', async () => {
@@ -53,7 +53,7 @@ test('audio delays greeting recovery while real interviewer speech completes it'
   f.at(10_000); f.recovery.playback(10_000); await f.recovery.tick(11_000);
   expect(f.sent).toHaveLength(1);
   f.say('interviewer'); await f.recovery.tick(40_000);
-  expect(f.output).toEqual([{ type: 'responded', epoch: 1 }]);
+  expect(f.output).toEqual([{ type: 'responded' }]);
   expect(f.sent).toHaveLength(1);
 });
 

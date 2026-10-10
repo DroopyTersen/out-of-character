@@ -53,7 +53,7 @@ export class VoiceRecovery {
     if (reminder) reminder.nextSpeech = { at: now, passageId: changed.id, speaker: changed.speaker };
     if (changed.speaker === 'interviewer' && segment.greeting && segment.greeting.repliedAt == null) {
       segment.greeting.repliedAt = now;
-      this.options.output({ type: 'responded', epoch: segment.epoch });
+      this.options.output({ type: 'responded' });
     }
   }
 
@@ -93,10 +93,10 @@ export class VoiceRecovery {
     const quiet = now - Math.max(greeting.sentAt, this.lastSpeech, this.lastAudio);
     if (quiet >= GREETING_REPLACE_MS) {
       greeting.abandonedAt = now;
-      if (this.replacedSilent) this.options.output({ type: 'unresponsive', epoch: segment.epoch });
+      if (this.replacedSilent) this.options.output({ type: 'unresponsive' });
       else {
         this.replacedSilent = true;
-        this.options.output({ type: 'replace', epoch: segment.epoch });
+        this.options.output({ type: 'replace' });
       }
     } else if (quiet >= GREETING_RETRY_MS && greeting.retriedAt == null) {
       greeting.retriedAt = now;
@@ -118,7 +118,6 @@ export class VoiceRecovery {
     this.checkedRevision = conversation.revision;
     const abort = this.abort = new AbortController();
     return this.running = this.judge(transcript, segment, record, abort).finally(() => {
-      if (this.abort !== abort) return;
       this.running = undefined;
       this.abort = undefined;
     });

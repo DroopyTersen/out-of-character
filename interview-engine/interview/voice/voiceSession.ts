@@ -25,6 +25,6 @@ export type VoiceSegment = {
 };
 
 export type RecoveryOutput =
-  | { type: 'replace'; epoch: number }
-  | { type: 'unresponsive'; epoch: number }
-  | { type: 'responded'; epoch: number };
+  | { type: 'replace' }
+  | { type: 'unresponsive' }
+  | { type: 'responded' };

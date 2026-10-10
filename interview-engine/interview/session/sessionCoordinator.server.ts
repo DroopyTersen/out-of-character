@@ -520,7 +520,6 @@ export class SessionCoordinator {
     if (this.fenced) return;
     if (message.type === 'event') return this.onEvent(message.event, message.segment);
     if (message.type === 'dropped') return this.dropped(message.segment);
-    if (message.epoch !== this.segment?.epoch) return;
     if (message.type === 'replace') this.background.track(this.pause('provider'));
     if (message.type === 'unresponsive') this.state!.message = UNRESPONSIVE;
     if (message.type === 'responded' && this.state?.message === UNRESPONSIVE) this.state.message = null;
@@ -549,7 +548,6 @@ export class SessionCoordinator {
       this.background.track(this.end(event.reason === 'connection_lost'));
       return;
     }
-    if (segment !== this.segment) return;
     if (event.type === 'transcript') {
       const delta = event;
       // The participant cannot hear a reply generated after they end the interview or lose the connection.
@@ -568,7 +566,6 @@ export class SessionCoordinator {
       this.committed(next, changed, this.now());
       return;
     }
-    if (snapshot.status === 'ending' || snapshot.status === 'paused') return;
     if (event.type === 'acknowledged') {
       this.producer?.providerEvent(event.id, true, {
         ...(event.startMs != null ? { startMs: event.startMs + segment.offsetMs } : {}),

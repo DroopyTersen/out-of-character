@@ -1,6 +1,6 @@
 # Interview engine
 
-The interview engine runs a spoken interview and turns its transcript into a written narrative. Sam asks the questions over a realtime voice model. Sol keeps the conversation map. The host's judge reads coverage and grades the result. Luna looks up public background.
+The interview engine runs a spoken interview and captures its transcript and topic coverage. Reports are a separate host module. Sam asks the questions over a realtime voice model. Sol keeps the conversation map. The host's judge reads coverage and grades the result. Luna looks up public background.
 
 The engine is one folder that knows nothing about the app around it. A host gives it three things:
 
@@ -8,7 +8,7 @@ The engine is one folder that knows nothing about the app around it. A host give
 - ready-made model clients (the providers)
 - three small adapters over its own platform (the seams)
 
-The host then forwards the browser's commands. This repository hosts the engine on Cloudflare and in a Bun reference host. The host app plans to copy the same folder in as `app/debrief/engine/`.
+The host then forwards the browser's commands. This repository hosts the engine on Cloudflare and in a Bun reference host. The host app plans to copy the same folder in as `app/playback/interview/engine/`.
 
 Terms used here are defined in [CONTEXT.md](CONTEXT.md). For why the design looks like this, see `docs/solutioning/interview-engine-api-design.html`.
 
@@ -38,12 +38,10 @@ A shared 400-call cap includes failed and interrupted producer calls. Sol, Jev a
 | `client/` | The browser side: `LiveConnection`, the transport, audio levels | `shared/` |
 | `providers/` | How the engine talks to models: voice, language, judge, and `foundryProviders` | `shared/`, the AI SDK |
 | `interview/` | The Interview phase: the session coordinator, the seams, the conversation (Sol, Jev, Luna) and Sam's brief | `shared/`, `providers/` |
-| `narrative/` | The Narrative phase: writing a document from a transcript | `shared/`, `providers/` |
-| `setup/` | Debrief setup: drafting and approving the topics an attempt runs under | `shared/`, `providers/`, `interview/` |
 
 Rules:
 
-- `interview/` and `narrative/` never import each other. A transcript from anywhere can be written up.
+- Report generation and organizer setup live in the host; the engine imports neither.
 - `client/` imports no `.server.ts` file.
 - Nothing in the folder imports from the host.
 - The only packages allowed are `ai`, `@ai-sdk/azure`, `@ai-sdk/typesafe-ai` and `zod`.
@@ -56,8 +54,6 @@ The entry points a host uses are:
 - `interview/interview.server.ts`: `SessionCoordinator`, the seam types and the checkpoint types
 - `interview/adapters/memory.server.ts`
 - `providers/providers.server.ts`
-- `narrative/writeNarrative.server.ts` and `narrative/narrativeRun.server.ts`
-- `setup/approve.server.ts` and `setup/draft.server.ts`
 - `shared/*` and `client/*`
 
 ## Conversation roles and session coordination
@@ -118,7 +114,7 @@ The host builds ready model clients and passes them in. The engine never sees a 
 ```ts
 export type Providers = {
   voice: VoiceProvider;                                  // Sam: the realtime voice model
-  language: { agent: LanguageModel; fast: LanguageModel }; // Sol, Luna and the narrative
+  language: { agent: LanguageModel; fast: LanguageModel }; // Sol and Luna
   webSearch: Tool;                                        // Luna's research: the fast model's deployment's search tool
   structured: StructuredRequest;                          // Sol's strict-JSON call to the agent model
   judge: Judge;                                          // model + calibrated thresholds
@@ -177,7 +173,6 @@ const plan = {
     topics: [{ id: 'access', label: 'Access', learn: 'Describe access problems and their effect.' }],
   }],
   guidance: 'Follow the participant’s actual responsibilities, including changes during the project.',
-  report: { audience: 'Delivery leads', format: 'A Markdown account with Findings and Lessons headings.' },
 };
 const context = { background: 'Atlas is the project name.', participant: { name: 'Jordan' } };
 const config = {
@@ -196,7 +191,7 @@ Conditional leaves carry `applicability: applicable | not-applicable | unknown` 
 
 The coordinator exposes a copied `definition` and persists it in checkpoints. On restore, accepted plan, configuration and context take precedence over replacement caller inputs, including an originally absent context. The Cloudflare host also stores the complete accepted definition before opening a voice session, covering restarts before the first checkpoint. A new attempt resolves its plan once; later catalog edits or removal cannot alter it.
 
-The shipped closeout and win/loss templates assemble their existing learning criteria, organizer guidance and report layouts into this input. `resolveInterview` compiles it for lower-level replay and evaluation tools; hosts starting sessions pass the plain input directly.
+The shipped closeout and win/loss templates assemble their existing learning criteria and organizer guidance into this input; their report layouts stay alongside it in host-owned setup data. `resolveInterview` compiles it for lower-level replay and evaluation tools; hosts starting sessions pass the plain input directly.
 
 The voice model composes the opening from that same accepted title, goals, guidance and context. It introduces itself, explains the purpose, names the subject when supplied, and asks for the first missing grounding detail. The title describes the interview type; it is never substituted for an unknown project or organization name. The opening has a short preamble before the usual concise follow-ups. No separate model call delays startup, and Sol starts its evidence-based map after participant speech using the approved plan as its seed.
 
@@ -205,7 +200,7 @@ The voice model composes the opening from that same accepted title, goals, guida
 The browser and the session exchange these actions (`shared/protocol.ts`):
 
 ```ts
-export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume', 'submitText'] as const;
+export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'pause', 'resume', 'submitText'] as const;
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;   // the bearer secret returned by start
 // startSchema { id, planId, voiceId, sdp }, resumeSchema { sdp }, activitySchema (the poll body; readySchema: optional, the ready body)
 // submitTextSchema { id, text }, TYPED_TEXT_LIMIT = 2000, SUBMIT_TEXT_BODY_LIMIT = 16 KiB, SubmitTextReply { acceptedId, snapshot }
@@ -215,10 +210,10 @@ On the server, a host turns each request into a `Command` and returns the `Reply
 
 ```ts
 type Command = { action: string; capability: string; body?: string };
-type Reply = { status: number; body: unknown; terminal?: true; report?: true };
+type Reply = { status: number; body: unknown; terminal?: true };
 ```
 
-`terminal` marks a reply to an attempt that has ended. `report` asks the host to start the narrative.
+`terminal` marks a reply to an attempt that has ended.
 
 On the client, `LiveConnection` (`client/liveConnection.ts`) sends its requests through a `ProtocolTransport`:
 
@@ -266,44 +261,11 @@ Two transports exist. The browser uses `pollTransport`. `socketTransport` (`clie
 
 Each socket message is one command, `{ id, action, capability, body? }`, where `capability` is the 64 hex digits without `Bearer ` (`socketRequestSchema` in `shared/protocol.ts`). Each reply is `{ id, status, body }`: the status and JSON body that the command's HTTP route returns. The host builds the HTTP request the poll transport would have sent and passes it to the same route handler (`answerSocket` in `app/server/interview/socket.ts`), so the gates and the replies are the same. The report streams, so it stays on HTTP.
 
-## The Narrative phase
+## Reports and organizer setup
 
-The Narrative phase turns a transcript into a document. It needs only a language model.
+Reports live outside the runtime in `app/reports/`. They take plain `{ transcript, format, context? }` and a language model; no coordinator, voice provider, database, catalog or interview ID is required. The report writer, streaming runner, schemas and synthetic fixtures are described in `app/reports/README.md`.
 
-```ts
-export type NarrativeInput = { transcript: Passage[]; format: ReportFormat; context?: InterviewContext };
-export type NarrativeDocument = { text: string }; // Markdown, without a required findings structure
-export type NarrativeRun = { stream: ReadableStream<string>; result: Promise<Narrative> };
-
-export function writeNarrative(input: NarrativeInput, providers: Pick<Providers, 'language' | 'telemetry'>, signal?: AbortSignal): NarrativeRun;
-```
-
-`writeNarrative` accepts exactly transcript, report format and optional explicit context. Its strict schema rejects extra fields such as maps, inferred participant state or coverage. The engine owns the evidence rules and output envelope; the format controls Markdown organization without forcing headings to mirror the topics. Supplied background is labeled separately from participant findings.
-
-`writeNarrative` streams the text as it is written. `result` settles exactly once, with the document and its usage, or with a failure (`provider`, `invalid`, `cancelled` or `timeout`). It throws if the participant said nothing.
-
-`NarrativeRunner` (`narrative/narrativeRun.server.ts`) puts the rules a report route needs around one run:
-
-```ts
-new NarrativeRunner(start: (signal: AbortSignal) => NarrativeRun, options?: { deadlineMs?: number; onSettled?: (narrative: SettledNarrative) => void; track?: (work: Promise<unknown>) => void });
-runner.attach(signal): Response;   // start a run, rejoin the running one, or return the stored document or "retry used"
-runner.run(): Promise<NarrativeState>; // the same run with no request attached, resolving once it settles
-runner.state(); runner.read(); runner.cancel();
-```
-
-The runner allows two starts at most (`NARRATIVE_MAX_STARTS`), with a 120-second deadline (`NARRATIVE_DEADLINE_MS`). After a run settles, the host passes the result to `coordinator.settleNarrative(status, provenance)` so the archive records it. A request made while a run is writing rejoins it: it receives everything written so far, then the rest as it is written, so a reloaded page picks up where it was. Dropping a request detaches it without stopping the run. Only the deadline or `runner.cancel()` stops a run, and `track` keeps it alive on a platform that would otherwise stop it (Cloudflare: `waitUntil`). A host that persists the report itself and streams nothing calls `run()` instead of `attach`: the deadline, draining and failure handling are the same, and it resolves with the settled state.
-
-## Debrief setup
-
-An organizer can edit a template’s approved content, or ask `draftDebrief` to propose a plan from a description. The draft has the same goals, recursive topics, optional guidance and report requirements as the accepted plan, without `id` and `version`.
-
-```ts
-type DebriefDraft = Omit<InterviewPlan, 'id' | 'version'>;
-const draft = templateDraft(template);
-const approved = await approveDebrief(template, { ...draft, id: 'my-review' });
-```
-
-Approval validates the content and builds a version from its digest plus the base template identity. The base supplies voices, persona and limits; the engine supplies prompt construction. Approval does not replace the requested report format with a topic-sectioned report. Business authorization and the approval workflow remain host responsibilities.
+Organizer drafting and approval live in `app/server/interview/setup/`. A hosted spec contains an engine plan and a separate report format. The host freezes both at approval and pins both before starting an attempt. Only the plan, runtime configuration and explicit interview context enter the engine.
 
 ## How this repository hosts it
 
@@ -322,13 +284,13 @@ type InterviewGates = {
 };
 ```
 
-**Narrative route.** `POST /api/interview/narratives` writes the narrative for a transcript that did not come from a live attempt. The body is `{ transcript, format, context? }` (`narrativeRequestSchema` in `shared/protocol.ts`, at most 256 KiB), behind the same origin, capability, kill-switch and limiter gates as the session routes. The reply streams the narrative's JSON text, as the report route does, and nothing is stored. No catalog or live attempt is needed. A transcript in which the participant said nothing answers 422.
+**Narrative route.** `POST /api/interview/narratives` writes the narrative for a transcript that did not come from a live attempt. The body is `{ transcript, format, context? }` (`narrativeRequestSchema` in `app/reports/report.types.ts`, at most 256 KiB), behind the same origin, capability, kill-switch and limiter gates as the session routes. The reply streams the narrative's JSON text, as the report route does, and nothing is stored. No catalog or live attempt is needed. A transcript in which the participant said nothing answers 422.
 
 **Hosted session.** `HostedSession` wraps a `SessionCoordinator`:
 
 - It turns the request into a `Command` and sends it to `coordinator.handle`.
 - It returns the canonical `InterviewSnapshot`: `planId`, `voiceId`, `transcript`, `evaluation`, `background` and lifecycle fields. Transcript and evidence speakers are `participant` and `interviewer`. There is no coaching field or nested interview wrapper; the host adds report state separately.
-- On a `report` reply, it runs `writeNarrative` over the ended transcript through a `NarrativeRunner`, the same runner the narrative route uses (`app/server/interview/narrative.ts`). A second report request rejoins the running narrative.
+- On an authenticated host `report` request, it runs `writeNarrative` over the ended transcript through a `NarrativeRunner`, the same runner the narrative route uses (`app/server/interview/narrative.ts`). A second report request rejoins the running narrative.
 
 **Cloudflare** (`app/server/interview/durableObject.ts`, routed from `app/workers/app.ts`):
 
@@ -378,7 +340,7 @@ bun run check          # everything: typecheck, check:engine, bun test, build, b
 
 The steps below use the host app as the example. They follow the plan in the design documents; none of this exists in the host app yet.
 
-1. **Copy the folder.** Copy `interview-engine/` to the host as `app/debrief/engine/`, and add any of the four packages the host lacks. A host that judges with Decisions can leave `providers/jevJudge.server.ts` behind and skip `@ai-sdk/typesafe-ai`; `ai` must be new enough to export `experimental_evaluate`. The copy check above is the evidence that this compiles.
+1. **Copy the folder.** Copy `interview-engine/` to the host as `app/playback/interview/engine/`, and add any of the four packages the host lacks. A host that judges with Decisions can leave `providers/jevJudge.server.ts` behind and skip `@ai-sdk/typesafe-ai`; `ai` must be new enough to export `experimental_evaluate`. The copy check above is the evidence that this compiles.
 2. **Supply approved input.** Pass the approved `InterviewPlan`, runtime `InterviewConfig`, and explicit `InterviewContext` if available. Keep browser labels and host business identity outside the engine.
 3. **Implement the seams.**
    - A `SessionStore` over the host's database. The design calls for an attempts row with a `segment` column and guarded writes that throw `FencedError` when the segment has moved on.
@@ -387,7 +349,7 @@ The steps below use the host app as the example. They follow the plan in the des
    - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
 4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
 5. **Own a coordinator per attempt.** Call `SessionCoordinator.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `coordinator.handle`, and call `coordinator.close('hold')` when the host drops the attempt.
-6. **Serve the report.** Read report format and context from `coordinator.definition`; pass only these and the canonical transcript. Wrap `writeNarrative` in a `NarrativeRunner`, and pass the settled result to `coordinator.settleNarrative`.
+6. **Serve the report separately.** Keep report instructions in the accepted host setup. Pass the saved transcript, those instructions and optional explicit context to the report module. The host owns report authorization, generation claims, storage and retries; reports never write back into the coordinator.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.
 
 Identity, the right to start, archive reads and the screens stay with the host. The engine checks only the capability.

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { resolveInterview } from '../interview/definition.server';
+import { resolveInterview } from '../../../../interview-engine/interview/definition.server';
 import { approveDebrief, debriefVersion } from './approve.server';
 import { debriefDraftSchema, slug, templateDraft, type DebriefDraft } from './debrief';
 
@@ -19,15 +19,17 @@ export const vendorReview: DebriefDraft = {
     ] },
   ],
 };
-const base = resolveInterview({ ...vendorReview, id: 'vendor-review', version: 'v1' }, {
+const { report, ...plan } = vendorReview;
+const base = { ...resolveInterview({ ...plan, id: 'vendor-review', version: 'v1' }, {
   interviewer: { name: 'Sam', persona: 'Curious and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/cedar.png' }] },
-});
+}), report };
 
 test('approval preserves editable learning content and report format under a stable content version', async () => {
   const draft = templateDraft(base);
   expect(debriefDraftSchema.safeParse(draft).success).toBe(true);
   const spec = await approveDebrief(base, { ...draft, id: 'copy' });
-  expect(spec.plan).toEqual({ ...vendorReview, id: 'copy', version: spec.version });
+  expect(spec.report).toEqual(vendorReview.report);
+  expect(spec.plan).toEqual({ ...plan, id: 'copy', version: spec.version });
   expect(spec.config).toEqual(base.config);
   expect(spec.version).toMatch(/^copy-[0-9a-f]{12}$/);
   expect((await approveDebrief(base, { ...draft, id: 'copy' })).version).toBe(spec.version);

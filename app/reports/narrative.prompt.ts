@@ -1,4 +1,4 @@
-/** Report policy belongs to the engine; callers supply audience and format as data. */
+/** Evidence rules belong to the report module; callers supply audience and format as data. */
 export const narrativeInstructions = `Write a useful report of one interview, following the supplied audience and Markdown format instructions. Return only the Markdown document in the text field.
 
 EVIDENCE

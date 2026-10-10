@@ -1,12 +1,16 @@
 import { createTextStreamResponse } from 'ai';
-import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState } from './narrative.server';
-import type { NarrativeAttempt } from '../shared/narrative';
-import { within } from '../shared/timing';
+import type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState } from './report.types';
+import type { NarrativeAttempt } from './report.types';
+/** Rejects when `promise` has not settled within `ms`. */
+export async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Operation timed out.')), ms); })]);
+  } finally { clearTimeout(timer!); }
+}
 
-export { within };
-
-export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './narrative.server';
-export type { NarrativeAttempt } from '../shared/narrative';
+export type { Narrative, NarrativeFailure, NarrativeRun, NarrativeState, NarrativeUsage } from './report.types';
+export type { NarrativeAttempt } from './report.types';
 
 // SessionReport's lifecycle (app/server/simulator/report.ts) over a NarrativeRun, with the API design's rejoin: a
 // request that arrives while a run is writing attaches to it instead of being refused.

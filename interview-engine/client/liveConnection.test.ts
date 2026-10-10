@@ -5,7 +5,8 @@ import { pollTransport } from './transport';
 // Browser media and the session server are substituted; the connection's own pause, heartbeat, and resume logic is real.
 class FakeTrack { enabled = true; stopped = false; stop() { this.stopped = true; } }
 class FakeStream {
-  constructor(readonly microphone = false) {}
+  static all: FakeStream[] = [];
+  constructor(readonly microphone = false) { FakeStream.all.push(this); }
   tracks = [new FakeTrack()];
   getTracks() { return this.tracks; }
   getAudioTracks() { return this.tracks; }
@@ -26,6 +27,9 @@ class FakePeer extends EventTarget {
   async getStats() { if (!FakePeer.stats) throw new Error('No stats.'); return FakePeer.stats(); }
 }
 class FakeAudioContext {
+  static all: FakeAudioContext[] = [];
+  closes = 0;
+  constructor() { FakeAudioContext.all.push(this); }
   /** Whether every meter, the microphone and Sam's playback, picks up sound. */
   static loud = false;
   static inputLoud: boolean | undefined;
@@ -39,7 +43,7 @@ class FakeAudioContext {
   }
   createMediaStreamSource(stream: FakeStream) { return { connect(meter: { microphone: boolean }) { meter.microphone = stream.microphone; } }; }
   async resume() {}
-  async close() { this.state = 'closed'; }
+  async close() { this.closes++; this.state = 'closed'; }
 }
 class FakeAudio { autoplay = false; paused = true; srcObject: unknown = null; async play() { this.paused = false; } pause() { this.paused = true; } }
 
@@ -102,6 +106,8 @@ beforeEach(() => {
   Object.assign(server, { status: 'connecting', resumes: 0, offline: false, calls: [], polls: [], requests: [], override: undefined });
   browser.onLine = true;
   FakePeer.all = [];
+  FakeStream.all = [];
+  FakeAudioContext.all = [];
   FakePeer.stats = undefined;
   FakeAudioContext.loud = false;
 });
@@ -585,4 +591,110 @@ test('repeated resume calls wait for the pause acknowledgment and negotiate one 
     globalThis.fetch = fixtureFetch;
     await connection.end();
   }
+});
+
+
+for (const disposeDuringDrain of [false, true]) test(`End releases media ${disposeDuringDrain ? 'immediately on disposal' : 'by its drain deadline'}`, async () => {
+  const { connection, closures, peer } = await connected();
+  const media = FakeStream.all.find(stream => stream.microphone)!;
+  const context = FakeAudioContext.all[0]!;
+  const fetch = globalThis.fetch;
+  const held = Promise.withResolvers<void>();
+  globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+    if (String(args[0]).endsWith('/end')) await held.promise;
+    return fetch(...args);
+  }) as typeof fetch;
+  try {
+    const ending = connection.end();
+    expect(media.tracks[0]!.enabled).toBe(false);
+    expect(media.tracks[0]!.stopped).toBe(false);
+    expect(peer().connectionState).toBe('connected');
+    expect(context.state).toBe('closed');
+    if (disposeDuringDrain) {
+      await advance(100);
+      connection.dispose();
+    } else {
+      await advance(2900);
+      expect(media.tracks[0]!.stopped).toBe(false);
+      await advance(100);
+    }
+    expect(media.tracks[0]!.stopped).toBe(true);
+    expect(peer().connectionState).toBe('closed');
+    held.resolve();
+    await ending;
+    expect(context.closes).toBe(1);
+    expect(server.calls.filter(call => call === 'end')).toHaveLength(1);
+    expect(closures).toHaveLength(disposeDuringDrain ? 0 : 1);
+  } finally { held.resolve(); globalThis.fetch = fetch; connection.dispose(); }
+});
+
+test('a microphone granted after End is released without starting a server attempt', async () => {
+  const { LiveConnection } = await import('./liveConnection');
+  const microphone = navigator.mediaDevices.getUserMedia;
+  const held = Promise.withResolvers<MediaStream>();
+  navigator.mediaDevices.getUserMedia = () => held.promise;
+  const closures: Closure[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: () => {}, link: () => {}, closed: value => closures.push(value) });
+  try {
+    const starting = connection.start('sharepoint', 'morgan');
+    await connection.end();
+    const media = new FakeStream(true);
+    held.resolve(media as unknown as MediaStream);
+    await starting;
+    expect(media.tracks[0]!.stopped).toBe(true);
+    expect(FakePeer.all).toHaveLength(0);
+    expect(server.calls).toEqual([]);
+    expect(closures).toEqual([{ outcome: 'ended', reachedLive: false }]);
+  } finally { navigator.mediaDevices.getUserMedia = microphone; connection.dispose(); }
+});
+
+test('End during network negotiation prevents a late ready event from starting an attempt', async () => {
+  const { LiveConnection } = await import('./liveConnection');
+  const setLocalDescription = FakePeer.prototype.setLocalDescription;
+  FakePeer.prototype.setLocalDescription = async function (description) {
+    this.localDescription = description;
+    this.iceGatheringState = 'gathering';
+  };
+  const errors: string[] = [], closures: Closure[] = [];
+  const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: value => errors.push(value), link: () => {}, closed: value => closures.push(value) });
+  try {
+    const starting = connection.start('sharepoint', 'morgan');
+    await flush();
+    const peer = FakePeer.all[0]!;
+    expect(peer.localDescription).not.toBeNull();
+    await connection.end();
+    await starting;
+    peer.iceGatheringState = 'complete';
+    peer.dispatchEvent(new Event('icegatheringstatechange'));
+    await advance(9000);
+    expect(peer.connectionState).toBe('closed');
+    expect(FakeStream.all[0]!.tracks[0]!.stopped).toBe(true);
+    expect(server.calls).toEqual([]);
+    expect(errors).toEqual([]);
+    expect(closures).toEqual([{ outcome: 'ended', reachedLive: false }]);
+  } finally { FakePeer.prototype.setLocalDescription = setLocalDescription; connection.dispose(); }
+});
+
+test('pause releases old media while resume reuses the audio context and ignores old peer failures', async () => {
+  const { connection, links, peer } = await connected();
+  const first = peer();
+  const media = FakeStream.all.find(stream => stream.microphone)!;
+  const context = FakeAudioContext.all[0]!;
+  try {
+    first.set('failed');
+    await flush();
+    expect(first.connectionState).toBe('closed');
+    expect(media.tracks[0]!.stopped).toBe(true);
+    expect(context.state).toBe('running');
+    await connection.resume();
+    expect(FakeAudioContext.all).toHaveLength(1);
+    expect(peer()).not.toBe(first);
+    const sent = [...server.calls];
+    first.set('failed');
+    await flush();
+    expect(server.calls).toEqual(sent);
+    expect(links.at(-1)?.state).toBe('stable');
+    expect(peer().connectionState).toBe('connected');
+  } finally { await connection.end(); }
+  expect(context.closes).toBe(1);
 });

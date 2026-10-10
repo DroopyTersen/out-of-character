@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
-import { vendorReview } from '../../../interview-engine/setup/setup.test';
+import { vendorReview } from './setup/setup.test';
 import { spec as projectCloseout } from '../../../interviews/project-closeout/spec';
 import { spec as salesWinLoss } from '../../../interviews/sales-win-loss/spec';
 import { d1DebriefStore, memoryDebriefStore, routeDebriefs, specCatalog, templates, type DebriefGates, type DebriefStore } from './debriefs';

@@ -1,6 +1,7 @@
 import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
-import { activitySchema, CAPABILITY, narrativeRequestSchema, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
+import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema} from '../../../interview-engine/shared/protocol';
+import { narrativeRequestSchema, type NarrativeRequest } from '../../reports/report.types';
 import { routeDebriefs, workerDebriefs, type DebriefGates } from './debriefs';
 import { BodyError, boundedJson, jsonResponse } from '../http';
 import { importedNarrative, narrateWith } from './narrative';

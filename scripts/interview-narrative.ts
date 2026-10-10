@@ -1,4 +1,4 @@
-import { NARRATIVE_VERSION } from '../interview-engine/shared/narrative';
+import { NARRATIVE_VERSION } from '../app/reports/report.types';
 /**
  * Writes an interview narrative for a transcript file, outside any attempt: `writeNarrative` against Foundry.
  *
@@ -12,32 +12,39 @@ import { NARRATIVE_VERSION } from '../interview-engine/shared/narrative';
  * result (document, failure and usage) goes to `--out`, or to stdout after the stream.
  */
 import { z } from 'zod';
+import { reportFixtures } from '../app/reports/reportFixtures';
 import { foundryConfig } from '../ai/foundry.server';
 import { archivedTranscriptSchema as passagesSchema } from '../core/interview-transcript';
-import { narrativeRequestSchema } from '../interview-engine/shared/protocol';
-import type { NarrativeInput } from '../interview-engine/narrative/narrative.server';
-import { writeNarrative } from '../interview-engine/narrative/writeNarrative.server';
-import { foundryProviders } from '../interview-engine/providers/providers.server';
+import { narrativeRequestSchema } from '../app/reports/report.types';
+import type { NarrativeInput } from '../app/reports/report.types';
+import { writeNarrative } from '../app/reports/writeNarrative.server';
+import { foundryProvider } from '../interview-engine/providers/foundry.server';
 import type { Passage } from '../interview-engine/shared/transcript';
 import { spec as closeout } from '../interviews/project-closeout/spec';
 import { spec as sales } from '../interviews/sales-win-loss/spec';
 
-const usage = 'Usage: bun scripts/interview-narrative.ts <transcript.json> [--spec <id>] [--out <result.json>]';
+const usage = 'Usage: bun scripts/interview-narrative.ts <transcript.json> [--spec <id>] [--out <result.json>] OR --fixture <delivery|sparse|correction> [--validate]';
 const specs = [closeout, sales];
 
 export function parseArgs(args: string[]) {
-  let file: string | undefined, specId: string | undefined, out: string | undefined;
+  let file: string | undefined, specId: string | undefined, out: string | undefined, fixture: keyof typeof reportFixtures | undefined, validate = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]!;
-    if (arg === '--spec' || arg === '--out') {
+    if (arg === '--validate') { validate = true; continue; }
+    if (arg === '--spec' || arg === '--out' || arg === '--fixture') {
       const value = args[++index];
       if (!value || value.startsWith('--')) throw new Error(usage);
-      if (arg === '--spec') specId = value; else out = value;
+      if (arg === '--spec') specId = value;
+      else if (arg === '--out') out = value;
+      else {
+        if (!(value in reportFixtures)) throw new Error(usage);
+        fixture = value as keyof typeof reportFixtures;
+      }
     } else if (!arg.startsWith('--') && !file) file = arg;
     else throw new Error(usage);
   }
-  if (!file) throw new Error(usage);
-  return { file, specId, out };
+  if ((!file && !fixture) || (file && fixture)) throw new Error(usage);
+  return { file, specId, out, fixture, validate };
 }
 
 const fileSchema = z.union([
@@ -64,12 +71,13 @@ export function readTranscript(value: unknown, specId?: string) {
 export function readReport(value: unknown, specId?: string): NarrativeInput {
   if (value && typeof value === 'object' && 'format' in value) return narrativeRequestSchema.parse(value);
   const { spec, passages } = readTranscript(value, specId);
-  return narrativeRequestSchema.parse({ transcript: passages, format: spec.plan.report });
+  return narrativeRequestSchema.parse({ transcript: passages, format: spec.report });
 }
 
 async function main() {
-  const { file, specId, out } = parseArgs(Bun.argv.slice(2));
-  const input = readReport(await Bun.file(file).json(), specId);
+  const { file, specId, out, fixture, validate } = parseArgs(Bun.argv.slice(2));
+  const input = readReport(fixture ? reportFixtures[fixture] : await Bun.file(file!).json(), specId);
+  if (validate) { process.stdout.write(JSON.stringify(input, null, 2) + '\n'); return; }
   const foundry = foundryConfig(process.env);
   // Only the language model is called; the voice and judge providers are built but never used.
   const providers = foundryProviders(foundry);

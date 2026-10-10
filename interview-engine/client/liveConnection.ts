@@ -167,8 +167,8 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
       this.audio.srcObject = remote;
       void this.audio.play().catch(() => this.callbacks.error('Audio playback was blocked. Use Enable audio to listen.'));
       this.outputMeter = this.meter(remote);
-    });
-    pc.addEventListener('connectionstatechange', () => this.mediaChanged(pc, segment));
+    }, { signal: segment.signal });
+    pc.addEventListener('connectionstatechange', () => this.mediaChanged(pc, segment), { signal: segment.signal });
     // Audio only: session events and private actor context stay on the server's sideband.
     await pc.setLocalDescription(await pc.createOffer());
     await this.until(pc, 'icegatheringstatechange', () => pc.iceGatheringState === 'complete', 8000, 'Network negotiation timed out.', segment.signal);
@@ -210,9 +210,16 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private async until(target: EventTarget, event: string, ready: () => boolean, ms: number, message: string, signal: AbortSignal) {
     if (ready()) return;
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(message)), ms);
-      target.addEventListener(event, () => { if (ready()) { clearTimeout(timeout); resolve(); } });
-      const abort = () => { clearTimeout(timeout); reject(new DOMException('Aborted', 'AbortError')); };
+      const finish = (error?: Error) => {
+        clearTimeout(timeout);
+        target.removeEventListener(event, changed);
+        signal.removeEventListener('abort', abort);
+        if (error) reject(error); else resolve();
+      };
+      const changed = () => { if (ready()) finish(); };
+      const abort = () => finish(new DOMException('Aborted', 'AbortError'));
+      const timeout = setTimeout(() => finish(new Error(message)), ms);
+      target.addEventListener(event, changed);
       signal.addEventListener('abort', abort, { once: true });
       if (signal.aborted) abort();
     });
@@ -523,27 +530,35 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   /** Stops the current media connection and its loops; the attempt itself continues. */
   private teardown() {
+    this.stopSegment();
+    this.closeMedia();
+    this.mediaUnstable = false;
+    this.pollFailingSince = undefined;
+    this.autoMuted = false;
+  }
+
+  /** Stops one connection's work and playback without cutting off its final microphone drain. */
+  private stopSegment() {
     this.segment.abort();
     clearInterval(this.meterTimer);
     clearTimeout(this.pollTimer);
     clearTimeout(this.disconnectTimer);
-    this.mediaUnstable = false;
-    this.pollFailingSince = undefined;
-    this.autoMuted = false;
     this.audio.pause();
     this.audio.srcObject = null;
-    this.stream?.getTracks().forEach(track => track.stop());
-    this.pc?.close();
-    this.stream = undefined;
-    this.pc = undefined;
     this.inputMeter = this.outputMeter = undefined;
     this.callbacks.levels(silentLevels);
   }
 
-  private release() {
-    this.silence();
+  private closeMedia() {
     this.stream?.getTracks().forEach(track => track.stop());
     this.pc?.close();
+    this.stream = undefined;
+    this.pc = undefined;
+  }
+
+  private release() {
+    this.silence();
+    this.closeMedia();
   }
 
   private silence() {
@@ -551,19 +566,14 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.composing = false;
     this.mute(true);
     this.controller.abort();
-    this.segment.abort();
-    clearInterval(this.meterTimer);
-    clearTimeout(this.pollTimer);
-    clearTimeout(this.disconnectTimer);
+    this.stopSegment();
     clearTimeout(this.heartbeatTimer);
     window.removeEventListener('pointerdown', this.keepActive);
     window.removeEventListener('keydown', this.keepActive);
     window.removeEventListener('offline', this.offline);
     window.removeEventListener('online', this.retry);
     document.removeEventListener('visibilitychange', this.retry);
-    this.audio.pause();
-    this.audio.srcObject = null;
     void this.context?.close().catch(() => {});
-    this.callbacks.levels(silentLevels);
+    this.context = undefined;
   }
 }

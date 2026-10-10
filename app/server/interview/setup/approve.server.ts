@@ -1,5 +1,5 @@
-import { resolveInterview, type ResolvedInterview } from '../interview/definition.server';
-import { approvedDebriefSchema, slug, type ApprovedDebrief, type DebriefDraft } from './debrief';
+import { resolveInterview, type ResolvedInterview } from '../../../../interview-engine/interview/definition.server';
+import { approvedDebriefSchema, slug, type ApprovedDebrief, type HostedSpec, type DebriefDraft } from './debrief';
 
 /** The first twelve hex digits of the SHA-256 of `text`. */
 const digest = async (text: string) => {
@@ -23,9 +23,9 @@ const canonical = (value: unknown): string => Array.isArray(value) ? `[${value.m
   : JSON.stringify(value);
 
 /** Compile the organizer's approved content with the host's runtime configuration. */
-export async function approveDebrief(base: ResolvedInterview, input: DebriefDraft & { id?: string; base?: string }): Promise<ResolvedInterview> {
+export async function approveDebrief(base: HostedSpec, input: DebriefDraft & { id?: string; base?: string }): Promise<HostedSpec> {
   const record = approvedDebriefSchema.parse({ ...input, id: approvedId(input), base: input.base ?? base.id });
   if (record.base !== base.id) throw new Error(`Debrief ${record.id} is based on ${record.base}, not ${base.id}.`);
-  const { base: _base, ...plan } = record;
-  return resolveInterview({ ...plan, version: await debriefVersion(record, base) }, base.config);
+  const { base: _base, report, ...plan } = record;
+  return { ...resolveInterview({ ...plan, version: await debriefVersion(record, base) }, base.config), report };
 }

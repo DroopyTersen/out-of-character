@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
 import type { Checkpoint, Lease } from '../../../interview-engine/interview/interview.server';
-import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
+import type { Narrative, NarrativeRun } from '../../reports/report.types';
 import { capability, settle, waitFor } from '../simulator/session-fixture';
 // The object fixture substitutes the Workers base class (through the simulator fixture) before the object loads.
 import { fakeStorage, interviewAttempt, objectFixture } from './durableObjectFixture';
@@ -185,8 +185,8 @@ test('a report resumes failed terminal persistence before starting its narrative
 // --- An approved ad hoc debrief: the object resolves its spec at start and pins it for every later owner. ---
 
 const { specCatalog, memoryDebriefStore } = await import('./debriefs');
-const { approveDebrief } = await import('../../../interview-engine/setup/approve.server');
-const { vendorReview } = await import('../../../interview-engine/setup/setup.test');
+const { approveDebrief } = await import('./setup/approve.server');
+const { vendorReview } = await import('./setup/setup.test');
 const { spec: closeout } = await import('../../../interviews/project-closeout/spec');
 
 async function adHocCatalog() {

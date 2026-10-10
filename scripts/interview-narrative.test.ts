@@ -9,8 +9,8 @@ const passages: Passage[] = [
 const wire = passages.map(item => ({ ...item, speaker: item.speaker === 'participant' ? 'trainee' : 'client' }));
 
 test('the CLI takes one transcript file, an optional spec and an optional output file', () => {
-  expect(parseArgs(['t.json'])).toEqual({ file: 't.json', specId: undefined, out: undefined });
-  expect(parseArgs(['--spec', 'sales-win-loss', 't.json', '--out', 'r.json'])).toEqual({ file: 't.json', specId: 'sales-win-loss', out: 'r.json' });
+  expect(parseArgs(['t.json'])).toEqual({ file: 't.json', specId: undefined, out: undefined, fixture: undefined, validate: false });
+  expect(parseArgs(['--spec', 'sales-win-loss', 't.json', '--out', 'r.json'])).toEqual({ file: 't.json', specId: 'sales-win-loss', out: 'r.json', fixture: undefined, validate: false });
   for (const args of [[], ['--spec'], ['t.json', 'u.json'], ['t.json', '--out', '--spec'], ['t.json', '--paid']]) expect(() => parseArgs(args)).toThrow('Usage:');
 });
 
@@ -31,4 +31,11 @@ test('an explicit report format and context need no catalog or interview identit
   const input = { transcript: passages, format: { audience: 'Project team', format: 'Use Findings and Lessons headings.' }, context: { background: 'Atlas is the project name.' } };
   expect(readReport(input)).toEqual(input);
   expect(() => readReport({ ...input, coverage: [] })).toThrow();
+});
+
+
+test('the standalone report command selects a synthetic fixture without an interview or file', () => {
+  expect(parseArgs(['--fixture', 'delivery', '--validate'])).toEqual({ file: undefined, specId: undefined, out: undefined, fixture: 'delivery', validate: true });
+  expect(() => parseArgs(['--fixture', 'missing'])).toThrow('Usage:');
+  expect(() => parseArgs(['t.json', '--fixture', 'delivery'])).toThrow('Usage:');
 });

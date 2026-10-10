@@ -58,7 +58,7 @@ export type InterviewObjectOverrides = {
 /** The complete accepted definition is pinned before any voice session opens. */
 const SPEC_KEY = 'spec';
 type SpecIdentity = Pick<HostedSpec, 'id' | 'version'>;
-type PinnedSpec = InterviewDefinition | SpecIdentity;
+type PinnedSpec = (InterviewDefinition & Pick<HostedSpec, 'report'>) | SpecIdentity;
 
 /**
  * One interview attempt. The engine's SessionCoordinator owns everything; this object adapts storage, alarms, background
@@ -91,7 +91,7 @@ export class InterviewObject extends DurableObject<Env> {
     ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get<PinnedSpec>(SPEC_KEY);
       if (!stored) return;
-      const spec = 'plan' in stored ? resolveInterview(stored.plan, stored.config, stored.context) : await this.catalog.resolve(stored.id, stored.version);
+      const spec = 'plan' in stored ? { ...resolveInterview(stored.plan, stored.config, stored.context), report: stored.report } : await this.catalog.resolve(stored.id, stored.version);
       if (!spec) throw new Error('The attempt’s original debrief is no longer served.');
       this.session = await this.open(spec);
       this.pinned = true;
@@ -105,13 +105,14 @@ export class InterviewObject extends DurableObject<Env> {
     const foundry: FoundryConfig = foundryConfigured(env) ? foundryConfig(env) : { resourceName: '', apiKey: '', agentModel: '', fastModel: '', liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL };
     const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { socket: cloudflareSocket });
     const background = durableBackground(ctx);
+    const archive = d1Archive(env.SIMULATOR_ARCHIVE, { model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null });
     const actor = await SessionCoordinator.restore({
       plan: spec.plan, config: spec.config, context: spec.context, providers, store: durableStore(ctx.storage), background,
-      archive: d1Archive(env.SIMULATOR_ARCHIVE, { model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null }),
+      archive,
       log: event => { if (event.type === 'session') console.warn('Interview session', event); },
       ...(overrides.services ? { services: overrides.services } : {}),
     });
-    return new HostedSession(actor, { narrate: overrides.narrate ?? narrateWith(providers), model: foundry.agentModel, track: background.track });
+    return new HostedSession(actor, { format: spec.report, saveReport: archive.writeReport, narrate: overrides.narrate ?? narrateWith(providers), model: foundry.agentModel, track: background.track });
   }
 
   /**
@@ -126,7 +127,7 @@ export class InterviewObject extends DurableObject<Env> {
         const parsed = startSchema.safeParse(await command.clone().json().catch(() => null));
         const named = parsed.success ? await this.catalog.resolve(parsed.data.planId) : null;
         if (named) {
-          await this.ctx.storage.put(SPEC_KEY, { plan: named.plan, config: named.config, ...(named.context ? { context: named.context } : {}) } satisfies InterviewDefinition);
+          await this.ctx.storage.put(SPEC_KEY, { plan: named.plan, config: named.config, report: named.report, ...(named.context ? { context: named.context } : {}) } satisfies PinnedSpec);
           if (this.session) { await this.session.actor.close('fenced'); this.session = undefined; }
           this.session ??= await this.open(named);
           this.pinned = true;

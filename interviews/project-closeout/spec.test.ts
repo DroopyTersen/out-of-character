@@ -9,7 +9,7 @@ test('the closeout spec carries the closeout content the app already uses', asyn
   // The browser's topics, plus Jev's criteria on every objective.
   expect(spec.topics.map(topic => ({ ...topic, objectives: topic.objectives.map(({ id, label }) => ({ id, label })) }))).toEqual(interviewTopics.map(topic => ({ ...topic, objectives: [...topic.objectives] })));
   for (const objective of spec.topics.flatMap(topic => topic.objectives)) expect(objective.criterion).toEqual(expect.any(String));
-  expect(spec.plan.report.audience).toContain('internal delivery team');
+  expect(spec.report.audience).toContain('internal delivery team');
   expect(SUMMARY_VERSION).toBe('interview-narrative-v2');
   // Browser code imports ./public; the summary prompt and Jev's criteria must not be reachable from it.
   const browser = await Bun.file(new URL('./public.ts', import.meta.url)).text();

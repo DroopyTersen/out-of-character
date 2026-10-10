@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import { TRANSCRIPT_LIMIT, transcriptCharacters } from './transcript';
-import { interviewContextSchema, reportFormatSchema } from './plan';
 import type { InterviewSnapshot } from './snapshot';
 
 // Interview commands shared by HTTP and socket transports.
@@ -34,27 +32,12 @@ export type StartInput = z.infer<typeof startSchema>;
 export const resumeSchema = z.object({ sdp: offerSchema }).strict();
 /** The capability the browser minted for the attempt, on every command. */
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;
-export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'report', 'pause', 'resume', 'submitText'] as const;
+export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'pause', 'resume', 'submitText'] as const;
 export type ProtocolAction = typeof PROTOCOL_ACTIONS[number];
-
-const passageSchema = z.object({
-  id: z.string().min(1).max(100), speaker: z.enum(['participant', 'interviewer']), text: z.string().max(TRANSCRIPT_LIMIT.characters),
-  startMs: z.number().min(0), endMs: z.number().min(0),
-}).strict();
-/** Phase 2 is independent of live sessions, plans, conversation maps and coverage judgments. */
-export const narrativeRequestSchema = z.object({
-  transcript: z.array(passageSchema).max(TRANSCRIPT_LIMIT.entries)
-    .refine(passages => transcriptCharacters(passages) <= TRANSCRIPT_LIMIT.characters, 'The transcript is too long.')
-    .refine(passages => new Set(passages.map(passage => passage.id)).size === passages.length, 'Passage IDs must be unique.'),
-  format: reportFormatSchema,
-  context: interviewContextSchema.optional(),
-}).strict();
-export type NarrativeRequest = z.infer<typeof narrativeRequestSchema>;
 
 /**
  * The socket transport: one WebSocket per attempt at `/api/interview/sessions/:id/socket`, opt-in for a host.
  * Each message is one command, answered by the same handler as its HTTP route; `id` correlates the reply.
- * The report streams, so it stays on HTTP.
  */
 export const SOCKET_ACTIONS = ['start', 'poll', 'ready', 'end', 'pause', 'resume', 'submitText'] as const;
 /** The largest command message: a start's SDP offer with room for the JSON around it. */

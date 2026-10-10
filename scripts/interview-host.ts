@@ -18,8 +18,9 @@ import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../i
 import { SessionCoordinator, type Archive } from '../interview-engine/interview/interview.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
-import { draftDebrief } from '../interview-engine/setup/draft.server';
+import { draftDebrief } from '../app/server/interview/setup/draft.server';
 import { startSchema } from '../interview-engine/shared/protocol';
+import type { NarrativeStatus, NarrativeProvenance } from '../app/reports/report.types';
 
 const env = process.env;
 if (!foundryConfigured(env) || !env.OPENAI_API_KEY) {
@@ -54,10 +55,19 @@ const providers = foundryProviders({ ...foundry, judge: createDecisionJudge({ ap
   { fetch: upgradingFetch, socket: response => upgraded.get(response) ?? null });
 
 const rows = memoryArchive();
+const reports = new Map<string, { narrative: NarrativeStatus; provenance: NarrativeProvenance }>();
+async function saveArchive(id: string) {
+  const row = rows.rows.get(id);
+  if (!row || !env.INTERVIEW_ARCHIVE_DIR) return;
+  const report = reports.get(id);
+  await Bun.write(`${env.INTERVIEW_ARCHIVE_DIR}/${id}.json`, JSON.stringify({
+    ...row, ...(report ? { narrative: report.narrative, provenance: { ...row.provenance, narrative: report.provenance } } : {}),
+  }, null, 2));
+}
 const archive: Archive = {
   async write(row) {
     await rows.write(row);
-    if (env.INTERVIEW_ARCHIVE_DIR) await Bun.write(`${env.INTERVIEW_ARCHIVE_DIR}/${row.id}.json`, JSON.stringify(rows.rows.get(row.id), null, 2));
+    await saveArchive(row.id);
   },
 };
 
@@ -98,7 +108,14 @@ async function open(id: string, spec: HostedSpec) {
   hosted = SessionCoordinator.restore({
     plan: spec.plan, config: spec.config, context: spec.context, providers, store, background: inlineBackground(), archive,
     log: event => { if (event.type === 'session') console.warn('Interview session', event); },
-  }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), model: foundry.agentModel }));
+  }).then(actor => new HostedSession(actor, {
+    format: spec.report, narrate: narrateWith(providers), model: foundry.agentModel,
+    saveReport: async (id, narrative, provenance) => {
+      reports.set(id, { narrative, provenance });
+      await saveArchive(id);
+    },
+    track: work => { void work.catch(error => console.error('Interview report failed', id, error)); },
+  }));
   return hosted;
 }
 

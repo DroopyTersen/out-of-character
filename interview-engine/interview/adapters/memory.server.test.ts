@@ -5,9 +5,8 @@ import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from './me
 
 const lease = { capability: 'Bearer x', providerIds: [], deadline: 1000, closed: false };
 const checkpoint = (savedAt: number) => ({ savedAt, epoch: 1 }) as unknown as Checkpoint;
-const row = (state: 'partial' | 'final', capturedAt: number, summary: 'pending' | 'ready' | null = null) => ({
+const row = (state: 'partial' | 'final', capturedAt: number) => ({
   id: 'a1', state, capturedAt,
-  narrative: summary && { status: summary, text: null },
 }) as unknown as InterviewArchiveRow;
 
 describe('memoryStore', () => {
@@ -73,13 +72,13 @@ describe('memoryArchive', () => {
     await archive.write(row('partial', 10));
     await archive.write(row('partial', 5));
     expect(archive.rows.get('a1')?.capturedAt).toBe(10);
-    await archive.write(row('final', 8, 'pending'));
+    await archive.write(row('final', 8));
     expect(archive.rows.get('a1')?.state).toBe('final');
     await archive.write(row('partial', 20));
     expect(archive.rows.get('a1')?.state).toBe('final');
-    await archive.write(row('final', 12, 'ready'));
-    await archive.write(row('final', 13, 'pending'));
-    expect(archive.rows.get('a1')).toMatchObject({ capturedAt: 12 });
+    await archive.write(row('final', 12));
+    await archive.write(row('final', 13));
+    expect(archive.rows.get('a1')).toMatchObject({ capturedAt: 13 });
     expect(archive.writes).toHaveLength(6);
   });
 });

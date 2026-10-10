@@ -22,9 +22,9 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Interview phase**: the live conversation that produces a transcript and topic coverage. Lives in `interview/`.
 
-**Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives in `narrative/`.
+**Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives outside the runtime in `app/reports/`.
 
-**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in `setup/`; the live coordinator never sees setup concerns.
+**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in host-owned `app/server/interview/setup/`; the live coordinator never sees setup concerns.
 
 **Approved debrief**: readable learning goals, recursive topics, optional interviewing guidance and report requirements. Approval validates this content and produces a version. Runtime voices, persona and limits come from the host; prompt construction belongs to the engine.
 
@@ -78,7 +78,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 ## Hosts
 
-**Hosted session**: the host wrapper around one coordinator. It returns canonical interview snapshots and adds report state separately. Reports use the coordinator’s frozen format and explicit context with the final transcript; they receive no map or coverage.
+**Hosted session**: the host wrapper around one coordinator. It returns canonical interview snapshots and adds report state separately. Reports use the host’s frozen format and explicit context with the final transcript; they receive no map or coverage.
 
 **Narrative route**: `POST /api/interview/narratives`, an independent report from `{ transcript, format, context? }`. No catalog or live attempt is involved. The narrative streams back and is not stored.
 

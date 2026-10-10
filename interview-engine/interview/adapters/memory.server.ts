@@ -62,7 +62,6 @@ export function inlineBackground(): InlineBackground {
 
 export type MemoryArchive = Archive & { readonly rows: Map<string, InterviewArchiveRow>; readonly writes: InterviewArchiveRow[] };
 
-const narrative = (row: InterviewArchiveRow) => row.narrative?.status ?? null;
 
 /** Keeps rows by id with the archive's upsert rules: a partial row never replaces a final one, nor an older row a newer one. */
 export function memoryArchive(): MemoryArchive {
@@ -78,7 +77,6 @@ export function memoryArchive(): MemoryArchive {
         const finishing = stored.state === 'partial' && copy.state === 'final';
         if (stored.state === 'final' && copy.state === 'partial') return;
         if (copy.capturedAt < stored.capturedAt && !finishing) return;
-        if (['ready', 'unavailable'].includes(narrative(stored)!) && narrative(copy) === 'pending') return;
       }
       rows.set(row.id, copy);
     },

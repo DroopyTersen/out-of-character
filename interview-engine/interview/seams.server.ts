@@ -1,11 +1,9 @@
 import type { Passage } from '../shared/transcript';
 import type { ProducerLogRecord, ProducerSummary } from './reasoning/conversationRecords';
-import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus } from './session/sessionCheckpoint';
+import type { Checkpoint, ConnectionLog, Lease} from './session/sessionCheckpoint';
 import type { InterviewSnapshot } from '../shared/snapshot';
-import type { NarrativeProvenance } from '../shared/narrative';
 
 export type { Checkpoint, Lease } from './session/sessionCheckpoint';
-export type { NarrativeProvenance } from '../shared/narrative';
 
 /** A save was refused because a newer owner of the attempt has taken over. The superseded owner stops. */
 export class FencedError extends Error {
@@ -41,7 +39,7 @@ export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
 
 /**
  * One archived attempt. A partial row is written every 30 seconds while live; the final row once the attempt ends,
- * until the archive acknowledges it, and again when the narrative settles. A partial row never replaces a final one.
+ * until the archive acknowledges it. A partial row never replaces a final one.
  */
 export type InterviewArchiveRow = {
   id: string;
@@ -53,7 +51,6 @@ export type InterviewArchiveRow = {
   /** The public snapshot as the browser saw it at `capturedAt`. */
   snapshot: InterviewSnapshot;
   transcript: Passage[];
-  narrative: NarrativeStatus | null;
   /** Sol, Jev and Luna calls with timings, then the coverage grades. The host trims it to its byte budget. */
   producerLog: ProducerLogRecord[];
   provenance: {
@@ -65,6 +62,5 @@ export type InterviewArchiveRow = {
     openingDigest: string;
     producer: ProducerSummary | null;
     connection: ConnectionLog;
-    narrative?: NarrativeProvenance;
   };
 };

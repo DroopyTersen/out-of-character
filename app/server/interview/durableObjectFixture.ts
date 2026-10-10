@@ -7,7 +7,7 @@ import type { VoiceHandlers, WebSocketLike } from '../../../interview-engine/pro
 import { spec } from '../../../interviews/project-closeout/spec';
 // The simulator fixture substitutes the Workers base class before anything imports it.
 import { archiveDatabase, attempt, ProviderSocket } from '../simulator/session-fixture';
-import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
+import type { Narrative, NarrativeRun } from '../../reports/report.types';
 import type { SpecCatalog } from './debriefs';
 import type { Narrate } from './narrative';
 import { socketPair } from '../../../interview-engine/client/testSocket';

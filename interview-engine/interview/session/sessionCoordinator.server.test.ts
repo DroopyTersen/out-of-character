@@ -22,7 +22,6 @@ const topics = [{ id: 'project', label: 'The project', objectives: [{ id: 'scope
 const spec = resolveInterview({
   id: 'fixture-interview', version: 'fixture-v1', title: 'Recent project', goals: 'Learn what was built.',
   topics: [{ id: 'project', label: 'Project', learn: 'Understand the project.', topics: [{ id: 'scope', label: 'Scope', learn: 'Names what was built.' }] }],
-  report: { audience: 'The delivery team', format: 'A Markdown account of what was learned.' },
 }, {
   interviewer: { name: 'Riley', persona: 'Curious and direct.', voices: [{ id: 'riley-cedar', voice: 'cedar', label: 'Cedar', presentation: 'Male', image: '/riley.png' }] },
 });
@@ -119,12 +118,11 @@ async function conversation(f: ReturnType<typeof fixture>) {
   return { actor, socket, started };
 }
 
-test('the initial voice brief receives the accepted purpose and context, without report instructions', async () => {
+test('the initial voice brief receives the accepted purpose and context', async () => {
   const f = fixture();
   f.options.plan.title = 'Delivery retrospective';
   f.options.plan.goals = 'Learn what helped delivery and what to improve.';
   f.options.plan.guidance = 'Begin with what was built and who it was for.';
-  f.options.plan.report.format = 'REPORT_LAYOUT_ONLY';
   f.options.context = { background: 'Project Atlas was completed for Harbor Labs.', participant: { name: 'Jordan' } };
   const actor = await f.restore();
   f.options.plan.goals = 'REPLACEMENT_GOALS';
@@ -133,7 +131,7 @@ test('the initial voice brief receives the accepted purpose and context, without
   await f.send(actor, 'ready');
   const brief = f.voice.created[0]!.instructions;
   for (const accepted of ['Riley', 'Delivery retrospective', 'Learn what helped delivery and what to improve.', 'Begin with what was built and who it was for.', 'Project Atlas was completed for Harbor Labs.', 'Jordan']) expect(brief).toContain(accepted);
-  for (const excluded of ['REPORT_LAYOUT_ONLY', 'REPLACEMENT_GOALS', 'REPLACEMENT_CONTEXT']) expect(brief).not.toContain(excluded);
+  for (const excluded of ['REPLACEMENT_GOALS', 'REPLACEMENT_CONTEXT']) expect(brief).not.toContain(excluded);
   const opening = f.voice.sockets.get('provider-1')!.sent.find(event => event.event_id === 'opening')!;
   expect(opening.type).toBe('session.instructions.append');
   expect(opening.content).toContain('Riley');
@@ -173,7 +171,6 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   const after = await f.send(actor, 'poll', quietPoll);
   expect(after.terminal).toBe(true);
   expect(body(after).status).toBe('ended');
-  expect(await f.send(actor, 'report')).toEqual({ status: 200, body: null, report: true });
 
   await f.background.settle();
   const row = f.archive.rows.get(attempt.id)!;
@@ -185,12 +182,6 @@ test('a start, a conversation and an end produce the protocol’s snapshots, a c
   expect(row.provenance.openingDigest).toMatch(/^[0-9a-f]{12}$/);
   expect(row.provenance.connection.segments[0]).not.toHaveProperty('providerId');
   expect(row.producerLog.some(record => record.source === 'grade' && record.final)).toBe(true);
-
-  // The narrative settles later; its status and provenance rewrite the final row.
-  actor.settleNarrative({ status: 'ready', text: 'A summary.' }, { model: 'fixture', version: 'v1', attempts: [] });
-  await f.background.settle();
-  expect(f.archive.rows.get(attempt.id)!.narrative).toEqual({ status: 'ready', text: 'A summary.' });
-  expect(f.archive.rows.get(attempt.id)!.provenance.narrative).toBeDefined();
 
   // The wake after closure clears the attempt.
   await actor.wake();
@@ -312,7 +303,8 @@ test('a final row the archive refuses keeps the terminal checkpoint, and a later
   expect(body(await f.send(actor, 'end'))).toMatchObject({ status: 'ended', finalization: 'confirmed' });
   expect(finalFailures(f)).toHaveLength(1);
   expect(f.record.lease).toMatchObject({ closed: true });
-  expect(f.record.checkpoint).toMatchObject({ savedAt: EPOCH + 10_000, snapshot: { status: 'ended', interview: { summary: { status: 'pending' } } } });
+  expect(f.record.checkpoint).toMatchObject({ savedAt: EPOCH + 10_000, snapshot: { status: 'ended' } });
+  expect(f.record.checkpoint?.snapshot.interview?.evaluation).not.toBeNull();
   expect(f.record.wakeAt).toBe(EPOCH + 25_000);
   const paid = { created: f.voice.created.length, closed: [...f.voice.closed], closes: socket.sent.filter(event => event.type === 'session.close').length, graded: f.graded.length };
 
@@ -333,7 +325,7 @@ test('a final row the archive refuses keeps the terminal checkpoint, and a later
   expect(body(read).transcript.map(entry => [entry.speaker, entry.text])).toEqual(dialogue);
   await restored.wake();
   const row = archive.rows.get(attempt.id)!;
-  expect(row).toMatchObject({ state: 'final', capturedAt: EPOCH + 10_000, snapshot: { status: 'ended', usageSeconds: 12 }, narrative: { status: 'pending' } });
+  expect(row).toMatchObject({ state: 'final', capturedAt: EPOCH + 10_000, snapshot: { status: 'ended', usageSeconds: 12 } });
   expect(row.transcript.map(entry => [entry.speaker, entry.text])).toEqual(dialogue);
   expect(row.producerLog.some(record => record.source === 'grade' && record.final)).toBe(true);
   expect(f.record.checkpoint).toBeUndefined();
@@ -341,25 +333,22 @@ test('a final row the archive refuses keeps the terminal checkpoint, and a later
   expect({ created: f.voice.created.length, closed: f.voice.closed, closes: socket.sent.filter(event => event.type === 'session.close').length, graded: f.graded.length }).toEqual(paid);
   expect(next.graded).toEqual([]);
 
-  // The narrative rewrites the acknowledged row, and the hold then forgets the attempt.
-  restored.settleNarrative({ status: 'ready', text: 'A summary.' }, { model: 'fixture', version: 'v1', attempts: [] });
+  // The hold then forgets the attempt.
   await next.background.settle();
-  expect(archive.rows.get(attempt.id)!.narrative).toEqual({ status: 'ready', text: 'A summary.' });
   next.at(340_000);
   await restored.wake();
   expect(f.record.lease).toBeUndefined();
   expect(f.record.clears).toBe(1);
 });
 
-test('without timers, the next command after the retry time archives the final row, with a narrative that settled meanwhile', async () => {
+test('without timers, the next command after the retry time archives the final row', async () => {
   const { archive, control } = flakyArchive();
   const f = fixture({ archive, lazyWake: true });
   const { actor } = await conversation(f);
   f.at(10_000);
   await f.send(actor, 'end');
-  actor.settleNarrative({ status: 'ready', text: 'A summary.' }, { model: 'fixture', version: 'v1', attempts: [] });
   await f.background.settle();
-  expect(finalFailures(f)).toHaveLength(2);
+  expect(finalFailures(f)).toHaveLength(1);
   expect(archive.rows.has(attempt.id)).toBe(false);
   control.refusing = false;
   f.at(20_000);
@@ -367,7 +356,7 @@ test('without timers, the next command after the retry time archives the final r
   expect(archive.rows.has(attempt.id)).toBe(false);
   f.at(25_000);
   expect((await f.send(actor, 'poll', quietPoll)).terminal).toBe(true);
-  expect(archive.rows.get(attempt.id)).toMatchObject({ state: 'final', capturedAt: EPOCH + 10_000, narrative: { status: 'ready', text: 'A summary.' } });
+  expect(archive.rows.get(attempt.id)).toMatchObject({ state: 'final', capturedAt: EPOCH + 10_000 });
   expect(f.record.checkpoint).toBeUndefined();
   expect(f.record.wakeAt).toBe(EPOCH + 25_000 + 300_000);
 });
@@ -393,7 +382,7 @@ test('a live wake checkpoints the attempt and reschedules itself', async () => {
   await f.send(actor, 'poll', quietPoll);
   await actor.wake();
   expect(f.record.wakeAt).toBe(EPOCH + 60_000);
-  expect(f.record.checkpoint).toMatchObject({ savedAt: EPOCH + 30_000, reachedLive: true, epoch: 1, resumes: 0, snapshot: { status: 'live', revision: 2, interview: { summary: null } } });
+  expect(f.record.checkpoint).toMatchObject({ savedAt: EPOCH + 30_000, reachedLive: true, epoch: 1, resumes: 0, snapshot: { status: 'live', revision: 2 } });
   expect(f.record.checkpoint!.producer).toBeDefined();
   await f.background.settle();
   expect(f.archive.rows.get(attempt.id)!.state).toBe('partial');
@@ -750,7 +739,7 @@ test('pause closes voice before settling cancelled grading and checkpoints no la
   } finally { pending.resolve(); await f.send(actor, 'end'); }
 });
 
-test.each(['empty coverage', 'failed final grade'] as const)('End saves participant evidence and permits a report with %s', async outcome => {
+test.each(['empty coverage', 'failed final grade'] as const)('End saves participant evidence with %s', async outcome => {
   const f = fixture();
   f.options.services!.evaluate = async input => {
     if (outcome === 'failed final grade') throw new Error('Judge unavailable');
@@ -763,8 +752,6 @@ test.each(['empty coverage', 'failed final grade'] as const)('End saves particip
   const row = f.archive.rows.get(attempt.id)!;
   expect(row.snapshot.status).toBe('ended');
   expect(row.transcript.some(entry => entry.speaker === 'participant')).toBe(true);
-  expect(row.narrative?.status).toBe('pending');
-  expect((await f.send(actor, 'report')).report).toBe(true);
   expect(f.record.checkpoint).toBeUndefined();
 });
 
@@ -979,7 +966,6 @@ test.each([false, true])('resume preserves the accepted definition when the orig
   const { actor } = await conversation(original);
   const accepted = actor.definition;
   original.options.plan.goals = 'CHANGED GOALS';
-  original.options.plan.report.format = 'CHANGED REPORT';
   original.options.context = { participant: { name: 'Someone else' }, background: 'CHANGED BACKGROUND' };
   await original.send(actor, 'pause');
   await original.background.settle();

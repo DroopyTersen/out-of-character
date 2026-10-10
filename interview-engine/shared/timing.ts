@@ -10,14 +10,6 @@ export const SESSION_MAX_RESUMES = 5;
 /** Paused time extends the live limit, up to this much wall clock. */
 export const SESSION_WALL_LIMIT_MS = 90 * 60_000;
 
-/** Rejects when `promise` has not settled within `ms`. */
-export async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  try {
-    return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Operation timed out.')), ms); })]);
-  } finally { clearTimeout(timer!); }
-}
-
 export type PauseSpan = { from: number; to: number | null };
 /** Wall time since start minus paused spans: the conversation's own clock. An open span runs to `time`. */
 export function activeElapsed(startedAt: number, time: number, pauses: readonly PauseSpan[] = []): number {

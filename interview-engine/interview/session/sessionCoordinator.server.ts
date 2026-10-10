@@ -6,7 +6,7 @@ import type { InterviewSnapshot, SessionPause } from '../../shared/snapshot';
 import type { InterviewLimits } from '../../shared/spec';
 import { resolveInterview, type InterviewDefinition, type ResolvedInterview } from '../definition.server';
 import {
-  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, within, type PauseSpan,
+  SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS, type PauseSpan,
 } from '../../shared/timing';
 import type { Passage } from '../../shared/transcript';
 import { TopicGrading, type Evaluate } from '../judging/topicGrading.server';
@@ -16,9 +16,9 @@ import { InterviewProducer } from '../reasoning/interviewProducer.server';
 import { evaluateTurn } from '../judging/judgeConversationTurn.server';
 import { lookupInterviewBackground } from '../reasoning/backgroundResearch.server';
 import { INTERVIEW_RUBRIC_VERSION } from '../judging/topicCoverage.prompt';
-import { FencedError, type Archive, type Background, type InterviewArchiveRow, type NarrativeProvenance, type SessionStore } from '../seams.server';
+import { FencedError, type Archive, type Background, type InterviewArchiveRow, type SessionStore } from '../seams.server';
 import { interviewerBrief, interviewOpening } from '../voice/interviewerBrief.server';
-import type { Checkpoint, ConnectionLog, Lease, NarrativeStatus, PauseRecord, SessionSnapshot } from './sessionCheckpoint';
+import type { Checkpoint, ConnectionLog, Lease, PauseRecord, SessionSnapshot } from './sessionCheckpoint';
 import { SessionTranscript } from './sessionTranscript';
 import { attemptDeadline, canHold, lifetimeDecision, pauseDeadline, resumeRefusal } from './sessionLifetime';
 import { conversationSoFar, isTypedItem, NO_EXTERNAL_TASK, resumeInstruction, typedAnswerCue, typedItemId } from '../voice/voice.prompt';
@@ -56,10 +56,9 @@ export type SessionOptions = InterviewDefinition & {
 /** One browser command. `body` is the request's JSON text, when it had one. */
 export type Command = { action: string; capability: string; body?: string };
 /**
- * The answer to a command. `terminal`: the attempt has ended, and the host adds its report state to the body.
- * `report`: the browser asked for the report, which the host serves once `closing` settles.
+ * The answer to a command. `terminal`: the attempt has ended.
  */
-export type Reply = { status: number; body: unknown; terminal?: true; report?: true };
+export type Reply = { status: number; body: unknown; terminal?: true };
 
 const FENCED = 'Another owner has taken over this attempt.';
 const INVALID = 'Invalid interview request.';
@@ -105,7 +104,6 @@ export class SessionCoordinator {
   private state: Omit<SessionSnapshot, 'transcript' | 'revision'> | undefined;
   private readonly dialogue = new SessionTranscript();
   private readonly grading: TopicGrading;
-  private narrativeStatus: NarrativeStatus | null = null;
   private readonly voice: VoiceInterviewer;
   private timer: ReturnType<typeof setInterval> | undefined;
   private finishing: Promise<void> | undefined;
@@ -127,8 +125,6 @@ export class SessionCoordinator {
   private activitySequence = -1;
   /** When the attempt ended, while the archive has not acknowledged its final row. Its terminal checkpoint is kept until then. */
   private unarchived: number | null = null;
-  private narrativeArchive = Promise.resolve();
-  private narrative: NarrativeProvenance | undefined;
   private digests: Promise<[string, string]> | undefined;
   private wakeAt: number | null = null;
   private fenced = false;
@@ -186,12 +182,12 @@ export class SessionCoordinator {
     return coordinator;
   }
 
-  /** A copy of the accepted input, including the report format and context used after resume. */
+  /** A copy of the accepted input, including context used after resume. */
   get definition(): InterviewDefinition {
     return structuredClone({ plan: this.spec.plan, config: this.spec.config, ...(this.spec.context ? { context: this.spec.context } : {}) });
   }
 
-  /** Finishes through the first final archive write, resuming a failed close before the host starts its report. */
+  /** Finishes through the first final archive write, resuming a failed close before the host reads final evidence. */
   get closing(): Promise<void> | undefined { return this.endingInterrupted !== undefined ? this.end() : this.finishing; }
 
   private get segment(): Readonly<VoiceSegment> | undefined { return this.voice.current; }
@@ -226,7 +222,6 @@ export class SessionCoordinator {
       if (!this.lease.closed) this.background.track(this.closeOrphan());
       return reply({ error: 'This interview session was interrupted. Start a new attempt.' }, 410);
     }
-    if (action === 'report') return { status: 200, body: null, report: true };
     if (action === 'end' && this.endingInterrupted !== undefined) await this.end();
     // A terminal snapshot is not an acceptance receipt.
     // A retry of a turn already in the transcript is still acknowledged after the end; a new one is not.
@@ -358,21 +353,6 @@ export class SessionCoordinator {
     await this.pause('browser').catch(error => { if (!(error instanceof FencedError)) throw error; });
   }
 
-  /**
-   * The narrative settled: its status rides in the snapshot and its provenance in the archive, which is rewritten once
-   * the end-of-attempt row has been written.
-   */
-  settleNarrative(status: NarrativeStatus, provenance: NarrativeProvenance) {
-    if (!this.state) return;
-    this.narrative = provenance;
-    this.narrativeStatus = status;
-    this.narrativeArchive = this.narrativeArchive.then(async () => {
-      if (this.finishing) await within(this.finishing, 15_000).catch(() => {});
-      await this.archiveFinal();
-    });
-    this.background.track(this.narrativeArchive);
-  }
-
   private publicSnapshot(): InterviewSnapshot {
     const snapshot = this.state!;
     const { evaluation, feedbackStatus } = this.grading.snapshot();
@@ -431,7 +411,7 @@ export class SessionCoordinator {
   private checkpoint(savedAt = this.now()): Checkpoint {
     const { evaluation, feedbackStatus, grades, gradeCalls } = this.grading.snapshot();
     return structuredClone({
-      definition: this.definition, savedAt, snapshot: { ...this.state!, transcript: this.dialogue.entries, revision: this.dialogue.revision, feedbackStatus, interview: { evaluation, summary: this.narrativeStatus } }, reachedLive: this.reachedLive, epoch: this.voice.epoch, resumes: this.resumes,
+      definition: this.definition, savedAt, snapshot: { ...this.state!, transcript: this.dialogue.entries, revision: this.dialogue.revision, feedbackStatus, interview: { evaluation } }, reachedLive: this.reachedLive, epoch: this.voice.epoch, resumes: this.resumes,
       segments: [...this.voice.segments], pauses: this.pauses, grades, gradeCalls,
       ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
     });
@@ -787,7 +767,6 @@ export class SessionCoordinator {
       if (outstanding.length) snapshot.message = 'Interview ended, but the voice service did not confirm finalization.';
       this.lease!.closed = !outstanding.length;
       if (this.reachedLive) {
-        this.narrativeStatus = { status: this.dialogue.entries.some(item => item.speaker === 'participant') ? 'pending' : 'unavailable', text: null };
         this.unarchived = now;
       }
     }
@@ -829,7 +808,6 @@ export class SessionCoordinator {
   private async restoreCheckpoint(checkpoint: Checkpoint) {
     const { interview, feedbackStatus, transcript, revision, ...stored } = checkpoint.snapshot;
     this.state = stored;
-    this.narrativeStatus = interview?.summary ?? null;
     this.grading.restore({ evaluation: interview?.evaluation ?? null, feedbackStatus, grades: checkpoint.grades, gradeCalls: checkpoint.gradeCalls });
     this.reachedLive = checkpoint.reachedLive;
     this.resumes = checkpoint.resumes;
@@ -954,13 +932,12 @@ export class SessionCoordinator {
       const producerLog = structuredClone([...(this.producer?.records ?? []), ...this.grading.snapshot().grades]);
       const producer = this.producer?.summary() ?? null;
       const connection = this.connectionLog();
-      const narrative = structuredClone(this.narrative);
       this.digests ??= Promise.all([digest(interviewerBrief(this.spec, snapshot.voiceId)), digest(interviewOpening(this.spec, snapshot.voiceId))]);
       const [actorDigest, openingDigest] = await this.digests;
       const row: InterviewArchiveRow = {
         id: snapshot.id, specId: this.spec.id, specVersion: this.spec.version, voiceId: snapshot.voiceId, state, capturedAt, snapshot,
-        transcript: snapshot.transcript, producerLog, narrative: structuredClone(this.narrativeStatus),
-        provenance: { voice: this.voice.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection, ...(narrative ? { narrative } : {}) },
+        transcript: snapshot.transcript, producerLog,
+        provenance: { voice: this.voice.voiceName(snapshot.voiceId), rubricVersion: INTERVIEW_RUBRIC_VERSION, actorDigest, openingDigest, producer, connection },
       };
       if (this.fenced) return false;
       await this.archive.write(row);

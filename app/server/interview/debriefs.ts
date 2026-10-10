@@ -1,16 +1,16 @@
-import type { ResolvedInterview } from '../../../interview-engine/interview/definition.server';
+import type { HostedSpec } from './setup/debrief';
+export type { HostedSpec } from './setup/debrief';
 import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
-import { approveDebrief, approvedId } from '../../../interview-engine/setup/approve.server';
-import { approvedDebriefSchema, debriefDraftSchema, templateDraft, type ApprovedDebrief, type DebriefDraft } from '../../../interview-engine/setup/debrief';
-import { draftDebrief, type DraftResult } from '../../../interview-engine/setup/draft.server';
+import { approveDebrief, approvedId } from './setup/approve.server';
+import { approvedDebriefSchema, debriefDraftSchema, templateDraft, type ApprovedDebrief, type DebriefDraft } from './setup/debrief';
+import { draftDebrief, type DraftResult } from './setup/draft.server';
 import { spec as projectCloseout } from '../../../interviews/project-closeout/spec';
 import { spec as salesWinLoss } from '../../../interviews/sales-win-loss/spec';
 import { z } from 'zod';
 import { BodyError, boundedJson, jsonResponse } from '../http';
 
 /** A spec this host can run: briefed, judged and mapped for the session, with a narrative that writes a text document. */
-export type HostedSpec = ResolvedInterview;
 
 /** The debriefs a host ships as code: each is a template an organizer can run as is, edit, or base an ad hoc debrief on. */
 export const templates: readonly HostedSpec[] = [projectCloseout, salesWinLoss];

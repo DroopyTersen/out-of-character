@@ -5,7 +5,7 @@
 import { foundryConfig } from '../ai/foundry.server';
 import { resolveInterview } from '../interview-engine/interview/definition.server';
 import { judgeTopicCoverage } from '../interview-engine/interview/judging/judgeTopicCoverage.server';
-import { writeNarrative } from '../interview-engine/narrative/writeNarrative.server';
+import { writeNarrative } from '../app/reports/writeNarrative.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import type { Passage } from '../interview-engine/shared/transcript';
@@ -39,7 +39,7 @@ const results = await Promise.allSettled(cases.map(async row => {
 const grades = results.map((result, index) => result.status === 'fulfilled' ? result.value : { id: cases[index]!.id, passed: false, error: result.reason instanceof Error ? result.reason.name : 'Provider failure' });
 const input = {
   transcript: dialogue('The vendor caused a two-week customer delay, right?', 'I do not know whether any delay happened or what caused it. I only worked on internal tests. Priya handled customer handoffs; I was not involved.'),
-  format: spec.plan.report,
+  format: spec.report,
   context: { participant: { name: 'Jordan' }, background: 'The organizer suspects a two-week delay caused by a vendor mistake. This is an unconfirmed hypothesis.' },
 };
 const run = writeNarrative(input, providers, AbortSignal.timeout(90_000));

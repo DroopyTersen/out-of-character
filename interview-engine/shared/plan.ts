@@ -9,9 +9,6 @@ export const interviewContextSchema = z.object({
 }).strict();
 export type InterviewContext = z.infer<typeof interviewContextSchema>;
 
-export const reportFormatSchema = z.object({ audience: text.max(2000), format: text.max(16_000) }).strict();
-export type ReportFormat = z.infer<typeof reportFormatSchema>;
-
 /** Every topic uses the same shape; nesting organizes more specific things to learn. */
 export type InterviewTopic = {
   id: string;
@@ -30,7 +27,7 @@ export const interviewTopicSchema: z.ZodType<InterviewTopic> = z.lazy(() => z.ob
 /** Learning intent is prose. Situation and participant background belong in InterviewContext. */
 export const interviewDraftSchema = z.object({
   title: text.max(200), goals: text.max(8000), topics: z.array(interviewTopicSchema).min(1),
-  guidance: text.max(8000).optional(), report: reportFormatSchema,
+  guidance: text.max(8000).optional(),
 }).strict().superRefine((plan, ctx) => {
   const ids = new Set<string>();
   const visit = (topics: InterviewTopic[], path: (string | number)[]) => {

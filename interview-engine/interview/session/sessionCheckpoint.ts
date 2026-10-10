@@ -4,9 +4,7 @@ import type { ProducerCheckpoint } from '../reasoning/interviewProducer.server';
 import type { GradeRecord, ProducerSummary } from '../reasoning/conversationRecords';
 import type { VoiceSegment } from '../voice/voiceSession';
 
-/** Whether the host has written the narrative. Kept in storage and archives, outside the live snapshot. */
-export type NarrativeStatus = { status: 'pending' | 'ready' | 'unavailable'; text: string | null };
-export type InterviewState = { evaluation: InterviewEvaluation | null; summary: NarrativeStatus | null };
+export type InterviewState = { evaluation: InterviewEvaluation | null };
 
 /** The coordinator's lifecycle and transcript, before current coverage and public references are composed into it. */
 export type SessionSnapshot = Omit<InterviewSnapshot, 'evaluation' | 'feedbackStatus' | 'background' | 'pause'> & { pause?: SessionPause | null };

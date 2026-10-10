@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { foundryProvider } from '../providers/foundry.server';
-import { testFoundry } from '../providers/testFoundry.server';
+import { foundryProvider } from '../../../../interview-engine/providers/foundry.server';
+import { testFoundry } from '../../../../interview-engine/providers/testFoundry.server';
 import { draftDebrief } from './draft.server';
 import { vendorReview } from './setup.test';
 

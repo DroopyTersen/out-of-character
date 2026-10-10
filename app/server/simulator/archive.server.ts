@@ -5,7 +5,7 @@ import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
 import type { ProducerSummary } from '../../../interview-engine/interview/reasoning/conversationRecords';
 import type { NetworkRecord } from '../../../interview-engine/shared/network';
-import type { NarrativeProvenance } from '../../../interview-engine/shared/narrative';
+import type { NarrativeProvenance } from '../../reports/report.types';
 import type { ReportArchive } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {

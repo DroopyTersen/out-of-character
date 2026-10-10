@@ -64,15 +64,15 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string; kind: string }) => record.source === 'note' && ['list', 'map'].includes(record.kind))).toHaveLength(4);
 });
 
-test('a restarted interview keeps its coverage and summary state, stored inside the checkpoint snapshot', async () => {
+test('a restarted interview keeps its coverage state, stored inside the checkpoint snapshot', async () => {
   const f = await live();
   await lose(f);
   const before = await poll(f);
   expect(before).toMatchObject({ background: [] });
   expect(before).not.toHaveProperty('interview');
-  // The stored shape is unchanged, so checkpoints saved before the interview state moved beside the snapshot still restore.
+  // Coverage is checkpointed with the interview; reports are host-owned.
   const stored = (f.values.get('checkpoint') as { snapshot: Record<string, unknown> }).snapshot;
-  expect(stored.interview).toEqual({ evaluation: before.evaluation, summary: null });
+  expect(stored.interview).toEqual({ evaluation: before.evaluation });
   expect(stored.interview).not.toHaveProperty('background');
   const replacement = await objectFixture({ values: f.values, archive: f.archive, provider: 'replacement' });
   const state = await poll(replacement);

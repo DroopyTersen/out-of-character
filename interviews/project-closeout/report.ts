@@ -1,4 +1,4 @@
-import type { ReportFormat } from '../../interview-engine/shared/plan';
+import type { ReportFormat } from '../../app/reports/report.types';
 
 /** Approved default report requirements. The engine supplies the evidence policy. */
 export const report: ReportFormat = {

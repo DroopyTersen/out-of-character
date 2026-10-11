@@ -1,4 +1,4 @@
-import { resolveInterview, type ResolvedInterview } from '../../../../interview-engine/interview/definition.server';
+import { resolveInterview, type ResolvedInterview } from '../../../../interview-engine/definition.server';
 import { approvedDebriefSchema, slug, type ApprovedDebrief, type HostedSpec, type DebriefDraft } from './debrief';
 
 /** The first twelve hex digits of the SHA-256 of `text`. */

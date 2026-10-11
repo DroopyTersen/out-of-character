@@ -2,7 +2,7 @@ import { INTERVIEWER_NAME, interviewVoices } from '../../core/interview';
 import type { Client, ClientStats } from '../../core/simulator/types';
 import { persona } from '../../interviews/project-closeout/brief.prompt';
 import { spec } from '../../interviews/project-closeout/spec';
-import * as brief from '../../interview-engine/interview/voice/interviewerBrief.server';
+import * as brief from '../../interview-engine/voice/interviewerBrief.server';
 
 const stats: ClientStats = { assertiveness: 2, skepticism: 2, guardedness: 1, bargaining: 0, riskAversion: 2, relationship: 4 };
 

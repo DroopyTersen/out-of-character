@@ -1,4 +1,4 @@
-import type { Archive, InterviewArchiveRow } from '../../../interview-engine/interview/seams.server';
+import type { Archive, InterviewArchiveRow } from '../../../interview-engine/seams.server';
 import { SIMULATOR_VERSION } from '../../../core/simulator/types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
 import type { NarrativeStatus, NarrativeProvenance } from '../../reports/report.types';

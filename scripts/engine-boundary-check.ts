@@ -1,8 +1,8 @@
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 /**
- * Keeps interview-engine/ portable: nothing in it may reach this app, Cloudflare, Bun or Node, and the two phases
- * never import each other. Test files may additionally import bun:test, the only exception.
+ * Keeps interview-engine/ portable: nothing in it may reach the host app, reports, Cloudflare, Bun or Node.
+ * Test files may additionally import bun:test, the only exception.
  */
 export const ALLOWED_PACKAGES = ['ai', '@ai-sdk/azure', '@ai-sdk/typesafe-ai', 'zod'];
 const FORBIDDEN_PREFIXES = ['~/', '@/', 'bun:', 'node:', 'virtual:'];
@@ -16,16 +16,14 @@ export type Violation = { file: string; line: number; text: string; reason: stri
 
 const lineAt = (source: string, index: number) => source.slice(0, index).split('\n').length;
 const packageName = (specifier: string) => specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]!;
-const phase = (path: string) => path.split('/')[0];
 
 function specifierProblem(specifier: string, file: string, root: string): string | null {
   if (specifier === TEST_ONLY && file.endsWith('.test.ts')) return null;
   if (specifier.startsWith('.')) {
     const target = relative(root, resolve(root, dirname(file), specifier)).split(sep).join('/');
     if (target === '..' || target.startsWith('../')) return 'relative import leaves interview-engine/';
-    const from = phase(file), to = phase(target);
+    const from = file.split('/')[0];
     if ((from === 'client' || from === 'shared') && /\.server(?:\.ts)?$/.test(target)) return `${from}/ imports a server file`;
-    if ((from === 'narrative' && to === 'interview') || (from === 'interview' && to === 'narrative')) return 'the Interview and Narrative phases import each other';
     return null;
   }
   if (FORBIDDEN_PREFIXES.some(prefix => specifier.startsWith(prefix))) return 'platform or app import';

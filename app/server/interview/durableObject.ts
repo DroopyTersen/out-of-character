@@ -1,7 +1,9 @@
-import { resolveInterview, type InterviewDefinition } from '../../../interview-engine/interview/definition.server';
+import { resolveInterview, type InterviewDefinition } from '../../../interview-engine/definition.server';
 import { DurableObject } from 'cloudflare:workers';
 import { foundryConfig, foundryConfigured, type FoundryConfig } from '../../../ai/foundry.server';
-import { SessionCoordinator, type Background, type Checkpoint, type Lease, type SessionOptions, type SessionStore } from '../../../interview-engine/interview/interview.server';
+import { SessionCoordinator, type SessionOptions } from '../../../interview-engine/session/sessionCoordinator.server';
+import { type Background, type SessionStore } from '../../../interview-engine/seams.server';
+import { type Checkpoint, type Lease } from '../../../interview-engine/session/sessionCheckpoint';
 import { foundryProviders, type Providers } from '../../../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../../../interview-engine/providers/decisionJudge.server';
 import { startSchema } from '../../../interview-engine/shared/protocol';

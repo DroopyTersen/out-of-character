@@ -1,5 +1,5 @@
 // The closeout evaluator binds the host's plan and injected decision model.
-import * as engine from '../../interview-engine/interview/judging/judgeTopicCoverage.server';
+import * as engine from '../../interview-engine/judging/judgeTopicCoverage.server';
 import { createDecisionJudge } from '../../interview-engine/providers/decisionJudge.server';
 import { dialogueState as renderDialogue, type Passage } from '../../interview-engine/shared/transcript';
 import type { JudgeAnswers } from '../../interview-engine/providers/judgeProvider.server';

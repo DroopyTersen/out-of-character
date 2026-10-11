@@ -1,6 +1,6 @@
 import type { InterviewSummaryContent } from '../../../core/interview';
 import type { ReportState } from '../../../core/simulator/report';
-import type { SessionCoordinator } from '../../../interview-engine/interview/interview.server';
+import type { SessionCoordinator } from '../../../interview-engine/session/sessionCoordinator.server';
 import type { NarrativeInput, NarrativeState } from '../../reports/report.types';
 import { NarrativeRunner, within } from '../../reports/narrativeRun.server';
 import { narrativeRunner, participantSpoke, type Narrate } from './narrative';

@@ -17,8 +17,8 @@ async function engine(files: Record<string, string>) {
 test('a portable folder passes', async () => {
   expect(await engine({
     'shared/spec.ts': "import { z } from 'zod';\nimport type { Passage } from './transcript';\nexport * from './snapshot';",
-    'interview/run.server.ts': "import { streamText } from 'ai';\nimport { x } from '../providers/judgeProvider.server';\nconst later = await import('@ai-sdk/azure/internal');",
-    'narrative/write.test.ts': "import { test } from 'bun:test';",
+    'session/run.server.ts': "import { streamText } from 'ai';\nimport { x } from '../providers/judgeProvider.server';\nconst later = await import('@ai-sdk/azure/internal');",
+    'judging/coverage.test.ts': "import { test } from 'bun:test';",
     'README.md': 'Hosted by a Durable Object per attempt.',
   })).toEqual([]);
 });
@@ -40,20 +40,18 @@ test('app, platform and unlisted imports fail with their line', async () => {
   ]);
 });
 
-test('browser folders cannot reach server files, and the phases cannot reach each other', async () => {
+test('browser folders cannot reach server files, and engine files cannot reach host reports', async () => {
   expect(await engine({
     'client/live.ts': "import { x } from '../providers/gptLive.server';",
-    'shared/s.ts': "import type { X } from '../interview/seams.server.ts';",
-    'narrative/n.server.ts': "import { y } from '../interview/reasoning/conversationMap';",
-    'interview/i.server.ts': "import { z } from '../narrative/narrative.server';\nexport type Host = { env: Env; db: D1Database; ctx: ExecutionContext; state: DurableObjectState };",
-  }).then(items => items.toSorted())).toEqual([
+    'shared/s.ts': "import type { X } from '../seams.server.ts';",
+    'session/run.server.ts': "import { z } from '../../app/reports/reportWriter.server';\nexport type Host = { env: Env; db: D1Database; ctx: ExecutionContext; state: DurableObjectState };",
+  })).toEqual([
     'client/live.ts:1 client/ imports a server file: ../providers/gptLive.server',
-    'interview/i.server.ts:1 the Interview and Narrative phases import each other: ../narrative/narrative.server',
-    'interview/i.server.ts:2 platform identifier D1Database',
-    'interview/i.server.ts:2 platform identifier DurableObjectState',
-    'interview/i.server.ts:2 platform identifier Env',
-    'interview/i.server.ts:2 platform identifier ExecutionContext',
-    'narrative/n.server.ts:1 the Interview and Narrative phases import each other: ../interview/reasoning/conversationMap',
-    'shared/s.ts:1 shared/ imports a server file: ../interview/seams.server.ts',
+    'session/run.server.ts:1 relative import leaves interview-engine/: ../../app/reports/reportWriter.server',
+    'session/run.server.ts:2 platform identifier Env',
+    'session/run.server.ts:2 platform identifier D1Database',
+    'session/run.server.ts:2 platform identifier ExecutionContext',
+    'session/run.server.ts:2 platform identifier DurableObjectState',
+    'shared/s.ts:1 shared/ imports a server file: ../seams.server.ts',
   ]);
 });

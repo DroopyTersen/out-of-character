@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { resolveInterview } from '../../../../interview-engine/interview/definition.server';
+import { resolveInterview } from '../../../../interview-engine/definition.server';
 import { approveDebrief, debriefVersion } from './approve.server';
 import { debriefDraftSchema, slug, templateDraft, type DebriefDraft } from './debrief';
 

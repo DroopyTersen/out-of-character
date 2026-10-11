@@ -1,5 +1,5 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import type { Checkpoint, Lease } from '../../../interview-engine/interview/interview.server';
+import type { Checkpoint, Lease } from '../../../interview-engine/session/sessionCheckpoint';
 import type { Narrative, NarrativeRun } from '../../reports/report.types';
 import { capability, settle, waitFor } from '../simulator/session-fixture';
 // The object fixture substitutes the Workers base class (through the simulator fixture) before the object loads.

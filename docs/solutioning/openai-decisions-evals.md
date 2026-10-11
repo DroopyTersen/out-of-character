@@ -35,7 +35,7 @@ Two adapter checks matter before semantic testing:
 
 | Lane | Source and application contract |
 | --- | --- |
-| Interview silence | `interview-engine/interview/judging/judgeConversationSilence.server.ts`: `interview-silence-v2`; last 8 passages; `P(continue) >= .85`; transcript inactivity of 4 seconds; 3-second request deadline; once per unchanged revision; 120-check cap. Current checks are **not audio-level gated**. |
+| Interview silence | `interview-engine/judging/judgeConversationSilence.server.ts`: `interview-silence-v2`; last 8 passages; `P(continue) >= .85`; transcript inactivity of 4 seconds; 3-second request deadline; once per unchanged revision; 120-check cap. Current checks are **not audio-level gated**. |
 | Interview turn | `conversation/ranking.server.ts`: `ranking-rubric-v5`; full settled prefix; focus, new project facts, new feedback, natural-next probability and open/answered/declined/stalled state per open thread. `producer.server.ts` uses a 3-second deadline. Novelty or feedback at `.8` can wake Sol, subject to existing eligibility and budgets. |
 | Thread action | `conversation/ranking.ts` and `notes.ts`: retain current ranking, `.1` switching margin, holds, lead changes and note suppression. Raw score agreement alone is insufficient. |
 | Interview grade | `conversation/evaluate.server.ts`: `interview-rubric-v8`; 0–4 readings with observable gate `.8`; explored coverage requires `.85`; supported set-aside requires `.5`; evidence must resolve to a participant passage. Live/final deadlines are 3/8 seconds. |
@@ -146,7 +146,7 @@ Current reproducible commands (no provider calls):
 
 ```sh
 bun scripts/interview-replay.ts output/interview-review/2026-10-08-506432d/archive-row.json output/interview-review/2026-10-08-production-1343bc9/archive-row.json
-bun test interview-engine/interview/judging/judgeConversationSilence.server.test.ts interview-engine/interview/session/session.server.test.ts interview-engine/interview/reasoning/ranking.server.test.ts interview-engine/interview/reasoning/ranking.test.ts interview-engine/interview/reasoning/evaluate.server.test.ts
+bun test interview-engine/judging/judgeConversationSilence.server.test.ts interview-engine/interview/session/session.server.test.ts interview-engine/interview/reasoning/ranking.server.test.ts interview-engine/interview/reasoning/ranking.test.ts interview-engine/interview/reasoning/evaluate.server.test.ts
 ```
 
 The paired runner now exists at `ai/decisions/run.ts`, with report generation at `ai/decisions/report.ts`. See the measured-results document for current commands. Existing paid scripts such as `ai/interview/run.ts`, `ai/simulator/run.ts`, and `scripts/interview-silence-probe.ts` remain Jev-only; their historical results were preserved.

@@ -1,6 +1,6 @@
 import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
-import type { SessionServices } from '../../../interview-engine/interview/interview.server';
-import { interviewerBrief } from '../../../interview-engine/interview/voice/interviewerBrief.server';
+import type { SessionServices } from '../../../interview-engine/session/sessionCoordinator.server';
+import { interviewerBrief } from '../../../interview-engine/voice/interviewerBrief.server';
 import { unpaidProviders, testFoundry } from '../../../interview-engine/providers/testFoundry.server';
 import { gptLiveProvider } from '../../../interview-engine/providers/gptLive.server';
 import type { VoiceHandlers, WebSocketLike } from '../../../interview-engine/providers/voice.server';

@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
-import type { InterviewArchiveRow } from '../../../interview-engine/interview/seams.server';
+import type { InterviewArchiveRow } from '../../../interview-engine/seams.server';
 import { spec } from '../../../interviews/project-closeout/spec';
 import { spec as sales } from '../../../interviews/sales-win-loss/spec';
 import { archiveProvenance, d1Archive } from './archiveD1.server';

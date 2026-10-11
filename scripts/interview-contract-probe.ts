@@ -3,8 +3,8 @@
  * Writes only synthetic evidence under output/interview-contract-probe/.
  */
 import { foundryConfig } from '../ai/foundry.server';
-import { resolveInterview } from '../interview-engine/interview/definition.server';
-import { judgeTopicCoverage } from '../interview-engine/interview/judging/judgeTopicCoverage.server';
+import { resolveInterview } from '../interview-engine/definition.server';
+import { judgeTopicCoverage } from '../interview-engine/judging/judgeTopicCoverage.server';
 import { writeNarrative } from '../app/reports/writeNarrative.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';

@@ -1,4 +1,4 @@
-import { inlineBackground } from '../interview-engine/interview/adapters/memory.server.ts';
+import { inlineBackground } from '../interview-engine/adapters/memory.server.ts';
 import { archivedTranscriptSchema } from '../core/interview-transcript.ts';
 import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
@@ -6,8 +6,8 @@ import { foundryProviders, modelName } from '../interview-engine/providers/provi
 import { createHash } from 'node:crypto';
 import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
-import { evaluateTurn } from '../interview-engine/interview/judging/judgeConversationTurn.server.ts';
-import { lookupInterviewBackground } from '../interview-engine/interview/reasoning/backgroundResearch.server.ts';
+import { evaluateTurn } from '../interview-engine/judging/judgeConversationTurn.server.ts';
+import { lookupInterviewBackground } from '../interview-engine/reasoning/backgroundResearch.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateEnding, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
@@ -16,11 +16,11 @@ import { generateMap, settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
-import { NOTE_HEADERS } from '../interview-engine/interview/reasoning/interviewerNotes.ts';
+import { NOTE_HEADERS } from '../interview-engine/reasoning/interviewerNotes.ts';
 import { interviewTurnGaps } from '../core/interview-timeline.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
-import { InterviewProducer } from '../interview-engine/interview/reasoning/interviewProducer.server.ts';
+import { InterviewProducer } from '../interview-engine/reasoning/interviewProducer.server.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
 // real GPT-Live supplies the client. In interviews the producer sends Sam its thread and map

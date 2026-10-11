@@ -12,7 +12,7 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Checkpoint fencing**: how the engine keeps one writer per attempt. A store whose owner has been superseded (on a store with segments, when a newer owner has claimed the next one) throws `FencedError` from `save`, `wake` or `clear`; the coordinator then stops, closes its provider socket and never writes again. On Cloudflare a Durable Object owns its attempt, so nothing is ever fenced; the memory store fences by segment, as a database-backed store would.
 
-**Seams**: the three things a host implements over its platform, in `interview/seams.server.ts`: `SessionStore` (lease, checkpoint, wake hint, clear), `Background` (work that outlives a reply) and `Archive` (archive row upserts). Everything else the engine needs arrives as providers.
+**Seams**: the three things a host implements over its platform, in `seams.server.ts`: `SessionStore` (lease, checkpoint, wake hint, clear), `Background` (work that outlives a reply) and `Archive` (archive row upserts). Everything else the engine needs arrives as providers.
 
 **Archive row**: the attempt's record for later reading: transcript, snapshot, conversation map, producer log and prompt versions. Written through `Archive` as a partial row while live (best effort) and a final row at the end (retried from the terminal checkpoint until acknowledged); each write is an upsert by attempt id, and a partial never replaces a final.
 
@@ -32,9 +32,9 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Accepted definition**: `InterviewPlan`, `InterviewConfig`, and optional `InterviewContext`. Context is explicit background, not participant evidence. The engine parses and copies these values and compiles its internal brief, framing and judging criteria.
 
-**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/judging/topicCoverage.prompt.ts`).
+**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `judging/topicCoverage.prompt.ts`).
 
-**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `interview/voice/interviewerBrief.server.ts`).
+**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `voice/interviewerBrief.server.ts`).
 
 **Framing**: what kind of interview a spec is, in the words Sol's map and Jev's grade use (`InterviewFraming`): the occasion, the name for one topic, the purpose and setting that open Sol's seed, the thread Sol keeps open by default, what the spec's terms mean, and whose words count toward a topic.
 
@@ -102,3 +102,5 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 **Topic**: one recursive node with `id`, `label`, `learn`, optional `appliesWhen` and optional child `topics`. Only leaves are assessed. Parent learning intent scopes children, and parent conditions apply to descendants.
 
 **Applicability**: whether a conditional leaf applies to this participant, based on participant evidence. `unknown` differs from `not-applicable`, coverage depth, and a participant’s refusal or uncertainty.
+
+**Session persistence**: `session/sessionPersistence.server.ts` wraps the host store, orders checkpoint saves and removal, remembers the next wake, and rejects writes after ownership is lost. The coordinator decides what to save and which lifecycle actions to take.

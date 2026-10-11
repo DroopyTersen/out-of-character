@@ -1,4 +1,4 @@
-import { resolveInterview } from '../../interview-engine/interview/definition.server';
+import { resolveInterview } from '../../interview-engine/definition.server';
 import { SESSION_IDLE_TIMEOUT_MS, SESSION_IDLE_WARNING_MS, SESSION_LIMIT_SECONDS, SESSION_MAX_RESUMES, SESSION_PAUSE_HOLD_MS } from '../../interview-engine/shared/timing';
 import { orientation, persona } from './brief.prompt';
 import { report } from './report';

@@ -1,4 +1,4 @@
-import { resolveInterview } from '../../interview-engine/interview/definition.server';
+import { resolveInterview } from '../../interview-engine/definition.server';
 import { orientation, persona } from './brief.prompt';
 import { report } from './report';
 import { SALES_WIN_LOSS_ID, SALES_WIN_LOSS_VERSION, salesInterviewerName, salesLimits, salesTopics, salesVoices } from './public';

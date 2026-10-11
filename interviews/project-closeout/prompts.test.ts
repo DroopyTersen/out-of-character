@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Experimental_EvaluationModel } from 'ai';
-import { judgeTopicCoverage } from '../../interview-engine/interview/judging/judgeTopicCoverage.server';
+import { judgeTopicCoverage } from '../../interview-engine/judging/judgeTopicCoverage.server';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { spec } from './spec';
 

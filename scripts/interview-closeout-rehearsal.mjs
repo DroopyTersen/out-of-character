@@ -1,4 +1,4 @@
-import { inlineBackground } from '../interview-engine/interview/adapters/memory.server.ts';
+import { inlineBackground } from '../interview-engine/adapters/memory.server.ts';
 import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
@@ -9,13 +9,13 @@ import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server
 import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
 import { generateMap } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
-import { InterviewProducer } from '../interview-engine/interview/reasoning/interviewProducer.server.ts';
-import { evaluateTurn } from '../interview-engine/interview/judging/judgeConversationTurn.server.ts';
-import { lookupInterviewBackground } from '../interview-engine/interview/reasoning/backgroundResearch.server.ts';
+import { InterviewProducer } from '../interview-engine/reasoning/interviewProducer.server.ts';
+import { evaluateTurn } from '../interview-engine/judging/judgeConversationTurn.server.ts';
+import { lookupInterviewBackground } from '../interview-engine/reasoning/backgroundResearch.server.ts';
 import { modelName } from '../interview-engine/providers/providers.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
-import { SessionTranscript } from '../interview-engine/interview/session/sessionTranscript.ts';
+import { SessionTranscript } from '../interview-engine/session/sessionTranscript.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
 // speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the

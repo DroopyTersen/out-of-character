@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { interviewDraftSchema, type InterviewPlan } from '../../../../interview-engine/shared/plan';
 import { reportFormatSchema, type ReportFormat } from '../../../reports/report.types';
-import type { ResolvedInterview } from '../../../../interview-engine/interview/definition.server';
+import type { ResolvedInterview } from '../../../../interview-engine/definition.server';
 
 export type DebriefDraft = Omit<InterviewPlan, 'id' | 'version'> & { report: ReportFormat };
 export type HostedSpec = ResolvedInterview & { report: ReportFormat };

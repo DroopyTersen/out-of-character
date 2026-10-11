@@ -12,7 +12,7 @@ import { mapInstructions, mapSeed, type MappedSpec } from './conversationMap.pro
 export { mapInstructions, mapSeed, type MappedSpec } from './conversationMap.prompt';
 type TranscriptEntry = Passage;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v18';
+export const MAP_PROMPT_VERSION = 'sol-map-v19';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;
@@ -123,8 +123,8 @@ export type MapTail = {
   reasons: string[];
   elapsedMs: number;
   lastPassageId: string | null;
-  /** Lookups requested so far, and how many remain. */
-  research?: { requests: { kind: ResearchRequest['kind']; name: string; clue: string | null; status: string }[]; left: number };
+  /** Existing requests let Sol reuse public background without repeating searches. */
+  research?: { requests: { kind: ResearchRequest['kind']; name: string; clue: string | null; status: string }[] };
 };
 
 /** The semantic coverage visible to the map; probability and evidence changes do not alter it. */
@@ -139,7 +139,7 @@ export function renderMapTail(spec: MappedSpec, previous: ConversationMap, tail:
     `PREVIOUS MAP${first ? ' (empty: this is your first call)' : ''}\n${renderMapForSol(previous)}`,
     `COVERAGE (Jev's readings; fallible)\n${renderMapCoverage(spec, tail.coverage)}`,
     ...(tail.signals?.length ? [`THREAD SIGNALS (Jev, latest participant turn; fallible)\n${tail.signals.map(item => `- ${item.threadId}: ${item.state}`).join('\n')}`] : []),
-    ...(tail.research ? [`RESEARCH (${tail.research.left} lookup${tail.research.left === 1 ? '' : 's'} left)\n${tail.research.requests.map(item => `- ${item.kind} "${item.name}"${item.clue ? ` (clue: ${item.clue})` : ''}: ${item.status}`).join('\n') || '- none requested yet'}`] : []),
+    ...(tail.research ? [`RESEARCH\n${tail.research.requests.map(item => `- ${item.kind} "${item.name}"${item.clue ? ` (clue: ${item.clue})` : ''}: ${item.status}`).join('\n') || '- none requested yet'}`] : []),
     `WHY NOW\n${tail.reasons.map(reason => `- ${reason}`).join('\n') || '- scheduled'}`,
     `CLOCK\n${minutes(tail.elapsedMs)} minutes elapsed; last logged passage ${tail.lastPassageId ?? 'none'}.`,
     'Return your edits.',

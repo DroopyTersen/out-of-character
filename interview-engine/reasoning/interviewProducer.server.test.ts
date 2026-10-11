@@ -47,7 +47,7 @@ const mapped = (map: ConversationMap, research: ResearchRequest | null = null): 
 /** Jev read every open thread in its current wording; nothing is natural, answered or new unless a test says so. */
 function reading(input: Input<'evaluateTurn'>, over: Partial<TurnReading> = {}): Read {
   const keys = Object.fromEntries(input.map.threads.filter(item => item.status === 'open').map(item => [item.id, threadKey(item)]));
-  return { reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys, natural: Object.fromEntries(Object.keys(keys).map(id => [id, .5])), states: {}, novel: 0, ...over }, model: 'fixture', durationMs: 5, usage: jevUsage, answers: {} };
+  return { reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys, next: { choice: Object.keys(keys)[0] ? `thread:${Object.keys(keys)[0]}` : 'current', probabilities: Object.fromEntries(Object.keys(keys).map(id => [`thread:${id}`, .5])) }, states: {}, novel: 0, ...over }, model: 'fixture', durationMs: 5, usage: jevUsage, answers: {} };
 }
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
@@ -57,12 +57,13 @@ function deferred<T>() {
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setTimeout(done, 0)); };
 
 // Substitute only paid services: tests exercise real scheduling, ranking, validation, persistence and delivery.
-function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds }: { empty?: boolean; thresholds?: Partial<Options['thresholds']> } = {}) {
+function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds, research }: { empty?: boolean; thresholds?: Partial<Options['thresholds']>; research?: Options['research'] } = {}) {
   setSystemTime(epoch);
   let transcript: TranscriptEntry[] = empty ? [] : [
     { id: 'p1', speaker: 'interviewer', text: 'What did the team build?', startMs: 0, endMs: 1000 },
     { id: 'p2', speaker: 'participant', text: 'We integrated OpenStreetMap and Mapbox for the routing layer.', startMs: 1000, endMs: 4000 },
   ];
+  let revision = 0;
   let connected: boolean | 'throw' = true;
   let held = false;
   let coverage: InterviewObjectiveReading[] = [];
@@ -74,7 +75,7 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
     attemptId: 'attempt-1', startedAt: epoch,
     models: { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' }, thresholds: thresholds ?? {},
     notesHeld: () => held, pauses: () => pauses, waitUntil: work => background.track(work),
-    settled: () => transcript, coverage: () => coverage, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
+    settled: () => transcript, revision: () => revision, research, coverage: () => coverage, send: event => { if (connected === 'throw') throw new Error('socket closed'); if (!connected) return false; sent.push(event); return true; },
     services: {
       generateMap: async input => { calls.map.push(input); return overrides.generateMap ? overrides.generateMap(input) : mapped(input.previous); },
       evaluateTurn: async input => { calls.turn.push(input); return overrides.evaluateTurn ? overrides.evaluateTurn(input) : reading(input); },
@@ -88,11 +89,13 @@ function fixture(overrides: Partial<Services> = {}, { empty = false, thresholds 
     const entry: TranscriptEntry = { id: `p${transcript.length + 1}`, speaker, text, startMs: Date.now() - epoch, endMs: Date.now() - epoch + 1000 };
     const previous = transcript.at(-1)?.id ?? null;
     transcript = [...transcript, entry];
+    revision++;
     if (speaker === 'participant') producer.transcriptChanged(entry, previous);
     return entry;
   };
   const grow = (id: string, text: string) => {
     transcript = transcript.map(entry => entry.id === id ? { ...entry, text } : entry);
+    revision++;
     return transcript.find(entry => entry.id === id)!;
   };
   /** Sam starts speaking, as the live transcript reports each of Sam's deltas. */
@@ -379,7 +382,7 @@ test('only a changed lead, changed gap or unavailable alternative sends another 
   const maps = [mapWith([thread('t1'), thread('t2')]), mapWith([thread('t1', { unknown: 'who owned the release' }), thread('t2', { status: 'off', reason: 'They declined.' })])];
   const f = fixture({
     generateMap: async () => mapped(maps[Math.min(f.calls.map.length - 1, 1)]!),
-    evaluateTurn: async input => reading(input, { focus: 't1', natural: { t1: .8, t2: .6 } }),
+    evaluateTurn: async input => reading(input, { focus: 't1', next: { choice: 'thread:t1', probabilities: { current: .1, 'thread:t1': .8, 'thread:t2': .1 } } }),
   });
   await f.step(60_000); await f.step(60_500);
   await f.turn(65_000); await f.turn(70_000);
@@ -404,7 +407,7 @@ test('map changes and withdrawals reach Sam without a second spacing timer', asy
 test('rejected and unsent notes retry, receipts carry timing, and rejecting an obsolete note does not resend it', async () => {
   const f = fixture({
     generateMap: async () => mapped(mapWith([thread('t1'), thread('t2')])),
-    evaluateTurn: async input => reading(input, { natural: input.transcript.at(-1)!.id === 'p2' ? { t1: .9, t2: .2 } : { t1: .2, t2: .9 } }),
+    evaluateTurn: async input => reading(input, { next: { choice: input.transcript.at(-1)!.id === 'p2' ? 'thread:t1' : 'thread:t2', probabilities: { current: .1, 'thread:t1': .45, 'thread:t2': .45 } } }),
   });
   await f.step(60_000); await f.step(60_500);
   const first = f.of('note').find(note => note.kind === 'list')!;
@@ -474,19 +477,19 @@ test('all paid producer calls share a cap that survives a restart', async () => 
   expect(next.calls.turn).toHaveLength(0);
 });
 
-test('map, turn and research calls consume the same budget after restore', async () => {
+test('research does not consume the map and turn allowance, including after restore', async () => {
   const f = fixture({ generateMap: async () => mapped(mapWith([thread('t1')]), request('OpenStreetMap')) });
   await f.step(60_000); await f.background.settle();
   expect(f.calls.map).toHaveLength(1);
   expect(f.calls.lookup).toHaveLength(1);
   expect(f.calls.turn).toHaveLength(1);
   // Freeze elapsed time so only distinct participant answers request more work.
-  for (let i = 0; i < 397; i++) {
+  for (let i = 0; i < 398; i++) {
     f.say('interviewer', 'What happened next?'); f.say('participant', `The team completed part ${i}.`);
     f.producer.tick(epoch + 60_000); await f.background.settle();
   }
-  expect(f.calls.turn).toHaveLength(398);
-  expect(f.calls.map.length + f.calls.lookup.length + f.calls.turn.length).toBe(400);
+  expect(f.calls.turn).toHaveLength(399);
+  expect(f.calls.map.length + f.calls.turn.length).toBe(400);
   const next = fixture(); next.producer.restore(structuredClone(f.producer.checkpoint())); next.producer.resume(epoch + 60_000);
   await next.step(120_000);
   expect(next.calls).toEqual({ map: [], turn: [], lookup: [] });
@@ -507,7 +510,7 @@ test('a late Jev result is dropped, including one for a map that Sol has replace
   const slow = deferred<Read>();
   const f = fixture({
     generateMap: async () => mapped(mapWith([thread('t1')])),
-    evaluateTurn: async input => f.calls.turn.length === 2 ? slow.promise : reading(input, { natural: { t1: .9 } }),
+    evaluateTurn: async input => f.calls.turn.length === 2 ? slow.promise : reading(input, { next: { choice: 'thread:t1', probabilities: { current: .1, 'thread:t1': .9 } } }),
   });
   await f.step(0);
   await f.turn(59_000);
@@ -525,7 +528,7 @@ test('a late Jev result is dropped, including one for a map that Sol has replace
   expect(timeout.calls.map).toHaveLength(0);
 });
 
-test('research accepts only a participant-named target, serializes, deduplicates and retries failed calls within the cap', async () => {
+test('research accepts only a participant-named target, serializes, deduplicates and allows a fourth distinct lookup', async () => {
   const requests = [request('Invented company'), request('OpenStreetMap'), request('openstreetmap'), request('Mapbox'), request('OpenStreetMap'), request('Mapbox'), request('Mapbox', 'new clue')];
   const pending: ReturnType<typeof deferred<Lookup>>[] = [];
   const f = fixture({
@@ -544,10 +547,11 @@ test('research accepts only a participant-named target, serializes, deduplicates
   await f.turn(105_000); await f.step(120_000);
   pending[2]!.resolve({ status: 'found', facts, retrievedAt: Date.now(), queries: [] }); await flush();
   await f.turn(125_000); await f.step(140_000);
-  expect(f.of('research').map(record => record.outcome)).toEqual(['invalid', 'error', 'duplicate', 'busy', 'unresolved', 'found', 'budget']);
-  expect(f.calls.lookup.map(call => call.target.name)).toEqual(['OpenStreetMap', 'OpenStreetMap', 'Mapbox']);
+  expect(f.of('research').map(record => record.outcome)).toEqual(['invalid', 'error', 'duplicate', 'busy', 'unresolved', 'found', 'pending']);
+  expect(f.calls.lookup.map(call => call.target.name)).toEqual(['OpenStreetMap', 'OpenStreetMap', 'Mapbox', 'Mapbox']);
   expect(f.of('research').filter(record => record.outcome !== 'invalid').map(record => record.passageIds)).toEqual(Array.from({ length: 6 }, () => ['p2']));
-  expect(f.producer.summary().research).toBe(3);
+  expect(f.producer.summary().research).toBe(4);
+  pending[3]!.resolve({ status: 'found', facts, retrievedAt: Date.now(), queries: [] }); await f.background.settle();
 });
 
 test('a completed lookup survives restart, wakes Sol, and becomes public only after a cited map note is accepted', async () => {
@@ -731,4 +735,47 @@ test('restart retains consumed coverage and notices a newer grade without new sp
   next.setCoverage(['explored']); await next.step(81_000);
   expect(next.calls.map).toHaveLength(1);
   expect(next.calls.map[0]!.tail.coverage[0]!.level).toBe('explored');
+});
+
+
+test('kickoff researches the supplied identity without waiting for speech and reuses the result after restore', async () => {
+  const pending = deferred<Lookup>();
+  const f = fixture({ lookupInterviewBackground: () => pending.promise }, { empty: true, research: { organization: 'Cutter Associates', subject: 'Member-facing content search' } });
+  await f.step(0);
+  expect(f.calls.lookup).toHaveLength(1);
+  expect(f.calls.lookup[0]).toMatchObject({ target: { kind: 'organization', name: 'Cutter Associates' }, subject: 'Member-facing content search' });
+  expect(f.calls.map).toHaveLength(0);
+  pending.resolve({ status: 'found', facts, retrievedAt: epoch + 1000, queries: ['Cutter Associates research'] });
+  await f.background.settle(); await f.step(1000);
+  expect(f.calls.map).toHaveLength(1);
+  expect(f.calls.map[0]!.lookups).toEqual(['L1']);
+  const next = fixture({}, { empty: true, research: { organization: 'Cutter Associates' } });
+  next.producer.restore(structuredClone(f.producer.checkpoint())); next.producer.resume();
+  await next.step(2000);
+  expect(next.calls.lookup).toHaveLength(0);
+});
+
+test('a new answer invalidates an in-flight topic suggestion without holding the voice connection', async () => {
+  const slow = deferred<Read>();
+  const f = fixture({ generateMap: async () => mapped(mapWith([thread('t1')])), evaluateTurn: async input => f.calls.turn.length === 2 ? slow.promise : reading(input) });
+  await f.step(60_000);
+  await f.step(60_500);
+  f.grow('p2', 'Actually, let me finish the ingestion story first.');
+  slow.resolve(reading(f.calls.turn[1]!, { next: { choice: 'thread:t1', probabilities: { 'thread:t1': 1 } } })); await flush();
+  expect(f.notes('list')).toHaveLength(0);
+  expect(f.of('turn')[1]!.guidance).toBe('stale');
+});
+
+test.each(['sent', 'current'] as const)('a completed %s decision keeps its history through holds and later speech', async guidance => {
+  const f = fixture({ generateMap: async () => mapped(mapWith(guidance === 'sent' ? [thread('t1')] : [])) });
+  await f.step(60_000); await f.step(60_500);
+  const reading = f.of('turn').find(record => record.guidance === guidance)!;
+  expect(reading).toBeDefined();
+  const delivered = guidance === 'sent' ? 1 : 0;
+  expect(f.notes('list')).toHaveLength(delivered);
+  f.holdNotes(true); await f.step(60_600);
+  expect(reading.guidance).toBe(guidance);
+  f.holdNotes(false); f.sam('Tell me about that integration.'); await f.step(61_000);
+  expect(reading.guidance).toBe(guidance);
+  expect(f.notes('list')).toHaveLength(delivered);
 });

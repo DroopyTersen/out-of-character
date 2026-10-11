@@ -62,7 +62,7 @@ test('lookup sends only the public target and returns only provider-listed facts
     expect(String(url).split('?')[0]).toBe('https://fixture-foundry.openai.azure.com/openai/v1/responses');
     expect(new Headers(options.headers).get('api-key')).toBe('fixture-secret');
     body = JSON.parse(String(options.body));
-    return response([search, message({ facts: [
+    return response([search, message({ matchedIdentity: 'Acme Field Systems', facts: [
       { text: 'Acme operates distributed field sites.', title: 'About Acme', url: 'https://acme.example/about' },
       { text: 'A fabricated project claim.', title: 'Invented', url: 'https://bad.example/claim' },
     ], unresolved: null }, [citation('https://acme.example/about')])]);
@@ -87,10 +87,10 @@ test('uncited, non-HTTP and empty results are unresolved, with the provider reas
     [[{ text: 'Claim', title: 'Claim', url: 'javascript:alert(1)' }], [citation('javascript:alert(1)')]],
     [[], []],
   ] as const) {
-    const request = (async () => response([search, message({ facts, unresolved: null }, [...annotations])])) as unknown as typeof fetch;
+    const request = (async () => response([search, message({ matchedIdentity: 'Acme Field Systems', facts, unresolved: null }, [...annotations])])) as unknown as typeof fetch;
     expect(await lookup({ target, clue: null, ...input }, request)).toEqual({ status: 'unresolved', reason: 'No reliable cited public source matched.', queries: ['Acme Field Systems official operations'] });
   }
-  const ambiguous = (async () => response([search, message({ facts: [], unresolved: 'Several organizations share this name.' })])) as unknown as typeof fetch;
+  const ambiguous = (async () => response([search, message({ matchedIdentity: 'Acme Field Systems', facts: [], unresolved: 'Several organizations share this name.' })])) as unknown as typeof fetch;
   expect(await lookup({ target, clue: null, ...input }, ambiguous)).toMatchObject({ status: 'unresolved', reason: 'Several organizations share this name.' });
 });
 
@@ -99,7 +99,7 @@ test('a URL annotation can substantiate a fact when search action sources are ab
   const fact = { text: 'Acme operates field sites.', title: 'About Acme', url: 'https://acme.example/about' };
   const request = (async () => response([
     { ...search, action: { type: 'search', queries: ['Acme Field Systems'] } },
-    message({ facts: [fact], unresolved: null }, [citation(fact.url)]),
+    message({ matchedIdentity: 'Acme Field Systems', facts: [fact], unresolved: null }, [citation(fact.url)]),
   ])) as unknown as typeof fetch;
   expect(await lookup({ target, clue: null, ...input }, request)).toMatchObject({ status: 'found', facts: [fact] });
 });
@@ -109,4 +109,11 @@ test('provider failure makes one request', async () => {
   const request = (async () => { calls++; return Response.json({ error: { message: 'unavailable' } }, { status: 429 }); }) as unknown as typeof fetch;
   await expect(lookup({ target: { kind: 'term', name: 'Acme' }, clue: null, ...input }, request)).rejects.toThrow();
   expect(calls).toBe(1);
+});
+
+
+test('a cited but conflicting organization is not accepted as background', async () => {
+  const fact = { text: 'Another firm offers consulting.', title: 'About', url: 'https://acme.example/about' };
+  const request = (async () => response([search, message({ matchedIdentity: 'Acme Consortium', facts: [fact], unresolved: null }, [citation(fact.url)])])) as unknown as typeof fetch;
+  expect(await lookup({ target: { kind: 'organization', name: 'Acme Field Systems' }, clue: null, ...input }, request)).toMatchObject({ status: 'unresolved' });
 });

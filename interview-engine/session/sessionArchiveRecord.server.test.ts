@@ -64,6 +64,10 @@ test('prompt fingerprints are stable across captures and change with the accepte
   expect(last.provenance.actorDigest).toMatch(/^[0-9a-f]{12}$/);
   expect(last.provenance.actorDigest).toBe(first.provenance.actorDigest);
   expect(last.provenance.openingDigest).toBe(first.provenance.openingDigest);
+  expect(last.provenance.brief).toContain('Riley');
+  expect(last.provenance.opening).toContain('Riley');
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(last.provenance.brief));
+  expect(Buffer.from(hash).toString('hex').slice(0, 12)).toBe(last.provenance.actorDigest);
   input.spec.interviewer.persona = 'Keep each question short and direct.';
   const changed = await captureArchiveRecord(input);
   expect(changed.provenance.actorDigest).not.toBe(first.provenance.actorDigest);

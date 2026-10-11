@@ -1,3 +1,5 @@
+import type { PassageTiming } from './sessionTranscript';
+import type { MediaDiagnostics } from '../shared/mediaActivity';
 import type { InterviewDefinition } from '../definition.server';
 import type { FeedbackStatus, InterviewEvaluation, InterviewSnapshot, SessionPause } from '../shared/snapshot';
 import type { ProducerCheckpoint } from '../reasoning/interviewProducer.server';
@@ -19,6 +21,8 @@ export type Checkpoint = {
   savedAt: number; snapshot: SessionSnapshot & { feedbackStatus: FeedbackStatus; interview?: InterviewState }; reachedLive: boolean; epoch: number; resumes: number;
   segments: VoiceSegment[]; pauses: PauseRecord[]; grades: GradeRecord[]; gradeCalls: number;
   producer?: ProducerCheckpoint;
+  passageTimings?: PassageTiming[];
+  media?: MediaDiagnostics;
 };
 
 /** One entry per provider session, and each connection pause. Provider ids are never archived. */

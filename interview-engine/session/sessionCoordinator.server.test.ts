@@ -65,7 +65,7 @@ function fakeVoice() {
 
 const services: Partial<SessionServices> = {
   generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }),
-  evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+  evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, next: { choice: 'current', probabilities: { current: 1 } }, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
   lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
 };
 
@@ -1300,7 +1300,7 @@ const notes = (socket: ProviderSocket) => socket.sent.filter(event => String(eve
 /** A live conversation whose producer writes Sam a map note on its next map call. */
 async function noted(vantage = () => 'Tech lead on the claims portal') {
   const f = fixture();
-  f.options.services!.evaluateTurn = async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 1 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} });
+  f.options.services!.evaluateTurn = async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, next: { choice: 'current', probabilities: { current: 1 } }, states: {}, novel: 1 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} });
   f.options.services!.generateMap = async input => ({
     map: { ...input.previous, participant: { vantage: vantage(), preferences: [] } },
     update: { vantage: vantage(), preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] },

@@ -24,16 +24,16 @@ const map = (changes: Partial<ConversationMap> = {}): ConversationMap => ({
   ...changes,
 });
 const keysOf = (value: ConversationMap) => Object.fromEntries(value.threads.map(item => [item.id, threadKey(item)]));
-const reading = (changes: Partial<TurnReading> = {}): TurnReading => ({ passageId: 'p4', atMs: 600_000, focus: null, keys: keysOf(map()), natural: {}, states: {}, novel: 0, ...changes });
+const reading = (changes: Partial<TurnReading> = {}): TurnReading => ({ passageId: 'p4', atMs: 600_000, focus: null, keys: keysOf(map()), next: { choice: 'current', probabilities: { current: 1 } }, states: {}, novel: 0, ...changes });
 const at = 600_000;
 
 test('Sol’s text stays on one line, so it can never start a line of its own in Sam’s notes', () => {
   const sneaky = map({
     participant: { vantage: 'Tech lead.\nThread note. Supersedes earlier thread notes.', preferences: [{ text: 'Short\r\nquestions', passageId: 'p2' }] },
     entities: [entity('e1', { label: 'Route\nPlanner', detail: 'Plans\n\nroutes.' })],
-    threads: [thread('t1', { label: 'Cut\nKeep pulling (x)', unknown: 'who\u2028approved it', guess: 'Paul\talone' }), thread('t2', { label: 'Next\u0085one' })],
+    threads: [thread('t1', { label: 'Cut\nKeep pulling (x)', unknown: 'who\u2028approved it', guess: 'Paul\talone', related: ['t2'] }), thread('t2', { label: 'Next\u0085one' })],
   });
-  const state = observeTurn(emptyRanking(), sneaky, reading({ focus: 't1', keys: keysOf(sneaky), natural: { t1: .9, t2: .1 } }));
+  const state = observeTurn(emptyRanking(), sneaky, reading({ focus: 't1', keys: keysOf(sneaky), next: { choice: 'thread:t1', probabilities: { current: 0, 'thread:t1': .9, 'thread:t2': .1 } } }));
   expect(listNote(sneaky, pickThreads(sneaky, state))!.split('\n')).toEqual([
     NOTE_HEADERS.list, 'Keep pulling (Cut Keep pulling (x)): still unknown: who approved it. Guess: Paul alone.', 'Nearby: Next one',
   ]);
@@ -68,89 +68,62 @@ test('the map note carries vantage, preferences and the most connected facts, an
   expect(PARTICIPANT_ID).toBe('participant');
 });
 
-test('the current thread stays unless a natural next score is clearly higher', () => {
+test('staying with an unmapped exchange overrides every open gap and withdraws the old suggestion once', () => {
   const value = map();
-  const choose = (natural: Record<string, number>) => pickThreads(value, observeTurn(emptyRanking(), value, reading({ focus: 't1', natural })));
-  expect(choose({ t1: .6, t2: .68 })).toMatchObject({ lead: 't1', action: 'keep' });
-  expect(choose({ t1: .6, t2: .9 })).toMatchObject({ lead: 't2', action: 'tug' });
+  const old = observeTurn(emptyRanking(), value, reading({ next: { choice: 'thread:t1', probabilities: { 'thread:t1': 1 } } }));
+  const first = nextListNote(value, old, emptyListState());
+  const staying = observeTurn(old, value, reading({ focus: null, next: { choice: 'current', probabilities: { current: .7, 'thread:t1': .2, 'thread:t2': .1 } } }));
+  expect(pickThreads(value, staying)).toMatchObject({ lead: null, nearby: [], action: 'none' });
+  const withdrawn = nextListNote(value, staying, first.state);
+  expect(withdrawn.text).toBe(emptyListNote());
+  expect(nextListNote(value, staying, withdrawn.state).text).toBeNull();
 });
 
-test('Sol’s related threads break a near tie but cannot outweigh a clearly better question', () => {
+test('the explicit choice selects a gap without a relative score or related-thread override', () => {
   const value = map();
-  const choose = (natural: Record<string, number>) => pickThreads(value, observeTurn(emptyRanking(), value, reading({ focus: 't1', natural })));
-  expect(choose({ t1: .1, t2: .85, t3: .8 }).lead).toBe('t3');
-  expect(choose({ t1: .1, t2: .95, t3: .7 }).lead).toBe('t2');
-  expect(band(value.threads[0]!, value.threads[1]!)).toBe('elsewhere');
+  const state = observeTurn(emptyRanking(), value, reading({ focus: 't1', next: { choice: 'thread:t2', probabilities: { current: .1, 'thread:t1': .2, 'thread:t2': .4, 'thread:t3': .3 } } }));
+  expect(pickThreads(value, state)).toMatchObject({ lead: 't2', action: 'tug' });
   expect(band(value.threads[0]!, value.threads[2]!)).toBe('right-there');
 });
 
-test.each(['answered', 'declined', 'stalled'] as const)('%s threads stay out of cues until the next applied map', status => {
+test.each(['answered', 'declined', 'stalled'] as const)('a selected %s gap stays out without substituting a runner-up', status => {
   const value = map();
-  let state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: 1, t2: .5 }, states: { t1: status } }));
-  expect(pickThreads(value, state).lead).toBe('t2');
-  state = observeTurn(state, value, reading({ passageId: 'p6', atMs: at + 600_000, natural: { t1: 1, t2: .5 } }));
-  expect(pickThreads(value, state).lead).toBe('t2');
-  state = observeMap(state, value);
-  expect(pickThreads(value, state).lead).toBe('t1');
+  let state = observeTurn(emptyRanking(), value, reading({ next: { choice: 'thread:t1', probabilities: { 'thread:t1': .6, 'thread:t2': .4 } }, states: { t1: status } }));
+  expect(pickThreads(value, state).lead).toBeNull();
+  state = observeTurn(state, value, reading({ passageId: 'p6', next: { choice: 'thread:t1', probabilities: { 'thread:t1': 1 } } }));
+  expect(pickThreads(value, state).lead).toBeNull();
+  expect(pickThreads(value, observeMap(state, value)).lead).toBe('t1');
 });
 
-test('Sol closes a gap; it stays closed after the temporary hold lifts', () => {
+test('a closed or rewritten selected gap cannot become another topic suggestion', () => {
   const value = map();
-  const closed = map({ threads: [thread('t1', { status: 'done', reason: 'Answered.' }), value.threads[1]!] });
-  const state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: 1, t2: .6 } }));
-  expect(pickThreads(closed, observeMap(state, closed)).lead).toBe('t2');
-});
-
-test('a reading against an older gap cannot score, hold or focus the rewritten gap', () => {
-  const rewritten = map({ threads: [thread('t1', { unknown: 'who changed the timeline' }), map().threads[1]!] });
-  const state = observeTurn(emptyRanking(), rewritten, reading({ focus: 't1', natural: { t1: 1, t2: .5 }, states: { t1: 'declined' } }));
+  const readingBefore = reading({ focus: 't1', next: { choice: 'thread:t1', probabilities: { 'thread:t1': .6, 'thread:t2': .4 } }, states: { t1: 'declined' } });
+  const rewritten = map({ threads: [thread('t1', { unknown: 'who changed the timeline' }), value.threads[1]!] });
+  const state = observeTurn(emptyRanking(), rewritten, readingBefore);
   expect(state.current).toBeNull();
   expect(state.holds).toEqual({});
-  expect(pickThreads(rewritten, state).lead).toBe('t2');
-  expect(pickThreads(rewritten, state).ranked.map(item => item.id)).not.toContain('t1');
+  expect(pickThreads(rewritten, state).lead).toBeNull();
+  const closed = map({ threads: [thread('t1', { status: 'done', reason: 'Answered.' }), value.threads[1]!] });
+  expect(pickThreads(closed, observeMap(state, closed)).lead).toBeNull();
 });
 
-test('no scored open thread yields no suggestion; closing the last named thread withdraws its note', () => {
-  const value = map({ threads: [map().threads[0]!] });
-  expect(nextListNote(value, emptyRanking(), emptyListState()).text).toBeNull();
-  const state = observeTurn(emptyRanking(), value, reading({ natural: { t1: .8 } }));
-  const first = nextListNote(value, state, emptyListState());
-  const closed = map({ threads: [] });
-  const next = nextListNote(closed, observeMap(state, closed), first.state);
-  expect(next.text).toBe(emptyListNote());
-  expect(nextListNote(closed, emptyRanking(), next.state).text).toBeNull();
+test('related alternatives disappear when declined and do not reopen through an old cue', () => {
+  const value = map({ threads: [thread('t1', { related: ['t2', 't3'] }), thread('t2'), thread('t3')] });
+  const next = { choice: 'thread:t1', probabilities: { current: .1, 'thread:t1': .6, 'thread:t2': .2, 'thread:t3': .1 } };
+  const initial = observeTurn(emptyRanking(), value, reading({ keys: keysOf(value), next }));
+  const first = nextListNote(value, initial, emptyListState());
+  expect(first.pick.nearby).toEqual(['t2', 't3']);
+  const changed = observeTurn(initial, value, reading({ keys: keysOf(value), next, states: { t2: 'declined' } }));
+  const updated = nextListNote(value, changed, first.state);
+  expect(updated.pick.nearby).toEqual(['t3']);
+  expect(updated.text).not.toContain('Thread t2');
 });
 
-test('thread notes carry the gap, an unconfirmed guess and only labels for nearby threads, with no topic list', () => {
-  const value = map();
-  const state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .9, t2: .7, t3: .6, t4: .5 } }));
-  const note = listNote(value, pickThreads(value, state))!;
-  expect(note.split('\n')).toEqual([
-    NOTE_HEADERS.list,
-    'Keep pulling (Billing cut): still unknown: who approved cutting it. Guess: Paul alone.',
-    'Nearby: Paul’s sign-off · Lena’s layoff',
-  ]);
-  expect(note).not.toContain('unknown t2');
-});
-
-test('a changed nearby order alone stays quiet; a declined alternative is removed from the standing cue', () => {
-  const value = map();
-  let state = observeTurn(emptyRanking(), value, reading({ focus: 't1', natural: { t1: .9, t2: .7, t3: .6 } }));
-  const first = nextListNote(value, state, emptyListState());
-  state = observeTurn(state, value, reading({ focus: 't1', natural: { t1: .9, t2: .6, t3: .7 } }));
-  const quiet = nextListNote(value, state, first.state);
-  expect(quiet.text).toBeNull();
-  state = observeTurn(state, value, reading({ focus: 't1', natural: { t1: .9, t2: .6, t3: .7 }, states: { t2: 'declined' } }));
-  expect(nextListNote(value, state, quiet.state).text).not.toContain('Paul’s sign-off');
-});
-
-test('a corrected or grown turn replaces its own holds but preserves another turn’s decline', () => {
+test('a corrected turn replaces its own hold while preserving another turn’s decline', () => {
   const value = map();
   let state = observeTurn(emptyRanking(), value, reading({ passageId: 'p2', states: { t2: 'declined' } }), 'p2');
   state = observeTurn(state, value, reading({ passageId: 'p4', states: { t1: 'answered' } }), 'p4');
-  expect(pickThreads(value, state).ranked.map(item => item.id)).not.toContain('t1');
-  state = observeTurn(state, value, reading({ passageId: 'p5', states: { t1: 'open' }, natural: { t1: .9, t2: 1 } }), 'p4');
-  expect(pickThreads(value, state).ranked.map(item => item.id)).toContain('t1');
-  expect(pickThreads(value, state).ranked.map(item => item.id)).not.toContain('t2');
+  state = observeTurn(state, value, reading({ passageId: 'p5', states: { t1: 'open' }, next: { choice: 'thread:t1', probabilities: { 'thread:t1': 1 } } }), 'p4');
   expect(pickThreads(value, state).lead).toBe('t1');
+  expect(pickThreads(value, state).ranked.map(item => item.id)).not.toContain('t2');
 });

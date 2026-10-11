@@ -34,6 +34,8 @@ export type VoiceConnection = {
 
 /** The voice model: one provider session per media connection, steered over its control connection. */
 export type VoiceProvider = {
+  /** Exact deployment identity when the adapter can provide it. */
+  modelId?: string;
   create(input: { sdp: string; voice: string; instructions: string }): Promise<{ id: string; sdp: string }>;
   attach(id: string, handlers?: VoiceHandlers): Promise<VoiceConnection>;
   /** Closes a provider session by id. A session that no longer exists is closed. */

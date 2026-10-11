@@ -51,7 +51,7 @@ beforeAll(() => {
     if (action === 'poll') server.polls.push(sent);
     if (server.offline) throw new TypeError('Failed to fetch');
     const { status = 200, body } = server.reply(action);
-    return { ok: status < 400, status, json: async () => body };
+    return Response.json(body, { status, headers: { 'X-Interview-Server-Time': String(Date.now()) } });
   }) as unknown as typeof fetch;
 });
 afterAll(() => {

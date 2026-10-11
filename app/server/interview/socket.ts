@@ -6,7 +6,7 @@ export type SocketContext = { attemptId: string; origin: string; ip: string | nu
 /** The host's HTTP handler for `/api/interview/...`, which every socket command goes through. */
 export type SocketRoute = (request: Request) => Promise<Response | null>;
 
-const reply = (value: SocketReply) => JSON.stringify(value);
+const reply = (value: SocketReply) => JSON.stringify({ ...value, serverAt: Date.now() });
 
 /**
  * Answers one socket message by handing its command to the HTTP route as the request the poll transport would have

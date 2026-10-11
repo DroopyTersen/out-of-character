@@ -3,7 +3,7 @@ import type { ModelUsage } from '../providers/structured.server';
 import type { CoverageLevel, InterviewBackground, InterviewObjectiveReading as Reading } from '../shared/snapshot';
 import type { Speaker } from '../shared/transcript';
 import type { MapDefect, MapUpdate } from './conversationMap';
-import type { Band, Pick, ThreadState } from './threadSelection';
+import type { Band, NextThread, Pick, ThreadState } from './threadSelection';
 
 type InterviewObjectiveReading = Reading<Speaker>;
 
@@ -11,14 +11,14 @@ type InterviewObjectiveReading = Reading<Speaker>;
  * Private producer state for the interview: Sol keeps the conversation map, Jev reads each settled participant turn
  * against its threads, and code picks threads and sends Sam two fixed-template notes. Luna's research feeds the map.
  */
-export const PRODUCER_VERSION = 'interview-producer-v28';
+export const PRODUCER_VERSION = 'interview-producer-v29';
 export const PRODUCER_LIMITS = {
-  /** Shared cap for paid producer calls, including failures and interrupted calls. */
+  /** Cap for map and turn calls, including failures and interrupted calls. Research has no count quota. */
   calls: 400,
   /** One Sol call at a time; early wakes are spaced start to start. */
   mapFloor: 20_000, mapTimer: 60_000, mapTimeout: 50_000,
   turnTimeout: 3000, lookupTimeout: 90_000,
-  research: 3, notes: 100,
+  notes: 100,
 };
 
 export const RESEARCH_KINDS = ['organization', 'product', 'term'] as const satisfies readonly InterviewBackground['target']['kind'][];
@@ -46,11 +46,13 @@ export type MapRecord = {
 export type TurnRecord = {
   source: 'turn'; id: string; passageId: string; mapId: string | null; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: ModelUsage;
-  reading?: { atMs: number; focus: string | null; novel: number; feedback?: number; natural: Record<string, number>; states: Record<string, ThreadState> };
+  revision?: number;
+  guidance?: 'sent' | 'current' | 'unchanged' | 'held' | 'stale';
+  reading?: { atMs: number; focus: string | null; novel: number; feedback?: number; next?: NextThread; natural?: Record<string, number>; states: Record<string, ThreadState> };
   pick?: Omit<Pick, 'ranked'> & { ranked: [id: string, score: number, band: Band][] };
   failure?: CallFailure;
 };
-/** Historical trait readings from interviews before v26; new runs use only natural-next scores. */
+/** Historical trait readings from interviews before v26; new runs use an explicit next choice. */
 export type TraitRecord = {
   source: 'traits'; id: string; mapId: string | null; threadIds: string[]; startedAt: number; completedAt?: number;
   outcome: 'pending' | 'read' | 'timeout' | 'error' | 'aborted'; durationMs?: number; usage?: ModelUsage;
@@ -65,7 +67,9 @@ export type NoteRecord = {
 };
 /** Sol requests a lookup on its map output; the result reaches Sol as a log event and Sam only through Sol's map. */
 export type ResearchRecord = {
-  source: 'research'; id: string; mapId: string; request: ResearchRequest; model: string;
+  source: 'research'; id: string; mapId: string | null; request: ResearchRequest; model: string;
+  origin?: 'host-context' | 'participant';
+  matchedIdentity?: string;
   /** Participant passages that code verified named the target. */
   passageIds?: string[];
   requestedAt: number; lookupAt?: number; completedAt?: number; loggedAt?: number;

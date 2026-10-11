@@ -1,3 +1,5 @@
+import type { PassageTiming } from './session/sessionTranscript';
+import type { MediaDiagnostics } from './shared/mediaActivity';
 import type { Passage } from './shared/transcript';
 import type { ProducerLogRecord, ProducerSummary } from './reasoning/conversationRecords';
 import type { Checkpoint, ConnectionLog, Lease} from './session/sessionCheckpoint';
@@ -56,6 +58,12 @@ export type InterviewArchiveRow = {
   provenance: {
     /** The voice provider's voice name. */
     voice: string;
+    /** Private diagnostic evidence, absent in historical archives. */
+    brief?: string;
+    opening?: string;
+    models?: { voice: string | null; agent: string; research: string; judge: string };
+    passageTimings?: PassageTiming[];
+    media?: MediaDiagnostics;
     rubricVersion: string;
     /** The first 12 hex digits of the SHA-256 of the interviewer's brief, and of the opening instruction. */
     actorDigest: string;

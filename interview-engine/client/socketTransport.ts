@@ -11,7 +11,7 @@ export type ClientSocket = {
 };
 export type SocketTransportOptions = { open?: (url: string) => ClientSocket };
 
-type Pending = { resolve: (value: unknown) => void; reject: (error: unknown) => void };
+type Pending = { resolve: (value: unknown, serverAt?: number) => void; reject: (error: unknown) => void };
 type Connection = { attempt: Attempt; socket: ClientSocket; opened: Promise<void>; pending: Map<number, Pending> };
 
 const OPEN = 1;
@@ -53,7 +53,7 @@ export function socketTransport(baseUrl: string, options: SocketTransportOptions
       if (!waiting) return;
       pending.delete(reply.id!);
       const body = reply.body as { error?: string } | null;
-      if (reply.status >= 200 && reply.status < 300 && body) waiting.resolve(body);
+      if (reply.status >= 200 && reply.status < 300 && body) waiting.resolve(body, reply.serverAt);
       else waiting.reject(new SessionRequestError(body?.error || 'The interview connection is unavailable.', reply.status));
     });
     socket.addEventListener('close', () => {
@@ -71,12 +71,13 @@ export function socketTransport(baseUrl: string, options: SocketTransportOptions
       signal?.throwIfAborted();
       const current = connect(attempt);
       const id = next++;
+      const sentAtMs = performance.now();
       return new Promise((resolve, reject) => {
         const settle = (finish: () => void) => { clearTimeout(timer); signal?.removeEventListener('abort', abort); current.pending.delete(id); finish(); };
         const timer = setTimeout(() => settle(() => reject(new SessionUnanswered('The server took too long to answer.'))), timeoutMs);
         const abort = () => settle(() => reject(signal!.reason));
         signal?.addEventListener('abort', abort, { once: true });
-        current.pending.set(id, { resolve: value => settle(() => resolve(value)), reject: error => settle(() => reject(error)) });
+        current.pending.set(id, { resolve: (value, serverAt) => settle(() => { if (serverAt != null) requestOptions.onServerTime?.(sentAtMs, performance.now(), serverAt); resolve(value); }), reject: error => settle(() => reject(error)) });
         current.opened.then(() => {
           if (!current.pending.has(id)) return;
           const message: SocketRequest = { id, action, capability: attempt.capability, ...(body ? { body } : {}) };

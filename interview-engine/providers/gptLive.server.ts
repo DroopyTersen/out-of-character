@@ -122,6 +122,7 @@ export function gptLiveProvider<Socket extends WebSocketLike = WebSocketLike>(co
   }
 
   return {
+    modelId: config.liveModel,
     async create({ sdp, voice, instructions }) {
       const response = await request(foundryUrl(config, '/live/sessions'), {
         method: 'POST', headers: { 'api-key': config.apiKey, 'Content-Type': 'application/json' },

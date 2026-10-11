@@ -109,7 +109,8 @@ export class BrowserMedia {
     clearInterval(this.meterTimer);
     if (this.disposed || this.segment.signal.aborted || !this.pc) return;
     this.meterTimer = setInterval(() => {
-      const input = readAudio(this.inputMeter), output = readAudio(this.outputMeter);
+      const running = this.context?.state === 'running';
+      const input = readAudio(running && !this.muted ? this.inputMeter : undefined), output = readAudio(running && !this.audio.paused ? this.outputMeter : undefined);
       const audible = this.context?.state === 'running' && output.level > .03 && !this.audio.paused;
       this.callbacks.levels({ input: input.level, output: output.level, inputBands: input.bands, outputBands: output.bands }, audible);
     }, 80);

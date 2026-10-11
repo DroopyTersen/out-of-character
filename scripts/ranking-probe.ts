@@ -50,7 +50,7 @@ const turns = transcript.flatMap((entry, index) => entry.speaker === 'participan
 
 type Row = {
   passageId: string; atMs: number; mapCall: number | null; focus: string | null; novel: number; durationMs: number; inputTokens?: number;
-  natural?: TurnReading['natural']; states?: TurnReading['states']; holds?: string[];
+  next?: TurnReading['next']; states?: TurnReading['states']; holds?: string[];
   pick: Omit<Pick, 'ranked'> & { top: [string, number, string][] }; listNote?: string; mapNote?: string; error?: string;
 };
 const rows: Row[] = [];
@@ -83,7 +83,7 @@ for (const turn of turns.slice(0, limit)) {
     const { ranked, ...pick } = decision.pick;
     item = {
       passageId, atMs: turn.atMs, mapCall: applied!.call, focus: result.reading.focus, novel: result.reading.novel, durationMs: result.durationMs, inputTokens: result.usage.inputTokens,
-      natural: result.reading.natural, states: result.reading.states, holds: Object.keys(state.holds),
+      next: result.reading.next, states: result.reading.states, holds: Object.keys(state.holds),
       pick: { ...pick, top: ranked.slice(0, 4).map(entry => [entry.id, +entry.score.toFixed(2), entry.band]) },
     };
     if (decision.text) item.listNote = decision.text;

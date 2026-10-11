@@ -1,3 +1,4 @@
+import type { InterviewArchiveRow } from '../../../interview-engine/seams.server';
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { SIMULATOR_VERSION, type ClientEnding, type PublicSnapshot, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
@@ -13,7 +14,7 @@ export async function writeReport(db: D1Database, id: string, report: ReportArch
   if (!result.success || result.meta.changes !== 1) throw new Error('Simulator report archive write failed.');
 }
 
-export type ArchiveProvenance = {
+export type ArchiveProvenance = Pick<InterviewArchiveRow['provenance'], 'brief' | 'opening' | 'models' | 'passageTimings' | 'media'> & {
   model: string;
   voice: string;
   rubricVersion: string;

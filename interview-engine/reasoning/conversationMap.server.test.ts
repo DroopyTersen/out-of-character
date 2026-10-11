@@ -69,13 +69,13 @@ test('only settled passages whose current text the log lacks are unlogged', () =
   expect(unloggedPassages(log, [transcript[0]!, { ...transcript[1]!, text: 'A routing layer for  the dispatch team. ' }])).toEqual([]);
 });
 
-test('the tail lists each lookup with its status and the lookups left', () => {
-  const research = { left: 1, requests: [
+test('the tail lists each lookup with its status without a lookup quota', () => {
+  const research = { requests: [
     { kind: 'organization' as const, name: 'Acme', clue: 'logistics', status: 'found; see the event in the log' },
     { kind: 'term' as const, name: 'offline mode', clue: null, status: 'rejected (name_unspoken)' },
   ] };
-  expect(renderMapTail(emptyMap(), { ...tail, research })).toContain('RESEARCH (1 lookup left)\n- organization "Acme" (clue: logistics): found; see the event in the log\n- term "offline mode": rejected (name_unspoken)');
-  expect(renderMapTail(emptyMap(), { ...tail, research: { left: 3, requests: [] } })).toContain('RESEARCH (3 lookups left)\n- none requested yet');
+  expect(renderMapTail(emptyMap(), { ...tail, research })).toContain('RESEARCH\n- organization "Acme" (clue: logistics): found; see the event in the log\n- term "offline mode": rejected (name_unspoken)');
+  expect(renderMapTail(emptyMap(), { ...tail, research: { requests: [] } })).toContain('RESEARCH\n- none requested yet');
   expect(renderMapTail(emptyMap(), tail)).not.toContain('RESEARCH');
 });
 
@@ -218,5 +218,5 @@ test('Sol settles the participant’s own part early, several responsibilities i
   expect(instructions).toContain('People often hold more than one responsibility');
   expect(instructions).toContain('Never write it when their part is already clear');
   expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
-  expect(MAP_PROMPT_VERSION).toBe('sol-map-v18');
+  expect(MAP_PROMPT_VERSION).toBe('sol-map-v19');
 });

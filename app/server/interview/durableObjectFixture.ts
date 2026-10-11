@@ -93,7 +93,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
     providers: unpaidProviders(voice, { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' }),
     services: {
       generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
-      evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage, answers: {} }),
+      evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, next: { choice: 'current', probabilities: { current: 1 } }, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage, answers: {} }),
       lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
       evaluate: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, objectives: [], model: 'fixture', durationMs: 1 }; },
       ...services,

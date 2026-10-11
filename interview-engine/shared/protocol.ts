@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mediaBatchSchema } from './mediaActivity';
 import type { InterviewSnapshot } from './snapshot';
 
 // Interview commands shared by HTTP and socket transports.
@@ -12,6 +13,7 @@ export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean()
   /** The participant has a typed draft open; only sequenced reports may change it. */
   composing: z.boolean().optional(),
   // Diagnostics only: a report this server cannot read is dropped, never a failed poll.
+  media: mediaBatchSchema.optional().catch(undefined),
   network: network.optional().catch(undefined) }).strict();
 export type Activity = z.infer<typeof activitySchema>;
 /** A `ready` may carry the browser's current activity report, applied before the session goes live. */
@@ -51,4 +53,4 @@ export const socketRequestSchema = z.object({
 }).strict();
 export type SocketRequest = z.infer<typeof socketRequestSchema>;
 /** The HTTP reply's status and JSON body. `id` is null when the message could not be read. */
-export type SocketReply = { id: number | null; status: number; body: unknown };
+export type SocketReply = { id: number | null; status: number; body: unknown; serverAt?: number };

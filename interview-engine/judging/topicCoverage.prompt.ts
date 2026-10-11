@@ -4,7 +4,7 @@ import type { CoverageLevel } from '../shared/snapshot';
 import type { InterviewFraming, Objective } from '../shared/spec';
 import type { Passage } from '../shared/transcript';
 
-export const INTERVIEW_RUBRIC_VERSION = 'interview-rubric-v10';
+export const INTERVIEW_RUBRIC_VERSION = 'interview-rubric-v11';
 
 /**
  * The part of a spec Jev's final grade reads: the interviewer's name, the framing's words and every objective's criterion.
@@ -27,7 +27,7 @@ function evidenceQuestions(spec: JudgedSpec, questions: Record<string, Experimen
   evidenceBatches(passages).forEach((batch, index) => {
     questions[index ? `${key}:${index}` : key] = {
       type: 'choice',
-      instructions: { task: `Select the participant passage that best supports how far this topic was covered, or where the participant declined it or said it does not apply: ${task}. The passage should itself support that judgment, not merely mention the topic; when several passages qualify, choose the strongest. Choose none if this batch has no participant passage about this topic. Do not select ${name}’s wording or an answer that only repeats ${name}’s premise.`, sourceRule },
+      instructions: { task: `Select the participant passage that best supports how far this topic was covered, or where the participant declined it or said it does not apply: ${task}. The passage should itself support that judgment, not merely mention the topic; when several passages qualify, choose the strongest. Choose none if this batch has no participant passage about this topic. Do not select ${name}’s wording alone. A clear participant confirmation can establish the referenced fact in context; a vague backchannel cannot. A correction supports the participant’s corrected account, not the original premise.`, sourceRule },
       criteria: { none: 'No qualifying participant passage in this batch.', ...Object.fromEntries(batch.map(entry => [entry.id, null])) },
     };
   });
@@ -53,7 +53,7 @@ export function interviewQuestions(spec: JudgedSpec, passages: Passage[]): Recor
       instructions: {
         task: `How far has the participant covered this ${spec.framing.topic}? ${objective.criterion} ${objective.appliesWhen ? `Only relevant when: ${objective.appliesWhen}` : ''}`.trim(),
         party: spec.framing.party,
-        depth: `Judge the whole dialogue, including earlier passages. Explored means the stated topic criterion is answered, not that ${name} has exhausted every follow-up or obtained a complete story. A concise concrete fact can answer it. ${name} mentioning the topic, offering an example, or paraphrasing does not cover it; neither does a vague agreement or “mm.”`,
+        depth: `Judge the whole dialogue, including earlier passages. Grade the supplied criterion for the specified party: related words or facts about another party do not substitute for the requested fact or relationship. Do not require a broader story than the criterion asks for. Explored means the stated topic criterion is answered, not that ${name} has exhausted every follow-up or obtained a complete story. A concise concrete fact can answer it. ${name} mentioning the topic, offering an example, or paraphrasing does not cover it; neither does a vague agreement or “mm.”`,
         limits: 'A qualifier about hearsay, unknown motives, or an unrelated detail does not erase facts the participant did supply. Set aside applies when they cannot or will not address this topic itself, not just when part of their answer is uncertain.',
         sourceRule,
       },

@@ -12,6 +12,7 @@ export function archiveProvenance(row: InterviewArchiveRow, host: ArchiveHost): 
   const { provenance } = row;
   const value: ArchiveProvenance = {
     model: host.model, voice: provenance.voice, rubricVersion: provenance.rubricVersion, simulatorVersion: SIMULATOR_VERSION,
+    brief: provenance.brief, opening: provenance.opening, models: provenance.models, passageTimings: provenance.passageTimings, media: provenance.media,
     actorDigest: provenance.actorDigest, openingDigest: provenance.openingDigest, workerId: host.workerId, workerTag: host.workerTag,
     contextualDirector: provenance.producer, connection: provenance.connection,
   };

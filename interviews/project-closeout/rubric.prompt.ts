@@ -1,35 +1,36 @@
-// What Jev reads from a project closeout: the criterion for each topic. Server-only.
+// Closeout-specific learning intent and visibility; the engine remains topic-independent.
 import type { interviewTopics } from './public';
 
 type TopicId = (typeof interviewTopics)[number]['objectives'][number]['id'];
-/** What covering each closeout topic takes, as Jev judges it. Sol's map reads the same criteria. */
 export const topicCriteria = {
-  'client-access': 'The participant describes actual onboarding, access, permissions, environments, equipment, or time to become productive with the client. Client staff being unfamiliar with software development is not onboarding or access.',
-  'client-decisions': 'The participant describes who on the client side made, influenced, approved, or delegated a project decision, or how client stakeholders engaged in decisions. Decisions the delivery team kept for itself do not show client decision-making; a client that explicitly left decisions to the delivery team does. A client employee explaining their day-to-day workflow is insufficient by itself.',
-  'client-pace': 'The participant describes the actual pace of client reviews, approvals, availability, or waiting, with a concrete effect or pattern. How fast the delivery team itself produced a prototype or build is not client pace, and early client unease alone does not show approval delays or a review cadence.',
-  'client-coordination': 'The participant describes actual coordination across client teams, divisions, vendors, or silos.',
-  'client-friction': 'The participant describes a difficult interaction or collaboration pattern with the client, or grounded advice for a future team working with that client. A product-design challenge alone is insufficient.',
-  'client-needs': 'The participant names a client need beyond the delivered scope, something the client asked for or something the participant noticed, with enough detail to follow up on later. A guess with no basis in the project is insufficient.',
-  'setup-alignment': 'The participant describes whether the delivery team and the client started with a shared understanding of scope, requirements, plan or governance, and what followed from it. A kickoff meeting merely happening is insufficient.',
-  'setup-quality': 'The participant describes how quality and “done” were defined and checked, such as acceptance criteria, non-functional requirements, a test strategy, acceptance testing, quality gates or defect triage, and the effect of that definition or its absence.',
-  'setup-technical': 'The participant describes how the architecture, platform or data handling fit or clashed with the client’s own standards, systems, skills or governance rules, and the effect. When their part on the project gave them no view of this, set it aside rather than count it against them.',
-  'process-worked': 'The participant names an internal team practice that worked and why it helped or should be repeated.',
-  'process-improve': 'The participant identifies an internal team practice, decision, or gap the team could improve, with a consequence or suggestion. Naming a missing role or practice without the participant’s own consequence or suggestion is insufficient, as is changing the product or client workflow alone.',
-  'process-communication': 'The participant describes how information or handoffs flowed within the delivery team and their effect. An explicitly attributed account can establish this, but a vague report of awkwardness without a practice or effect cannot. A client demo alone is insufficient.',
-  'process-tools': 'The participant describes a tool, meeting, documentation practice, or process the delivery team used to do its work and its practical effect. A product feature or client workflow is not an internal team tool.',
-  'process-resourcing': 'The participant describes how the delivery team’s staffing, skills, timeline, or organizational support affected its work. A client’s lack of technical skills or cloud infrastructure belongs to client-access, not delivery-team resourcing. The absence of a role, such as a business analyst, does not by itself show a staffing problem; the participant must describe its effect. A wait for initial client access belongs to client-access alone.',
-  'project-purpose': 'The participant describes the problem or need that led the client to start the project, as they understood it. Naming the product alone is insufficient.',
-  'project-delivery': 'The participant identifies what the project actually built or delivered, its scope, changes, or current state. Merely mentioning a demo or release does not identify a deliverable.',
-  'project-outcome': 'The participant describes how the client judged success, or how the result landed with the client, and why. A bare “it went well” is insufficient.',
-  'project-role': 'The participant describes their own responsibility or actual work on the project, including each responsibility when they held several. Collective “we” activity without their individual role is insufficient.',
-  'project-contributions': 'The participant describes what another member of their delivery team actually contributed, with appropriate attribution. Client stakeholders testing the product or providing feedback are client participation, not delivery-team contributions. A named contact or person with an unknown role is insufficient.',
-  'project-reflection': 'The participant explicitly reflects on a standout contribution, their growth or performance, or what they would do differently. Merely saying the product challenge was hard is insufficient.',
+  "project-purpose": "The participant explains the problem or unmet need the project was intended to address and who needed the improvement, as they understood it. The intended benefit can establish this; merely naming a product cannot.",
+  "project-delivery": "The participant identifies what was actually built or delivered and its current state, distinguishing completed work from planned, prototype, or unfinished work. A scope change matters when it changes that account.",
+  "project-outcome": "The participant describes an observed result, adoption, client reaction, or acceptance decision and the concrete evidence behind that account. Intended benefits or success targets alone are not achieved outcomes.",
+  "project-role": "The participant identifies their own project responsibilities and what they actually did. Include multiple responsibilities when they held several. Collective team activity alone does not identify their contribution.",
+  "project-contributions": "The participant identifies a contribution by another delivery-team member and what that person did. An explicitly attributed account is acceptable. Client feedback belongs to client participation; a name or title alone is not a contribution.",
+  "project-reflection": "The participant identifies something they learned through this project and how it will change or reinforce their future work.",
+  "client-access": "The participant describes how onboarding, permissions, environments, or equipment affected their ability to begin productive work with the client.",
+  "client-decisions": "The participant explains who on the client side made or delegated a project decision and how that decision was reached. Explicit delegation to the delivery team counts; general feedback alone does not identify decision authority.",
+  "client-pace": "The participant describes a concrete pattern or instance of client reviews, approvals, availability, or waiting, and its effect on delivery. Time spent on the delivery team’s own implementation or tuning does not establish client review pace.",
+  "client-coordination": "The participant explains how work or information crossed client-team or vendor boundaries and what effect that coordination had.",
+  "client-friction": "The participant describes a client collaboration pattern that helped or hindered the work and a lesson for a future team working with that client.",
+  "client-needs": "The participant identifies a client need outside the delivered scope, grounded in a request or observation, with enough detail for someone to follow up.",
+  "setup-alignment": "The participant explains whether client and delivery team shared an understanding of scope and responsibilities at the start, and a concrete consequence of that alignment or mismatch.",
+  "setup-quality": "The participant explains how delivered work was checked against quality or acceptance expectations, including an actual check, practice, or acknowledged gap. A desired product feature alone does not establish verification.",
+  "setup-technical": "The participant describes a client system, standard, skill, or governance constraint that shaped a technical decision, and how the solution accommodated or conflicted with it.",
+  "process-worked": "The participant identifies an internal delivery-team practice worth repeating and explains how it helped.",
+  "process-improve": "The participant identifies an internal delivery-team practice or decision to change, with its consequence or a concrete improvement. A product change alone is not a team-process improvement.",
+  "process-communication": "The participant explains how an internal delivery-team communication or handoff worked and its effect on the work. Client demos alone do not establish internal communication.",
+  "process-tools": "The participant identifies a tool or working method used by the delivery team and its practical effect. Product features and client workflows are separate from tools used to deliver the work.",
+  "process-resourcing": "The participant describes how staffing, skills, available time, or organizational support affected the delivery team’s work. A missing role alone does not establish a problem; the effect matters.",
+  "project-success": "The participant identifies the outcome, standard, or acceptance expectation the client wanted the project to meet. This describes the target; it does not establish that the target was achieved.",
 } satisfies Record<TopicId, string>;
 
-/** Only the participant's own work establishes their role. */
-export const topicRules: Partial<Record<TopicId, { creditRule: string; explored: string }>> = {
-  'project-role': {
-    creditRule: 'Credit only the participant’s own stated responsibility or work. Watching or describing what teammates did, including “our team” or “our testers,” does not establish the participant’s role.',
-    explored: 'The participant explicitly identifies their own project responsibility or work, and when they say they held several responsibilities, what each involved.',
-  },
+export const topicApplicability: Partial<Record<TopicId, string>> = {
+  "client-decisions": "The participant participated in or directly observed client decision-making or delegation on this project.",
+  "client-pace": "The participant participated in client reviews or approvals, or directly observed how client availability or waiting affected delivery.",
+  "client-coordination": "The participant worked across, or directly observed coordination between, multiple client teams or vendors.",
+  "setup-alignment": "The participant took part in project setup or directly observed the starting agreement between the client and delivery team.",
+  "setup-quality": "The participant worked on or directly observed testing, quality checks, release, or acceptance of the delivered work.",
+  "setup-technical": "The participant designed, implemented, supported, or directly observed technical decisions involving the client’s systems or constraints.",
 };

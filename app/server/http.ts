@@ -1,5 +1,5 @@
 /** A JSON reply the browser must not cache. */
-export const jsonResponse = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
+export const jsonResponse = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Interview-Server-Time': String(Date.now()) } });
 
 export class BodyError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 

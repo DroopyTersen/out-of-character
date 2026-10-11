@@ -5,13 +5,13 @@ export type ThreadState = typeof THREAD_STATES[number];
 /** Nearby remains readable in historical archives; new picks use only Sol's related links. */
 export const BANDS = ['right-there', 'nearby', 'elsewhere'] as const;
 export type Band = typeof BANDS[number];
-/** Within a tenth, keep the current thread or prefer one Sol marked related. */
-export const RANKING = { margin: .1, nearby: 2, novel: .8 };
+export const RANKING = { nearby: 2, novel: .8 };
+export type NextThread = { choice: string; probabilities: Record<string, number> };
 
 /** Keys keep a reading from applying to a gap Sol rewrote while Jev was running. */
 export type TurnReading = {
   passageId: string; atMs: number; focus: string | null; keys: Record<string, string>;
-  natural: Record<string, number>; states: Record<string, ThreadState>; novel: number;
+  next: NextThread; states: Record<string, ThreadState>; novel: number;
   /** Unsaved interview feedback; absent in checkpoints from before ranking v5. */
   feedback?: number;
 };
@@ -41,28 +41,22 @@ export function observeMap(state: RankingState, map: ConversationMap): RankingSt
   return { ...state, holds: {}, current: current && state.reading?.keys[current.id] === threadKey(current) ? current.id : null };
 }
 
-export function score(state: RankingState, thread: MapThread): number {
-  return state.reading?.keys[thread.id] === threadKey(thread) ? state.reading.natural[thread.id] ?? 0 : 0;
-}
-
 export function band(from: MapThread | null, to: MapThread): Band {
   return from && (from.related.includes(to.id) || to.related.includes(from.id)) ? 'right-there' : 'elsewhere';
 }
 
-/** Natural-next scores decide; an easy segue only breaks a near-tie. */
+/** The judge chooses the current exchange or one gap. An unavailable choice never falls through to another gap. */
 export function pickThreads(map: ConversationMap, state: RankingState): Pick {
   const open = map.threads.filter(thread => thread.status === 'open');
   const current = open.find(thread => thread.id === state.current) ?? null;
   const ranked = open.filter(thread => !state.holds[thread.id] && state.reading?.keys[thread.id] === threadKey(thread))
-    .map(thread => ({ id: thread.id, score: score(state, thread), band: band(current, thread) }))
+    .map(thread => ({ id: thread.id, score: state.reading!.next.probabilities[`thread:${thread.id}`] ?? 0, band: band(current, thread) }))
     .sort((a, b) => b.score - a.score);
-  const best = ranked[0];
-  const mine = ranked.find(item => item.id === current?.id);
-  const keep = !!mine && !!best && best.score <= mine.score + RANKING.margin;
-  const related = best && ranked.find(item => item.band === 'right-there' && item.score >= best.score - RANKING.margin);
-  const lead = keep ? mine.id : (related ?? best)?.id ?? null;
+  const selected = ranked.find(item => `thread:${item.id}` === state.reading?.next.choice);
+  const lead = selected?.id ?? null;
+  const keep = lead != null && lead === current?.id;
   return {
     current: current?.id ?? null, action: lead == null ? 'none' : keep ? 'keep' : 'tug', lead,
-    nearby: ranked.filter(item => item.id !== lead && item.id !== current?.id).slice(0, RANKING.nearby).map(item => item.id), ranked,
+    nearby: lead == null ? [] : ranked.filter(item => item.id !== lead && open.find(thread => thread.id === lead)!.related.includes(item.id)).slice(0, RANKING.nearby).map(item => item.id), ranked,
   };
 }

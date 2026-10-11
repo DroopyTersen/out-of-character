@@ -27,7 +27,7 @@ export function listNote(map: ConversationMap, pick: Pick): string | null {
   ].join('\n');
 }
 
-export const emptyListNote = () => `${NOTE_HEADERS.list}\nNo open thread right now: follow the participant.`;
+export const emptyListNote = () => `${NOTE_HEADERS.list}\nStay with the current exchange. Follow the participant; no topic change is suggested.`;
 export const emptyMapNote = () => `${NOTE_HEADERS.map}\nThe previous map facts are withdrawn. Follow what the participant establishes.`;
 export type ListState = { key: string | null; sent: boolean; named: string[] };
 export const emptyListState = (): ListState => ({ key: null, sent: false, named: [] });

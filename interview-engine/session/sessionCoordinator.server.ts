@@ -1,3 +1,4 @@
+import { SessionMediaDiagnostics } from './sessionMediaDiagnostics';
 import type { EngineEvent } from '../providers/diagnostics.server';
 import { modelName, type Providers } from '../providers/providers.server';
 import type { VoiceEvent } from '../providers/voice.server';
@@ -100,6 +101,7 @@ export class SessionCoordinator {
   private lease: Lease | undefined;
   private state: Omit<SessionSnapshot, 'transcript' | 'revision'> | undefined;
   private readonly dialogue = new SessionTranscript();
+  private readonly media = new SessionMediaDiagnostics();
   private readonly grading: TopicGrading;
   private readonly voice: VoiceInterviewer;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -233,6 +235,10 @@ export class SessionCoordinator {
       if (!parsed.success) return reply({ error: INVALID }, 400);
       if (parsed.data) this.applyActivity(parsed.data, this.now());
     }
+    if (action === 'end' || action === 'pause') {
+      const finalActivity = activitySchema.safeParse(parse(body));
+      if (finalActivity.success && finalActivity.data.media) this.media.append(finalActivity.data.media, this.now());
+    }
     // A best-effort report from a browser that lost its media; the server never depends on it.
     if (action === 'pause') this.background.track(this.pause('browser'));
     if (action === 'resume') return this.resume(body);
@@ -258,6 +264,7 @@ export class SessionCoordinator {
 
   /** A poll's or ready's activity report. Stale reports are dropped; activity changes composing only when sequenced. */
   private applyActivity(activity: Activity, now: number) {
+    if (activity.media) this.media.append(activity.media, now);
     if (activity.sequence != null && activity.sequence <= this.activitySequence) return;
     if (activity.sequence != null) this.activitySequence = activity.sequence;
     if (activity.active || activity.audio) this.lastActivity = now;
@@ -367,6 +374,7 @@ export class SessionCoordinator {
     const { evaluation, feedbackStatus, grades, gradeCalls } = this.grading.snapshot();
     return structuredClone({
       definition: this.definition, savedAt, snapshot: { ...this.state!, transcript: this.dialogue.entries, revision: this.dialogue.revision, feedbackStatus, interview: { evaluation } }, reachedLive: this.reachedLive, epoch: this.voice.epoch, resumes: this.resumes,
+      passageTimings: this.dialogue.timings, media: this.media.snapshot,
       segments: [...this.voice.segments], pauses: this.pauses, grades, gradeCalls,
       ...(this.producer ? { producer: this.producer.checkpoint() } : {}),
     });
@@ -432,7 +440,8 @@ export class SessionCoordinator {
         evaluateTurn: input => this.paid.evaluateTurn({ ...input, judge: this.providers.judge.model }),
         lookupInterviewBackground: input => this.paid.lookupInterviewBackground({ ...input, model: this.providers.language.fast, webSearch: this.providers.webSearch }),
       },
-      settled: () => this.dialogue.settledPrefix(this.now()), coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.voice.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
+      settled: () => this.dialogue.settledPrefix(this.now()), revision: () => this.dialogue.revision, research: this.spec.context?.research,
+      coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.voice.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
     });
   }
@@ -766,7 +775,8 @@ export class SessionCoordinator {
     this.resumes = checkpoint.resumes;
     this.pauses = checkpoint.pauses;
     this.voice.restore({ segments: checkpoint.segments, epoch: checkpoint.epoch, providerIds: this.lease!.providerIds, savedAt: checkpoint.savedAt });
-    this.dialogue.restore(transcript, revision, checkpoint.savedAt);
+    this.dialogue.restore(transcript, revision, checkpoint.savedAt, checkpoint.passageTimings);
+    this.media.restore(checkpoint.media);
     this.createProducer();
     if (checkpoint.producer) this.producer?.restore(checkpoint.producer);
     const snapshot = this.state;
@@ -872,6 +882,8 @@ export class SessionCoordinator {
     const id = this.state?.id ?? '';
     try {
       const row = await captureArchiveRecord({
+        passageTimings: this.dialogue.timings, media: this.media.snapshot,
+        models: { voice: this.providers.voice.modelId ?? null, agent: modelName(this.providers.language.agent), research: modelName(this.providers.language.fast), judge: typeof this.providers.judge.model === 'string' ? this.providers.judge.model : this.providers.judge.model.modelId },
         spec: this.spec, snapshot: this.publicSnapshot(), state, capturedAt,
         producerLog: [...(this.producer?.records ?? []), ...this.grading.snapshot().grades],
         producer: this.producer?.summary() ?? null, segments: this.voice.segments, pauses: this.pauses,

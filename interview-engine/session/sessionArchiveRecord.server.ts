@@ -8,7 +8,10 @@ import type { VoiceSegment } from '../voice/voiceSession';
 import type { PauseRecord } from './sessionCheckpoint';
 
 /** Captures one moment before hashing: later transcript, diagnostic and connection changes cannot alter the record. */
-export async function captureArchiveRecord({ spec, snapshot, state, capturedAt, producerLog, producer, segments, pauses }: {
+export async function captureArchiveRecord({ spec, snapshot, state, capturedAt, producerLog, producer, segments, pauses, passageTimings, media, models }: {
+  passageTimings?: InterviewArchiveRow['provenance']['passageTimings'];
+  media?: InterviewArchiveRow['provenance']['media'];
+  models?: InterviewArchiveRow['provenance']['models'];
   spec: ResolvedInterview;
   snapshot: InterviewSnapshot;
   state: InterviewArchiveRow['state'];
@@ -18,10 +21,12 @@ export async function captureArchiveRecord({ spec, snapshot, state, capturedAt, 
   segments: readonly VoiceSegment[];
   pauses: readonly PauseRecord[];
 }): Promise<InterviewArchiveRow> {
+  const brief = interviewerBrief(spec, snapshot.voiceId), opening = interviewOpening(spec, snapshot.voiceId);
   const captured = structuredClone({
     id: snapshot.id, specId: spec.id, specVersion: spec.version, voiceId: snapshot.voiceId, state, capturedAt, snapshot,
     transcript: snapshot.transcript, producerLog: [...producerLog],
     provenance: {
+      brief, opening, models, passageTimings, media,
       voice: spec.interviewer.voices.find(voice => voice.id === snapshot.voiceId)!.voice,
       rubricVersion: INTERVIEW_RUBRIC_VERSION, producer,
       connection: {
@@ -31,7 +36,7 @@ export async function captureArchiveRecord({ spec, snapshot, state, capturedAt, 
     },
   });
   const [actorDigest, openingDigest] = await Promise.all([
-    digest(interviewerBrief(spec, snapshot.voiceId)), digest(interviewOpening(spec, snapshot.voiceId)),
+    digest(brief), digest(opening),
   ]);
   return { ...captured, provenance: { ...captured.provenance, actorDigest, openingDigest } };
 }

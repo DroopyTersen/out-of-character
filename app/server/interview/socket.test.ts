@@ -15,7 +15,7 @@ test('a socket message becomes the HTTP request the poll transport would send, a
   const seen: Request[] = [];
   const route = async (request: Request) => { seen.push(request); return Response.json({ status: 'live', body: await request.text() }, { status: 202 }); };
   const reply = JSON.parse(await answerSocket(JSON.stringify({ id: 7, action: 'poll', capability: hex, body: { active: true } }), context, route));
-  expect(reply).toEqual({ id: 7, status: 202, body: { status: 'live', body: '{"active":true}' } });
+  expect(reply).toEqual({ id: 7, status: 202, serverAt: expect.any(Number), body: { status: 'live', body: '{"active":true}' } });
   expect(seen[0]!.url).toBe(`${origin}/api/interview/sessions/${attempt.id}/poll`);
   expect(seen[0]!.method).toBe('POST');
   expect(Object.fromEntries(seen[0]!.headers)).toMatchObject({ origin, authorization: `Bearer ${hex}`, 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9' });

@@ -3,8 +3,9 @@ import type { TopicGroup } from '../shared/spec';
 import { COVERAGE_LEVEL_LABELS } from '../judging/topicCoverage';
 import type { GradeObjective, ProducerLogRecord } from '../reasoning/conversationRecords';
 import type { Passage as TranscriptEntry } from '../shared/transcript';
+import type { PassageTiming } from '../session/sessionTranscript';
 
-export const TIMELINE_LANES = ['dialogue', 'map', 'turn', 'traits', 'note', 'research', 'grade', 'delegation'] as const;
+export const TIMELINE_LANES = ['dialogue', 'arrival', 'map', 'turn', 'traits', 'note', 'research', 'grade', 'delegation'] as const;
 export type TimelineLane = typeof TIMELINE_LANES[number];
 /** One debug row: offsets are from the session start; latency is the row's own span, parts break it down. */
 export type TimelineRow = {
@@ -48,13 +49,15 @@ export function interviewTurnGaps(transcript: TranscriptEntry[]) {
  * one time order. Dialogue offsets come from the voice session, so they can trail producer timestamps by the
  * connection time. `topics` names the objectives in grade rows; without them the rows show objective IDs.
  */
-export function producerTimeline({ startedAt, transcript, records, topics = [] }: { startedAt: number; transcript: TranscriptEntry[]; records: ProducerLogRecord[]; topics?: readonly TopicGroup[] }): TimelineRow[] {
+export function producerTimeline({ startedAt, transcript, records, topics = [], passageTimings = [] }: { startedAt: number; transcript: TranscriptEntry[]; records: ProducerLogRecord[]; topics?: readonly TopicGroup[]; passageTimings?: PassageTiming[] }): TimelineRow[] {
   const labels = new Map<string, string>(topics.flatMap(topic => topic.objectives.map(item => [item.id, item.label])));
   const at = (time: number) => time - startedAt;
   const rows: TimelineRow[] = transcript.map(entry => ({
     id: entry.id, lane: 'dialogue', atMs: entry.startMs, title: `${entry.speaker === 'participant' ? 'Participant' : 'Sam'} · ${entry.id}`,
     detail: entry.text, outcome: null, latencyMs: null, parts: [],
   }));
+  for (const timing of passageTimings) rows.push({ id: `arrival:${timing.passageId}`, lane: 'arrival', atMs: at(timing.firstReceivedAt), title: `Transcript arrival · ${timing.passageId}`,
+    detail: `Epoch ${timing.firstEpoch ?? 'typed'} to ${timing.lastEpoch ?? 'typed'}`, outcome: null, latencyMs: timing.lastReceivedAt - timing.firstReceivedAt, parts: [] });
   let graded = new Map<string, GradeObjective>();
   for (const record of records) {
     switch (record.source) {
@@ -75,7 +78,7 @@ export function producerTimeline({ startedAt, transcript, records, topics = [] }
         const pick = record.pick;
         rows.push({
           id: record.id, lane: 'turn', atMs: at(record.startedAt), title: `Jev turn · ${record.passageId}`,
-          detail: join([reading && `focus ${reading.focus ?? 'none'}`, reading && `novel ${reading.novel.toFixed(2)}`, reading?.feedback != null && `feedback ${reading.feedback.toFixed(2)}`, states.join(', '),
+          detail: join([reading?.next && `next ${reading.next.choice}`, record.guidance && `guidance ${record.guidance}`, reading && `focus ${reading.focus ?? 'none'}`, reading && `novel ${reading.novel.toFixed(2)}`, reading?.feedback != null && `feedback ${reading.feedback.toFixed(2)}`, states.join(', '),
             pick && (pick.action === 'none' ? 'pick none' : `${pick.action} ${pick.lead}${pick.nearby.length ? ` · nearby ${pick.nearby.join(', ')}` : ''}`)]),
           outcome: record.outcome, latencyMs: record.durationMs ?? span(record.startedAt, record.completedAt), parts: [],
         });
@@ -130,11 +133,12 @@ export function producerTimeline({ startedAt, transcript, records, topics = [] }
 
 export function formatTimelineRows(rows: TimelineRow[]): string {
   const clock = (ms: number) => `${Math.floor(Math.max(0, ms) / 60_000)}:${String(Math.floor(Math.max(0, ms) % 60_000 / 1000)).padStart(2, '0')}`;
-  return rows.map(row => [
+  const render = (items: TimelineRow[]) => items.map(row => [
     `${clock(row.atMs).padStart(5)}  ${row.lane.padEnd(10)}  ${row.title}${row.outcome ? `  [${row.outcome}]` : ''}${row.latencyMs != null ? `  ${row.latencyMs} ms` : ''}`,
     row.parts.length ? `${' '.repeat(19)}${row.parts.map(part => `${part.label} ${part.ms} ms`).join(' · ')}` : null,
     row.detail ? `${' '.repeat(19)}${row.detail}` : null,
   ].filter(Boolean).join('\n')).join('\n');
+  return `Provider transcript clock (approximate audio offsets; not server time)\n${render(rows.filter(row => row.lane === 'dialogue'))}\n\nServer clock (milliseconds from attempt start; note latency means next Sam transcript arrival)\n${render(rows.filter(row => row.lane !== 'dialogue'))}`;
 }
 
 /**

@@ -13,7 +13,7 @@ afterEach(() => setSystemTime());
 const fixtureUsage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 /** Jev finds every participant turn new to the map, so each one wakes Sol once the floor allows. */
 const novelTurn: SessionServices['evaluateTurn'] = async input => ({
-  reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), natural: Object.fromEntries(input.map.threads.map(thread => [thread.id, .8])), states: {}, novel: .9 },
+  reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), next: { choice: input.map.threads[0] ? `thread:${input.map.threads[0].id}` : 'current', probabilities: Object.fromEntries(input.map.threads.map(thread => [`thread:${thread.id}`, .8])) }, states: {}, novel: .9 },
   model: 'fixture', durationMs: 1, usage: fixtureUsage, answers: {},
 });
 const solMap = (): ConversationMap => ({

@@ -1,4 +1,5 @@
-import type { SubmitTextReply } from '../shared/protocol';
+import { MediaActivityCapture } from './mediaActivity';
+import type { Activity, SubmitTextReply } from '../shared/protocol';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
 import type { AudioLevels } from './audioLevels';
 import { BrowserMedia, type MediaCallbacks, type MediaConnection } from './browserMedia';
@@ -55,6 +56,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private id: string = crypto.randomUUID();
   private capability = [...crypto.getRandomValues(new Uint8Array(32))].map(value => value.toString(16).padStart(2, '0')).join('');
   private media: MediaConnection;
+  private mediaCapture = new MediaActivityCapture();
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
   private disconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
@@ -96,7 +98,10 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   get attempt(): Attempt { return { id: this.id, capability: this.capability }; }
   private request(action: ProtocolAction, body?: unknown, { keepalive = false, signal = this.controller.signal }: { keepalive?: boolean; signal?: AbortSignal } = {}): Promise<unknown> {
     const timeoutMs = action === 'start' ? 40_000 : action === 'poll' || action === 'pause' ? 5000 : 30_000;
-    return this.transport.request(action, body, { attempt: this.attempt, timeoutMs, keepalive, signal });
+    const batch = (body as Activity | undefined)?.media;
+    return this.transport.request(action, body, { attempt: this.attempt, timeoutMs, keepalive, signal,
+      onServerTime: (sent, received, server) => this.mediaCapture.synchronize(sent, received, server),
+    }).then(result => { if (batch) this.mediaCapture.acknowledge(batch); return result; });
   }
 
   async start(planId: string, voiceId: string) {
@@ -140,6 +145,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
    */
   private async connect(exchange: (sdp: string) => Promise<string | null>): Promise<boolean> {
     const segment = this.segment = new AbortController();
+    this.mediaCapture.connect();
     this.applyMute();
     const connected = await this.media.connect(exchange, segment.signal);
     if (!connected || this.ending) return false;
@@ -182,7 +188,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     const now = Date.now();
     // Time-based, so a reloaded page never repeats a number the server already saw.
     this.activitySequence = Math.max(this.activitySequence + 1, now);
-    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing };
+    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing, media: this.mediaCapture.batch() };
   }
 
   /** Starts the live loops for the current media connection. */
@@ -197,6 +203,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   private mediaLevels(levels: AudioLevels, audible: boolean) {
     const now = Date.now();
+    this.mediaCapture.observe(!this.muted && !this.autoMuted && !this.composing && levels.input > .03, audible, performance.now());
     // Only the interviewer's playback extends the idle lease; microphone noise does not.
     const outputStarted = audible && now - this.lastAudioAt >= 1500;
     if (audible) { this.keepActive(); this.lastAudioAt = now; }
@@ -241,7 +248,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     this.pausedAt = Date.now();
     this.autoResumed = false;
     this.setLink({ state: 'paused', reach: offline('answered') });
-    this.reported = report ? this.request('pause').then(() => {}, () => {}) : Promise.resolve();
+    this.reported = report ? this.request('pause', this.activity(false)).then(() => {}, () => {}) : Promise.resolve();
     await this.reported;
     this.heartbeat(0);
   }
@@ -299,7 +306,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
       if (error instanceof SessionRequestError && error.status === 409) this.autoResumed = true;
       this.callbacks.error(this.describe(error, 'The voice connection could not be re-established. Try again.'));
       // The server began reconnecting; hold it again rather than waiting out its connecting timeout.
-      this.reported = accepted ? this.request('pause').then(() => {}, () => {}) : Promise.resolve();
+      this.reported = accepted ? this.request('pause', this.activity(false)).then(() => {}, () => {}) : Promise.resolve();
       await this.reported;
       this.heartbeat(accepted ? 0 : HEARTBEAT_MS);
     }
@@ -388,7 +395,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
       const closeDeadline = setTimeout(() => this.release(), 3000);
       try {
         if (this.requested) {
-          const ended = await this.request('end', undefined, { keepalive: true }) as S;
+          const ended = await this.request('end', this.activity(false), { keepalive: true }) as S;
           if (!this.disposed && ended.id) this.callbacks.snapshot(ended);
         }
       } catch (error) {
@@ -415,7 +422,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     if (this.disposed) return false;
     if (!this.reachedLive || this.ending) { this.dispose(); return false; }
     this.disposed = true;
-    void this.request('pause', undefined, { keepalive: true }).catch(() => {});
+    void this.request('pause', this.activity(false), { keepalive: true }).catch(() => {});
     this.settle();
     return true;
   }

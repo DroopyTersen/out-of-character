@@ -100,14 +100,14 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
     const [, id, action] = match as unknown as [string, string, string];
     if (action === 'report' && !gates.available()) return jsonResponse({ error: 'Final reviews are currently unavailable.' }, 503);
     let body: string | undefined;
-    if (action === 'poll' && request.body) {
-      const activity = activitySchema.safeParse(await boundedJson(request, 384));
+    if (['poll', 'pause', 'end'].includes(action) && request.body) {
+      const activity = activitySchema.safeParse(await boundedJson(request, 8 * 1024));
       if (!activity.success) return jsonResponse({ error: 'Invalid activity report.' }, 400);
       body = JSON.stringify(activity.data);
     }
     // A ready may carry the browser's current activity; one without a body still connects.
     if (action === 'ready' && request.body) {
-      const activity = readySchema.safeParse(await boundedJson(request, 384));
+      const activity = readySchema.safeParse(await boundedJson(request, 8 * 1024));
       if (!activity.success) return jsonResponse({ error: 'Invalid activity report.' }, 400);
       if (activity.data) body = JSON.stringify(activity.data);
     }

@@ -3,6 +3,7 @@ import { DirectorOutputError, type ModelUsage } from '../providers/structured.se
 import type { InterviewBackground, InterviewObjectiveReading as Reading } from '../shared/snapshot';
 import { activeElapsed, type PauseSpan } from '../shared/timing';
 import type { Passage as TranscriptEntry, Speaker } from '../shared/transcript';
+import type { InterviewContext } from '../shared/plan';
 import { emptyMap, type ConversationMap, type MapChanges } from './conversationMap';
 import {
   appendMapLog, emptyMapLog, type generateMap, MAP_EFFORT, MAP_PROMPT_VERSION, MapOutputError, researchLogEvent, renderMapCoverage, unloggedPassages,
@@ -34,6 +35,8 @@ type Options = {
   services: ProducerCalls;
   /** Settled passages in order, stopping at the first still being transcribed. */
   settled: () => TranscriptEntry[]; coverage: () => InterviewObjectiveReading[];
+  revision: () => number;
+  research?: InterviewContext['research'];
   send: (note: { id: string; content: string }) => boolean; notesHeld?: () => boolean; waitUntil: (work: Promise<void>) => void;
   pauses?: () => PauseSpan[];
 };
@@ -62,6 +65,7 @@ export class InterviewProducer {
   private mapRecord: MapRecord | null = null;
   private log: MapLog = emptyMapLog();
   private ranking = emptyRanking();
+  private selection: { record: TurnRecord; turn: string } | null = null;
   private call: { record: MapRecord; controller: AbortController } | null = null;
   private lastMapStart: number;
   private coverageKey: string;
@@ -94,10 +98,14 @@ export class InterviewProducer {
       research: this.records.filter(record => record.source === 'research' && !['invalid', 'duplicate', 'budget', 'busy'].includes(record.outcome)).length,
     };
   }
-  private get budgetLeft() { const { maps, turns, research } = this.counts; return LIMITS.calls - maps - turns - research; }
+  private get budgetLeft() { const { maps, turns } = this.counts; return LIMITS.calls - maps - turns; }
 
   tick(now = Date.now()) {
     if (!this.alive) return;
+    const seed = this.options.research;
+    if (seed && !this.records.some(record => record.source === 'research' && record.origin === 'host-context')) {
+      this.request(null, { kind: 'organization', name: seed.organization, clue: null }, [], 'host-context');
+    }
     if (this.call && now - this.call.record.startedAt >= LIMITS.mapTimeout) this.abandon(now);
     this.readTurn(now);
     this.startMap(now);
@@ -117,14 +125,15 @@ export class InterviewProducer {
   }
 
   private startMap(now: number) {
-    if (this.call || this.budgetLeft <= 0 || now - this.lastMapStart < LIMITS.mapFloor) return;
+    if (this.call || this.budgetLeft <= 0) return;
+    const events = this.pendingResearch();
+    if (now - this.lastMapStart < LIMITS.mapFloor && (this.records.some(record => record.source === 'map') || !events.length)) return;
     const settled = [...this.options.settled()];
     const unlogged = new Set(unloggedPassages(this.log, settled).map(entry => entry.id));
     const fresh = settled.some((entry, index) => unlogged.has(entry.id) && said(settled, index));
     const coverageKey = renderMapCoverage(this.options.spec, this.options.coverage());
     const coverageChanged = coverageKey !== this.coverageKey && settled.some((_, index) => said(settled, index));
     if (coverageChanged) this.reasons.add('topic coverage changed');
-    const events = this.pendingResearch();
     if (events.some(item => this.records.some(record => record.source === 'research' && record.id === item.researchId && record.outcome === 'found'))) this.reasons.add('public research arrived');
     if (now - this.lastMapStart >= LIMITS.mapTimer && (fresh || this.behind)) this.reasons.add('a minute has passed since your last call');
     if (!this.reasons.size) return;
@@ -164,7 +173,6 @@ export class InterviewProducer {
       research: {
         requests: research.map(item => ({ kind: item.request.kind, name: item.request.name, clue: item.request.clue,
           status: item.outcome === 'invalid' ? `rejected (${item.reason})` : RESEARCH_STATUS[item.outcome] })),
-        left: Math.max(0, Math.min(LIMITS.research - this.counts.research, this.budgetLeft)),
       },
     };
   }
@@ -229,7 +237,7 @@ export class InterviewProducer {
     this.readTurnKey = turnKey(turn);
     this.readMapId = mapId;
     this.turnBusy = true;
-    const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId, startedAt: now, outcome: 'pending' };
+    const record: TurnRecord = { source: 'turn', id: `turn-${crypto.randomUUID()}`, passageId: turn.at(-1)!.id, mapId, revision: this.options.revision(), startedAt: now, outcome: 'pending' };
     this.records.push(record);
     this.options.waitUntil(this.evaluate(record, settled, now));
   }
@@ -248,12 +256,13 @@ export class InterviewProducer {
         reading: {
           atMs: reading.atMs, focus: reading.focus, novel: round(reading.novel),
           ...(reading.feedback != null ? { feedback: round(reading.feedback) } : {}),
-          natural: roundAll(reading.natural), states: reading.states,
+          next: { choice: reading.next.choice, probabilities: roundAll(reading.next.probabilities) }, states: reading.states,
         },
       } satisfies Partial<TurnRecord>);
       // Sol may have landed a different map while Jev read. The next tick reads against that map.
-      if (record.mapId !== (this.mapRecord?.id ?? null)) return;
+      if (record.mapId !== (this.mapRecord?.id ?? null)) { record.guidance = 'stale'; return; }
       this.ranking = observeTurn(this.ranking, this.map, reading, latestTurn(settled)[0]!.id);
+      this.selection = { record, turn: turnKey(latestTurn(settled)) };
       const thresholds = this.options.thresholds;
       if ((reading.novel >= (thresholds.novelInformation ?? RANKING.novel) || (reading.feedback ?? 0) >= (thresholds.interviewFeedback ?? RANKING.novel)) && unloggedPassages(this.log, settled).some(entry => entry.speaker === 'participant')) this.wake(`the participant's latest turn (${reading.passageId}) adds facts or feedback the map lacks`);
       record.pick = compactPick(this.pick(Date.now(), record));
@@ -268,7 +277,16 @@ export class InterviewProducer {
 
   private pick(now: number, turn?: TurnRecord): Pick {
     const decision = nextListNote(this.map, this.ranking, this.list);
-    if (!decision.text || this.note('list', decision.text, now, { turn }) === 'sent') this.list = decision.state;
+    const selection = this.selection;
+    const record = turn ?? selection?.record;
+    if (!selection || selection.record.revision !== this.options.revision() || selection.record.mapId !== (this.mapRecord?.id ?? null) || selection.turn !== turnKey(latestTurn(upToParticipant(this.options.settled())))) {
+      if (record && (record.guidance == null || record.guidance === 'held')) record.guidance = 'stale';
+      return decision.pick;
+    }
+    if (this.options.notesHeld?.()) { if (record!.guidance == null) record!.guidance = 'held'; return decision.pick; }
+    const sent = decision.text != null && this.note('list', decision.text, now, { turn: record }) === 'sent';
+    if (!decision.text || sent) this.list = decision.state;
+    if (record?.guidance !== 'sent') record!.guidance = sent ? 'sent' : decision.pick.lead == null ? 'current' : 'unchanged';
     return decision.pick;
   }
 
@@ -303,16 +321,18 @@ export class InterviewProducer {
         text: researchLogEvent(record.request, record.facts ?? null, record.reason) } }] : []);
   }
 
-  private request(map: MapRecord, request: ResearchRequest, settled: TranscriptEntry[]) {
-    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map.id, request, model: this.options.models.fast, requestedAt: Date.now(), outcome: 'pending' };
+  private request(map: MapRecord | null, request: ResearchRequest, settled: TranscriptEntry[], origin: 'host-context' | 'participant' = 'participant') {
+    const record: ResearchRecord = { source: 'research', id: `research-${crypto.randomUUID()}`, mapId: map?.id ?? null, origin, request, model: this.options.models.fast, requestedAt: Date.now(), outcome: 'pending' };
     const refuse = (outcome: ResearchRecord['outcome'], reason: string) => { record.outcome = outcome; record.reason = reason; record.completedAt = Date.now(); this.records.push(record); };
-    const valid = validateResearchRequest(request, settled);
+    const canonical = this.options.research?.organization;
+    const hostRequest = origin === 'host-context' && request.kind === 'organization' && request.name === canonical;
+    const valid = hostRequest ? { ok: true as const, request, passageIds: [] } : validateResearchRequest(request, settled);
     if (!valid.ok) return refuse('invalid', valid.reason);
     record.request = valid.request;
+    if (origin === 'participant' && canonical && request.kind === 'organization') record.request = { ...record.request, clue: [record.request.clue, `The supplied project client is ${canonical}; do not assume another named organization is the same entity.`].filter(Boolean).join(' ') };
     record.passageIds = valid.passageIds;
-    const key = researchKey(valid.request);
+    const key = researchKey(record.request);
     if (this.records.some(item => item.source === 'research' && ['pending', 'found', 'unresolved'].includes(item.outcome) && researchKey(item.request) === key)) return refuse('duplicate', 'duplicate');
-    if (this.budgetLeft <= 0 || this.counts.research >= LIMITS.research) return refuse('budget', 'budget');
     if (this.lookupBusy) return refuse('busy', 'busy');
     this.records.push(record);
     this.lookupBusy = true;
@@ -326,13 +346,13 @@ export class InterviewProducer {
     const scope = this.abort.signal;
     const signal = AbortSignal.any([scope, AbortSignal.timeout(LIMITS.lookupTimeout)]);
     try {
-      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, signal });
+      const lookup = await this.options.services.lookupInterviewBackground({ target: { kind, name }, clue, ...(record.origin === 'host-context' ? { subject: this.options.research?.subject } : {}), signal });
       if (scope.aborted) return;
       signal.throwIfAborted();
       const now = Date.now();
       record.lookupAt = now;
       record.queries = lookup.queries;
-      if (lookup.status === 'found') Object.assign(record, { outcome: 'found', facts: lookup.facts, retrievedAt: lookup.retrievedAt } satisfies Partial<ResearchRecord>);
+      if (lookup.status === 'found') Object.assign(record, { outcome: 'found', matchedIdentity: lookup.matchedIdentity, facts: lookup.facts, retrievedAt: lookup.retrievedAt } satisfies Partial<ResearchRecord>);
       else Object.assign(record, { outcome: 'unresolved', reason: lookup.reason } satisfies Partial<ResearchRecord>);
       const facts = lookup.status === 'found' ? lookup.facts : null;
       record.eventId = `L${this.records.filter(item => item.source === 'research' && item.eventId != null).length + 1}`;
@@ -424,6 +444,7 @@ export class InterviewProducer {
     this.coverageKey = checkpoint.coverageKey;
     this.readTurnKey = '';
     this.ranking = emptyRanking();
+    this.selection = null;
     this.readMapId = null;
     this.reasons.clear();
     this.release(Date.now());

@@ -19,6 +19,13 @@ test('overlapping speakers retain arrival order and settle independently as thei
   expect(transcript.settledPrefix(2400)).toEqual([]);
   expect(transcript.settled(3199).map(entry => entry.id)).toEqual(['p2']);
   expect(transcript.settledPrefix(3200).map(entry => entry.id)).toEqual(['p1', 'p2']);
+  expect(transcript.timings).toEqual([
+    { passageId: 'p1', firstEpoch: 1, lastEpoch: 1, firstReceivedAt: 1000, lastReceivedAt: 2000 },
+    { passageId: 'p2', firstEpoch: 1, lastEpoch: 1, firstReceivedAt: 1200, lastReceivedAt: 1200 },
+  ]);
+  const restored = new SessionTranscript();
+  restored.restore(transcript.entries, transcript.revision, 9000, transcript.timings);
+  expect(restored.timings).toEqual(transcript.timings);
 });
 
 test('a real reply or a grading freeze makes subsequent words a new passage', () => {
@@ -61,6 +68,7 @@ test('restoration retains revision and frozen passage identity, with a fresh set
   const transcript = new SessionTranscript();
   const saved: Passage[] = [{ id: 'p1', speaker: 'participant', text: 'Saved words.', startMs: 0, endMs: 500 }];
   transcript.restore(saved, 9, 5000);
+  expect(transcript.timings).toEqual([]); // Historical arrival times are unavailable, not the restore time.
   expect(transcript.revision).toBe(9);
   expect(transcript.settled(6199)).toEqual([]);
   expect(transcript.settled(6200)).toEqual(saved);

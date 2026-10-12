@@ -2,9 +2,9 @@ import { experimental_evaluate } from 'ai';
 import type { Providers } from '../providers/providers.server';
 import { choice, evidenceBatches, type Judge, type JudgeAnswers } from '../providers/judgeProvider.server';
 import { COVERAGE_LEVELS, type CoverageLevel, type InterviewEvaluation, type InterviewObjectiveReading } from '../shared/snapshot';
-import { dialogueState, findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../shared/transcript';
-import { interviewerToken, interviewQuestions, judgedObjectives, type JudgedSpec } from './topicCoverage.prompt';
-import { isBackchannel } from '../reasoning/turnTaking';
+import { findEvidence, TRANSCRIPT_LIMIT, transcriptCharacters, type Passage } from '../shared/transcript';
+import { coverageRequest, judgedObjectives, type JudgedSpec } from './topicCoverage.prompt';
+import { said } from '../reasoning/turnTaking';
 
 export type EvaluationInput = {
   spec: JudgedSpec;
@@ -17,7 +17,7 @@ export type EvaluationJudge = Pick<Providers, 'judge' | 'telemetry'> | Judge;
 
 const validProbability = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
 
-function evidence(answers: JudgeAnswers, key: string, participant: Passage[]) {
+function evidence(answers: JudgeAnswers, key: string, participant: Passage[], eligible: Set<string>) {
   let selected: { id: string; probability: number } | null = null;
   evidenceBatches(participant).forEach((batch, index) => {
     const answer = choice(answers, index ? `${key}:${index}` : key, ['none', ...batch.map(passage => passage.id)]);
@@ -25,18 +25,18 @@ function evidence(answers: JudgeAnswers, key: string, participant: Passage[]) {
     const probability = answer.probabilities?.[answer.choice] ?? 0;
     if (!selected || probability > selected.probability) selected = { id: answer.choice, probability };
   });
-  // The chosen ID must still resolve to a real participant passage. The judge never supplies quotation text.
+  // The chosen ID must still resolve to a real participant passage that said something. The judge never supplies quotation text.
   if (!selected) return null;
   const passage = findEvidence(participant, (selected as { id: string }).id);
-  return passage && !isBackchannel(passage.text) ? passage : null;
+  return passage && eligible.has(passage.entryId) ? passage : null;
 }
 
-function coverage(answers: JudgeAnswers, objectiveId: string, participant: Passage[], exploredThreshold: number): InterviewObjectiveReading {
+function coverage(answers: JudgeAnswers, objectiveId: string, participant: Passage[], eligible: Set<string>, exploredThreshold: number): InterviewObjectiveReading {
   const answer = choice(answers, `objective:${objectiveId}`, [...COVERAGE_LEVELS]);
   const levels = answer.probabilities
     ? Object.fromEntries(COVERAGE_LEVELS.map(level => [level, validProbability(answer.probabilities![level] ?? NaN) ? answer.probabilities![level]! : 0])) as Record<CoverageLevel, number>
     : null;
-  const passage = evidence(answers, `objective:${objectiveId}:evidence`, participant);
+  const passage = evidence(answers, `objective:${objectiveId}:evidence`, participant, eligible);
   let level = answer.choice as CoverageLevel;
   // Credit uses the judge's calibrated confidence. A supported boundary still wins at even odds.
   if (level !== 'not-yet' && !passage) level = 'not-yet';
@@ -45,15 +45,19 @@ function coverage(answers: JudgeAnswers, objectiveId: string, participant: Passa
   return { id: objectiveId, level, levels, probability: levels?.explored ?? null, achieved: level === 'explored', evidence: level === 'not-yet' ? null : passage };
 }
 
-/** Turns the judge's answers into topic coverage. Only a participant passage can be evidence. */
+/**
+ * Turns the judge's answers into topic coverage. Only a participant passage that said something can be evidence: a
+ * bare acknowledgment is not, while a short answer to the interviewer's direct question is, read in the dialogue.
+ */
 export function readTopicCoverage(spec: JudgedSpec, passages: Passage[], answers: JudgeAnswers, exploredThreshold = .85): Pick<InterviewEvaluation, 'objectives'> {
   const participant = passages.filter(passage => passage.speaker === 'participant');
+  const eligible = new Set(passages.flatMap((passage, index) => said(passages, index) ? [passage.id] : []));
   return { objectives: judgedObjectives(spec).map(objective => {
-    const reading = coverage(answers, objective.id, participant, exploredThreshold);
+    const reading = coverage(answers, objective.id, participant, eligible, exploredThreshold);
     if (!objective.appliesWhen) return reading;
     const key = `objective:${objective.id}:applicability`;
     const answer = choice(answers, key, ['applicable', 'not-applicable', 'unknown']);
-    const support = evidence(answers, `objective:${objective.id}:applicability-evidence`, participant);
+    const support = evidence(answers, `objective:${objective.id}:applicability-evidence`, participant, eligible);
     const applicability = support && (answer.probabilities?.[answer.choice] ?? 0) >= .8
       ? answer.choice as 'applicable' | 'not-applicable' | 'unknown' : 'unknown';
     return { ...reading, applicability, applicabilityEvidence: applicability === 'unknown' ? null : support,
@@ -74,7 +78,7 @@ export async function judgeTopicCoverage(input: EvaluationInput, supplied: Evalu
   const { passages } = input;
   const { judge, telemetry } = 'judge' in supplied ? supplied : { judge: supplied, telemetry: undefined };
   const result = await experimental_evaluate({
-    model: judge.model, state: dialogueState(passages, interviewerToken(input.spec)), questions: interviewQuestions(input.spec, passages),
+    model: judge.model, ...coverageRequest(input.spec, passages),
     abortSignal: input.signal, maxRetries: 0, ...(telemetry ? { telemetry } : {}),
   });
   return {

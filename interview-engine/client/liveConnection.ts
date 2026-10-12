@@ -1,5 +1,5 @@
 import { MediaActivityCapture } from './mediaActivity';
-import type { Activity, SubmitTextReply } from '../shared/protocol';
+import type { Activity, SubmitTextInput, SubmitTextReply } from '../shared/protocol';
 import type { SessionPause, SessionStatus } from '../shared/snapshot';
 import type { AudioLevels } from './audioLevels';
 import { BrowserMedia, type MediaCallbacks, type MediaConnection } from './browserMedia';
@@ -77,6 +77,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   private reported: Promise<void> = Promise.resolve();
   private activeSincePoll = false;
   private lastAudioAt = 0;
+  private lastInputAudioAt = 0;
   private activitySequence = 0;
   private muted = false;
   private autoMuted = false;
@@ -188,7 +189,7 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
     const now = Date.now();
     // Time-based, so a reloaded page never repeats a number the server already saw.
     this.activitySequence = Math.max(this.activitySequence + 1, now);
-    return { active, audio: now - this.lastAudioAt < 1500, sequence: this.activitySequence, composing: this.composing, media: this.mediaCapture.batch() };
+    return { active, audio: now - this.lastAudioAt < 1500, inputAudio: !this.muted && !this.autoMuted && !this.composing && now - this.lastInputAudioAt < 1500, sequence: this.activitySequence, composing: this.composing, media: this.mediaCapture.batch() };
   }
 
   /** Starts the live loops for the current media connection. */
@@ -203,7 +204,9 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
 
   private mediaLevels(levels: AudioLevels, audible: boolean) {
     const now = Date.now();
-    this.mediaCapture.observe(!this.muted && !this.autoMuted && !this.composing && levels.input > .03, audible, performance.now());
+    const inputAudio = !this.muted && !this.autoMuted && !this.composing && levels.input > .03;
+    if (inputAudio) this.lastInputAudioAt = now;
+    this.mediaCapture.observe(inputAudio, audible, performance.now());
     // Only the interviewer's playback extends the idle lease; microphone noise does not.
     const outputStarted = audible && now - this.lastAudioAt >= 1500;
     if (audible) { this.keepActive(); this.lastAudioAt = now; }
@@ -346,11 +349,12 @@ export class LiveConnection<S extends ConnectionSnapshot = ConnectionSnapshot> {
   }
 
   /**
-   * Sends one typed answer under one ID, retried unchanged while the server is unreachable or busy,
-   * so a lost reply never creates a second turn. Resolves once the server saved it.
+   * Sends one typed answer under its ID, retried unchanged while the server is unreachable or busy,
+   * so a lost reply never creates a second turn. Resolves once the server saved it. The caller keeps the ID
+   * for a later manual retry of the same answer.
    */
-  async submitText(text: string): Promise<SubmitTextReply> {
-    const reply = await deliverTypedAnswer({ text, transport: this.transport, attempt: this.attempt, signal: this.controller.signal });
+  async submitText(answer: SubmitTextInput): Promise<SubmitTextReply> {
+    const reply = await deliverTypedAnswer({ answer, transport: this.transport, attempt: this.attempt, signal: this.controller.signal });
     // Saved even if the attempt is closing; only a live page shows the snapshot.
     if (!this.ending) this.callbacks.snapshot(reply.snapshot as unknown as S);
     return reply;

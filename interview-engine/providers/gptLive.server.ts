@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { foundryUrl, type FoundryConfig } from './foundry.server';
-import type { SocketOpener, VoiceConnection, VoiceEvent, VoiceHandlers, VoiceProvider, WebSocketLike } from './voice.server';
+import type { ControlOpener, VoiceConnection, VoiceEvent, VoiceHandlers, VoiceProvider, WebSocketLike } from './voice.server';
 
 export const LIVE_MODEL = 'gpt-live-1';
 /** The provider no longer has the session: it ended or expired. */
@@ -15,22 +15,19 @@ export const transcriptEvent = z.object({
 export type GptLiveOptions<Socket extends WebSocketLike> = {
   /** Substitutes the HTTP client; defaults to the global fetch. */
   fetch?: typeof fetch;
-  /** Opens the control socket from the upgrade response, e.g. Cloudflare's `response.webSocket` after `accept()`. */
-  socket: SocketOpener<Socket>;
+  /** Opens the control socket: the platform's WebSocket client with the provider's headers. */
+  openControl: ControlOpener<Socket>;
 };
 
-/** Raw upgrade for the separate simulator, which owns its own control protocol. */
-export async function attachGptLiveSocket<Socket extends WebSocketLike>(id: string, config: FoundryConfig, { fetch: request = fetch, socket: open }: GptLiveOptions<Socket>): Promise<Socket> {
+/** Raw control socket for the separate simulator, which owns its own control protocol. */
+export async function attachGptLiveSocket<Socket extends WebSocketLike>(id: string, config: FoundryConfig, { openControl }: GptLiveOptions<Socket>): Promise<Socket> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const response = await request(foundryUrl(config, `/live/sessions/${encodeURIComponent(id)}/attach`), {
-      headers: { Upgrade: 'websocket', 'api-key': config.apiKey }, signal: controller.signal,
-    });
-    if (response.status === 404 || response.status === 410) throw new LiveSessionGone('The voice session has already ended.');
-    const socket = open(response);
-    if (!socket) throw new Error('Live control connection is unavailable.');
-    return socket;
+    const opened = await openControl({ url: foundryUrl(config, `/live/sessions/${encodeURIComponent(id)}/attach`), headers: { 'api-key': config.apiKey }, signal: controller.signal });
+    if (opened.status === 'gone') throw new LiveSessionGone('The voice session has already ended.');
+    if (opened.status === 'failed') throw new Error('Live control connection is unavailable.');
+    return opened.socket;
   } finally {
     // Bound only the handshake: aborting an established sideband can close the conversation.
     clearTimeout(timeout);

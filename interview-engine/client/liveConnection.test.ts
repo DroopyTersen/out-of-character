@@ -377,9 +377,10 @@ test('microphone noise sends no extra activity reports and never reports Sam as 
   expect(server.polls.length).toBe(seen);
   await advance(1500);
   expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
+  expect(server.polls.at(-1)).toMatchObject({ inputAudio: true });
   connection.mute(true);
   await advance(1500);
-  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false });
+  expect(server.polls.at(-1)).toMatchObject({ active: false, audio: false, inputAudio: false });
   await connection.end();
 });
 
@@ -464,6 +465,7 @@ test('ready carries the current activity, including an open draft', async () => 
 
 const accepted = (id: string) => ({ acceptedId: id, snapshot: { ...server.snapshot(), transcript: [{ id: `typed-${id}`, speaker: 'participant', text: 'Typed.', startMs: 0, endMs: 0 }] } });
 const submitted = () => server.requests.filter(request => request.action === 'submitText').map(request => request.body as { id: string; text: string });
+const typed = (text: string) => ({ id: crypto.randomUUID(), text });
 
 test('an accepted typed answer resolves with its receipt and shows its snapshot', async () => {
   const { LiveConnection } = await import('./liveConnection');
@@ -471,7 +473,7 @@ test('an accepted typed answer resolves with its receipt and shows its snapshot'
   const connection = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: value => snapshots.push(value), levels: () => {}, error: () => {}, link: () => {}, closed: () => {} });
   await connection.start('sharepoint', 'morgan');
   server.override = action => action === 'submitText' ? { body: accepted(submitted().at(-1)!.id) } : undefined;
-  const reply = await connection.submitText('Typed.');
+  const reply = await connection.submitText(typed('Typed.'));
   const [sent] = submitted();
   expect(sent).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), text: 'Typed.' });
   expect(reply.acceptedId).toBe(sent!.id);
@@ -487,7 +489,7 @@ test('a busy server is retried with the same id; a refusal is final', async () =
     if (busy) { busy = false; return { status: 503, body: { error: 'Saving is slow.' } }; }
     return { body: accepted(submitted().at(-1)!.id) };
   };
-  const pending = connection.submitText('Once.');
+  const pending = connection.submitText(typed('Once.'));
   await advance(1100);
   const reply = await pending;
   const [first, second] = submitted();
@@ -496,7 +498,7 @@ test('a busy server is retried with the same id; a refusal is final', async () =
   expect(reply.acceptedId).toBe(first!.id);
 
   server.override = action => action === 'submitText' ? { status: 409, body: { error: 'This answer conflicts with one already sent.' } } : undefined;
-  const refused = connection.submitText('Twice.');
+  const refused = connection.submitText(typed('Twice.'));
   const outcome = refused.then(() => 'resolved', (error: Error) => error.message);
   await advance(5000);
   expect(await outcome).toBe('This answer conflicts with one already sent.');
@@ -508,12 +510,81 @@ test('a busy server is retried with the same id; a refusal is final', async () =
 test('an unreachable server gives up with a readable message, and a closed attempt rejects', async () => {
   const { connection } = await connected();
   server.override = action => action === 'submitText' ? { status: 503, body: { error: 'Unavailable.' } } : undefined;
-  const outcome = connection.submitText('Lost.').then(() => 'resolved', (error: Error) => error.message);
+  const outcome = connection.submitText(typed('Lost.')).then(() => 'resolved', (error: Error) => error.message);
   await advance(40_000);
   expect(await outcome).toBe('Your answer could not be sent. Check your connection and try again.');
   expect(new Set(submitted().map(body => body.id)).size).toBe(1);
   await connection.end();
-  await expect(connection.submitText('Late.')).rejects.toThrow('The interview is not live.');
+  await expect(connection.submitText(typed('Late.'))).rejects.toThrow('The interview is not live.');
+});
+
+test('an end lost in transit is rejoined with the participant\'s mute and open draft, in place before the microphone returns', async () => {
+  const { ParticipantIntent } = await import('./participantIntent');
+  const { connection, closures } = await connected();
+  const intent = new ParticipantIntent();
+  intent.muted = true;
+  intent.composing = true;
+  intent.apply(connection);
+  browser.onLine = false;
+  server.offline = true;
+  await connection.end();
+  expect(closures).toEqual([{ outcome: 'unconfirmed', reachedLive: true }]);
+  expect(server.status).toBe('live');
+
+  // The host opens a replacement for the same attempt and gives it the participant's intent before rejoining.
+  const { LiveConnection } = await import('./liveConnection');
+  const again = new LiveConnection(pollTransport('/api/simulator/sessions'), { snapshot: () => {}, levels: () => {}, error: () => {}, link: () => {}, closed: () => {} }, connection.attempt);
+  intent.apply(again);
+  await again.reattach();
+  expect(server.requests.at(-1)).toMatchObject({ action: 'pause', body: { composing: true, inputAudio: false } });
+  browser.onLine = true;
+  server.offline = false;
+  const microphones = FakeStream.all.filter(stream => stream.microphone).length;
+  await again.resume();
+  expect(server.status).toBe('live');
+  const microphone = FakeStream.all.filter(stream => stream.microphone).at(-1)!;
+  expect(FakeStream.all.filter(stream => stream.microphone)).toHaveLength(microphones + 1);
+  expect(microphone.tracks[0]!.enabled).toBe(false);
+  expect(server.requests.findLast(request => request.action === 'ready')!.body).toMatchObject({ composing: true, inputAudio: false });
+  // The draft is sent, so the microphone returns, still muted by the participant.
+  intent.composing = false;
+  again.setComposing(false);
+  expect(microphone.tracks[0]!.enabled).toBe(false);
+  intent.muted = false;
+  again.mute(false);
+  expect(microphone.tracks[0]!.enabled).toBe(true);
+  await again.end();
+});
+
+test('an answer the server saved without a receipt is retried by hand under the same id and saved once', async () => {
+  const { ParticipantIntent } = await import('./participantIntent');
+  const { connection } = await connected();
+  const intent = new ParticipantIntent();
+  const passages = new Map<string, string>();
+  let lost = true;
+  server.override = action => {
+    if (action !== 'submitText') return;
+    const answer = submitted().at(-1)!;
+    if (passages.has(answer.id) && passages.get(answer.id) !== answer.text) return { status: 409, body: { error: 'This answer was already sent with different text.' } };
+    passages.set(answer.id, answer.text);
+    if (lost) throw new TypeError('Failed to fetch');
+    return { body: accepted(answer.id) };
+  };
+  const first = connection.submitText(intent.answer('Five days.')).then(() => 'resolved', (error: Error) => error.message);
+  await advance(40_000);
+  expect(await first).toBe('Your answer could not be sent. Check your connection and try again.');
+  expect(submitted().length).toBeGreaterThan(1);
+  expect(passages.size).toBe(1);
+  // The host kept the draft; the participant sends the same answer again once the connection is back.
+  lost = false;
+  const reply = await connection.submitText(intent.answer('Five days.'));
+  expect(reply.acceptedId).toBe(submitted()[0]!.id);
+  expect(passages.size).toBe(1);
+  intent.acknowledged(reply.acceptedId);
+  // Sent and acknowledged: the same words again are a new answer, as is an edit.
+  expect(intent.answer('Five days.').id).not.toBe(reply.acceptedId);
+  expect(intent.answer('Five days, then one.').id).not.toBe(intent.answer('Five days.').id);
+  await connection.end();
 });
 
 test('repeated resume calls wait for the pause acknowledgment and negotiate one connection', async () => {

@@ -4,6 +4,7 @@ import type { Checkpoint, Lease } from './sessionCheckpoint';
 /** Saves one owner's session state and keeps checkpoint writes and removal in order. */
 export class SessionPersistence {
   private lost = false;
+  private cleared = false;
   private nextWake: number | null = null;
   private writes: Promise<void> = Promise.resolve();
 
@@ -11,6 +12,8 @@ export class SessionPersistence {
 
   get ownershipLost(): boolean { return this.lost; }
   get wakeAt(): number | null { return this.nextWake; }
+  /** The store no longer holds the attempt: its owner has nothing left to do. */
+  get forgotten(): boolean { return this.cleared; }
 
   loseOwnership() {
     if (this.lost) return;
@@ -55,5 +58,6 @@ export class SessionPersistence {
     this.nextWake = null;
     // A late checkpoint write must not restore the attempt after its removal.
     await this.ordered(() => this.guarded(() => this.store.clear()));
+    this.cleared = true;
   }
 }

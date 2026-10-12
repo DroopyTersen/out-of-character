@@ -12,7 +12,7 @@ import { mapInstructions, mapSeed, type MappedSpec } from './conversationMap.pro
 export { mapInstructions, mapSeed, type MappedSpec } from './conversationMap.prompt';
 type TranscriptEntry = Passage;
 /** Part of the cache key: any change to the instructions, schema, seed or effort needs a new version. */
-export const MAP_PROMPT_VERSION = 'sol-map-v19';
+export const MAP_PROMPT_VERSION = 'sol-map-v21';
 export const MAP_EFFORT = 'low';
 /** Reasoning counts against this; a whole first map plus reasoning must fit. */
 export const MAP_MAX_OUTPUT_TOKENS = 8000;

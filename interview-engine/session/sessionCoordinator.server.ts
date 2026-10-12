@@ -2,7 +2,7 @@ import { SessionMediaDiagnostics } from './sessionMediaDiagnostics';
 import type { EngineEvent } from '../providers/diagnostics.server';
 import { modelName, type Providers } from '../providers/providers.server';
 import type { VoiceEvent } from '../providers/voice.server';
-import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, submitTextSchema, type Activity, type SubmitTextInput, type SubmitTextReply } from '../shared/protocol';
+import { CAPABILITY, type Activity, type Command, type ResumeInput, type StartInput, type SubmitTextInput, type SubmitTextReply } from '../shared/protocol';
 import type { InterviewSnapshot, SessionPause } from '../shared/snapshot';
 import type { InterviewLimits } from '../shared/spec';
 import { resolveInterview, type InterviewDefinition, type ResolvedInterview } from '../definition.server';
@@ -14,6 +14,7 @@ import { TopicGrading, type Evaluate } from '../judging/topicGrading.server';
 import { judgeTopicCoverage } from '../judging/judgeTopicCoverage.server';
 import { generateMap } from '../reasoning/conversationMap.server';
 import { InterviewProducer } from '../reasoning/interviewProducer.server';
+import { said } from '../reasoning/turnTaking';
 import { evaluateTurn } from '../judging/judgeConversationTurn.server';
 import { lookupInterviewBackground } from '../reasoning/backgroundResearch.server';
 import { FencedError, type Archive, type Background, type SessionStore } from '../seams.server';
@@ -55,8 +56,7 @@ export type SessionOptions = InterviewDefinition & {
   lazyWake?: boolean;
 };
 
-/** One browser command. `body` is the request's JSON text, when it had one. */
-export type Command = { action: string; capability: string; body?: string };
+export type { Command } from '../shared/protocol';
 /**
  * The answer to a command. `terminal`: the attempt has ended.
  */
@@ -71,7 +71,6 @@ const CLOSURE_GRACE_MS = 60 * 60_000;
 class Cancelled extends Error { constructor() { super(CANCELLED); this.name = 'Cancelled'; } }
 const interviewerSpoke = (transcript: Passage[]) => transcript.some(entry => entry.speaker === 'interviewer' && entry.text.trim());
 const reply = (body: unknown, status = 200): Reply => ({ status, body });
-const parse = (body: string | undefined): unknown => { try { return JSON.parse(body ?? ''); } catch { return undefined; } };
 const defaultLimits: InterviewLimits = {
   durationSeconds: SESSION_LIMIT_SECONDS, idleWarningMs: SESSION_IDLE_WARNING_MS, idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
   pauseHoldMs: SESSION_PAUSE_HOLD_MS, maxResumes: SESSION_MAX_RESUMES,
@@ -165,14 +164,19 @@ export class SessionCoordinator {
 
   /**
    * Loads the attempt this store is bound to. A started conversation whose owner was lost is held for its browser to
-   * resume; a finished one whose final row was never acknowledged is archived again.
+   * resume; a finished one whose final row was never acknowledged is archived again. A lease without a checkpoint has
+   * no conversation to restore: the attempt was cancelled, lost during creation, or already archived and waiting to be
+   * forgotten. Its remaining work is scheduled here rather than left to a later page load: a closed lease is held for
+   * the receipt window, an open one closes its provider sessions promptly.
    */
   static async restore(options: SessionOptions): Promise<SessionCoordinator> {
     const stored = await options.store.load();
     const accepted = stored.checkpoint?.definition;
     const coordinator = new SessionCoordinator(accepted ? { ...options, ...accepted, context: accepted.context } : options);
     coordinator.lease = stored.lease;
-    if (coordinator.lease && stored.checkpoint) await coordinator.restoreCheckpoint(stored.checkpoint);
+    if (!coordinator.lease) return coordinator;
+    if (stored.checkpoint) await coordinator.restoreCheckpoint(stored.checkpoint);
+    else await coordinator.holdFinished();
     return coordinator;
   }
 
@@ -181,26 +185,36 @@ export class SessionCoordinator {
     return structuredClone({ plan: this.spec.plan, config: this.spec.config, ...(this.spec.context ? { context: this.spec.context } : {}) });
   }
 
+  /**
+   * This owner has no further authority: the attempt was let go, because every final write and closure was
+   * acknowledged and its retention window passed or it never recorded anything; a newer owner has fenced it; or it
+   * holds neither a lease nor a conversation, as after a command rejected before any start. The host may drop it; a
+   * later command finds the interview ended or restores the current state.
+   */
+  get retired(): boolean { return this.persistence.forgotten || this.persistence.ownershipLost || (!this.lease && !this.state); }
+
   /** Finishes through the first final archive write, resuming a failed close before the host reads final evidence. */
   get closing(): Promise<void> | undefined { return this.endingInterrupted !== undefined ? this.end() : this.finishing; }
 
   private get segment(): Readonly<VoiceSegment> | undefined { return this.voice.current; }
 
-  async handle(command: Command): Promise<Reply> {
+  /** Answers one decoded command sent with the attempt's `capability`. */
+  async handle(command: Command, capability: string): Promise<Reply> {
     if (this.persistence.ownershipLost) return reply({ error: FENCED }, 409);
     try {
       if (this.lazyWake && this.persistence.wakeAt != null && this.now() >= this.persistence.wakeAt) await this.wake();
-      return await this.dispatch(command);
+      return await this.dispatch(command, capability);
     } catch (error) {
       if (error instanceof FencedError || this.persistence.ownershipLost) return reply({ error: FENCED }, 409);
       throw error;
     }
   }
 
-  private async dispatch({ action, capability, body }: Command): Promise<Reply> {
+  private async dispatch(command: Command, capability: string): Promise<Reply> {
+    const { action } = command;
     if (!CAPABILITY.test(capability)) return reply({ error: 'Session capability is required.' }, 401);
     if (this.lease && capability !== this.lease.capability) return reply({ error: 'Session ownership did not match.' }, 403);
-    if (action === 'start') return this.start(body, capability);
+    if (command.action === 'start') return this.start(command.input, capability);
     if (!this.lease) {
       // A cancelled browser may send end before its creation request arrives.
       if (action === 'end') {
@@ -219,29 +233,17 @@ export class SessionCoordinator {
     if (action === 'end' && this.endingInterrupted !== undefined) await this.end();
     // A terminal snapshot is not an acceptance receipt.
     // A retry of a turn already in the transcript is still acknowledged after the end; a new one is not.
-    if (action === 'submitText' && this.ended()) return this.submitText(body);
+    if (command.action === 'submitText' && this.ended()) return this.submitText(command.input);
     // Terminal reads must not refresh a lease, heartbeat, or live state.
     if (this.ended()) return { status: 200, body: this.publicSnapshot(), terminal: true };
     this.lastSeen = this.now();
-    if (action === 'submitText') return this.submitText(body);
-    if (action === 'poll' && body) {
-      const parsed = activitySchema.safeParse(parse(body));
-      if (!parsed.success) return reply({ error: INVALID }, 400);
-      this.applyActivity(parsed.data, this.now());
-    }
+    if (command.action === 'submitText') return this.submitText(command.input);
     // The browser's current activity rides on ready, so a draft opened while reconnecting protects the resumed session.
-    if (action === 'ready' && body) {
-      const parsed = readySchema.safeParse(parse(body));
-      if (!parsed.success) return reply({ error: INVALID }, 400);
-      if (parsed.data) this.applyActivity(parsed.data, this.now());
-    }
-    if (action === 'end' || action === 'pause') {
-      const finalActivity = activitySchema.safeParse(parse(body));
-      if (finalActivity.success && finalActivity.data.media) this.media.append(finalActivity.data.media, this.now());
-    }
+    if ((command.action === 'poll' || command.action === 'ready') && command.activity) this.applyActivity(command.activity, this.now());
     // A best-effort report from a browser that lost its media; the server never depends on it.
+    if ((command.action === 'end' || command.action === 'pause') && command.activity?.media) this.media.append(command.activity.media, this.now());
     if (action === 'pause') this.background.track(this.pause('browser'));
-    if (action === 'resume') return this.resume(body);
+    if (command.action === 'resume') return this.resume(command.input);
     if (action === 'ready' && this.state.status === 'connecting') {
       if (this.checkLifetime()) return reply(this.publicSnapshot());
       if (this.reachedLive) this.resumed();
@@ -269,6 +271,7 @@ export class SessionCoordinator {
     if (activity.sequence != null) this.activitySequence = activity.sequence;
     if (activity.active || activity.audio) this.lastActivity = now;
     if (activity.audio) this.voice.playback(now);
+    if (activity.sequence != null && activity.inputAudio) this.voice.inputAudio(now);
     if (activity.network) this.voice.network({ at: now, ...activity.network });
     if (activity.sequence != null && activity.composing !== undefined) this.setComposing(activity.composing, now);
   }
@@ -285,10 +288,7 @@ export class SessionCoordinator {
    * One typed participant answer. Validation, deduplication and the append happen before the first await; the reply
    * waits for a checkpoint holding the turn, and the answer is then forwarded once to the same provider session.
    */
-  private submitText(body: string | undefined): Promise<Reply> | Reply {
-    const parsed = submitTextSchema.safeParse(parse(body));
-    if (!parsed.success) return reply({ error: INVALID }, 400);
-    const input = parsed.data;
+  private submitText(input: SubmitTextInput): Promise<Reply> | Reply {
     const snapshot = this.state!;
     const id = typedItemId(input.id);
     const existing = this.dialogue.entries.find(entry => entry.id === id);
@@ -390,10 +390,8 @@ export class SessionCoordinator {
     this.report({ type: 'session', event: 'fenced', id: this.state?.id ?? '' });
   }
 
-  private async start(body: string | undefined, capability: string): Promise<Reply> {
-    const parsed = startSchema.safeParse(parse(body));
-    if (!parsed.success || parsed.data.planId !== this.spec.id || !this.spec.interviewer.voices.some(voice => voice.id === parsed.data.voiceId)) return reply({ error: INVALID }, 400);
-    const input = parsed.data;
+  private async start(input: StartInput, capability: string): Promise<Reply> {
+    if (input.planId !== this.spec.id || !this.spec.interviewer.voices.some(voice => voice.id === input.voiceId)) return reply({ error: INVALID }, 400);
     if (this.lease) return reply({ error: 'This attempt has already been used. Start a new attempt.' }, 409);
     const now = this.now();
     this.lease = { capability, providerIds: [], deadline: now + this.limits.durationSeconds * 1000, closed: false };
@@ -441,7 +439,13 @@ export class SessionCoordinator {
         lookupInterviewBackground: input => this.paid.lookupInterviewBackground({ ...input, model: this.providers.language.fast, webSearch: this.providers.webSearch }),
       },
       settled: () => this.dialogue.settledPrefix(this.now()), revision: () => this.dialogue.revision, research: this.spec.context?.research,
-      coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.voice.send({ kind: 'context', ...note }), notesHeld: () => this.composing, waitUntil: work => this.background.track(work),
+      coverage: () => this.grading.snapshot().evaluation?.objectives ?? [], send: note => this.voice.send({ kind: 'context', ...note }),
+      // Late guidance must not start another question while Sam is speaking or waiting for an answer.
+      notesHeld: () => {
+        const transcript = this.dialogue.entries;
+        return this.composing || !transcript.length || !said(transcript, transcript.length - 1);
+      },
+      waitUntil: work => this.background.track(work),
       pauses: () => this.pauseSpans(),
     });
   }
@@ -613,10 +617,7 @@ export class SessionCoordinator {
   }
 
   /** A new provider session, seeded with the conversation so far, continues the paused attempt. */
-  private async resume(body: string | undefined): Promise<Reply> {
-    const parsed = resumeSchema.safeParse(parse(body));
-    if (!parsed.success) return reply({ error: INVALID }, 400);
-    const input = parsed.data;
+  private async resume(input: ResumeInput): Promise<Reply> {
     const snapshot = this.state!;
     // An outage shorter than the server's contact grace was never noticed here, and an abandoned
     // reconnect may still be connecting; either is paused before the new attempt.

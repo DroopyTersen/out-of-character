@@ -12,6 +12,8 @@ const network = z.object({ ms: z.number().int().min(0).max(600_000), received: p
 export const activitySchema = z.object({ active: z.boolean(), audio: z.boolean(), sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   /** The participant has a typed draft open; only sequenced reports may change it. */
   composing: z.boolean().optional(),
+  /** Recent unmuted microphone activity suppresses silence recovery; it is not evidence of a completed turn. */
+  inputAudio: z.boolean().optional(),
   // Diagnostics only: a report this server cannot read is dropped, never a failed poll.
   media: mediaBatchSchema.optional().catch(undefined),
   network: network.optional().catch(undefined) }).strict();
@@ -32,10 +34,39 @@ export const offerSchema = z.string().min(20).max(60_000).startsWith('v=0').refi
 export const startSchema = z.object({ id: uuid, planId: z.string(), voiceId: z.string(), sdp: offerSchema }).strict();
 export type StartInput = z.infer<typeof startSchema>;
 export const resumeSchema = z.object({ sdp: offerSchema }).strict();
+export type ResumeInput = z.infer<typeof resumeSchema>;
 /** The capability the browser minted for the attempt, on every command. */
 export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;
 export const PROTOCOL_ACTIONS = ['start', 'poll', 'ready', 'end', 'pause', 'resume', 'submitText'] as const;
 export type ProtocolAction = typeof PROTOCOL_ACTIONS[number];
+
+/** One browser command, decoded once. Poll, ready, end and pause may carry an activity report. */
+export type Command =
+  | { action: 'start'; input: StartInput }
+  | { action: 'poll' | 'ready' | 'end' | 'pause'; activity?: Activity }
+  | { action: 'resume'; input: ResumeInput }
+  | { action: 'submitText'; input: SubmitTextInput };
+export type InvalidCommand = { action: 'invalid' };
+const INVALID: InvalidCommand = { action: 'invalid' };
+
+/**
+ * Decodes a command from its action and the JSON value the transport read (`undefined` when it carried none). The
+ * transport owns content type, encoding, byte limits and authentication; the engine checks the capability and the
+ * spec. Diagnostics inside an activity report that this server cannot read are dropped by the schema, never the command.
+ */
+export function decodeCommand(action: string, body: unknown): Command | InvalidCommand {
+  switch (action) {
+    case 'start': { const parsed = startSchema.safeParse(body); return parsed.success ? { action, input: parsed.data } : INVALID; }
+    case 'submitText': { const parsed = submitTextSchema.safeParse(body); return parsed.success ? { action, input: parsed.data } : INVALID; }
+    case 'resume': { const parsed = resumeSchema.safeParse(body); return parsed.success ? { action, input: parsed.data } : INVALID; }
+    case 'poll': case 'ready': case 'end': case 'pause': {
+      if (body === undefined) return { action };
+      const parsed = activitySchema.safeParse(body);
+      return parsed.success ? { action, activity: parsed.data } : INVALID;
+    }
+    default: return INVALID;
+  }
+}
 
 /**
  * The socket transport: one WebSocket per attempt at `/api/interview/sessions/:id/socket`, opt-in for a host.

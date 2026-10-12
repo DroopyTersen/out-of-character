@@ -78,7 +78,7 @@ test('a short reply can confirm a declarative guess without a question mark', ()
 });
 
 test('turn questions cover focus, newness and each open thread; closed threads, guesses and topics stay out', () => {
-  const questions = turnQuestions(map, latestTurn(transcript));
+  const questions = turnQuestions(map, latestTurn(transcript), 4000);
   expect(Object.keys(questions)).toEqual(['focus', 'next', 'new', 'feedback', 'state:t1', 'state:t3']);
   expect(Object.keys((questions.focus as { criteria: object }).criteria)).toEqual(['none', 't1', 't3']);
   expect(Object.keys((questions['state:t1'] as { criteria: object }).criteria)).toEqual(['open', 'answered', 'declined', 'stalled']);
@@ -89,7 +89,7 @@ test('turn questions cover focus, newness and each open thread; closed threads, 
   const text = JSON.stringify(questions);
   expect(text).not.toContain('a guess Jev never sees');
   expect(text).not.toContain('client-decisions');
-  expect(Object.keys(turnQuestions({ ...map, threads: [] }, latestTurn(transcript)))).toEqual(['new', 'feedback']);
+  expect(Object.keys(turnQuestions({ ...map, threads: [] }, latestTurn(transcript), 4000))).toEqual(['new', 'feedback']);
 });
 
 test('turn answers become a reading; an invalid answer rejects the whole reading', () => {

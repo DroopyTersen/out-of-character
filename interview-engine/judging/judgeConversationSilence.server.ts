@@ -2,8 +2,9 @@ import { experimental_evaluate, type Experimental_EvaluationModel } from 'ai';
 import type { CallFailure } from '../providers/diagnostics.server';
 import type { ModelUsage } from '../providers/structured.server';
 import type { Passage, Speaker } from '../shared/transcript';
+import { interviewJudgeOptions } from '../providers/judgeProvider.server';
 
-export const SILENCE_VERSION = 'interview-silence-v2';
+export const SILENCE_VERSION = 'interview-silence-v3';
 export const SILENCE_MS = 4000;
 export const MAX_SILENCE_CHECKS = 120;
 
@@ -13,6 +14,7 @@ export type SilenceRecord = {
   outcome: 'pending' | 'wait' | 'sent' | 'stale' | 'error' | 'timeout' | 'aborted' | 'rejected';
   completedAt?: number; probability?: number; model?: string; usage?: ModelUsage; failure?: CallFailure;
   acknowledgedAt?: number;
+  retriedAt?: number; retryAcknowledgedAt?: number; replacedAt?: number; playbackAt?: number;
   nextSpeech?: { at: number; passageId: string; speaker: Speaker };
 };
 
@@ -20,6 +22,7 @@ export type SilenceRecord = {
 export async function judgeConversationSilence(input: { transcript: Passage[]; judge: Experimental_EvaluationModel; signal?: AbortSignal }) {
   const result = await experimental_evaluate({
     model: input.judge,
+    providerOptions: interviewJudgeOptions({ purpose: 'silence' }),
     state: { recentDialogue: input.transcript.map(({ id, speaker, text }) => ({ id, speaker: speaker === 'participant' ? 'participant' : 'interviewer', text })) },
     questions: {
       continue: {

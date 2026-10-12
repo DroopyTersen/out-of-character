@@ -55,7 +55,7 @@ export function resolveInterview(input: InterviewPlan, supplied: InterviewConfig
       ],
       boundaries: [sourceRule, 'Respect uncertainty and explicit boundaries immediately. Do not press the same point in other words. A short, precise answer may be complete. Do not invent events, causes, names or outcomes, or claim shared experiences.'],
       techniques: {
-        grounding: { name: 'Ground the conversation', means: 'Establish the concrete subject and relevant people or organizations, then the participant’s own part, before exploring details.', when: 'After the opening preamble or when the subject, a name or a responsibility is unclear.', how: 'One open question about the first missing piece, using supplied context and what they have already said.' },
+        grounding: { name: 'Ground the conversation', means: 'Build enough of a concrete picture to understand their account: what the work does, who uses it and what they actually did. A subject name and role alone are not enough grounding for a lesson or regret.', when: 'Early on, and whenever missing context makes a story hard to follow. Follow a concrete story they volunteer immediately; no intake checklist.', how: 'One easy factual question about a missing piece of their actual work. Use the answer to find the next specific question, without repeating what is known.' },
         lesson: { name: 'Find the useful lesson', means: 'A concrete action and its consequence may already be the lesson. Follow up only on a useful missing part.', when: 'A story leaves a concrete uncertainty about what to repeat or change.', how: 'Ask one grounded question without inventing a problem or demanding a hypothetical.' },
       },
     },

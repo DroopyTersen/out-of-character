@@ -74,6 +74,7 @@ export class VoiceInterviewer {
   greet(id: string, content: string) { this.recovery.greet(id, content); }
   transcript(changed: Passage, now: number) { this.recovery.transcript(changed, now); }
   playback(now: number) { this.recovery.playback(now); }
+  inputAudio(now: number) { this.recovery.inputAudio(now); }
   composing(value: boolean, now: number) { this.recovery.composing(value, now); }
   tick(now: number) { return this.recovery.tick(now); }
   checkSilence(now: number) { return this.recovery.checkSilence(now); }

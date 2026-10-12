@@ -29,10 +29,20 @@ test('the control WebSocket attaches to Foundry with server-only authentication'
     expect(url).toBe('https://fixture-foundry.openai.azure.com/openai/v1/live/sessions/session%2Fid/attach');
     expect(new Headers(options?.headers).get('api-key')).toBe('fixture-secret');
     expect(new Headers(options?.headers).get('Upgrade')).toBe('websocket');
+    expect(options?.signal).toBeInstanceOf(AbortSignal);
     return { status: 101, webSocket: socket } as unknown as Response;
   }) as typeof fetch);
   expect(result).toBe(socket as unknown as WebSocket);
   expect(accepted).toBe(true);
+});
+
+test('control requires an upgraded response with a socket and never accepts a failed handshake', async () => {
+  let accepted = false;
+  const socket = { accept: () => { accepted = true; } };
+  for (const response of [{ status: 500 }, { status: 101 }, { status: 200, webSocket: socket }]) {
+    await expect(attachLive('session', fixtureFoundry, (async () => response as unknown as Response) as unknown as typeof fetch)).rejects.toThrow('Live control connection is unavailable.');
+  }
+  expect(accepted).toBe(false);
 });
 
 test('expired Live sessions and provider failures preserve safe error handling', async () => {

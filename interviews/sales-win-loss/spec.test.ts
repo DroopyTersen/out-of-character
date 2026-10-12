@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { resolveInterview } from '../../interview-engine/definition.server';
 import { mapSeed } from '../../interview-engine/reasoning/conversationMap.prompt';
-import { interviewQuestions } from '../../interview-engine/judging/topicCoverage.prompt';
+import { coverageRequest } from '../../interview-engine/judging/topicCoverage.prompt';
 import { interviewerBrief } from '../../interview-engine/voice/interviewerBrief.server';
 import { spec as closeout } from '../project-closeout/spec';
 import { spec } from './spec';
@@ -13,7 +13,7 @@ test('a second plan supplies its own learning content to the voice, map and cove
   const seed = mapSeed(spec);
   expect(seed).toContain(spec.plan.goals);
   expect(seed).not.toMatch(/project closeout/i);
-  const questions = interviewQuestions(spec, [{ id: 'p1', speaker: 'participant', text: 'We chose the other vendor.', startMs: 0, endMs: 1000 }]);
+  const questions = coverageRequest(spec, [{ id: 'p1', speaker: 'participant', text: 'We chose the other vendor.', startMs: 0, endMs: 1000 }]).questions;
   for (const topic of spec.topics.flatMap(group => group.objectives)) {
     expect(seed).toContain(topic.criterion);
     expect(questions[`objective:${topic.id}`]).toMatchObject({ type: 'choice', instructions: { task: expect.stringContaining(topic.criterion) } });

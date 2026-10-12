@@ -57,14 +57,75 @@ test('audio delays greeting recovery while real interviewer speech completes it'
   expect(f.sent).toHaveLength(1);
 });
 
-test('four seconds of transcript inactivity triggers one check per revision, independent of playback', async () => {
-  const pending = deferred<typeof result>(); const f = fixture(() => pending.promise); f.ready();
-  await f.recovery.checkSilence(4999); expect(f.calls).toHaveLength(0);
-  const check = f.recovery.checkSilence(5000);
-  f.recovery.playback(6000); pending.resolve(result); await check;
+test('four quiet seconds trigger one check per revision until a cue needs recovery', async () => {
+  const f = fixture(); f.ready();
+  f.at(4999); await f.recovery.checkSilence(4999); expect(f.calls).toHaveLength(0);
+  f.at(5000); await f.recovery.checkSilence(5000);
   expect(f.sent).toHaveLength(1);
   expect(f.segments[0]!.silence![0]!.outcome).toBe('sent');
-  await f.recovery.checkSilence(10_000); expect(f.calls).toHaveLength(1);
+  f.at(10_000); await f.recovery.checkSilence(10_000);
+  expect(f.calls).toHaveLength(1); expect(f.sent).toHaveLength(1);
+});
+
+for (const audio of ['playback', 'inputAudio'] as const) test(`${audio} cancels a pending judge and quiet can be checked again without transcript growth`, async () => {
+  const pending = deferred<typeof result>(); const f = fixture(() => pending.promise); f.ready();
+  f.at(5000); const check = f.recovery.checkSilence(5000);
+  f.at(5500); f.recovery[audio](5500);
+  expect(f.calls[0]!.signal.aborted).toBe(true);
+  pending.resolve(result); await check;
+  expect(f.sent).toEqual([]);
+  f.at(9499); await f.recovery.checkSilence(9499); expect(f.calls).toHaveLength(1);
+  f.at(9500); await f.recovery.checkSilence(9500); expect(f.calls).toHaveLength(2);
+  expect(f.sent).toHaveLength(1);
+});
+
+test('acknowledged silence cues without speech retry once then request one replacement', async () => {
+  const f = fixture(); f.ready();
+  f.at(5000); await f.recovery.tick(5000);
+  const record = f.segments[0]!.silence![0]!;
+  f.recovery.providerEvent(f.segments[0]!, { type: 'acknowledged', id: record.id });
+  f.at(10_999); await f.recovery.tick(10_999); expect(f.sent).toHaveLength(1);
+  f.at(11_000); await f.recovery.tick(11_000); await f.recovery.tick(11_000);
+  expect(f.sent).toHaveLength(2);
+  f.recovery.providerEvent(f.segments[0]!, { type: 'acknowledged', id: `${record.id}-again` });
+  expect(record).toMatchObject({ acknowledgedAt: 5000, retriedAt: 11_000, retryAcknowledgedAt: 11_000 });
+  expect(record.nextSpeech).toBeUndefined();
+  f.at(18_999); await f.recovery.tick(18_999); expect(f.output).toEqual([]);
+  f.at(19_000); await f.recovery.tick(19_000); await f.recovery.tick(20_000);
+  expect(f.sent).toHaveLength(2); expect(f.calls).toHaveLength(1);
+  expect(f.output).toEqual([{ type: 'replace' }]);
+  expect(record.replacedAt).toBe(19_000);
+});
+
+for (const activity of ['participant', 'interviewer', 'playback', 'inputAudio', 'composing'] as const) {
+  for (const at of [10_999, 18_999]) test(`${activity} just before ${at < 11_000 ? 'retry' : 'replacement'} cancels escalation`, async () => {
+    const f = fixture(); f.ready(); f.at(5000); await f.recovery.tick(5000);
+    if (at > 11_000) { f.at(11_000); await f.recovery.tick(11_000); }
+    const sent = f.sent.length;
+    f.at(at);
+    if (activity === 'participant' || activity === 'interviewer') f.say(activity);
+    else if (activity === 'composing') { f.conversation.composing = true; f.recovery.composing(true, at); }
+    else f.recovery[activity](at);
+    f.at(at + 1); await f.recovery.tick(at + 1);
+    expect(f.sent).toHaveLength(sent); expect(f.output.filter(event => event.type === 'replace')).toEqual([]);
+    expect(f.segments[0]!.silence![0]!.replacedAt).toBeUndefined();
+  });
+}
+
+for (const change of ['fence', 'replace', 'pause', 'end', 'stop'] as const) test(`${change} prevents a pending cue retry or replacement`, async () => {
+  const f = fixture(); f.ready(); f.at(5000); await f.recovery.tick(5000);
+  if (change === 'fence') f.fence();
+  if (change === 'replace') { f.segment(); f.say('interviewer'); }
+  if (change === 'pause') f.conversation.status = 'paused';
+  if (change === 'end') f.conversation.status = 'ending';
+  if (change === 'stop') { await f.recovery.stop(); f.conversation.status = 'paused'; }
+  f.sent.length = 0; f.output.length = 0;
+  f.at(19_000); await f.recovery.tick(19_000);
+  // A new segment may judge its own new transcript, but an old cue never reaches it.
+  expect(f.sent.every(input => !input.id.endsWith('-again'))).toBe(true);
+  expect(f.segments[0]!.silence![0]!.retriedAt).toBeUndefined();
+  expect(f.segments[0]!.silence![0]!.replacedAt).toBeUndefined();
+  expect(f.output).toEqual([]);
 });
 
 for (const speaker of ['participant', 'interviewer'] as const) test(`${speaker} transcript invalidates a pending silence judgment`, async () => {
@@ -93,7 +154,7 @@ for (const change of ['fence', 'replace', 'pause', 'end'] as const) test(`${chan
   if (change === 'pause') f.conversation.status = 'paused';
   if (change === 'end') f.conversation.status = 'ending';
   f.sent.length = 0; pending.resolve(result); await check;
-  expect(f.sent).toEqual([]); expect(f.segments[0]!.silence![0]!.outcome).toBe('stale');
+  expect(f.sent).toEqual([]); expect(f.segments[0]!.silence![0]!.outcome).toBe(change === 'replace' ? 'aborted' : 'stale');
 });
 
 test('the silence budget is shared across replacement segments', async () => {

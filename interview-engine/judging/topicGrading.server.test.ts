@@ -204,3 +204,17 @@ test.each([false, true])('the real deadline aborts an unresponsive evaluator (fi
   expect(f.grading.snapshot().grades[0]?.outcome).toBe('evaluation_timeout');
   expect(f.grading.snapshot().feedbackStatus).toBe('unavailable');
 }, 10_000);
+
+
+test('a permanent rejection is not retried for unchanged evidence; new evidence can be graded', async () => {
+  const f = fixture(async () => { throw Object.assign(new Error('Private provider response'), { statusCode: 422, isRetryable: false }); });
+  await f.grading.tick();
+  f.at(10_000); await f.grading.tick();
+  expect(f.calls).toHaveLength(1);
+  expect(f.grading.snapshot().grades[0]!.failure).toEqual({ name: 'Error', status: 422, detail: 'request_validation' });
+  f.append(passage('p3', 'participant', 'I also built the payment form.'));
+  f.at(15_000); await f.grading.tick();
+  expect(f.calls).toHaveLength(2);
+  expect(f.grading.snapshot().evaluation).toBeNull();
+  expect(f.grading.snapshot().feedbackStatus).toBe('unavailable');
+});

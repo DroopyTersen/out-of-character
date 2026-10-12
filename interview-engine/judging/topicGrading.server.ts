@@ -89,7 +89,7 @@ export class TopicGrading {
     const state = this.state;
     const diagnostic = { source: 'grade' as const, id: `grade-${++state.gradeCalls}`, final, revision, capturedAt: this.options.now(),
       inputCount: transcript.length, lastInputId: transcript.at(-1)?.id ?? null };
-    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(final ? 8000 : 3000)]);
+    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]);
     try {
       const result = await this.options.evaluate({ transcript, revision, signal });
       signal.throwIfAborted();
@@ -107,8 +107,9 @@ export class TopicGrading {
         outcome: abort.signal.aborted ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'evaluation_timeout' : 'evaluation_error' });
       if (abort.signal.aborted) return;
       state.feedbackStatus = state.evaluation ? 'delayed' : 'unavailable';
-      // One cadence-limited retry per participant input, still inside the paid-call cap.
-      if (!final && this.retriedText !== this.gradedText) {
+      // One cadence-limited retry per participant input for transient failures, inside the assessment cap.
+      const permanent = error instanceof Error && (error as Error & { isRetryable?: boolean }).isRetryable === false;
+      if (!final && !permanent && this.retriedText !== this.gradedText) {
         this.retriedText = this.gradedText;
         this.gradedText = '';
       }

@@ -7,6 +7,8 @@ import type { RecoveryOutput, VoiceConversation, VoiceSegment } from './voiceSes
 
 const GREETING_RETRY_MS = 10_000;
 const GREETING_REPLACE_MS = 25_000;
+const SILENCE_RETRY_MS = 6000;
+const SILENCE_REPLACE_MS = 14_000;
 export const UNRESPONSIVE = 'The voice service is not responding. You can end this attempt and try again.';
 export type SilenceJudgment = (input: { transcript: Passage[]; signal: AbortSignal }) => ReturnType<typeof judgeConversationSilence>;
 
@@ -24,28 +26,42 @@ type Options = {
 export class VoiceRecovery {
   private greeting: { eventId: string; content: string } | undefined;
   private lastSpeech = 0;
-  private lastAudio: number;
+  private lastAudio = 0;
+  private lastInputAudio = 0;
+  private continuation: { segment: VoiceSegment; record: SilenceRecord; sentAt: number } | undefined;
   private checkedRevision = -1;
   private running: Promise<void> | undefined;
   private abort: AbortController | undefined;
   private replacedSilent = false;
 
-  constructor(private readonly options: Options) { this.lastAudio = options.now(); }
+  constructor(private readonly options: Options) {}
 
   get lastActivityAt() { return Math.max(this.lastAudio, this.lastSpeech); }
 
-  playback(now: number) { this.lastAudio = now; }
+  playback(now: number) {
+    this.lastAudio = now;
+    if (this.continuation) this.continuation.record.playbackAt = now;
+    this.cancelContinuation();
+  }
+
+  /** Microphone activity suppresses recovery, but never extends the session's idle lease. */
+  inputAudio(now: number) { this.lastInputAudio = now; this.cancelContinuation(); }
+
+  private cancelContinuation() {
+    if (this.running || this.continuation) this.checkedRevision = -1;
+    this.continuation = undefined;
+    this.abort?.abort();
+  }
 
   composing(value: boolean, now: number) {
     if (value) {
-      if (this.running) this.checkedRevision = -1;
-      this.abort?.abort();
+      this.cancelContinuation();
     } else this.lastSpeech = now;
   }
 
   transcript(changed: Passage, now: number) {
     this.lastSpeech = now;
-    this.abort?.abort();
+    this.cancelContinuation();
     const current = this.options.current();
     if (!current) return;
     const { segment } = current;
@@ -61,11 +77,14 @@ export class VoiceRecovery {
   providerEvent(segment: VoiceSegment, event: VoiceEvent): boolean {
     if (event.type === 'acknowledged') {
       if (segment.greeting && this.greeting && [this.greeting.eventId, `${this.greeting.eventId}-again`].includes(event.id)) segment.greeting.acknowledgedAt ??= this.options.now();
-      const reminder = segment.silence?.find(item => item.id === event.id && item.outcome === 'sent');
-      if (reminder) reminder.acknowledgedAt ??= this.options.now();
+      const reminder = segment.silence?.find(item => [item.id, `${item.id}-again`].includes(event.id) && item.outcome === 'sent');
+      if (reminder) {
+        if (event.id === reminder.id) reminder.acknowledgedAt ??= this.options.now();
+        else reminder.retryAcknowledgedAt ??= this.options.now();
+      }
     }
     if (event.type === 'error') {
-      const reminder = segment.silence?.find(item => item.id === event.id);
+      const reminder = segment.silence?.find(item => event.id != null && [item.id, `${item.id}-again`].includes(event.id));
       if (reminder) { reminder.outcome = 'rejected'; return true; }
     }
     return false;
@@ -74,6 +93,7 @@ export class VoiceRecovery {
   greet(eventId: string, content: string) {
     const current = this.options.current();
     if (!current) return;
+    this.cancelContinuation();
     this.greeting = { eventId, content };
     current.segment.greeting = { sentAt: this.options.now(), acknowledgedAt: null, retriedAt: null, repliedAt: null, abandonedAt: null };
     this.options.send({ kind: 'instruction', id: eventId, content });
@@ -104,12 +124,34 @@ export class VoiceRecovery {
     }
   }
 
-  /** Transcript inactivity drives this check; playback affects only the greeting watchdog above. */
+  /** A receipt is not a response: retry one unanswered cue, then reuse the coordinator's reconnect path. */
+  private unansweredContinuation(now: number, segment: VoiceSegment, revision: number): boolean {
+    const pending = this.continuation;
+    if (!pending) return false;
+    const { record, sentAt } = pending;
+    if (pending.segment !== segment || record.revision !== revision) {
+      this.continuation = undefined;
+      return false;
+    }
+    if (now - sentAt >= SILENCE_REPLACE_MS) {
+      record.replacedAt = now;
+      this.continuation = undefined;
+      this.options.output({ type: 'replace' });
+    } else if (now - sentAt >= SILENCE_RETRY_MS && record.retriedAt == null) {
+      record.retriedAt = now;
+      this.options.send({ kind: 'instruction', id: `${record.id}-again`, content: CONTINUE_INTERVIEW });
+    }
+    return true;
+  }
+
+  /** Judge the turn only after both transcript and browser audio have been quiet. */
   checkSilence(now: number): Promise<void> | undefined {
     const current = this.options.current();
     if (!current) return;
     const { segment, conversation } = current;
-    if (conversation.status !== 'live' || conversation.composing || this.running || segment.greeting?.repliedAt == null || this.checkedRevision === conversation.revision || now - this.lastSpeech < SILENCE_MS) return;
+    if (conversation.status !== 'live' || conversation.composing || this.running || segment.greeting?.repliedAt == null) return;
+    if (this.unansweredContinuation(now, segment, conversation.revision)) return;
+    if (this.checkedRevision === conversation.revision || now - Math.max(this.lastSpeech, this.lastAudio, this.lastInputAudio) < SILENCE_MS) return;
     if (!conversation.transcript.some(entry => entry.speaker === 'participant') || this.options.segments().reduce((n, item) => n + (item.silence?.length ?? 0), 0) >= MAX_SILENCE_CHECKS) return;
     const transcript = conversation.transcript.slice(-8);
     const record: SilenceRecord = { id: `silence-${crypto.randomUUID()}`, version: SILENCE_VERSION, revision: conversation.revision,
@@ -124,7 +166,7 @@ export class VoiceRecovery {
   }
 
   /** Cancel immediately. Pause and End choose when their required ordering permits awaiting settlement. */
-  stop(): Promise<void> { this.abort?.abort(); return this.running ?? Promise.resolve(); }
+  stop(): Promise<void> { this.cancelContinuation(); return this.running ?? Promise.resolve(); }
 
   private async judge(transcript: Passage[], segment: VoiceSegment, record: SilenceRecord, abort: AbortController) {
     const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(3000)]);
@@ -137,7 +179,9 @@ export class VoiceRecovery {
       else if (result.probability < this.options.silenceContinue) record.outcome = 'wait';
       else {
         record.outcome = 'sent';
-        if (!this.options.send({ kind: 'instruction', id: record.id, content: CONTINUE_INTERVIEW })) record.outcome = 'error';
+        if (this.options.send({ kind: 'instruction', id: record.id, content: CONTINUE_INTERVIEW })) {
+          this.continuation = { segment, record, sentAt: this.options.now() };
+        } else record.outcome = 'error';
       }
     } catch (error) {
       record.outcome = abort.signal.aborted ? 'aborted' : error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'error';

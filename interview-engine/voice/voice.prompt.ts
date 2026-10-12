@@ -59,4 +59,4 @@ export function resumeInstruction(interviewerName: string, transcript: Passage[]
   ].filter(Boolean).join(' ');
 }
 
-export const CONTINUE_INTERVIEW = 'If the participant is still quiet and has finished their thought, take your next turn now: respond to their latest request, or ask one brief, grounded question to continue the interview. Respect any request to end or move on. Do not repeat an answered or declined question or apologize for the pause. If they are speaking or still thinking, keep listening.';
+export const CONTINUE_INTERVIEW = 'It is your turn in this ongoing interview. Speak now: respond to the latest participant request, finish your unfinished question, or ask one brief, grounded follow-up. Do not greet them again, introduce yourself, restate the purpose or restart the interview. Respect any request to end or move on. Do not repeat an answered or declined question or apologize for the pause. If the participant has started speaking, stop and listen.';

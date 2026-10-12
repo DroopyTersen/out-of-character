@@ -779,3 +779,17 @@ test.each(['sent', 'current'] as const)('a completed %s decision keeps its histo
   expect(reading.guidance).toBe(guidance);
   expect(f.notes('list')).toHaveLength(delivered);
 });
+
+
+test('the next-question judgment receives active time across a long pause and resume', async () => {
+  const f = fixture();
+  await f.step(60_000);
+  expect(f.calls.turn[0]!.atMs).toBe(60_000);
+  f.producer.pause();
+  f.pauses.push({ from: epoch + 60_000, to: epoch + 660_000 });
+  f.at(660_000);
+  f.producer.resume(epoch + 660_000);
+  await f.turn(690_000, 'I wrote the example payload used by both teams.');
+  expect(f.calls.turn.at(-1)!.atMs).toBe(90_000);
+  expect(f.calls.turn.at(-1)!.transcript.at(-1)!.text).toBe('I wrote the example payload used by both teams.');
+});

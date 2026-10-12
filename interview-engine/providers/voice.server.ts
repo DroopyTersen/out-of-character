@@ -7,11 +7,15 @@ export type WebSocketLike = {
   addEventListener(type: 'close' | 'error', listener: () => void): void;
 };
 
+/** What opening the control socket came to: an open socket, a session the provider no longer has, or a failure. */
+export type ControlOpening<Socket extends WebSocketLike = WebSocketLike> = { status: 'open'; socket: Socket } | { status: 'gone' } | { status: 'failed' };
+
 /**
- * Turns the provider's answer to an upgrade request into an open socket, or null when the response carries none.
- * Cloudflare: `response.webSocket` after `accept()`. The platform difference is an argument, not a seam.
+ * Opens the provider's control WebSocket at `url` with the provider's `headers`, which fetch cannot do. The platform
+ * supplies it: Bun's WebSocket client, or Cloudflare's upgrade fetch and `response.webSocket`. `signal` bounds the
+ * handshake only. `gone` is a 404 or 410: the session ended; any other failed handshake is `failed`.
  */
-export type SocketOpener<Socket extends WebSocketLike = WebSocketLike> = (response: Response) => Socket | null;
+export type ControlOpener<Socket extends WebSocketLike = WebSocketLike> = (request: { url: string; headers: Record<string, string>; signal: AbortSignal }) => Promise<ControlOpening<Socket>>;
 
 /** Provider events in the engine's names, independent of the wire protocol. */
 export type VoiceEvent =

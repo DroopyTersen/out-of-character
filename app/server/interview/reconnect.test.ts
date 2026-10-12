@@ -17,8 +17,8 @@ async function live(options: Parameters<typeof objectFixture>[0] = {}) {
   const f = await objectFixture(options);
   await f.session.fetch(request('start', capability, interviewAttempt));
   await f.session.fetch(request('ready'));
-  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-1', delta: 'Who owns the site today?', start_ms: 0, end_ms: 1200 });
-  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-1', delta: 'Our team does.', start_ms: 1300, end_ms: 2000 });
+  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-1', delta: 'Who owns the site today?', start_ms: 0, end_ms: 1200 });
+  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-1', delta: 'Our team does.', start_ms: 1300, end_ms: 2000 });
   return f;
 }
 async function lose(f: Fixture) {
@@ -54,6 +54,7 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   await waitFor(() => notes(f.socket.sent).some(note => note.startsWith(NOTE_HEADERS.list)));
   const delivered = notes(f.socket.sent);
   expect(delivered).toHaveLength(2);
+  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('note-')).every(event => event.type === 'session.thinking.append')).toBe(true);
   await lose(f);
   await reconnect(f);
   await waitFor(() => notes(f.socket.sent).length === 2);

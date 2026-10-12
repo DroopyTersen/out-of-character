@@ -19,10 +19,10 @@ async function advance(ms: number) {
   for (let elapsed = 0; elapsed < ms; elapsed += 100) { jest.advanceTimersByTime(100); await flush(); }
 }
 function delivery(request: ProtocolTransport['request'], signal = new AbortController().signal, text = '  Five days to one.  ') {
-  return deliverTypedAnswer({ text, transport: { request }, attempt, signal });
+  return deliverTypedAnswer({ answer: { id: crypto.randomUUID(), text }, transport: { request }, attempt, signal });
 }
 
-test('mixed unanswered and busy replies retain one answer identity; the next answer has its own', async () => {
+test('mixed unanswered and busy replies retain the answer identity it was given', async () => {
   const sent: SubmitTextInput[] = [];
   const request: ProtocolTransport['request'] = async (action, body, options) => {
     expect(action).toBe('submitText');
@@ -40,8 +40,6 @@ test('mixed unanswered and busy replies retain one answer identity; the next ans
   expect(new Set(sent.map(answer => answer.id)).size).toBe(1);
   expect(sent.every(answer => answer.text === '  Five days to one.  ')).toBe(true);
   expect(accepted.acceptedId).toBe(sent[0]!.id);
-  const next = await delivery(request);
-  expect(next.acceptedId).not.toBe(accepted.acceptedId);
 });
 
 test.each([400, 401, 403, 409, 413])('a %i refusal is final and preserves the server explanation', async status => {

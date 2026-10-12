@@ -1,5 +1,24 @@
 import type { Experimental_EvaluationModel, Experimental_EvaluationAnswer, Experimental_EvaluationQuestion } from 'ai';
 
+type EvaluationRequest = Parameters<Exclude<Experimental_EvaluationModel, string>['doEvaluate']>[0];
+type JudgePassage = { id: string; speaker: string; text: string };
+
+/** Domain input for a host's calibrated recipe. Other providers keep the ordinary state and questions unchanged. */
+export type InterviewJudgeInput =
+  | { purpose: 'turn'; scope: { earlierDialogue: JudgePassage[]; latestParticipantTurn: JudgePassage[]; precedingInterviewer: JudgePassage | null; earlierDialogueOmitted: boolean };
+      feedback: { id: string; latest: { speaker: string; text: string }[]; savedPreferences: { text: string; passageId: string }[] }; states: string[] }
+  | { purpose: 'coverage'; participantText: Record<string, string>; objectives: Record<string, { topic: string; criterion: string }>; coverageEvidenceQuestions: string[] }
+  | { purpose: 'silence' };
+
+export function interviewJudgeOptions(input: InterviewJudgeInput): NonNullable<EvaluationRequest['providerOptions']> {
+  return { interviewJudge: input };
+}
+
+/** Internal SDK boundary: only the typed interview builders populate this provider namespace. */
+export function readInterviewJudgeInput(request: EvaluationRequest): InterviewJudgeInput | undefined {
+  return request.providerOptions?.interviewJudge as InterviewJudgeInput | undefined;
+}
+
 /** The host binds the model and its calibrated action thresholds as one judge. */
 export type Judge = {
   model: Experimental_EvaluationModel;

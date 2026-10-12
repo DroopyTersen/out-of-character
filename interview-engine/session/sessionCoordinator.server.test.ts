@@ -11,9 +11,12 @@ import { inlineBackground, memoryArchive, memoryRecord, memoryStore, type Memory
 import { INTERVIEW_RUBRIC_VERSION } from '../judging/topicCoverage.prompt';
 import { testFraming, testTechniques } from '../reasoning/testSpec';
 import { FencedError, type InterviewArchiveRow } from '../seams.server';
+import { decodeCommand } from '../shared/protocol';
 import type { InterviewSnapshot as PublicSnapshot } from '../shared/snapshot';
-import { SessionCoordinator, type SessionOptions, type SessionServices } from './sessionCoordinator.server';
+import { SessionCoordinator, type Reply, type SessionOptions, type SessionServices } from './sessionCoordinator.server';
 import { resumeInstruction, typedAnswerCue } from '../voice/voice.prompt';
+import { threadKey } from '../reasoning/threadSelection';
+import type { MapThread } from '../reasoning/conversationMap';
 
 // Ownership tests: the session over the in-memory seams, with fake paid calls and a fake voice provider. Only the
 // network is substituted; timing, the lease, checkpoints, fencing and the archive are real.
@@ -27,8 +30,8 @@ const spec = resolveInterview({
 });
 const capability = `Bearer ${'a'.repeat(64)}`;
 const attempt = { id: 'c49f7954-7aab-47f9-a269-752932556c37', planId: spec.id, voiceId: 'riley-cedar', sdp: 'v=0\r\no=fixture-offer\r\n' };
-const start = JSON.stringify(attempt);
-const quietPoll = JSON.stringify({ active: false, audio: false });
+const start = attempt;
+const quietPoll = { active: false, audio: false };
 const EPOCH = 1_800_000_000_000;
 
 class ProviderSocket extends EventTarget {
@@ -57,7 +60,7 @@ function fakeVoice() {
         sockets.set(id, new ProviderSocket());
         return { id, sdp: 'v=0\r\nanswer' };
       },
-      attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { socket: () => sockets.get(id)! as unknown as WebSocketLike, fetch: (async () => ({ status: 101 }) as Response) as unknown as typeof fetch }).attach(id, handlers),
+      attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { openControl: async () => ({ status: 'open', socket: sockets.get(id)! as unknown as WebSocketLike }) }).attach(id, handlers),
       close: async (id: string) => { closed.push(id); },
     },
   };
@@ -91,7 +94,11 @@ function fixture({ record = memoryRecord(), voice = fakeVoice(), archive = memor
       },
     },
   };
-  const send = (actor: SessionCoordinator, action: string, body?: string, cap = capability) => actor.handle({ action, capability: cap, ...(body != null ? { body } : {}) });
+  // Decodes as a transport does: an invalid body is the transport's 400 and never reaches the coordinator.
+  const send = async (actor: SessionCoordinator, action: string, body?: unknown, cap = capability): Promise<Reply> => {
+    const command = decodeCommand(action, body);
+    return command.action === 'invalid' ? { status: 400, body: { error: 'Invalid interview request.' } } : actor.handle(command, cap);
+  };
   return {
     record, voice, archive, store, background, graded, events, options, send,
     restore: () => SessionCoordinator.restore(options),
@@ -385,7 +392,7 @@ test('the capability is checked before anything else, and an end before start le
   const actor = await f.restore();
   expect(await f.send(actor, 'poll', undefined, 'Bearer nope')).toEqual({ status: 401, body: { error: 'Session capability is required.' } });
   expect(await f.send(actor, 'poll')).toEqual({ status: 404, body: { error: 'This interview session was not found.' } });
-  expect(await f.send(actor, 'start', JSON.stringify({ ...attempt, planId: 'other' }))).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
+  expect(await f.send(actor, 'start', { ...attempt, planId: 'other' })).toEqual({ status: 400, body: { error: 'Invalid interview request.' } });
   expect(await f.send(actor, 'end')).toEqual({ status: 200, body: { ended: true } });
   expect(f.record.lease).toEqual({ capability, providerIds: [], deadline: EPOCH, closed: true });
   expect(f.record.wakeAt).toBe(EPOCH + 60_000);
@@ -441,7 +448,7 @@ test('a stale owner is fenced on its next save, and the new owner holds the atte
   b.at(32_000);
   await second.wake();
   expect(voice.closed).toEqual(['provider-1']);
-  const resumed = await b.send(second, 'resume', JSON.stringify({ sdp: attempt.sdp }));
+  const resumed = await b.send(second, 'resume', { sdp: attempt.sdp });
   expect(resumed.status).toBe(200);
   expect(voice.created[1]!.instructions).toContain('CONVERSATION SO FAR');
   expect(voice.created[1]!.instructions).toContain('The participant: A claims portal for the adjusters.');
@@ -476,7 +483,7 @@ test('a provider drop pauses a live conversation, and a resume continues it with
   const paused = body(await f.send(actor, 'poll', quietPoll));
   expect(paused).toMatchObject({ status: 'paused', pause: { reason: 'provider', pausedAt: EPOCH + 5000, resumeBy: EPOCH + 5000 + 15 * 60_000 } });
   expect(f.record.checkpoint!.snapshot.status).toBe('paused');
-  const resumed = await f.send(actor, 'resume', JSON.stringify({ sdp: attempt.sdp }));
+  const resumed = await f.send(actor, 'resume', { sdp: attempt.sdp });
   expect(resumed.status).toBe(200);
   expect(body(await f.send(actor, 'ready')).status).toBe('live');
   await f.send(actor, 'end');
@@ -498,7 +505,7 @@ test('a closed browser link holds a live conversation for the browser to resume,
   const replacement = fixture({ record: f.record, voice: f.voice, archive: f.archive });
   replacement.at(6000);
   const resumed = await replacement.restore();
-  expect(await replacement.send(resumed, 'resume', JSON.stringify({ sdp: attempt.sdp })).then(r => r.status)).toBe(200);
+  expect(await replacement.send(resumed, 'resume', { sdp: attempt.sdp }).then(r => r.status)).toBe(200);
   expect(body(await replacement.send(resumed, 'ready')).status).toBe('live');
   await replacement.send(resumed, 'end');
   await replacement.background.settle();
@@ -590,6 +597,50 @@ test('a provider session created after another owner took over is closed by the 
   expect(f.record.lease).toBeUndefined();
 });
 
+test('a restored lease without a checkpoint schedules its own cleanup: a cancelled attempt is held then forgotten, a lost creation closes its session', async () => {
+  const cancelled = fixture();
+  cancelled.record.lease = { capability, providerIds: [], deadline: EPOCH, closed: true };
+  const cancelledWakes = wakesOf(cancelled);
+  const finished = await cancelled.restore();
+  // The closed lease is a tombstone for the attempt's receipt window; it is not cleared on a cold restore.
+  expect(cancelledWakes).toEqual([EPOCH + 300_000]);
+  expect(finished.retired).toBe(false);
+  cancelled.at(300_000);
+  await finished.wake();
+  expect(cancelled.record.lease).toBeUndefined();
+  expect(finished.retired).toBe(true);
+
+  const lost = fixture();
+  lost.record.lease = { capability, providerIds: ['orphan-0'], deadline: EPOCH + 3_600_000, closed: false };
+  const lostWakes = wakesOf(lost);
+  const orphan = await lost.restore();
+  expect(lostWakes).toEqual([EPOCH + 15_000]);
+  lost.at(15_000);
+  await orphan.wake();
+  expect(lost.voice.closed).toEqual(['orphan-0']);
+  expect(lost.record.lease).toMatchObject({ closed: true, providerIds: [] });
+  expect(lostWakes).toEqual([EPOCH + 15_000, EPOCH + 15_000 + 300_000]);
+  lost.at(15_000 + 300_000);
+  await orphan.wake();
+  expect(lost.record.lease).toBeUndefined();
+  expect(orphan.retired).toBe(true);
+
+  // A row without a lease has nothing to clean up and nothing to protect: its owner may go until a start arrives.
+  const empty = fixture();
+  const emptyWakes = wakesOf(empty);
+  const idle = await empty.restore();
+  expect(emptyWakes).toEqual([]);
+  expect(idle.retired).toBe(true);
+  expect((await empty.send(idle, 'poll', { active: false, audio: false })).status).toBe(404);
+  expect(idle.retired).toBe(true);
+  expect((await empty.send(idle, 'end')).status).toBe(200);
+  expect(idle.retired).toBe(false);
+  const started = fixture();
+  const actor = await started.restore();
+  expect((await started.send(actor, 'start', start)).status).toBe(200);
+  expect(actor.retired).toBe(false);
+});
+
 test('a closure the provider refuses is retried on a scheduled wake, then given up once the attempt is long over', async () => {
   const f = fixture();
   f.record.lease = { capability, providerIds: ['orphan-0', 'orphan-1'], deadline: EPOCH + 3_600_000, closed: false };
@@ -600,10 +651,11 @@ test('a closure the provider refuses is retried on a scheduled wake, then given 
   await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
   expect(f.voice.closed).toEqual(['orphan-0']);
   expect(f.record.lease).toEqual({ capability, providerIds: ['orphan-1'], deadline: EPOCH + 3_600_000, closed: false });
-  expect(wakes).toEqual([EPOCH + 15_000]);
+  // Restoring a lease without a checkpoint scheduled the closure itself; the refusal schedules the retry.
+  expect(wakes).toEqual([EPOCH + 15_000, EPOCH + 15_000]);
   f.at(15_000);
   await expect(actor.wake()).rejects.toThrow('Closure not confirmed.');
-  expect(wakes).toEqual([EPOCH + 15_000, EPOCH + 30_000]);
+  expect(wakes).toEqual([EPOCH + 15_000, EPOCH + 15_000, EPOCH + 30_000]);
   expect(refusals).toBe(2);
   // An hour past the lease's deadline the provider has long ended the session itself.
   f.at(3_600_000 + 60 * 60_000);
@@ -829,7 +881,7 @@ test('transcript inactivity gets one Jev check per unchanged exchange and a priv
     await f.send(f.actor, 'end');
     await f.background.settle();
     const checks = f.archive.rows.get(attempt.id)!.provenance.connection.segments[0]!.silence;
-    expect(checks).toMatchObject([{ id, version: 'interview-silence-v2', outcome: 'sent', probability: .97, quietMs: 4000, acknowledgedAt: EPOCH + 8000, nextSpeech: { speaker: 'interviewer', passageId: 'p4' } }]);
+    expect(checks).toMatchObject([{ id, version: 'interview-silence-v3', outcome: 'sent', probability: .97, quietMs: 4000, acknowledgedAt: EPOCH + 8000, nextSpeech: { speaker: 'interviewer', passageId: 'p4' } }]);
   } finally { await f.send(f.actor, 'end'); }
 });
 
@@ -849,18 +901,18 @@ test.each([.03, .6])('a wait or uncertain silence judgment (%s) keeps listening 
   } finally { await f.send(f.actor, 'end'); }
 });
 
-test('four seconds without transcript growth starts Jev even when the browser reports sound', async () => {
+test.each(['audio', 'inputAudio'] as const)('%s holds silence recovery until four quiet seconds', async audio => {
   let calls = 0;
   const f = await stranded(async () => { calls++; return silenceResult(.97); });
   try {
-    f.at(5000);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true }));
-    expect(calls).toBe(0);
-    f.at(7999);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: true, audio: true }));
-    expect(calls).toBe(0);
     f.at(8000);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 3, active: true, audio: true }));
+    await f.send(f.actor, 'poll', { sequence: 1, active: false, audio: false, [audio]: true });
+    expect(calls).toBe(0);
+    f.at(11_999);
+    await f.send(f.actor, 'poll', { sequence: 2, active: false, audio: false, inputAudio: false });
+    expect(calls).toBe(0);
+    f.at(12_000);
+    await f.send(f.actor, 'poll', { sequence: 3, active: false, audio: false, inputAudio: false });
     await f.background.settle();
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(1);
@@ -918,19 +970,24 @@ test.each(['input', 'output'] as const)('a pending silence decision is discarded
   } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
 });
 
-test('playback activity changes cannot cancel a pending transcript judgment', async () => {
+test.each(['audio', 'inputAudio'] as const)('%s cancels a pending judgment and permits a later quiet check', async audio => {
   const result = deferred<ReturnType<typeof silenceResult>>();
   let calls = 0;
   const f = await stranded(async () => { calls++; return result.promise; });
   try {
     await f.send(f.actor, 'poll');
     expect(calls).toBe(1);
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 1, active: false, audio: true }));
-    await f.send(f.actor, 'poll', JSON.stringify({ sequence: 2, active: false, audio: false }));
+    await f.send(f.actor, 'poll', { sequence: 1, active: false, audio: false, [audio]: true });
+    await f.send(f.actor, 'poll', { sequence: 2, active: false, audio: false, inputAudio: false });
     f.at(10_500);
     result.resolve(silenceResult(.99));
     await f.background.settle();
     expect(calls).toBe(1);
+    expect(reminders(f.socket)).toHaveLength(0);
+    f.at(12_000);
+    await f.send(f.actor, 'poll');
+    await f.background.settle();
+    expect(calls).toBe(2);
     expect(reminders(f.socket)).toHaveLength(1);
   } finally { result.resolve(silenceResult(.99)); await f.send(f.actor, 'end'); }
 });
@@ -949,7 +1006,7 @@ test.each(['end', 'pause', 'fence'] as const)('a pending silence decision cannot
     await f.background.settle();
     expect(reminders(f.socket)).toHaveLength(0);
     if (action === 'pause') {
-      await f.send(f.actor, 'resume', JSON.stringify({ sdp: attempt.sdp }));
+      await f.send(f.actor, 'resume', { sdp: attempt.sdp });
       await f.send(f.actor, 'ready');
       const resumed = f.voice.sockets.get('provider-2')!;
       expect(reminders(resumed)).toHaveLength(0);
@@ -998,7 +1055,7 @@ test.each([false, true])('resume preserves the accepted definition when the orig
   const copy = resumed.definition;
   copy.plan.goals = 'MUTATED COPY';
   expect(resumed.definition.plan.goals).toBe('Learn what was built.');
-  expect((await replacement.send(resumed, 'resume', JSON.stringify({ sdp: attempt.sdp }))).status).toBe(200);
+  expect((await replacement.send(resumed, 'resume', { sdp: attempt.sdp })).status).toBe(200);
   const instructions = original.voice.created.at(-1)!.instructions;
   expect(instructions).toContain('Learn what was built.');
   expect(instructions).not.toContain('CHANGED');
@@ -1011,7 +1068,7 @@ test.each([false, true])('resume preserves the accepted definition when the orig
 
 // Typed answers: saved before they are acknowledged, forwarded once to the same provider session, and frozen.
 
-const typed = (id: string, text: string) => JSON.stringify({ id, text });
+const typed = (id: string, text: string) => ({ id, text });
 const forwards = (socket: ProviderSocket) => socket.sent.filter(event => String(event.event_id).startsWith('typed-'));
 type Receipt = { acceptedId: string; snapshot: PublicSnapshot };
 /** Holds the next checkpoint write until released; `fail` makes it throw once released. */
@@ -1168,7 +1225,7 @@ test('a typed answer saved after its session paused is not forwarded; the resume
   await f.background.settle();
   expect(forwards(socket)).toHaveLength(0);
   expect(f.record.checkpoint!.snapshot.transcript.at(-1)!.id).toBe(`typed-${id}`);
-  expect((await f.send(actor, 'resume', JSON.stringify({ sdp: attempt.sdp }))).status).toBe(200);
+  expect((await f.send(actor, 'resume', { sdp: attempt.sdp })).status).toBe(200);
   await f.send(actor, 'ready');
   const resumed = f.voice.sockets.get('provider-2')!;
   expect(forwards(resumed)).toHaveLength(0);
@@ -1210,7 +1267,7 @@ test('an end while a typed answer’s save is failing still ends the attempt and
   expect(f.archive.rows.get(attempt.id)!.transcript.map(entry => entry.id)).toContain(`typed-${id}`);
 });
 
-const composing = (sequence: number, value?: boolean) => JSON.stringify({ sequence, active: true, audio: false, ...(value === undefined ? {} : { composing: value }) });
+const composing = (sequence: number, value?: boolean) => ({ sequence, active: true, audio: false, ...(value === undefined ? {} : { composing: value }) });
 
 test('composing cancels a pending silence judgment, and closing the draft starts a fresh four-second interval', async () => {
   const first = deferred<ReturnType<typeof silenceResult>>();
@@ -1251,7 +1308,7 @@ test('an unnumbered poll cannot open a draft', async () => {
   let calls = 0;
   const f = await stranded(async () => { calls++; return silenceResult(.97); });
   try {
-    await f.send(f.actor, 'poll', JSON.stringify({ active: true, audio: false, composing: true }));
+    await f.send(f.actor, 'poll', { active: true, audio: false, composing: true });
     await f.background.settle();
     expect(calls).toBe(1);
     expect(reminders(f.socket)).toHaveLength(1);
@@ -1264,7 +1321,7 @@ test('a ready carrying an open draft protects the session from its first moment 
   f.options.services!.judgeConversationSilence = async () => { calls++; return silenceResult(.97); };
   const actor = await f.restore();
   await f.send(actor, 'start', start);
-  expect((await f.send(actor, 'ready', JSON.stringify({ active: false }))).status).toBe(400);
+  expect((await f.send(actor, 'ready', { active: false })).status).toBe(400);
   expect(actor.snapshot()!.status).toBe('connecting');
   expect(body(await f.send(actor, 'ready', composing(5, true))).status).toBe('live');
   const socket = f.voice.sockets.get('provider-1')!;
@@ -1359,15 +1416,17 @@ test('successive map corrections during typing send only the current note before
   expect(audit[0]).toMatchObject({ outcome: 'sent', delivery: { eventId: notes(f.socket)[0]!.event_id, status: 'unknown' } });
 });
 
-test('closing a draft sends current notes; the resumed session receives current context', async () => {
+test('closing a draft keeps notes held until an answer; a resumed session receives them after its answer', async () => {
   const f = await noted();
   await f.send(f.actor, 'poll', composing(1, true));
   f.at(30_000);
   await f.produce();
   expect(notes(f.socket)).toHaveLength(0);
   await f.send(f.actor, 'poll', composing(10, false));
+  expect(notes(f.socket)).toHaveLength(0);
+  say(f.socket, 'input', 'answer', 'I led the build.', 31_000);
+  f.at(33_000); await f.produce();
   expect(notes(f.socket)).toHaveLength(1);
-  // Later notes go straight through once the draft is closed.
   const g = await noted();
   await g.send(g.actor, 'poll', composing(1, true));
   g.at(30_000);
@@ -1375,10 +1434,13 @@ test('closing a draft sends current notes; the resumed session receives current 
   expect(notes(g.socket)).toHaveLength(0);
   await g.send(g.actor, 'pause');
   g.at(40_000);
-  await g.send(g.actor, 'resume', JSON.stringify({ sdp: attempt.sdp }));
+  await g.send(g.actor, 'resume', { sdp: attempt.sdp });
   await g.send(g.actor, 'ready', composing(10, true));
   const resumed = g.voice.sockets.get('provider-2')!;
   await g.send(g.actor, 'poll', composing(11, false));
+  expect(notes(resumed)).toHaveLength(0);
+  say(resumed, 'input', 'answer', 'I led the build.', 1500);
+  g.at(43_000); await g.produce();
   await f.send(f.actor, 'end');
   await g.send(g.actor, 'end');
   await g.background.settle();
@@ -1387,6 +1449,48 @@ test('closing a draft sends current notes; the resumed session receives current 
   expect(written).toHaveLength(1);
   expect(notes(g.socket)).toHaveLength(0);
   expect(notes(resumed).map(event => event.event_id)).toEqual(written);
+});
+
+test('late map and thread notes wait through Sam’s question and silence, then fresh guidance reaches the next answer', async () => {
+  const f = fixture();
+  const thread: MapThread = { id: 't1', label: 'Portal rollout', anchors: ['participant'], unknown: 'who tried the portal first', guess: '', related: [], topics: ['scope'], status: 'open', reason: null };
+  const read: string[] = [];
+  f.options.services!.generateMap = async input => ({
+    map: { ...input.previous, participant: { vantage: 'Built the claims portal', preferences: [] }, threads: [thread] },
+    update: { vantage: 'Built the claims portal', preferences: null, entities: [], edges: [], threads: [thread], revise: [], close: [], drop: [] },
+    changes: { added: ['t1'], changed: [], dropped: [], kept: [] }, research: null, model: 'fixture', usage: { inputTokens: 1, outputTokens: 1 },
+  });
+  f.options.services!.evaluateTurn = async input => {
+    read.push(input.transcript.at(-1)!.text);
+    return { reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: { t1: threadKey(thread) }, next: { choice: 'thread:t1', probabilities: { 'thread:t1': .9 } }, states: {}, novel: 1 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} };
+  };
+  const { actor, socket } = await conversation(f);
+  const produce = async () => {
+    for (let round = 0; round < 4; round++) {
+      (actor as unknown as { tick(): void }).tick();
+      await f.background.settle();
+    }
+  };
+  try {
+    f.at(30_000);
+    say(socket, 'output', 'question-start', 'Who', 30_000);
+    await produce();
+    expect(notes(socket)).toHaveLength(0); // Even before the question's transcript settles.
+    f.at(31_000);
+    say(socket, 'output', 'question-end', ' used the portal?', 30_900);
+    f.at(35_000); await f.send(actor, 'poll', quietPoll);
+    f.at(45_000); await produce();
+    expect(notes(socket)).toHaveLength(0);
+    say(socket, 'input', 'backchannel', 'Mm-hm.', 45_000);
+    f.at(47_000); await produce();
+    expect(notes(socket)).toHaveLength(0);
+    say(socket, 'input', 'answer', 'The field adjusters used it.', 49_000);
+    f.at(51_000); await produce();
+    expect(read.at(-1)).toBe('The field adjusters used it.');
+    expect(notes(socket).map(event => String(event.content).split('.')[0]).sort()).toEqual(['Map note', 'Thread note']);
+    await produce();
+    expect(notes(socket)).toHaveLength(2);
+  } finally { await f.send(actor, 'end'); }
 });
 
 test('closure drains final participant evidence into the final grade and archive', async () => {
@@ -1426,7 +1530,7 @@ test('restored near-limit closure retains the final participant delta and usage'
   first.voice.sockets.set('provider-1', finalSocket);
   const second = fixture({ record: first.record, voice: first.voice, archive: first.archive });
   second.options.providers.voice.close = (id, handlers) => gptLiveProvider(testFoundry, {
-    socket: () => finalSocket as unknown as WebSocketLike, fetch: (async () => ({ status: 101 }) as Response) as unknown as typeof fetch,
+    openControl: async () => ({ status: 'open', socket: finalSocket as unknown as WebSocketLike }),
   }).close(id, handlers);
   second.at(3_550_000);
   const restored = await second.restore();
@@ -1435,4 +1539,38 @@ test('restored near-limit closure retains the final participant delta and usage'
   const result = restored.snapshot()!;
   expect(result.transcript.map(item => item.text).join(' ')).toContain('The last answer survived.');
   expect(result).toMatchObject({ finalization: 'confirmed', usageSeconds: 12 });
+});
+
+
+test('unanswered acknowledged cues pause once and resume the same conversation with its evidence', async () => {
+  let calls = 0;
+  const f = await stranded(async () => { calls++; return silenceResult(.97); });
+  try {
+    await f.send(f.actor, 'poll'); await f.background.settle();
+    const id = reminders(f.socket)[0]!.event_id;
+    f.socket.emit({ type: 'session.instructions.appended', client_event_id: id });
+    f.at(14_000); await f.send(f.actor, 'poll'); await f.background.settle();
+    expect(reminders(f.socket)).toHaveLength(2);
+    f.socket.emit({ type: 'session.instructions.appended', client_event_id: `${id}-again` });
+    f.at(22_000); await f.send(f.actor, 'poll'); await f.background.settle();
+    expect(f.actor.snapshot()!.status).toBe('paused');
+    expect(f.actor.snapshot()!.pause?.reason).toBe('provider');
+    expect(f.record.checkpoint!.snapshot.transcript.map(passage => passage.text)).toContain('A claims portal for the adjusters.');
+    expect(calls).toBe(1);
+    expect((await f.send(f.actor, 'resume', { sdp: attempt.sdp })).status).toBe(200);
+    expect(f.voice.created[1]!.instructions).toContain('A claims portal for the adjusters.');
+    f.at(23_000); await f.send(f.actor, 'ready');
+    const resumed = f.voice.sockets.get('provider-2')!;
+    expect(resumed.sent[0]).toMatchObject({ event_id: 'resume-2' });
+    expect(reminders(resumed)).toEqual([]);
+    say(resumed, 'output', 'resumed-answer', 'Who tried the claims portal first?', 0);
+    await f.send(f.actor, 'end'); await f.background.settle();
+    const row = f.archive.rows.get(attempt.id)!;
+    expect(row.transcript.map(passage => passage.text)).toEqual([
+      'Hi, I’m Riley. What did you build?', 'A claims portal for the adjusters.', 'That sounds useful.', 'Who tried the claims portal first?',
+    ]);
+    expect(row.provenance.connection.segments[0]!.silence![0]).toMatchObject({
+      acknowledgedAt: EPOCH + 8000, retriedAt: EPOCH + 14_000, retryAcknowledgedAt: EPOCH + 14_000, replacedAt: EPOCH + 22_000,
+    });
+  } finally { await f.send(f.actor, 'end'); }
 });

@@ -6,6 +6,7 @@ import { NarrativeRunner, within } from '../../reports/narrativeRun.server';
 import { narrativeRunner, participantSpoke, type Narrate } from './narrative';
 import { NARRATIVE_VERSION, type NarrativeStatus, type NarrativeProvenance } from '../../reports/report.types';
 import { jsonResponse } from '../http';
+import { decodeCommand } from '../../../interview-engine/shared/protocol';
 
 export type HostedNarrative = {
   narrate: Narrate;
@@ -39,8 +40,10 @@ export class HostedSession {
 
   async fetch(request: Request): Promise<Response> {
     const action = new URL(request.url).pathname.slice(1);
-    const body = request.body ? await request.text() : undefined;
-    const reply = await this.actor.handle({ action: action === 'report' ? 'poll' : action, capability: request.headers.get('Authorization') ?? '', ...(body != null ? { body } : {}) });
+    const body = request.body ? await request.json().catch(() => null) : undefined;
+    const command = decodeCommand(action === 'report' ? 'poll' : action, body);
+    if (command.action === 'invalid') return jsonResponse({ error: 'Invalid interview request.' }, 400);
+    const reply = await this.actor.handle(command, request.headers.get('Authorization') ?? '');
     if (action === 'report') return reply.status === 200 ? this.startReport(request) : jsonResponse(reply.body, reply.status);
     if (reply.terminal) {
       // Terminal reads carry the narrative's state; a poll waits briefly for a running narrative to settle.

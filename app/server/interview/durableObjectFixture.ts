@@ -80,7 +80,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
       socketFor(id);
       return { id, sdp: 'v=0\r\nanswer' };
     },
-    attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { socket: () => socketFor(id) as unknown as WebSocketLike, fetch: (async () => ({ status: 101 }) as Response) as unknown as typeof fetch }).attach(id, handlers),
+    attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { openControl: async () => ({ status: 'open', socket: socketFor(id) as unknown as WebSocketLike }) }).attach(id, handlers),
     close: async () => {},
   };
   let pair = socketPair();

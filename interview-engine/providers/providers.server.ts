@@ -3,12 +3,12 @@ import { foundryProvider, type FoundryConfig } from './foundry.server';
 import { gptLiveProvider } from './gptLive.server';
 import { unconfiguredJudge, type Judge } from './judgeProvider.server';
 import { structuredWith, type StructuredRequest } from './structured.server';
-import type { SocketOpener, VoiceProvider } from './voice.server';
+import type { ControlOpener, VoiceProvider } from './voice.server';
 
 export type { FoundryConfig } from './foundry.server';
 export type { EngineEvent } from './diagnostics.server';
 export type { StructuredInput, StructuredRequest, StructuredResult } from './structured.server';
-export type { SocketOpener, VoiceProvider, WebSocketLike } from './voice.server';
+export type { ControlOpener, ControlOpening, VoiceProvider, WebSocketLike } from './voice.server';
 
 /**
  * Everything paid the engine calls, with credentials bound inside: the voice provider, the agent and fast language
@@ -32,13 +32,14 @@ export const modelName = (model: LanguageModel) => typeof model === 'string' ? m
 
 export type FoundryPlatform = {
   fetch?: typeof fetch;
-  socket?: SocketOpener;
+  /** Without it the voice control socket is unavailable rather than guessed. */
+  openControl?: ControlOpener;
 };
 
 export function foundryProviders(config: FoundryConfig & { judge?: Judge }, platform: FoundryPlatform = {}): Providers {
   const language = foundryProvider(config, platform.fetch);
   return {
-    voice: gptLiveProvider(config, { fetch: platform.fetch, socket: platform.socket ?? (() => null) }),
+    voice: gptLiveProvider(config, { fetch: platform.fetch, openControl: platform.openControl ?? (async () => ({ status: 'failed' })) }),
     language: { agent: language.responses(config.agentModel), fast: language.responses(config.fastModel) },
     webSearch: language.tools.webSearch({ searchContextSize: 'low' }),
     structured: structuredWith(config, platform.fetch ?? fetch),

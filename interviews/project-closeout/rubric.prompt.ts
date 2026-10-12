@@ -3,7 +3,7 @@ import type { interviewTopics } from './public';
 
 type TopicId = (typeof interviewTopics)[number]['objectives'][number]['id'];
 export const topicCriteria = {
-  "project-purpose": "The participant explains the problem or unmet need the project was intended to address and who needed the improvement, as they understood it. The intended benefit can establish this; merely naming a product cannot.",
+  "project-purpose": "The participant describes the intended benefit of the project for its users or client. They identify who it was for and how it was meant to help them.",
   "project-delivery": "The participant identifies what was actually built or delivered and its current state, distinguishing completed work from planned, prototype, or unfinished work. A scope change matters when it changes that account.",
   "project-outcome": "The participant describes an observed result, adoption, client reaction, or acceptance decision and the concrete evidence behind that account. Intended benefits or success targets alone are not achieved outcomes.",
   "project-role": "The participant identifies their own project responsibilities and what they actually did. Include multiple responsibilities when they held several. Collective team activity alone does not identify their contribution.",

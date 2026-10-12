@@ -2,7 +2,7 @@ import type { Experimental_EvaluationQuestion } from 'ai';
 import { judgeConversationSilence } from '../../interview-engine/judging/judgeConversationSilence.server';
 import { readTopicCoverage } from '../../interview-engine/judging/judgeTopicCoverage.server';
 import { dialogueState } from '../../interview-engine/shared/transcript';
-import { interviewQuestions } from '../../interview-engine/judging/topicCoverage.prompt';
+import { coverageRequest } from '../../interview-engine/judging/topicCoverage.prompt';
 import { turnQuestions, readTurnAnswers } from '../../interview-engine/judging/judgeConversationTurn.server';
 import { latestTurn } from '../../interview-engine/reasoning/turnTaking';
 import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/reasoning/threadSelection';
@@ -49,7 +49,7 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
     item.transcript = archivedTranscriptSchema.parse(item.transcript);
     result.push({ id: `turn:${item.id}`, lane: 'turn', split: item.sourceAlias === 'interview-A' ? 'development' : 'validation',
     source: item.sourceAlias, transcript: item.transcript, map: item.map, atMs: item.atMs, mapId: item.mapId,
-    state: dialogueState(item.transcript, 'sam'), questions: turnQuestions(item.map, latestTurn(item.transcript)), deadlineMs: 3000, checks: [] });
+    state: dialogueState(item.transcript, 'sam'), questions: turnQuestions(item.map, latestTurn(item.transcript), item.atMs), deadlineMs: 3000, checks: [] });
   }
   for (const item of interviewFixtures.filter(x => Object.values(x.expected).some(value => value.length))) {
     const checks: Check[] = [
@@ -57,7 +57,7 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
       ...item.expected.unheard.map(id => ({ name: `unheard:${id}`, path: ['objectives', id, 'achieved'], op: 'eq' as const, expected: false, critical: true })),
     ];
     result.push({ id: `grade:${item.id}`, lane: 'grade', split: parseInt(hash(item.id).slice(0, 4), 16) % 3 === 0 ? 'validation' : 'development', source: 'synthetic',
-      transcript: item.transcript, state: dialogueState(item.transcript, 'sam'), questions: interviewQuestions(spec, item.transcript), deadlineMs: 8000, checks });
+      transcript: item.transcript, state: dialogueState(item.transcript, 'sam'), questions: coverageRequest(spec, item.transcript).questions, deadlineMs: 8000, checks });
   }
   const manifest = await Bun.file(`${directory}/sources.json`).json() as { sources: { alias: string; path: string; sha256: string }[] };
   for (const alias of ['interview-A', 'interview-B']) {
@@ -74,7 +74,7 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
     for (const count of boundaries) {
       const prefix = transcript.slice(0, count);
       result.push({ id: `grade:${alias}-${prefix.at(-1)!.id}`, lane: 'grade', split: alias === 'interview-A' ? 'development' : 'validation', source: alias,
-        transcript: prefix, state: dialogueState(prefix, 'sam'), questions: interviewQuestions(spec, prefix), deadlineMs: 8000, checks: [] });
+        transcript: prefix, state: dialogueState(prefix, 'sam'), questions: coverageRequest(spec, prefix).questions, deadlineMs: 8000, checks: [] });
     }
   }
   if (new Set(result.map(x => x.id)).size !== result.length) throw new Error('Duplicate case ID');

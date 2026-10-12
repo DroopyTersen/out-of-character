@@ -1,20 +1,19 @@
-import type { SubmitTextReply } from '../shared/protocol';
+import type { SubmitTextInput, SubmitTextReply } from '../shared/protocol';
 import { SessionRequestError, SessionUnanswered, type Attempt, type ProtocolTransport } from './transport';
 
 const NOT_LIVE = 'The interview is not live.';
 const UNSENT = 'Your answer could not be sent. Check your connection and try again.';
 
 /** One answer keeps its ID through unanswered requests. Cancellation abandons pending delivery; the server may still save it. An already received receipt remains valid. */
-export async function deliverTypedAnswer({ text, transport, attempt, signal }: {
-  text: string; transport: ProtocolTransport; attempt: Attempt; signal: AbortSignal;
+export async function deliverTypedAnswer({ answer, transport, attempt, signal }: {
+  answer: SubmitTextInput; transport: ProtocolTransport; attempt: Attempt; signal: AbortSignal;
 }): Promise<SubmitTextReply> {
-  const id = crypto.randomUUID();
   const giveUpAt = Date.now() + 30_000;
   let delay = 1000;
   for (;;) {
     if (signal.aborted) throw new Error(NOT_LIVE);
     try {
-      return await transport.request('submitText', { id, text }, { attempt, timeoutMs: 10_000, signal }) as SubmitTextReply;
+      return await transport.request('submitText', answer, { attempt, timeoutMs: 10_000, signal }) as SubmitTextReply;
     } catch (error) {
       if (signal.aborted) throw new Error(NOT_LIVE);
       const retryable = error instanceof SessionUnanswered || (error instanceof SessionRequestError && error.status === 503);

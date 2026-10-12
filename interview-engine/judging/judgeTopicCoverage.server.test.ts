@@ -8,7 +8,7 @@ import type { Passage } from '../shared/transcript';
 import { judgeTopicCoverage, readTopicCoverage } from './judgeTopicCoverage.server';
 import { dialogueState } from '../shared/transcript';
 import { type JudgeAnswers } from '../providers/judgeProvider.server';
-import { interviewQuestions, type JudgedSpec } from './topicCoverage.prompt';
+import { coverageRequest, type JudgedSpec } from './topicCoverage.prompt';
 import { testFraming } from '../reasoning/testSpec';
 
 const spec = {
@@ -33,20 +33,20 @@ function answersFor(questions: Record<string, Experimental_EvaluationQuestion>):
 }
 
 test('the questions come from the spec, and only participant passages are evidence choices', () => {
-  const questions = interviewQuestions(spec, passages);
+  const questions = coverageRequest(spec, passages).questions;
   expect(Object.keys(questions)).toEqual(['objective:scope', 'objective:scope:evidence', 'objective:role', 'objective:role:evidence']);
-  expect(questions['objective:scope']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names what was built.' } });
-  expect(questions['objective:role']).toMatchObject({ instructions: { task: 'How far has the participant covered this test topic? Names their own work. Only their own work counts.' } });
+  expect(questions['objective:scope']).toMatchObject({ instructions: { task: expect.stringContaining(spec.topics[0]!.objectives[0]!.criterion) } });
+  expect(questions['objective:role']).toMatchObject({ instructions: { task: expect.stringContaining(spec.topics[0]!.objectives[1]!.criterion) } });
   const evidence = questions['objective:scope:evidence'];
   if (evidence?.type !== 'choice') throw new Error('Expected a choice.');
   expect(Object.keys(evidence.criteria ?? {})).toEqual(['none', 'p2', 'p4']);
   expect(questions['objective:scope']).toMatchObject({ instructions: { party: 'TEST PARTY' } });
-  expect(JSON.stringify(evidence.instructions)).toContain('Speakers are participant and riley (the interviewer); client means the test customer.');
-  expect(JSON.stringify(evidence.instructions)).toContain('Do not select Riley’s wording');
+  expect(JSON.stringify(evidence.instructions)).toContain(spec.framing.terms);
+  expect(JSON.stringify(evidence.instructions)).toContain(spec.interviewer.name);
 });
 
 test('answers become coverage; a backchannel is never evidence', () => {
-  const answers = answersFor(interviewQuestions(spec, passages));
+  const answers = answersFor(coverageRequest(spec, passages).questions);
   answers['objective:scope'] = { type: 'choice', choice: 'explored', probabilities: { explored: .9 } };
   answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2' };
   answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { explored: .99 } };
@@ -54,6 +54,28 @@ test('answers become coverage; a backchannel is never evidence', () => {
   expect(() => readTopicCoverage(spec, passages, { ...answers, 'objective:scope:evidence': { type: 'choice', choice: 'p9' } })).toThrow('Invalid interview selection: objective:scope:evidence');
   const result = readTopicCoverage(spec, passages, answers);
   expect(result.objectives.map(item => [item.id, item.level, item.evidence?.entryId ?? null])).toEqual([['scope', 'explored', 'p2'], ['role', 'not-yet', null]]);
+});
+
+test('a short answer to a direct question is evidence; the same words after an acknowledgment are not', () => {
+  const conditional = { ...spec, topics: [{ objectives: [{ id: 'handoff', label: 'Handoff', criterion: 'Handed the work over.', appliesWhen: 'They handed over.' }] }] } satisfies JudgedSpec;
+  const dialogue = (interviewer: string): Passage[] => [
+    { id: 'p1', speaker: 'interviewer', text: 'What did you build?', startMs: 0, endMs: 1000 },
+    { id: 'p2', speaker: 'participant', text: 'A claims portal for the adjusters.', startMs: 1500, endMs: 4000 },
+    { id: 'p3', speaker: 'interviewer', text: interviewer, startMs: 4500, endMs: 5000 },
+    { id: 'p4', speaker: 'participant', text: 'Yes.', startMs: 5500, endMs: 6000 },
+  ];
+  const read = (passages: Passage[]) => {
+    const answers = answersFor(coverageRequest(conditional, passages).questions);
+    answers['objective:handoff'] = { type: 'choice', choice: 'explored', probabilities: { explored: .9 } };
+    answers['objective:handoff:evidence'] = { type: 'choice', choice: 'p4' };
+    answers['objective:handoff:applicability'] = { type: 'choice', choice: 'applicable', probabilities: { applicable: .95 } };
+    answers['objective:handoff:applicability-evidence'] = { type: 'choice', choice: 'p4' };
+    return readTopicCoverage(conditional, passages, answers).objectives[0]!;
+  };
+  // "Yes." answers the direct question, so it is evidence for coverage and for applicability alike.
+  expect(read(dialogue('Did you hand the work over to the client team?'))).toMatchObject({ level: 'explored', achieved: true, evidence: { entryId: 'p4' }, applicability: 'applicable', applicabilityEvidence: { entryId: 'p4' } });
+  // The same "Yes." after the interviewer's own acknowledgment is a backchannel, read in the dialogue rather than from its text.
+  expect(read(dialogue('Okay.'))).toMatchObject({ level: 'not-yet', achieved: false, evidence: null, applicability: 'unknown', applicabilityEvidence: null });
 });
 
 test('Jev sees participant and the spec’s interviewer, and the grade runs on the judge it is given', async () => {
@@ -78,7 +100,7 @@ test('Jev sees participant and the spec’s interviewer, and the grade runs on t
 
 test('host-selected judges apply their coverage calibration without changing raw probabilities or evidence rules', async () => {
   // Only paid HTTP is replaced; both provider adapters, the SDK and the grade reader run normally.
-  const answers = answersFor(interviewQuestions(spec, passages));
+  const answers = answersFor(coverageRequest(spec, passages).questions);
   answers['objective:scope'] = { type: 'choice', choice: 'explored', probabilities: { 'not-yet': 0, touched: .25, explored: .75, 'set-aside': 0 } };
   answers['objective:scope:evidence'] = { type: 'choice', choice: 'p2', probabilities: { none: 0, p2: 1, p4: 0 } };
   answers['objective:role'] = { type: 'choice', choice: 'explored', probabilities: { 'not-yet': 0, touched: .1, explored: .9, 'set-aside': 0 } };

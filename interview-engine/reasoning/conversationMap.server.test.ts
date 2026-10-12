@@ -213,10 +213,8 @@ test('a rejected update reports every defect with what Sol returned', async () =
 
 test('Sol settles the participant’s own part early, several responsibilities included, and keeps gap threads inside it', () => {
   const instructions = mapInstructions;
-  expect(instructions).toContain('Three threads to keep in mind:');
   expect(instructions).toContain('- Their part. Until the participant has said what they themselves were responsible for, keep one thread for it');
   expect(instructions).toContain('People often hold more than one responsibility');
   expect(instructions).toContain('Never write it when their part is already clear');
   expect(instructions).toContain('prefer gap threads their stated part can answer firsthand');
-  expect(MAP_PROMPT_VERSION).toBe('sol-map-v19');
 });

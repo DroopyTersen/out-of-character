@@ -97,7 +97,7 @@ export type SessionStore = {
   load(): Promise<StoredSession>;
   /** Throws FencedError if this owner has been superseded. */
   save(patch: { lease?: Lease; checkpoint?: Checkpoint | null }): Promise<void>;
-  /** A hint: the attempt has due work at `at` (null: none). */
+  /** Schedule coordinator.wake() at `at`; null cancels the wake. */
   wake(at: number | null): Promise<void>;
   clear(): Promise<void>;
 };
@@ -113,7 +113,7 @@ export type Archive = { write(row: InterviewArchiveRow): Promise<void> };
 
 While the attempt is live, the coordinator writes a partial archive row every 30 seconds; a failed one is logged and dropped. At the end it saves the closed lease and a terminal checkpoint in one patch, so a store should commit them together, then writes the final row. The terminal checkpoint stays until `write` resolves for that row. A failed write is retried on the next wake, and a later owner restores the terminal checkpoint even beside a closed lease and writes the same row again: the end time, transcript and grades are frozen, so a retry never closes a voice session or grades again. `closing` resolves after the first attempt at the final row.
 
-A host without timers can ignore `wake` and pass `lazyWake: true`. Each command then first runs any work that has come due. Every wake job also runs on restore.
+A host that deliberately has no timers can pass `lazyWake: true`; each command then first runs any work that has come due. Such a host cannot retire an attempt without another command. Cloudflare alarms and the Bun host's timers run due work without a browser follow-up. Every wake job also runs on restore. Restoring a lease without a checkpoint schedules its remaining work: closed leases retain receipts for the hold window, while open leases retry provider closure promptly. Once `coordinator.retired` is true, the owner has been fenced, its store has been cleared after final work, or it holds neither a lease nor a conversation, so the host may release that coordinator.
 
 `adapters/memory.server.ts` provides in-memory versions of all three seams (`memoryRecord`, `memoryStore`, `inlineBackground`, `memoryArchive`). The tests and the reference host use them.
 
@@ -142,8 +142,9 @@ export type VoiceProvider = {
 
 ```ts
 export type FoundryConfig = { resourceName: string; apiKey: string; agentModel: string; fastModel: string; liveModel: string };
-export type FoundryPlatform = { fetch?: typeof fetch; socket?: SocketOpener; telemetry?: TelemetryOptions };
-export type SocketOpener = (response: Response) => WebSocketLike | null;
+export type FoundryPlatform = { fetch?: typeof fetch; openControl?: ControlOpener };
+export type ControlOpening = { status: 'open'; socket: WebSocketLike } | { status: 'gone' } | { status: 'failed' };
+export type ControlOpener = (request: { url: string; headers: Record<string, string>; signal: AbortSignal }) => Promise<ControlOpening>;
 export type Judge = {
   model: Experimental_EvaluationModel;
   thresholds: { silenceContinue: number; coverageExplored: number };
@@ -164,8 +165,12 @@ The factories bind the measured defaults: Decisions uses 0.70 for silence contin
 
 The voice control channel is a WebSocket upgrade, and each platform completes the upgrade differently. `FoundryPlatform` takes those differences as arguments:
 
-- **Cloudflare:** `fetch` already performs the upgrade. The `socket` opener only calls `accept()` on `response.webSocket`.
-- **Bun:** `fetch` does not upgrade. The reference host's `fetch` opens a `WebSocket` instead, and its `socket` opener collects that socket from the stand-in response.
+- **Cloudflare:** `openControl` fetches with `Upgrade: websocket`, accepts a successful `response.webSocket`, and returns the opened socket. A 404 or 410 returns `gone`; any other unsuccessful upgrade returns `failed`.
+- **Bun:** `openControl` opens a `WebSocket` with the supplied headers. If the handshake fails, a plain request with those same headers distinguishes an ended session (404 or 410) from a failed connection. Ordinary HTTP creation still uses `fetch`.
+
+The engine bounds only the control handshake with its abort signal; it does not close an established socket when that handshake finishes. Without an opener, voice attachment is unavailable. The simulator may use `attachGptLiveSocket` to obtain a raw socket and keep its independent protocol.
+
+The turn, coverage and silence builders attach a typed `InterviewJudgeInput` through `providerOptions.interviewJudge`. `turnRequest` captures the latest participant turn and its preceding interviewer while canonical passage timing is available; `coverageRequest` returns `{ state, questions, providerOptions }` with objective and evidence semantics. A calibrated host recipe reads this input with `readInterviewJudgeInput`; it does not infer purpose from question names or prompt wording. The ordinary SDK state and questions remain unchanged for generic judges, including Jev. Consumers that need only coverage questions use `coverageRequest(spec, passages).questions`.
 
 Creating a judge makes no provider call. Narrative-only callers can omit `judge`; the helper then supplies an unconfigured judge whose only behavior is to fail a judging call with a clear message. The repository's Cloudflare and Bun hosts inject `createDecisionJudge` with `OPENAI_API_KEY`; `providers/jevJudge.server.ts` is the only file that imports `@ai-sdk/typesafe-ai`, so a host that never copies it needs no TypeSafe dependency.
 
@@ -219,11 +224,17 @@ export const CAPABILITY = /^Bearer [a-f0-9]{64}$/;   // the bearer secret return
 On the server, a host turns each request into a `Command` and returns the `Reply`:
 
 ```ts
-type Command = { action: string; capability: string; body?: string };
+type Command =
+  | { action: 'start'; input: StartInput }
+  | { action: 'poll' | 'ready' | 'end' | 'pause'; activity?: Activity }
+  | { action: 'resume'; input: ResumeInput }
+  | { action: 'submitText'; input: SubmitTextInput };
 type Reply = { status: number; body: unknown; terminal?: true };
 ```
 
 `terminal` marks a reply to an attempt that has ended.
+
+The transport owns authentication, content type, encoding and byte bounds. Pass its parsed JSON value to `decodeCommand(action, body)` (`undefined` when no body was sent), return 400 for an invalid command, then call `coordinator.handle(command, capability)` with the capability separately. Poll, ready, end and pause accept an absent activity report; a present malformed activity shape is invalid for all four. Only unreadable optional media/network diagnostics are discarded. The coordinator receives validated domain input and checks the capability and accepted spec rather than parsing transport JSON.
 
 On the client, `LiveConnection` (`client/liveConnection.ts`) sends its requests through a `ProtocolTransport`:
 
@@ -254,10 +265,10 @@ The coordinator appends the answer as an immutable participant passage with id `
 
 ```ts
 connection.setComposing(value: boolean): void;            // a nonempty draft: mutes the microphone and reports at once
-connection.submitText(text: string): Promise<SubmitTextReply>; // resolves once the answer is saved
+connection.submitText(answer: SubmitTextInput): Promise<SubmitTextReply>; // resolves once the answer is saved
 ```
 
-`submitText` mints the id and retries the same id while the server is unanswered or replies 503, backing off for up to 30 seconds. Other failures reject with the server's message. The host keeps the draft until the promise resolves and clears it only then. A host forwards the command as it forwards the others: bound the body at `SUBMIT_TEXT_BODY_LIMIT` and pass it to `coordinator.handle`, which parses it with `submitTextSchema`.
+`ParticipantIntent` belongs to the host attempt and retains mute, composing, and the identity of one deliberately submitted answer. The host calls `intent.answer(text)` and passes that `SubmitTextInput` to `submitText`; an unchanged answer keeps its id across transport retries and a later manual retry. On receipt, `intent.acknowledged(acceptedId)` releases that identity, so edited text or the same words after acceptance are a new answer. Apply the intent to every replacement connection before starting or reattaching media. A fresh attempt starts with fresh intent; the unsent draft stays in the host. `submitText` retries the supplied id while the server is unanswered or replies 503, backing off for up to 30 seconds. Other failures reject with the server's message. The host keeps the draft until the promise resolves and clears it only then. A host bounds the body at `SUBMIT_TEXT_BODY_LIMIT`, decodes its parsed value with `decodeCommand('submitText', body)`, and passes the validated command and separate capability to `coordinator.handle`.
 
 `closed` reports, once per connection, how the attempt closed for this page, so a host never infers it from snapshots:
 
@@ -298,14 +309,14 @@ type InterviewGates = {
 
 **Hosted session.** `HostedSession` wraps a `SessionCoordinator`:
 
-- It turns the request into a `Command` and sends it to `coordinator.handle`.
+- It decodes the parsed request value into a `Command` and calls `coordinator.handle(command, capability)`. A host `report` request first checks the actor through the decoded `poll` command.
 - It returns the canonical `InterviewSnapshot`: `planId`, `voiceId`, `transcript`, `evaluation`, `background` and lifecycle fields. Transcript and evidence speakers are `participant` and `interviewer`. There is no coaching field or nested interview wrapper; the host adds report state separately.
 - On an authenticated host `report` request, it runs `writeNarrative` over the ended transcript through a `NarrativeRunner`, the same runner the narrative route uses (`app/server/interview/narrative.ts`). A second report request rejoins the running narrative.
 
 **Cloudflare** (`app/server/interview/durableObject.ts`, routed from `app/workers/app.ts`):
 
 - There is one `InterviewObject` per attempt.
-- Inside `blockConcurrencyWhile`, it calls `SessionCoordinator.restore` with `durableStore(ctx.storage)`, `durableBackground(ctx)`, the D1 archive and `foundryProviders(..., { socket: acceptSocket })`.
+- Inside `blockConcurrencyWhile`, it calls `SessionCoordinator.restore` with `durableStore(ctx.storage)`, `durableBackground(ctx)`, the D1 archive and `foundryProviders(..., { openControl: cloudflareControl() })`.
 - `fetch` goes to the hosted session. `alarm()` calls `coordinator.wake()`.
 - With `INTERVIEW_SOCKET_ENABLED=true`, the Worker forwards the attempt's socket upgrade to its object. The object accepts it through `WebSocketPair` and answers each message through the Worker's routes with its own session.
 
@@ -320,7 +331,7 @@ The reference host serves the same routes and replies as the Worker, from a sing
 - It keeps one `memoryRecord` and `memoryStore` per attempt, and schedules each wake with `setTimeout`.
 - Background work runs inline.
 - The rate limit is held in memory.
-- The upgrading `fetch` described under Providers handles the voice socket.
+- The explicit `openControl` described under Providers handles the voice socket and failed-handshake status probe.
 - With `INTERVIEW_SOCKET_ENABLED=true`, it accepts the socket transport through `server.upgrade` and answers each message through the same routes.
 
 It shows how little a host needs to write.
@@ -356,9 +367,9 @@ The steps below use the host app as the example. They follow the plan in the des
    - A `SessionStore` over the host's database. The design calls for an attempts row with a `segment` column and guarded writes that throw `FencedError` when the segment has moved on.
    - A `Background` for fire-and-forget work.
    - An `Archive` that upserts `InterviewArchiveRow`.
-   - A host without durable timers makes `wake` a no-op and passes `lazyWake: true`.
-4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Pass a `fetch` and `socket` opener if the platform's fetch cannot complete a WebSocket upgrade, as the Bun host does.
-5. **Own a coordinator per attempt.** Call `SessionCoordinator.restore({ plan, config, context, providers, store, background, archive })`. Forward each command to `coordinator.handle`, and call `coordinator.close('hold')` when the host drops the attempt.
+   - Schedule `coordinator.wake()` from each `wake(at)` hint to finish work and retire attempts without another command. A deliberate `lazyWake: true` fallback serves overdue work only when a command arrives.
+4. **Build providers.** Build `createDecisionJudge({ apiKey })` (or `createJevJudge({ apiKey })` from `jevJudge.server.ts`), then call `foundryProviders({ ...config, judge }, platform)`. Supply the platform's explicit `openControl` for voice attachment and optionally its `fetch` for ordinary HTTP calls.
+5. **Own a coordinator per attempt.** Call `SessionCoordinator.restore({ plan, config, context, providers, store, background, archive })`. Decode transport values with `decodeCommand`, forward valid commands through `coordinator.handle(command, capability)`, and call `coordinator.close('hold')` when the host drops the attempt. Release the owner when `coordinator.retired` reports that its store was cleared or ownership was lost.
 6. **Serve the report separately.** Keep report instructions in the accepted host setup. Pass the saved transcript, those instructions and optional explicit context to the report module. The host owns report authorization, generation claims, storage and retries; reports never write back into the coordinator.
 7. **Keep the browser on the engine's client.** Use `LiveConnection` with `pollTransport`, with `socketTransport`, or with a transport the host writes against `ProtocolTransport`.
 

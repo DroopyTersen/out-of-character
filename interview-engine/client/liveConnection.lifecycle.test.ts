@@ -91,7 +91,7 @@ test('a typed receipt already received before End cannot publish a snapshot to t
     return Promise.resolve({ acceptedId: submitted!.id, snapshot: { id: 'attempt', status: 'live', warning: null } });
   });
   await f.connection.start('plan', 'voice');
-  const sending = f.connection.submitText('Saved before closing.');
+  const sending = f.connection.submitText({ id: crypto.randomUUID(), text: 'Saved before closing.' });
   await f.connection.end();
   const afterEnd = [...f.snapshots];
   expect((await sending).acceptedId).toBe(submitted!.id);

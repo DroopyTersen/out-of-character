@@ -1,8 +1,8 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { interviewTopics } from '../../../core/interview';
-import type { MapEntity, MapThread } from '../../../interview-engine/interview/conversation/map';
-import type { GradeObjective, GradeRecord, MapRecord, NoteRecord, ProducerLogRecord, ResearchRecord, TraitRecord, TurnRecord } from '../../../interview-engine/interview/conversation/records';
+import type { MapEntity, MapThread } from '../../../interview-engine/reasoning/conversationMap';
+import type { GradeObjective, GradeRecord, MapRecord, NoteRecord, ProducerLogRecord, ResearchRecord, TraitRecord, TurnRecord } from '../../../interview-engine/reasoning/conversationRecords';
 import type { InterviewArchiveWrite } from './archive.server';
 import { writeInterviewArchive } from './archive.server';
 
@@ -64,7 +64,7 @@ test('interview transcript and summary stay in their own table; newer final summ
     await writeInterviewArchive(f.d1, write(5000, 'final', 'pending'));
     await writeInterviewArchive(f.d1, write(6000, 'partial', 'pending'));
     const row = f.row()!;
-    expect(row).toMatchObject({ archive_state: 'final', updated_at: 4000, ended_at: 3000, summary_status: 'ready', spec_id: 'project-closeout', spec_version: 'project-closeout-v1' });
+    expect(row).toMatchObject({ archive_state: 'final', updated_at: 5000, ended_at: 3000, summary_status: 'ready', spec_id: 'project-closeout', spec_version: 'project-closeout-v1' });
     expect(row.summary_text).toBe(markdown);
     expect(JSON.parse(row.transcript_json)[0].text).toBe('Jen helped us fix the access issue.');
     expect(f.sqlite.query('SELECT count(*) AS count FROM simulator_attempts').get()).toEqual({ count: 0 });
@@ -148,7 +148,7 @@ function hour(updateEntities: number): ProducerLogRecord[] {
     })),
     ...Array.from({ length: 100 }, (_, index) => note(index < 60 ? 'map' : 'list', index + 1)),
     ...Array.from({ length: 3 }, (_, index): ResearchRecord => ({
-      source: 'research', id: `research-${index + 1}`, mapId: 'map-90', request: { kind: 'organization', name: text(80), clue: text(120), passageIds: ['p300'] }, model: 'luna',
+      source: 'research', id: `research-${index + 1}`, mapId: 'map-90', request: { kind: 'organization', name: text(80), clue: text(120) }, passageIds: ['p300'], model: 'luna',
       requestedAt: at, lookupAt: at, completedAt: at, loggedAt: at, retrievedAt: at, queries: [text(80), text(80)], outcome: 'found',
       facts: Array.from({ length: 5 }, () => ({ text: text(300), url: 'https://example.com/a/long/path/to/the/source', title: text(80) })),
     })),

@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
-import { z } from 'zod';
-import { evidenceBatches } from './judge.server';
+import { evidenceBatches } from './judgeProvider.server';
 import { createDecisionJudge } from './decisionJudge.server';
 import { foundryProviders } from './providers.server';
 import { testFoundry } from './testFoundry.server';
@@ -53,7 +52,8 @@ test('the structured call reaches the agent deployment on the resource with its 
     }) as unknown as typeof fetch,
   });
   const result = await providers.structured({
-    signal: new AbortController().signal, instructions: 'Answer with ok.', name: 'probe', schema: z.object({ ok: z.boolean() }),
+    signal: new AbortController().signal, instructions: 'Answer with ok.', name: 'probe',
+    jsonSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'], additionalProperties: false },
     messages: [{ role: 'user', text: 'Go.' }], cacheKey: null,
   });
   expect(result).toMatchObject({ value: { ok: true }, model: 'agent-deployment' });

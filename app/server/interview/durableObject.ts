@@ -1,11 +1,13 @@
-import { resolveInterview, type InterviewDefinition } from '../../../interview-engine/interview/definition.server';
+import { resolveInterview, type InterviewDefinition } from '../../../interview-engine/definition.server';
 import { DurableObject } from 'cloudflare:workers';
 import { foundryConfig, foundryConfigured, type FoundryConfig } from '../../../ai/foundry.server';
-import { SessionActor, type Background, type Checkpoint, type Lease, type SessionOptions, type SessionStore } from '../../../interview-engine/interview/interview.server';
+import { SessionCoordinator, type SessionOptions } from '../../../interview-engine/session/sessionCoordinator.server';
+import { type Background, type SessionStore } from '../../../interview-engine/seams.server';
+import { type Checkpoint, type Lease } from '../../../interview-engine/session/sessionCheckpoint';
 import { foundryProviders, type Providers } from '../../../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../../../interview-engine/providers/decisionJudge.server';
 import { startSchema } from '../../../interview-engine/shared/protocol';
-import { cloudflareSocket, LIVE_MODEL } from '../simulator/live.server';
+import { cloudflareControl, LIVE_MODEL } from '../simulator/live.server';
 import { d1Archive } from './archiveD1.server';
 import { HostedSession } from './hosted';
 import { templates, workerDebriefs, type HostedSpec, type SpecCatalog } from './debriefs';
@@ -19,14 +21,16 @@ export function durableStore(storage: DurableObjectStorage): SessionStore {
   return {
     async load() {
       const lease = await storage.get<Lease>('lease');
-      const checkpoint = lease && !lease.closed ? await storage.get<Checkpoint>('checkpoint') : undefined;
+      const checkpoint = lease ? await storage.get<Checkpoint>('checkpoint') : undefined;
       return { ...(lease ? { lease } : {}), ...(checkpoint ? { checkpoint } : {}) };
     },
-    // One object owns its attempt, so storage writes are never stale here: nothing throws FencedError.
-    async save(patch) {
-      if (patch.lease) await storage.put('lease', patch.lease);
-      if (patch.checkpoint === null) await storage.delete('checkpoint');
-      else if (patch.checkpoint) await storage.put('checkpoint', patch.checkpoint);
+    // One object owns its attempt, so storage writes are never stale here: nothing throws FencedError. Writes issued
+    // without an await between them commit together, so a closed lease never lands without its terminal checkpoint.
+    async save({ lease, checkpoint }) {
+      await Promise.all([
+        lease && storage.put('lease', lease),
+        checkpoint === null ? storage.delete('checkpoint') : checkpoint && storage.put('checkpoint', checkpoint),
+      ]);
     },
     async wake(at) {
       if (at == null) await storage.deleteAlarm();
@@ -56,10 +60,10 @@ export type InterviewObjectOverrides = {
 /** The complete accepted definition is pinned before any voice session opens. */
 const SPEC_KEY = 'spec';
 type SpecIdentity = Pick<HostedSpec, 'id' | 'version'>;
-type PinnedSpec = InterviewDefinition | SpecIdentity;
+type PinnedSpec = (InterviewDefinition & Pick<HostedSpec, 'report'>) | SpecIdentity;
 
 /**
- * One interview attempt. The engine's SessionActor owns everything; this object adapts storage, alarms, background
+ * One interview attempt. The engine's SessionCoordinator owns everything; this object adapts storage, alarms, background
  * work and D1 to its seams and hands the browser's commands to the hosted session.
  *
  * The attempt's spec is whichever debrief its start names, resolved through the catalog and recorded in storage, so
@@ -89,7 +93,7 @@ export class InterviewObject extends DurableObject<Env> {
     ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get<PinnedSpec>(SPEC_KEY);
       if (!stored) return;
-      const spec = 'plan' in stored ? resolveInterview(stored.plan, stored.config, stored.context) : await this.catalog.resolve(stored.id, stored.version);
+      const spec = 'plan' in stored ? { ...resolveInterview(stored.plan, stored.config, stored.context), report: stored.report } : await this.catalog.resolve(stored.id, stored.version);
       if (!spec) throw new Error('The attempt’s original debrief is no longer served.');
       this.session = await this.open(spec);
       this.pinned = true;
@@ -101,15 +105,16 @@ export class InterviewObject extends DurableObject<Env> {
     const { ctx, env, overrides } = this;
     // Unconfigured, the paid calls fail, but owned attempts can still be read and closed.
     const foundry: FoundryConfig = foundryConfigured(env) ? foundryConfig(env) : { resourceName: '', apiKey: '', agentModel: '', fastModel: '', liveModel: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL };
-    const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { socket: cloudflareSocket });
+    const providers = overrides.providers ?? foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: env.OPENAI_API_KEY }) }, { openControl: cloudflareControl() });
     const background = durableBackground(ctx);
-    const actor = await SessionActor.restore({
+    const archive = d1Archive(env.SIMULATOR_ARCHIVE, { model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null });
+    const actor = await SessionCoordinator.restore({
       plan: spec.plan, config: spec.config, context: spec.context, providers, store: durableStore(ctx.storage), background,
-      archive: d1Archive(env.SIMULATOR_ARCHIVE, { model: env.AZURE_OPENAI_LIVE_MODEL || LIVE_MODEL, workerId: env.CF_VERSION_METADATA?.id ?? null, workerTag: env.CF_VERSION_METADATA?.tag ?? null }),
+      archive,
       log: event => { if (event.type === 'session') console.warn('Interview session', event); },
       ...(overrides.services ? { services: overrides.services } : {}),
     });
-    return new HostedSession(actor, { narrate: overrides.narrate ?? narrateWith(providers), model: foundry.agentModel, track: background.track });
+    return new HostedSession(actor, { format: spec.report, saveReport: archive.writeReport, narrate: overrides.narrate ?? narrateWith(providers), model: foundry.agentModel, track: background.track });
   }
 
   /**
@@ -124,7 +129,7 @@ export class InterviewObject extends DurableObject<Env> {
         const parsed = startSchema.safeParse(await command.clone().json().catch(() => null));
         const named = parsed.success ? await this.catalog.resolve(parsed.data.planId) : null;
         if (named) {
-          await this.ctx.storage.put(SPEC_KEY, { plan: named.plan, config: named.config, ...(named.context ? { context: named.context } : {}) } satisfies InterviewDefinition);
+          await this.ctx.storage.put(SPEC_KEY, { plan: named.plan, config: named.config, report: named.report, ...(named.context ? { context: named.context } : {}) } satisfies PinnedSpec);
           if (this.session) { await this.session.actor.close('fenced'); this.session = undefined; }
           this.session ??= await this.open(named);
           this.pinned = true;

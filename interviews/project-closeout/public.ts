@@ -8,33 +8,27 @@ export const interviewVoices = [
   { id: 'sam-gleam', voice: 'gleam', label: 'Gleam', presentation: 'Female', image: '/interview/sam-female.png' },
 ] as const;
 
-export const interviewReadings = [
-  { id: 'engagement', label: 'Engagement', description: 'Following the conversation and developing an answer.' },
-  { id: 'openness', label: 'Openness', description: 'Sharing your perspective, including uncertainty and tradeoffs.' },
-  { id: 'specificity', label: 'Specificity', description: 'Giving concrete examples of what happened.' },
-] as const;
-export type InterviewReadingId = typeof interviewReadings[number]['id'];
-
 export const interviewTopics = [
   { id: 'project', label: 'What you delivered', objectives: [
     { id: 'project-purpose', label: 'Why the client needed it' },
     { id: 'project-delivery', label: 'Deliverables & scope' },
-    { id: 'project-outcome', label: 'Success & how it landed' },
+    { id: 'project-success', label: 'What success meant' },
+    { id: 'project-outcome', label: 'What actually happened' },
     { id: 'project-role', label: 'Your role' },
     { id: 'project-contributions', label: 'Who contributed what' },
-    { id: 'project-reflection', label: 'Standouts & growth' },
+    { id: 'project-reflection', label: 'What you learned' },
   ] },
   { id: 'client', label: 'Working with the client', objectives: [
     { id: 'client-access', label: 'Onboarding & access' },
     { id: 'client-decisions', label: 'Decisions & stakeholders' },
     { id: 'client-pace', label: 'Pace & approvals' },
     { id: 'client-coordination', label: 'Teams, vendors & silos' },
-    { id: 'client-friction', label: 'Friction & advice for next time' },
+    { id: 'client-friction', label: 'Client collaboration lessons' },
     { id: 'client-needs', label: 'Needs beyond the scope' },
   ] },
   { id: 'setup', label: 'How the work was set up', objectives: [
     { id: 'setup-alignment', label: 'Shared starting picture' },
-    { id: 'setup-quality', label: 'What “done” meant' },
+    { id: 'setup-quality', label: 'Quality checks & acceptance' },
     { id: 'setup-technical', label: 'Technical fit with the client' },
   ] },
   { id: 'process', label: 'How the team worked', objectives: [

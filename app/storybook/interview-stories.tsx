@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { emptyInterviewReadings, interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummaryContent } from '../../core/interview';
+import { interviewTopics, type CoverageLevel, type InterviewBackground, type InterviewEvaluation, type InterviewSummaryContent } from '../../core/interview';
 import type { FeedbackStatus } from '../../interview-engine/shared/snapshot';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { illustrativeLevels } from './simulator-voice-story';
@@ -84,12 +84,6 @@ function fixture(status: 'live' | 'ended', feedback: FeedbackStatus, count = tra
   const has = (id: string) => entries.some(entry => entry.id === id);
   const evaluation: InterviewEvaluation = {
     revision: entries.length,
-    readings: {
-      ...emptyInterviewReadings(),
-      engagement: has('u2') ? { value: 3.3, distribution: null, evidence: { entryId: 'u2', speaker: 'participant', text: transcript[3]!.text } } : { value: null, distribution: null, evidence: null },
-      openness: has('u3') ? { value: 2.8, distribution: null, evidence: { entryId: 'u3', speaker: 'participant', text: transcript[5]!.text } } : { value: null, distribution: null, evidence: null },
-      specificity: has('u3') ? { value: 3.5, distribution: null, evidence: { entryId: 'u3', speaker: 'participant', text: transcript[5]!.text } } : has('u1') ? { value: 2.3, distribution: null, evidence: { entryId: 'u1', speaker: 'participant', text: transcript[1]!.text } } : { value: null, distribution: null, evidence: null },
-    },
     objectives: interviewTopics.flatMap(topic => topic.objectives.map(objective => {
       const entry = evidenceByObjective[objective.id];
       const heard = !!entry && has(entry.id);

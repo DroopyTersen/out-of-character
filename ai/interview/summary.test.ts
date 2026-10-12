@@ -31,9 +31,9 @@ test('the closeout summary uses Sol, the spec narrative prompt and source labels
   expect(results).toEqual([{ report: summary, failure: null, usage: { inputTokens: 100, outputTokens: 80, reasoningTokens: 30, cachedTokens: 0 } }]);
   expect(JSON.parse(text)).toEqual(summary);
   expect(body.model).toBe(fixtureFoundry.agentModel);
-  expect(body.input.find((item: { role: string }) => item.role === 'developer').content).toBe((await import('../../interview-engine/narrative/narrative.prompt')).narrativeInstructions);
+  expect(body.input.find((item: { role: string }) => item.role === 'developer').content).toBe((await import('../../app/reports/narrative.prompt')).narrativeInstructions);
   const prompt = body.input.find((item: { role: string }) => item.role === 'user').content[0].text;
-  expect(JSON.parse(prompt)).toEqual({ transcript: input.transcript, format: spec.plan.report });
+  expect(JSON.parse(prompt)).toEqual({ transcript: input.transcript, format: spec.report });
 });
 
 test('provider failures reach finish as report-less results, and silence spends no request', async () => {

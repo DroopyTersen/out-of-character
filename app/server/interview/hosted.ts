@@ -1,14 +1,17 @@
 import type { InterviewSummaryContent } from '../../../core/interview';
 import type { ReportState } from '../../../core/simulator/report';
-import type { SessionActor } from '../../../interview-engine/interview/interview.server';
-import type { NarrativeInput, NarrativeState } from '../../../interview-engine/narrative/narrative.server';
-import { NarrativeRunner, within } from '../../../interview-engine/narrative/narrativeRun.server';
+import type { SessionCoordinator } from '../../../interview-engine/session/sessionCoordinator.server';
+import type { NarrativeInput, NarrativeState } from '../../reports/report.types';
+import { NarrativeRunner, within } from '../../reports/narrativeRun.server';
 import { narrativeRunner, participantSpoke, type Narrate } from './narrative';
-import { NARRATIVE_VERSION } from '../../../interview-engine/shared/narrative';
+import { NARRATIVE_VERSION, type NarrativeStatus, type NarrativeProvenance } from '../../reports/report.types';
 import { jsonResponse } from '../http';
+import { decodeCommand } from '../../../interview-engine/shared/protocol';
 
 export type HostedNarrative = {
   narrate: Narrate;
+  format: NarrativeInput['format'];
+  saveReport?: (id: string, status: NarrativeStatus, provenance: NarrativeProvenance) => Promise<void>;
   /** The agent model recorded with the narrative. */
   model: string;
   /** Keeps a narrative running after its request has gone, so a reloaded page can rejoin it. */
@@ -29,17 +32,19 @@ export class HostedSession {
   private readonly format: NarrativeInput['format'];
   private readonly context: NarrativeInput['context'];
 
-  constructor(readonly actor: SessionActor, private readonly options: HostedNarrative) {
+  constructor(readonly actor: SessionCoordinator, private readonly options: HostedNarrative) {
     const definition = actor.definition;
-    this.format = definition.plan.report;
+    this.format = structuredClone(options.format);
     this.context = definition.context;
   }
 
   async fetch(request: Request): Promise<Response> {
     const action = new URL(request.url).pathname.slice(1);
-    const body = request.body ? await request.text() : undefined;
-    const reply = await this.actor.handle({ action, capability: request.headers.get('Authorization') ?? '', ...(body != null ? { body } : {}) });
-    if (reply.report) return this.startReport(request);
+    const body = request.body ? await request.json().catch(() => null) : undefined;
+    const command = decodeCommand(action === 'report' ? 'poll' : action, body);
+    if (command.action === 'invalid') return jsonResponse({ error: 'Invalid interview request.' }, 400);
+    const reply = await this.actor.handle(command, request.headers.get('Authorization') ?? '');
+    if (action === 'report') return reply.status === 200 ? this.startReport(request) : jsonResponse(reply.body, reply.status);
     if (reply.terminal) {
       // Terminal reads carry the narrative's state; a poll waits briefly for a running narrative to settle.
       const report = action === 'poll' && this.narrative ? reportState(await this.narrative.read()) : this.reportState();
@@ -67,8 +72,9 @@ export class HostedSession {
       const { narrate, model, track } = this.options;
       const input = { transcript: snapshot.transcript, format: this.format, ...(this.context ? { context: this.context } : {}) };
       this.narrative = narrativeRunner(input, narrate, ({ document, attempts }) => {
-        this.actor.settleNarrative(document ? { status: 'ready', text: document.text } : { status: 'unavailable', text: null },
+        const work = this.options.saveReport?.(snapshot.id, document ? { status: 'ready', text: document.text } : { status: 'unavailable', text: null },
           { model, version: NARRATIVE_VERSION, attempts });
+        if (work) track?.(work);
       }, track);
     }
     return this.narrative.attach(request.signal);

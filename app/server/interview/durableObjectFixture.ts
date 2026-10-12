@@ -1,12 +1,13 @@
 import { fixtureFoundryEnv } from '../../../ai/foundry-fixture';
-import { emptyInterviewReadings } from '../../../core/interview';
-import type { SessionServices } from '../../../interview-engine/interview/interview.server';
-import { interviewerBrief } from '../../../interview-engine/interview/voice/brief.server';
-import { unpaidProviders } from '../../../interview-engine/providers/testFoundry.server';
+import type { SessionServices } from '../../../interview-engine/session/sessionCoordinator.server';
+import { interviewerBrief } from '../../../interview-engine/voice/interviewerBrief.server';
+import { unpaidProviders, testFoundry } from '../../../interview-engine/providers/testFoundry.server';
+import { gptLiveProvider } from '../../../interview-engine/providers/gptLive.server';
+import type { VoiceHandlers, WebSocketLike } from '../../../interview-engine/providers/voice.server';
 import { spec } from '../../../interviews/project-closeout/spec';
 // The simulator fixture substitutes the Workers base class before anything imports it.
 import { archiveDatabase, attempt, ProviderSocket } from '../simulator/session-fixture';
-import type { Narrative, NarrativeRun } from '../../../interview-engine/narrative/narrative.server';
+import type { Narrative, NarrativeRun } from '../../reports/report.types';
 import type { SpecCatalog } from './debriefs';
 import type { Narrate } from './narrative';
 import { socketPair } from '../../../interview-engine/client/testSocket';
@@ -79,7 +80,7 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
       socketFor(id);
       return { id, sdp: 'v=0\r\nanswer' };
     },
-    attach: async (id: string) => socketFor(id),
+    attach: (id: string, handlers?: VoiceHandlers) => gptLiveProvider(testFoundry, { openControl: async () => ({ status: 'open', socket: socketFor(id) as unknown as WebSocketLike }) }).attach(id, handlers),
     close: async () => {},
   };
   let pair = socketPair();
@@ -92,9 +93,9 @@ export async function objectFixture({ values = new Map<string, unknown>(), overr
     providers: unpaidProviders(voice, { agent: 'gpt-6.1-sol', fast: 'gpt-6-luna' }),
     services: {
       generateMap: async input => ({ map: input.previous, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: [], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }),
-      evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, natural: {}, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage, answers: {} }),
+      evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: {}, next: { choice: 'current', probabilities: { current: 1 } }, states: {}, novel: 0 }, model: 'fixture', durationMs: 1, usage, answers: {} }),
       lookupInterviewBackground: async () => ({ status: 'unresolved', reason: 'fixture', queries: [] }),
-      evaluate: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, readings: emptyInterviewReadings(), objectives: [], model: 'fixture', durationMs: 1 }; },
+      evaluate: async input => { interviewJudged.push(input.transcript); return { revision: input.revision, objectives: [], model: 'fixture', durationMs: 1 }; },
       ...services,
     },
     narrate: narrate ?? (() => narrated('Fixture summary.')),

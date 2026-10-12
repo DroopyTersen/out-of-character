@@ -3,9 +3,9 @@
  * Writes only synthetic evidence under output/interview-contract-probe/.
  */
 import { foundryConfig } from '../ai/foundry.server';
-import { resolveInterview } from '../interview-engine/interview/definition.server';
-import { evaluateInterview } from '../interview-engine/interview/conversation/evaluate.server';
-import { writeNarrative } from '../interview-engine/narrative/write.server';
+import { resolveInterview } from '../interview-engine/definition.server';
+import { judgeTopicCoverage } from '../interview-engine/judging/judgeTopicCoverage.server';
+import { writeNarrative } from '../app/reports/writeNarrative.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import type { Passage } from '../interview-engine/shared/transcript';
@@ -20,7 +20,7 @@ const spec = resolveInterview({
     topics: [{ id: 'missing-information', label: 'Missing information', learn: 'Describe missing information and its effect.' }],
   }],
   report: { audience: 'Delivery leads', format: 'Write a concise Markdown report with headings Findings and Root cause. State when the account does not establish a root cause. Do not organize by the topic tree.' },
-}, { interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/synthetic.png' }] }, readings: [] });
+}, { interviewer: { name: 'Sam', persona: 'Warm and direct.', voices: [{ id: 'cedar', voice: 'cedar', label: 'Cedar', presentation: 'Neutral', image: '/synthetic.png' }] } });
 const dialogue = (question: string, answer: string): Passage[] => [
   { id: 'p1', speaker: 'interviewer', text: question, startMs: 0, endMs: 1000 },
   { id: 'p2', speaker: 'participant', text: answer, startMs: 1500, endMs: 8000 },
@@ -32,14 +32,14 @@ const cases = [
   { id: 'parent-scope', expected: 'applicable', explored: false, transcript: dialogue('What happened in the handoffs?', 'I personally handled the handoff to the customer, but have not described that yet. Separately, our internal engineering handoff lacked a test command, costing our own developers an hour. That internal example has nothing to do with the customer handoff.') },
 ] as const;
 const results = await Promise.allSettled(cases.map(async row => {
-  const result = await evaluateInterview({ spec, passages: [...row.transcript], revision: 2, signal: AbortSignal.timeout(30_000) }, providers);
+  const result = await judgeTopicCoverage({ spec, passages: [...row.transcript], revision: 2, signal: AbortSignal.timeout(30_000) }, providers);
   const reading = result.objectives[0]!;
   return { id: row.id, passed: reading.applicability === row.expected && reading.achieved === row.explored, reading, durationMs: result.durationMs };
 }));
 const grades = results.map((result, index) => result.status === 'fulfilled' ? result.value : { id: cases[index]!.id, passed: false, error: result.reason instanceof Error ? result.reason.name : 'Provider failure' });
 const input = {
   transcript: dialogue('The vendor caused a two-week customer delay, right?', 'I do not know whether any delay happened or what caused it. I only worked on internal tests. Priya handled customer handoffs; I was not involved.'),
-  format: spec.plan.report,
+  format: spec.report,
   context: { participant: { name: 'Jordan' }, background: 'The organizer suspects a two-week delay caused by a vendor mistake. This is an unconfirmed hypothesis.' },
 };
 const run = writeNarrative(input, providers, AbortSignal.timeout(90_000));

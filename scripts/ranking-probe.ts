@@ -5,12 +5,13 @@
  * Paid: one Jev call per settled participant turn that isn't backchannels alone.
  * A map applies once its Sol call finished (start plus latency); the replay stops a cadence after the last Sol call. The report holds transcript-derived notes: keep it out of the repo.
  */
-import { evaluateTurn, latestTurn } from '../interview-engine/interview/conversation/ranking.server';
+import { evaluateTurn } from '../interview-engine/judging/judgeConversationTurn.server';
+import { latestTurn } from '../interview-engine/reasoning/turnTaking';
 import { judgeModel } from '../interview-engine/providers/jevJudge.server';
 import { yieldsTurn } from '../core/interview';
-import type { ConversationMap } from '../interview-engine/interview/conversation/map';
-import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../interview-engine/interview/conversation/notes';
-import { emptyRanking, observeMap, observeTurn, RANKING, type Pick, type TurnReading } from '../interview-engine/interview/conversation/ranking';
+import type { ConversationMap } from '../interview-engine/reasoning/conversationMap';
+import { emptyListState, mapNote, mapNoteKey, nextListNote } from '../interview-engine/reasoning/interviewerNotes';
+import { emptyRanking, observeMap, observeTurn, RANKING, type Pick, type TurnReading } from '../interview-engine/reasoning/threadSelection';
 import { archivedTranscriptSchema } from '../core/interview-transcript';
 import type { Passage as TranscriptEntry } from '../interview-engine/shared/transcript';
 
@@ -49,7 +50,7 @@ const turns = transcript.flatMap((entry, index) => entry.speaker === 'participan
 
 type Row = {
   passageId: string; atMs: number; mapCall: number | null; focus: string | null; novel: number; durationMs: number; inputTokens?: number;
-  natural?: TurnReading['natural']; states?: TurnReading['states']; holds?: string[];
+  next?: TurnReading['next']; states?: TurnReading['states']; holds?: string[];
   pick: Omit<Pick, 'ranked'> & { top: [string, number, string][] }; listNote?: string; mapNote?: string; error?: string;
 };
 const rows: Row[] = [];
@@ -82,7 +83,7 @@ for (const turn of turns.slice(0, limit)) {
     const { ranked, ...pick } = decision.pick;
     item = {
       passageId, atMs: turn.atMs, mapCall: applied!.call, focus: result.reading.focus, novel: result.reading.novel, durationMs: result.durationMs, inputTokens: result.usage.inputTokens,
-      natural: result.reading.natural, states: result.reading.states, holds: Object.keys(state.holds),
+      next: result.reading.next, states: result.reading.states, holds: Object.keys(state.holds),
       pick: { ...pick, top: ranked.slice(0, 4).map(entry => [entry.id, +entry.score.toFixed(2), entry.band]) },
     };
     if (decision.text) item.listNote = decision.text;

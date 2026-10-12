@@ -6,35 +6,35 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Segment**: one voice-provider session within an attempt. Starting opens the first; each resume after a drop opens a new one. Provider events and closures are bound to their segment, so a superseded session can never pause or end its successor. Segments restart their own clock at zero, and an offset keeps the attempt's transcript clock monotonic.
 
-**Checkpoint**: the durable record a replacement owner needs to hold an attempt for resume or finish it with what was captured. Saved through `SessionStore`; in-flight paid work is not kept.
+**Checkpoint**: the durable record a replacement owner needs to hold an attempt for resume or finish it with what was captured. Saved through `SessionStore`; in-flight paid work is not kept. A finished conversation keeps a terminal checkpoint until its final archive row is acknowledged.
 
 **Lease**: the small record saved at start, before any checkpoint: the capability, the provider sessions not yet confirmed closed, a deadline, and whether the attempt has closed. It lets a later owner close a provider session the attempt opened even if the conversation never went live.
 
-**Checkpoint fencing**: how the engine keeps one writer per attempt. A store whose owner has been superseded (on a store with segments, when a newer owner has claimed the next one) throws `FencedError` from `save`, `wake` or `clear`; the actor then stops, closes its provider socket and never writes again. On Cloudflare a Durable Object owns its attempt, so nothing is ever fenced; the memory store fences by segment, as a database-backed store would.
+**Checkpoint fencing**: how the engine keeps one writer per attempt. A store whose owner has been superseded (on a store with segments, when a newer owner has claimed the next one) throws `FencedError` from `save`, `wake` or `clear`; the coordinator then stops, closes its provider socket and never writes again. On Cloudflare a Durable Object owns its attempt, so nothing is ever fenced; the memory store fences by segment, as a database-backed store would.
 
-**Seams**: the three things a host implements over its platform, in `interview/seams.server.ts`: `SessionStore` (lease, checkpoint, wake hint, clear), `Background` (work that outlives a reply) and `Archive` (archive row upserts). Everything else the engine needs arrives as providers.
+**Seams**: the three things a host implements over its platform, in `seams.server.ts`: `SessionStore` (lease, checkpoint, wake hint, clear), `Background` (work that outlives a reply) and `Archive` (archive row upserts). Everything else the engine needs arrives as providers.
 
-**Archive row**: the attempt's record for later reading: transcript, snapshot, conversation map, producer log and prompt versions. Written through `Archive` as a partial row while live and a final row at the end; each write is an upsert by attempt id, and a partial never replaces a final.
+**Archive row**: the attempt's record for later reading: transcript, snapshot, conversation map, producer log and prompt versions. Written through `Archive` as a partial row while live (best effort) and a final row at the end (retried from the terminal checkpoint until acknowledged); each write is an upsert by attempt id, and a partial never replaces a final.
 
 **Capability**: the bearer secret the browser receives at start and sends with every command. It is the only proof of ownership the engine checks; identity is the host's business.
 
-**Wake**: a time at which the attempt has due work (pause-hold expiry, idle timeout, limit, partial archive, provider close retry, post-finish clear). The engine asks the store for a wake as a hint; a host with durable timers calls `wake()` then. Due work also runs on restore, and with `lazyWake` before each command, so a host without timers can ignore the hint.
+**Wake**: a time at which the attempt has due work (pause-hold expiry, idle timeout, limit, partial archive, final archive retry, provider close retry, post-finish clear). The engine asks the store for a wake as a hint; a host with durable timers calls `wake()` then. Due work also runs on restore, and with `lazyWake` before each command, so a host without timers can ignore the hint.
 
-**Interview phase**: the live conversation that produces a transcript, coverage and readings. Lives in `interview/`.
+**Interview phase**: the live conversation that produces a transcript and topic coverage. Lives in `interview/`.
 
-**Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives in `narrative/`.
+**Narrative phase**: writing Markdown from a canonical transcript, approved report format and optional explicit context. Needs only a language model. Lives outside the runtime in `app/reports/`.
 
-**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in `setup/`; the live actor never sees setup concerns.
+**Debrief setup**: the step before an attempt where the topics are decided. An organizer edits a template's draft or a model's draft from a description (`draftDebrief`); approval (`approveDebrief`) turns the record into a spec the engine runs. Lives in host-owned `app/server/interview/setup/`; the live coordinator never sees setup concerns.
 
-**Approved debrief**: readable learning goals, recursive topics, optional interviewing guidance and report requirements. Approval validates this content and produces a version. Runtime voices, persona, reading rubrics and limits come from the host; prompt construction belongs to the engine.
+**Approved debrief**: readable learning goals, recursive topics, optional interviewing guidance and report requirements. Approval validates this content and produces a version. Runtime voices, persona and limits come from the host; prompt construction belongs to the engine.
 
 **Catalog**: the host lookup used when a new attempt starts. The host pins the full accepted plan, configuration and context before opening the voice session. Checkpoints preserve these inputs, so later owners do not depend on a mutable catalog.
 
 **Accepted definition**: `InterviewPlan`, `InterviewConfig`, and optional `InterviewContext`. Context is explicit background, not participant evidence. The engine parses and copies these values and compiles its internal brief, framing and judging criteria.
 
-**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `interview/conversation/rubric.prompt.ts`).
+**Judged spec**: a spec that carries the criteria and rubrics, so Jev can grade from it (`JudgedSpec`, in `judging/topicCoverage.prompt.ts`).
 
-**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `interview/voice/brief.server.ts`).
+**Briefed spec**: a spec that carries the interviewer's brief text, so the engine can render Sam's instructions and opening line (`BriefedSpec`, in `voice/interviewerBrief.server.ts`).
 
 **Framing**: what kind of interview a spec is, in the words Sol's map and Jev's grade use (`InterviewFraming`): the occasion, the name for one topic, the purpose and setting that open Sol's seed, the thread Sol keeps open by default, what the spec's terms mean, and whose words count toward a topic.
 
@@ -52,17 +52,39 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 **Composing**: the browser holds an unsent, nonempty typed draft. Only sequenced poll and `ready` reports change it on the server. While composing, the browser keeps the microphone track disabled, the silence check does not run, and producer notes to Sam are held until the typed answer is forwarded or composition ends; leaving composition starts a fresh four-second silence interval. The draft text stays in the browser.
 
-**Final grade**: Jev's single evaluation of a finished transcript against the judged spec: coverage of every objective and the readings, with evidence by passage id.
+**Voice interviewer**: the module that owns provider sessions, segment diagnostics, receipts, usage and closure retries. Its recovery component owns greetings and transcript-silence checks. The coordinator supplies a narrow conversation view, registers provider IDs durably and accepts emitted transcript/lifecycle events.
 
-**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior.
+**Conversation producer**: the reasoning module that schedules map generation, turn judgments and background research under one shared budget and cancellation scope. Provider-bound callbacks do the paid work; the producer owns the map, ranking and current notes.
+
+**Session coordinator**: the attempt owner that mediates voice, grading and reasoning. It owns lifecycle, input admission, typed-answer durability, fencing, persistence and archive completion. It applies the pure lifetime policy and delegates canonical passage state to `SessionTranscript`.
+
+**Canonical transcript**: one ordered set of passages and its revision, owned by `SessionTranscript`. It coalesces speech, deduplicates segment events, freezes typed or judged passages, and supplies settled grading input and the settled prefix used by the append-only map log.
+
+**Lifetime policy**: pure decisions about browser contact, connection establishment, warnings, bounded automatic drain, pause holds and resume eligibility. It does no paid work or persistence; the coordinator applies its decisions.
+
+**Topic grading**: evidence-backed assessment of approved leaf topics during an attempt. The host's injected judge performs it; Sol receives coverage as conversation-map context. `TopicGrading` owns cadence, retry, cancellation, coverage state and history; the coordinator owns lifecycle and persistence. Grading does not decide whether the participant may end or supply input to the narrative writer.
+
+**Topic coverage**: the depth and applicability recorded for each approved leaf topic, with supporting participant passages. It informs topic marks and the conversation producer, not interview completion. Changed depth or applicability wakes the next permitted map call even without new speech; changing probability or evidence alone does not.
+
+**Final grade**: the injected judge's assessment of the completed transcript against the judged spec. It replaces live coverage smoothing and is preserved across terminal archive retries.
+
+**Narrative run**: one attempt at writing a report. `writeNarrative` receives only `transcript`, `format` and optional `context`; it streams a JSON envelope containing Markdown in `text`. `NarrativeRunner` provides bounded retry and rejoin behavior, and `run()` executes the same run headless for a host that persists the result itself.
 
 **Rejoin**: a request that attaches to a narrative run already in progress. `NarrativeRunner.attach` replays what has been written so far and then streams the rest live; a request that drops only detaches, and the run continues until it settles, is cancelled or reaches its deadline. Once settled, a request gets the stored document instead. An imported transcript's run cannot be rejoined, so it is cancelled when its request drops.
+
+**Closure**: how an attempt closed for one page, which `LiveConnection` reports once through `closed`: `ended` (the server ended it or confirmed the end, or it never reached the server), `unconfirmed` (the end went unanswered; the host reattaches with the same attempt to reconcile it) or `lost` (the server no longer has it), with whether the conversation had started.
+
+**Browser media**: microphone, peer connection, playback, audio context, meters and network statistics, owned together by `BrowserMedia`. It reports media observations; `LiveConnection` owns attempt commands and reconnect policy. Pause preserves the audio context. End silences immediately and releases the peer after its bounded drain.
+
+**Typed answer delivery**: the browser operation that keeps one answer ID through bounded retries until it receives a durable receipt or fails. It can run without browser media. End cancels pending delivery; the server may still save the answer without the browser receiving its receipt. An already received receipt remains valid, but cannot publish a live snapshot to a closed page.
+
+**Archive capture**: construction of an immutable archive row from one captured moment. It excludes provider IDs and preserves private diagnostic records and prompt fingerprints. The coordinator still owns archive writes, retries and terminal-checkpoint retention.
 
 **Transport**: how the browser client delivers its commands. The poll transport sends one HTTP request per command; the socket transport (`client/socketTransport.ts`) sends the same commands over one WebSocket per attempt, as `{ id, action, capability, body }`, and receives `{ id, status, body }` replies equal to the HTTP replies. The report, which streams, stays on HTTP; a socket start must name the socket's own attempt. The socket is opt-in on the host.
 
 ## Hosts
 
-**Hosted session**: the host wrapper around one actor. It returns canonical interview snapshots and adds report state separately. Reports use the actor’s frozen format and explicit context with the final transcript; they receive no map or coverage.
+**Hosted session**: the host wrapper around one coordinator. It returns canonical interview snapshots and adds report state separately. Reports use the host’s frozen format and explicit context with the final transcript; they receive no map or coverage.
 
 **Narrative route**: `POST /api/interview/narratives`, an independent report from `{ transcript, format, context? }`. No catalog or live attempt is involved. The narrative streams back and is not stored.
 
@@ -74,9 +96,11 @@ The Markdown companions in `docs/solutioning/` (`interview-engine-api-design.md`
 
 - **Sam**: the interviewer the participant hears, a realtime voice model.
 - **Sol**: the producer with the notepad; keeps the conversation map of what has been said and what is still open, and writes Sam's notes.
-- **Jev**: the producer's instincts; a judge model that reads coverage, readings and which thread to follow, and gives the final grade.
+- **Jev**: the producer's instincts; a judge model that reads coverage and which thread to follow, and gives the final grade.
 - **Luna**: the research assistant; looks up public background on organizations, products and terms the participant mentions.
 
 **Topic**: one recursive node with `id`, `label`, `learn`, optional `appliesWhen` and optional child `topics`. Only leaves are assessed. Parent learning intent scopes children, and parent conditions apply to descendants.
 
 **Applicability**: whether a conditional leaf applies to this participant, based on participant evidence. `unknown` differs from `not-applicable`, coverage depth, and a participant’s refusal or uncertainty.
+
+**Session persistence**: `session/sessionPersistence.server.ts` wraps the host store, orders checkpoint saves and removal, remembers the next wake, and rejects writes after ownership is lost. The coordinator decides what to save and which lifecycle actions to take.

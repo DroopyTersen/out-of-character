@@ -1,7 +1,7 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/map';
-import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/notes';
-import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
+import { emptyMap, type ConversationMap } from '../../../interview-engine/reasoning/conversationMap';
+import { NOTE_HEADERS } from '../../../interview-engine/reasoning/interviewerNotes';
+import { threadKey } from '../../../interview-engine/reasoning/threadSelection';
 import { interviewAttempt, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, settle, waitFor } from '../simulator/session-fixture';
 
@@ -17,8 +17,8 @@ async function live(options: Parameters<typeof objectFixture>[0] = {}) {
   const f = await objectFixture(options);
   await f.session.fetch(request('start', capability, interviewAttempt));
   await f.session.fetch(request('ready'));
-  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-1', delta: 'Who owns the site today?', start_ms: 0, end_ms: 1200 });
-  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-1', delta: 'Our team does.', start_ms: 1300, end_ms: 2000 });
+  f.socket.emit({ type: 'session.output_transcript.delta', event_id: 'out-1', delta: 'Who owns the site today?', start_ms: 0, end_ms: 1200 });
+  f.socket.emit({ type: 'session.input_transcript.delta', event_id: 'in-1', delta: 'Our team does.', start_ms: 1300, end_ms: 2000 });
   return f;
 }
 async function lose(f: Fixture) {
@@ -42,7 +42,7 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   };
   let maps = 0;
   const f = await live({ overrides: {
-    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), natural: Object.fromEntries(input.map.threads.map(thread => [thread.id, .8])), states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
+    evaluateTurn: async input => ({ reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), next: { choice: input.map.threads[0] ? `thread:${input.map.threads[0].id}` : 'current', probabilities: Object.fromEntries(input.map.threads.map(thread => [`thread:${thread.id}`, .8])) }, states: {}, novel: .9 }, model: 'fixture', durationMs: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {} }),
     generateMap: async () => { maps++; return { map, update: { vantage: null, preferences: null, entities: [], edges: [], threads: [], revise: [], close: [], drop: [] }, changes: { added: ['e1', 't1'], changed: [], dropped: [], kept: [] }, research: null, model: 'gpt-6.1-sol', usage: { inputTokens: 1, outputTokens: 1 } }; },
   } });
   const notes = (sent: Record<string, unknown>[]) => sent.filter(event => String(event.event_id).startsWith('note-')).map(event => String(event.content));
@@ -54,6 +54,7 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   await waitFor(() => notes(f.socket.sent).some(note => note.startsWith(NOTE_HEADERS.list)));
   const delivered = notes(f.socket.sent);
   expect(delivered).toHaveLength(2);
+  expect(f.socket.sent.filter(event => String(event.event_id).startsWith('note-')).every(event => event.type === 'session.thinking.append')).toBe(true);
   await lose(f);
   await reconnect(f);
   await waitFor(() => notes(f.socket.sent).length === 2);
@@ -64,15 +65,15 @@ test('a resumed interview restates Sam’s notes to the new provider session', a
   expect(JSON.parse(f.interviewRow()!.interventions_json).filter((record: { source: string; kind: string }) => record.source === 'note' && ['list', 'map'].includes(record.kind))).toHaveLength(4);
 });
 
-test('a restarted interview keeps its readings and summary state, stored inside the checkpoint snapshot', async () => {
+test('a restarted interview keeps its coverage state, stored inside the checkpoint snapshot', async () => {
   const f = await live();
   await lose(f);
   const before = await poll(f);
   expect(before).toMatchObject({ background: [] });
   expect(before).not.toHaveProperty('interview');
-  // The stored shape is unchanged, so checkpoints saved before the interview state moved beside the snapshot still restore.
+  // Coverage is checkpointed with the interview; reports are host-owned.
   const stored = (f.values.get('checkpoint') as { snapshot: Record<string, unknown> }).snapshot;
-  expect(stored.interview).toEqual({ evaluation: before.evaluation, summary: null });
+  expect(stored.interview).toEqual({ evaluation: before.evaluation });
   expect(stored.interview).not.toHaveProperty('background');
   const replacement = await objectFixture({ values: f.values, archive: f.archive, provider: 'replacement' });
   const state = await poll(replacement);

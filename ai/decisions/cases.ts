@@ -1,10 +1,12 @@
 import type { Experimental_EvaluationQuestion } from 'ai';
-import { evaluateSilence } from '../../interview-engine/interview/session/silence.server';
-import { dialogueState, readInterviewAnswers } from '../../interview-engine/interview/conversation/evaluate.server';
-import { interviewQuestions } from '../../interview-engine/interview/conversation/rubric.prompt';
-import { latestTurn, turnQuestions, readTurnAnswers } from '../../interview-engine/interview/conversation/ranking.server';
-import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/interview/conversation/ranking';
-import type { ConversationMap } from '../../interview-engine/interview/conversation/map';
+import { judgeConversationSilence } from '../../interview-engine/judging/judgeConversationSilence.server';
+import { readTopicCoverage } from '../../interview-engine/judging/judgeTopicCoverage.server';
+import { dialogueState } from '../../interview-engine/shared/transcript';
+import { coverageRequest } from '../../interview-engine/judging/topicCoverage.prompt';
+import { turnQuestions, readTurnAnswers } from '../../interview-engine/judging/judgeConversationTurn.server';
+import { latestTurn } from '../../interview-engine/reasoning/turnTaking';
+import { emptyRanking, observeTurn, pickThreads } from '../../interview-engine/reasoning/threadSelection';
+import type { ConversationMap } from '../../interview-engine/reasoning/conversationMap';
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { archivedTranscriptSchema } from '../../core/interview-transcript';
 import { spec } from '../../interviews/project-closeout/spec';
@@ -25,7 +27,7 @@ async function silenceRequest(transcript: Passage[]): Promise<Request> {
   const stop = new Error('capture');
   const model: Model = { specificationVersion: 'v4', provider: 'capture', modelId: 'capture', supportedQuestionTypes: ['choice', 'boolean', 'score'],
     doEvaluate(input) { captured = input; throw stop; } };
-  try { await evaluateSilence({ transcript, judge: model }); } catch (error) { if (error !== stop) throw error; }
+  try { await judgeConversationSilence({ transcript, judge: model }); } catch (error) { if (error !== stop) throw error; }
   if (!captured) throw new Error('No silence request captured');
   return captured;
 }
@@ -47,18 +49,15 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
     item.transcript = archivedTranscriptSchema.parse(item.transcript);
     result.push({ id: `turn:${item.id}`, lane: 'turn', split: item.sourceAlias === 'interview-A' ? 'development' : 'validation',
     source: item.sourceAlias, transcript: item.transcript, map: item.map, atMs: item.atMs, mapId: item.mapId,
-    state: dialogueState(item.transcript, 'sam'), questions: turnQuestions(item.map, latestTurn(item.transcript)), deadlineMs: 3000, checks: [] });
+    state: dialogueState(item.transcript, 'sam'), questions: turnQuestions(item.map, latestTurn(item.transcript), item.atMs), deadlineMs: 3000, checks: [] });
   }
   for (const item of interviewFixtures.filter(x => Object.values(x.expected).some(value => value.length))) {
     const checks: Check[] = [
       ...item.expected.heard.map(id => ({ name: `heard:${id}`, path: ['objectives', id, 'achieved'], op: 'eq' as const, expected: true })),
       ...item.expected.unheard.map(id => ({ name: `unheard:${id}`, path: ['objectives', id, 'achieved'], op: 'eq' as const, expected: false, critical: true })),
-      ...(item.expected.highReadings ?? []).map(id => ({ name: `high:${id}`, path: ['readings', id, 'value'], op: 'gte' as const, expected: 2.5 })),
-      ...(item.expected.lowReadings ?? []).map(id => ({ name: `low:${id}`, path: ['readings', id, 'value'], op: 'lt' as const, expected: 2 })),
-      ...(item.expected.blankReadings ?? []).map(id => ({ name: `blank:${id}`, path: ['readings', id, 'value'], op: 'eq' as const, expected: null })),
     ];
     result.push({ id: `grade:${item.id}`, lane: 'grade', split: parseInt(hash(item.id).slice(0, 4), 16) % 3 === 0 ? 'validation' : 'development', source: 'synthetic',
-      transcript: item.transcript, state: dialogueState(item.transcript, 'sam'), questions: interviewQuestions(spec, item.transcript), deadlineMs: 8000, checks });
+      transcript: item.transcript, state: dialogueState(item.transcript, 'sam'), questions: coverageRequest(spec, item.transcript).questions, deadlineMs: 8000, checks });
   }
   const manifest = await Bun.file(`${directory}/sources.json`).json() as { sources: { alias: string; path: string; sha256: string }[] };
   for (const alias of ['interview-A', 'interview-B']) {
@@ -75,7 +74,7 @@ export async function prepareCases(directory: string): Promise<EvalCase[]> {
     for (const count of boundaries) {
       const prefix = transcript.slice(0, count);
       result.push({ id: `grade:${alias}-${prefix.at(-1)!.id}`, lane: 'grade', split: alias === 'interview-A' ? 'development' : 'validation', source: alias,
-        transcript: prefix, state: dialogueState(prefix, 'sam'), questions: interviewQuestions(spec, prefix), deadlineMs: 8000, checks: [] });
+        transcript: prefix, state: dialogueState(prefix, 'sam'), questions: coverageRequest(spec, prefix).questions, deadlineMs: 8000, checks: [] });
     }
   }
   if (new Set(result.map(x => x.id)).size !== result.length) throw new Error('Duplicate case ID');
@@ -94,7 +93,7 @@ export function interpret(item: EvalCase, answers: Result['answers']) {
     return { ...reading, new: reading.novel >= .8, feedbackNew: (reading.feedback ?? 0) >= .8, wakeCandidate: reading.novel >= .8 || (reading.feedback ?? 0) >= .8,
       pick: pickThreads(item.map!, ranking) };
   }
-  const grade = readInterviewAnswers(spec, item.transcript, answers);
+  const grade = readTopicCoverage(spec, item.transcript, answers);
   return { ...grade, objectives: Object.fromEntries(grade.objectives.map(x => [x.id, x])) };
 }
 

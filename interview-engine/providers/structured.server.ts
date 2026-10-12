@@ -36,9 +36,9 @@ const responseSchema = z.object({
 export type SolMessage = { role: 'developer' | 'user'; text: string; cache?: boolean };
 /** A structured call to the agent model with the resource and credentials already bound: what the Providers carry. */
 export type StructuredInput = {
-  signal: AbortSignal; instructions: string; name: string; schema: z.ZodType; effort?: 'low' | 'medium'; maxOutputTokens?: number;
-  /** The JSON schema sent, when it should differ from `schema`'s, such as without string lengths. */
-  jsonSchema?: Record<string, unknown>;
+  signal: AbortSignal; instructions: string; name: string; effort?: 'low' | 'medium'; maxOutputTokens?: number;
+  /** The wire JSON schema. The caller separately validates the parsed value against its local constraints. */
+  jsonSchema: Record<string, unknown>;
   messages: SolMessage[];
   /** Null sends no cache options, for deployments that reject them. */
   cacheKey: string | null;
@@ -65,7 +65,7 @@ export async function requestSol(input: { foundry: FoundryConfig } & StructuredI
     body: JSON.stringify({
       model: input.foundry.agentModel, reasoning: { effort }, store: false, max_output_tokens: input.maxOutputTokens ?? 1800,
       instructions: input.instructions, ...body,
-      text: { format: { type: 'json_schema', name: input.name, strict: true, schema: input.jsonSchema ?? z.toJSONSchema(input.schema) } },
+      text: { format: { type: 'json_schema', name: input.name, strict: true, schema: input.jsonSchema } },
     }),
   });
   if (!response.ok) throw new DirectorHttpError(response.status, response.headers.get('apim-request-id') ?? response.headers.get('x-request-id'));

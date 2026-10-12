@@ -1,4 +1,3 @@
-import type { InterviewReadingId } from '../../core/interview';
 import type { Passage } from '../../interview-engine/shared/transcript';
 
 function dialogue(lines: readonly (readonly [Passage['speaker'], string])[]): Passage[] {
@@ -9,7 +8,7 @@ export type InterviewFixture = {
   id: string;
   description: string;
   transcript: Passage[];
-  expected: { heard: string[]; unheard: string[]; highReadings?: InterviewReadingId[]; lowReadings?: InterviewReadingId[]; blankReadings?: InterviewReadingId[] };
+  expected: { heard: string[]; unheard: string[] };
 };
 
 export const interviewFixtures: InterviewFixture[] = [
@@ -109,7 +108,7 @@ export const interviewFixtures: InterviewFixture[] = [
     transcript: dialogue([
       ['interviewer', 'The client VP blocked every approval and your team had to redo all the work, right?'],
       ['participant', 'Yes.'],
-    ]), expected: { heard: [], unheard: ['client-decisions', 'client-pace', 'process-improve'], blankReadings: ['specificity'] },
+    ]), expected: { heard: [], unheard: ['client-decisions', 'client-pace', 'process-improve'] },
   },
   {
     id: 'terse-expert', description: 'A short answer carries concrete delivery and role facts.',
@@ -118,7 +117,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['participant', 'We replaced the paper inspection log with an offline iPad app for 42 field inspectors. I owned the sync API and migration.'],
       ['interviewer', 'What made offline important?'],
       ['participant', 'They spend most mornings outside cell coverage. We queued changes locally, then synced when they returned to the depot.'],
-    ]), expected: { heard: ['project-delivery', 'project-role'], unheard: ['client-decisions', 'process-tools'], highReadings: ['specificity', 'engagement'] },
+    ]), expected: { heard: ['project-delivery', 'project-role'], unheard: ['client-decisions', 'process-tools'] },
   },
   {
     id: 'vague-rant', description: 'Length and forcefulness do not supply project detail.',
@@ -127,7 +126,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['participant', 'The whole thing was a mess. Everybody was terrible, meetings were a joke, and nobody ever knew what was going on. Honestly, it was just awful in every way.'],
       ['interviewer', 'Can you name a specific handoff that failed?'],
       ['participant', 'Everything. Every single thing. That is what I am saying.'],
-    ]), expected: { heard: [], unheard: ['project-delivery', 'process-communication'], lowReadings: ['specificity'] },
+    ]), expected: { heard: [], unheard: ['project-delivery', 'process-communication'] },
   },
   {
     id: 'leading-and-mm', description: 'Sam supplies the claim; the participant only acknowledges it.',
@@ -135,7 +134,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['interviewer', 'So your client sponsor blocked staging access for three weeks and made every decision late, right?'],
       ['participant', 'Mm.'],
       ['interviewer', 'I guess that was the main reason the release slipped.'],
-    ]), expected: { heard: [], unheard: ['client-access', 'client-decisions', 'client-pace'], blankReadings: ['specificity'] },
+    ]), expected: { heard: [], unheard: ['client-access', 'client-decisions', 'client-pace'] },
   },
   {
     id: 'uncertainty', description: 'The participant marks a real limit to their knowledge.',
@@ -186,7 +185,7 @@ export const interviewFixtures: InterviewFixture[] = [
       ['participant', 'The existing forms did not match the actual review steps. We learned that when Nia, a clerk at the client, walked us through three rejected applications.'],
       ['interviewer', 'What did you change after that walk-through?'],
       ['participant', 'We split the review into eligibility and completeness checks. That let staff send back only the missing documents.'],
-    ]), expected: { heard: ['project-delivery'], unheard: ['client-friction', 'process-improve', 'process-tools', 'project-contributions', 'project-reflection'], highReadings: ['engagement', 'specificity'] },
+    ]), expected: { heard: ['project-delivery'], unheard: ['client-friction', 'process-improve', 'process-tools', 'project-contributions', 'project-reflection'] },
   },
   {
     id: 'boundary-accepted', description: 'Sam accepts a limit and follows the offered process account.',

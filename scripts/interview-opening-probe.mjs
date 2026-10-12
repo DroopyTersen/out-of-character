@@ -1,7 +1,7 @@
 // Bounded real-voice checks. Review the generated first turns against each case's expectations.
 // bun --env-file=.dev.vars scripts/interview-opening-probe.mjs --paid
-import { resolveInterview } from '../interview-engine/interview/definition.server.ts';
-import { interviewerBrief, interviewOpening } from '../interview-engine/interview/voice/brief.server.ts';
+import { resolveInterview } from '../interview-engine/definition.server.ts';
+import { interviewerBrief, interviewOpening } from '../interview-engine/voice/interviewerBrief.server.ts';
 import { spec as closeout } from '../interviews/project-closeout/spec.ts';
 import { spec as winLoss } from '../interviews/sales-win-loss/spec.ts';
 import { captureLiveClip } from './lib/live-voice-clip.mjs';

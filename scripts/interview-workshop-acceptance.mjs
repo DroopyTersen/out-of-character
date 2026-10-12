@@ -29,7 +29,6 @@ try {
       await capture(page, `${output}/${screen}-${width}.png`);
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Horizontal overflow');
       if (screen === 'live' && width < 500) {
-        check(await page.locator('.interview-readings').evaluate(el => el.getBoundingClientRect().bottom < innerHeight), 'Mobile readings are below the first screen');
         await page.locator('.interview-topics').scrollIntoViewIfNeeded();
         check(await page.getByRole('button', { name: 'End interview', exact: true }).evaluate(el => el.getBoundingClientRect().top >= 0), 'End control scrolls out of reach');
       }
@@ -63,11 +62,8 @@ try {
         check(await page.getByRole('button', { name: 'Mic off', exact: true }).getAttribute('aria-pressed') === 'true', 'Mute state absent');
         await page.getByRole('button', { name: 'Transcript', exact: true }).click();
         check(await page.locator('#interview-live-transcript article').count() > 0, 'Transcript did not open');
-        await page.locator('.interview-reading-evidence summary').click();
-        check(await page.locator('.interview-reading-evidence blockquote').count() === 3, 'Reading evidence absent');
         await controls.getByLabel('Transcript').selectOption('0');
         check(await page.locator('.interview-topic li.heard').count() === 0, 'Empty transcript retains topic credit');
-        check((await page.locator('.interview-reading-list').innerText()).includes('Not yet observed'), 'Empty transcript retains a reading');
         await controls.getByLabel('Call state').selectOption('ending');
         check(await page.getByRole('button', { name: 'Mic off', exact: true }).isDisabled(), 'Ending allows microphone input');
       } else {

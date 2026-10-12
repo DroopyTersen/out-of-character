@@ -1,10 +1,9 @@
 import { afterEach, expect, setSystemTime, test } from 'bun:test';
-import { emptyInterviewReadings } from '../../../core/interview';
-import { emptyMap, type ConversationMap } from '../../../interview-engine/interview/conversation/map';
-import { NOTE_HEADERS } from '../../../interview-engine/interview/conversation/notes';
-import { threadKey } from '../../../interview-engine/interview/conversation/ranking';
-import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/interview/conversation/records';
-import type { SessionServices } from '../../../interview-engine/interview/interview.server';
+import { emptyMap, type ConversationMap } from '../../../interview-engine/reasoning/conversationMap';
+import { NOTE_HEADERS } from '../../../interview-engine/reasoning/interviewerNotes';
+import { threadKey } from '../../../interview-engine/reasoning/threadSelection';
+import { PRODUCER_VERSION, type ResearchRequest } from '../../../interview-engine/reasoning/conversationRecords';
+import type { SessionServices } from '../../../interview-engine/session/sessionCoordinator.server';
 import { interviewAttempt, narrated, objectFixture } from './durableObjectFixture';
 import { activityPoll, capability, request, waitFor } from '../simulator/session-fixture';
 
@@ -14,7 +13,7 @@ afterEach(() => setSystemTime());
 const fixtureUsage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 };
 /** Jev finds every participant turn new to the map, so each one wakes Sol once the floor allows. */
 const novelTurn: SessionServices['evaluateTurn'] = async input => ({
-  reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), natural: Object.fromEntries(input.map.threads.map(thread => [thread.id, .8])), states: {}, novel: .9 },
+  reading: { passageId: input.transcript.at(-1)!.id, atMs: input.atMs, focus: null, keys: Object.fromEntries(input.map.threads.map(thread => [thread.id, threadKey(thread)])), next: { choice: input.map.threads[0] ? `thread:${input.map.threads[0].id}` : 'current', probabilities: Object.fromEntries(input.map.threads.map(thread => [`thread:${thread.id}`, .8])) }, states: {}, novel: .9 },
   model: 'fixture', durationMs: 1, usage: fixtureUsage, answers: {},
 });
 const solMap = (): ConversationMap => ({
@@ -116,7 +115,7 @@ test('the private archive keeps consecutive probability changes, failed grades, 
     calls++;
     if (calls === 3) throw new Error('Synthetic evaluation failure');
     const probability = calls === 1 ? .9 : .92;
-    return { revision: input.revision, readings: emptyInterviewReadings(), model: 'fixture', durationMs: 1,
+    return { revision: input.revision, model: 'fixture', durationMs: 1,
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, answers: {}, objectives: [{
         id: 'project-delivery', level: 'explored', achieved: true, probability,
         levels: { 'not-yet': 0, touched: 1 - probability, explored: probability, 'set-aside': 0 },

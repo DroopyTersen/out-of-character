@@ -14,12 +14,15 @@ import { HostedSession } from '../app/server/interview/hosted';
 import { importedNarrative, narrateWith } from '../app/server/interview/narrative';
 import { routeInterview, type InterviewGates } from '../app/server/interview/routes';
 import { answerSocket, socketContext, type SocketContext } from '../app/server/interview/socket';
-import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/interview/adapters/memory.server';
-import { SessionActor, type Archive } from '../interview-engine/interview/interview.server';
+import { inlineBackground, memoryArchive, memoryRecord, memoryStore } from '../interview-engine/adapters/memory.server';
+import { SessionCoordinator } from '../interview-engine/session/sessionCoordinator.server';
+import { type Archive } from '../interview-engine/seams.server';
 import { foundryProviders } from '../interview-engine/providers/providers.server';
 import { createDecisionJudge } from '../interview-engine/providers/decisionJudge.server';
-import { draftDebrief } from '../interview-engine/setup/draft.server';
+import { draftDebrief } from '../app/server/interview/setup/draft.server';
 import { startSchema } from '../interview-engine/shared/protocol';
+import type { NarrativeStatus, NarrativeProvenance } from '../app/reports/report.types';
+import { openControl } from '../app/server/interview/bunControl.server';
 
 const env = process.env;
 if (!foundryConfigured(env) || !env.OPENAI_API_KEY) {
@@ -29,35 +32,23 @@ if (!foundryConfigured(env) || !env.OPENAI_API_KEY) {
 const foundry = foundryConfig(env);
 const openaiKey = env.OPENAI_API_KEY;
 
-// GPT-Live's control channel is a WebSocket upgrade. Bun's fetch does not upgrade, so the upgrade request opens a
-// WebSocket instead and the socket opener collects it from the response that stands in for the 101.
-const upgraded = new WeakMap<Response, WebSocket>();
-const upgradingFetch = (async (input: string | URL | Request, init?: RequestInit) => {
-  const headers = new Headers(init?.headers);
-  if (headers.get('Upgrade')?.toLowerCase() !== 'websocket') return fetch(input, init);
-  headers.delete('Upgrade');
-  const url = new URL(input instanceof Request ? input.url : input);
-  url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
-  const socket = new WebSocket(url, { headers: Object.fromEntries(headers) } as unknown as string[]);
-  const opened = await new Promise<boolean>(resolve => {
-    socket.addEventListener('open', () => resolve(true), { once: true });
-    socket.addEventListener('error', () => resolve(false), { once: true });
-    socket.addEventListener('close', () => resolve(false), { once: true });
-    init?.signal?.addEventListener('abort', () => { socket.close(); resolve(false); }, { once: true });
-  });
-  if (!opened) return new Response(null, { status: 502 });
-  const response = new Response(null, { status: 200 });
-  upgraded.set(response, socket);
-  return response;
-}) as typeof fetch;
 const providers = foundryProviders({ ...foundry, judge: createDecisionJudge({ apiKey: openaiKey }) },
-  { fetch: upgradingFetch, socket: response => upgraded.get(response) ?? null });
+  { openControl });
 
 const rows = memoryArchive();
+const reports = new Map<string, { narrative: NarrativeStatus; provenance: NarrativeProvenance }>();
+async function saveArchive(id: string) {
+  const row = rows.rows.get(id);
+  if (!row || !env.INTERVIEW_ARCHIVE_DIR) return;
+  const report = reports.get(id);
+  await Bun.write(`${env.INTERVIEW_ARCHIVE_DIR}/${id}.json`, JSON.stringify({
+    ...row, ...(report ? { narrative: report.narrative, provenance: { ...row.provenance, narrative: report.provenance } } : {}),
+  }, null, 2));
+}
 const archive: Archive = {
   async write(row) {
     await rows.write(row);
-    if (env.INTERVIEW_ARCHIVE_DIR) await Bun.write(`${env.INTERVIEW_ARCHIVE_DIR}/${row.id}.json`, JSON.stringify(rows.rows.get(row.id), null, 2));
+    await saveArchive(row.id);
   },
 };
 
@@ -95,10 +86,17 @@ async function open(id: string, spec: HostedSpec) {
     clearTimeout(timer);
     timer = at == null ? undefined : setTimeout(() => void wake().catch(error => console.error('Interview wake failed', id, error)), Math.max(0, at - Date.now()));
   } });
-  hosted = SessionActor.restore({
+  hosted = SessionCoordinator.restore({
     plan: spec.plan, config: spec.config, context: spec.context, providers, store, background: inlineBackground(), archive,
     log: event => { if (event.type === 'session') console.warn('Interview session', event); },
-  }).then(actor => new HostedSession(actor, { narrate: narrateWith(providers), model: foundry.agentModel }));
+  }).then(actor => new HostedSession(actor, {
+    format: spec.report, narrate: narrateWith(providers), model: foundry.agentModel,
+    saveReport: async (id, narrative, provenance) => {
+      reports.set(id, { narrative, provenance });
+      await saveArchive(id);
+    },
+    track: work => { void work.catch(error => console.error('Interview report failed', id, error)); },
+  }));
   return hosted;
 }
 

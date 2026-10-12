@@ -15,7 +15,7 @@ test('a socket message becomes the HTTP request the poll transport would send, a
   const seen: Request[] = [];
   const route = async (request: Request) => { seen.push(request); return Response.json({ status: 'live', body: await request.text() }, { status: 202 }); };
   const reply = JSON.parse(await answerSocket(JSON.stringify({ id: 7, action: 'poll', capability: hex, body: { active: true } }), context, route));
-  expect(reply).toEqual({ id: 7, status: 202, body: { status: 'live', body: '{"active":true}' } });
+  expect(reply).toEqual({ id: 7, status: 202, serverAt: expect.any(Number), body: { status: 'live', body: '{"active":true}' } });
   expect(seen[0]!.url).toBe(`${origin}/api/interview/sessions/${attempt.id}/poll`);
   expect(seen[0]!.method).toBe('POST');
   expect(Object.fromEntries(seen[0]!.headers)).toMatchObject({ origin, authorization: `Bearer ${hex}`, 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9' });
@@ -51,8 +51,8 @@ test('the socket path is unknown without the opt-in gate, and otherwise needs a 
 
 test('the interview object answers socket commands exactly as the HTTP routes do', async () => {
   const script: [ProtocolAction, unknown, string?][] = [
-    ['poll', { active: false, audio: false, outputQuietMs: 60_000 }], ['start', interviewAttempt], ['start', interviewAttempt, 'b'.repeat(64)], ['ready', undefined],
-    ['poll', { active: true, audio: false, outputQuietMs: 60_000 }], ['pause', undefined], ['poll', undefined], ['end', undefined], ['poll', undefined],
+    ['poll', { active: false, audio: false }], ['start', interviewAttempt], ['start', interviewAttempt, 'b'.repeat(64)], ['ready', undefined],
+    ['poll', { active: true, audio: false }], ['pause', undefined], ['poll', undefined], ['end', undefined], ['poll', undefined],
   ];
   const run = async (send: (action: ProtocolAction, body: unknown, capability: string) => Promise<{ status: number; body: unknown }>) => {
     setSystemTime(1_800_000_000_000);

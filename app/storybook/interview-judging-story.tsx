@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { interviewFixtures } from '../../ai/interview/fixtures';
 import recordings from '../../ai/interview/recordings.json';
-import { COVERAGE_LEVEL_LABELS, interviewReadings, interviewTopics, type InterviewObjectiveReading, type InterviewReadingId } from '../../core/interview';
+import { COVERAGE_LEVEL_LABELS, interviewTopics, type InterviewObjectiveReading } from '../../core/interview';
 import { formatTime } from '../simulator/conversation';
 import '../simulator/simulator.css';
 
@@ -9,7 +9,7 @@ type Recording = {
   collectedAt: string; rubricVersion: string; source: string;
   rows: {
     fixtureId: string;
-    participant: { model: string; durationMs: number; readings: Record<InterviewReadingId, { value: number | null; evidence: { entryId: string; speaker: string; text: string } | null }>; objectives: InterviewObjectiveReading[] };
+    participant: { model: string; durationMs: number; objectives: InterviewObjectiveReading[] };
   }[];
 };
 const recorded = recordings as unknown as Recording;
@@ -48,15 +48,6 @@ export function InterviewJudgingStory() {
           )}</div>
         </div>
         <div>
-          <h2 className="sim-lab-column-title">Participant observations</h2>
-          <div className="sim-lab-grid">{interviewReadings.map(item => {
-            const reading = row.participant.readings[item.id];
-            return <section className="sim-panel" key={item.id}>
-              <h3>{item.label}</h3>
-              <p>{reading.value == null ? 'Not observed' : `${reading.value.toFixed(2)} / 4`}</p>
-              <ParticipantEvidence evidence={reading.evidence} />
-            </section>;
-          })}</div>
           <section className="sim-director-readout">
             <h3>Topic coverage from the participant</h3>
             <p className="sim-muted">Marks require participant evidence and sufficient confidence. The raw probabilities below may favor a level that has not met those checks.</p>

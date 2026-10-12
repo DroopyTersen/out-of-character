@@ -1,23 +1,26 @@
+import { inlineBackground } from '../interview-engine/adapters/memory.server.ts';
 import { archivedTranscriptSchema } from '../core/interview-transcript.ts';
 import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
-import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
+import { foundryProviders, modelName } from '../interview-engine/providers/providers.server.ts';
 import { createHash } from 'node:crypto';
 import { foundryConfig, foundryUrl } from '../ai/foundry.server.ts';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { evaluateTurn } from '../interview-engine/judging/judgeConversationTurn.server.ts';
+import { lookupInterviewBackground } from '../interview-engine/reasoning/backgroundResearch.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { getClient, getScenario, openingInstruction } from '../ai/simulator/scenarios.server.ts';
 import { evaluateClient, evaluateEnding, evaluateTrainee } from '../ai/simulator/evaluate.server.ts';
-import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
-import { settledPrefix } from '../ai/interview/map.server.ts';
+import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
+import { generateMap, settledPrefix } from '../ai/interview/map.server.ts';
 import { RUBRIC_VERSION } from '../ai/simulator/rubric.ts';
 import { INTERVIEW_RUBRIC_VERSION } from '../ai/interview/rubric.ts';
 import { INTERVIEW_SCENARIO_ID, mergeCoverage } from '../core/interview.ts';
-import { NOTE_HEADERS } from '../interview-engine/interview/conversation/notes.ts';
+import { NOTE_HEADERS } from '../interview-engine/reasoning/interviewerNotes.ts';
 import { interviewTurnGaps } from '../core/interview-timeline.ts';
 import { appendTranscript, settledTranscript } from '../core/simulator/state.ts';
 import { ContextualDirector, directorServices } from '../app/server/simulator/contextual-director.ts';
-import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
+import { InterviewProducer } from '../interview-engine/reasoning/interviewProducer.server.ts';
 
 // Synthetic, responsive rehearsal. Local speech synthesis supplies trainee audio;
 // real GPT-Live supplies the client. In interviews the producer sends Sam its thread and map
@@ -539,10 +542,22 @@ let coverage = [];
 const passageUpdatedAt = new Map();
 const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
 const startedAt = Date.now();
+const producerBackground = inlineBackground();
 const contextual = isInterview ? null : new ContextualDirector({ scenarioId, clientId, objectives: () => [], isFresh: transcript => JSON.stringify(transcript) === JSON.stringify(report.transcript), foundry, typesafeKey: process.env.TYPESAFE_API_KEY, services: directorServices, settled: () => report.transcript, send });
 // As in the session, Sol's append-only log reads only up to the first passage still being transcribed.
 const prefix = () => { const ready = new Set(settled()); return settledPrefix(archivedTranscriptSchema.parse(report.transcript), entry => [...ready].some(item => item.id === entry.id)); };
-const producer = isInterview ? new InterviewProducer({ attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, spec, providers: foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) }), services: producerServices, settled: prefix, send }) : null;
+const providers = isInterview ? foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) }) : null;
+const producer = isInterview ? new InterviewProducer({
+  attemptId: `probe-${crypto.randomUUID()}`, startedAt, coverage: () => coverage, spec,
+  models: { agent: modelName(providers.language.agent), fast: modelName(providers.language.fast) }, thresholds: providers.judge.thresholds,
+  services: {
+    generateMap: input => generateMap({ ...input, structured: providers.structured }),
+    evaluateTurn: input => evaluateTurn({ ...input, judge: providers.judge.model }),
+    lookupInterviewBackground: input => lookupInterviewBackground({ ...input, model: providers.language.fast, webSearch: providers.webSearch }),
+  },
+  settled: prefix, send: note => send({ type: 'session.thinking.append', event_id: note.id, delegation_id: null, content: note.content }),
+  waitUntil: work => producerBackground.track(work),
+}) : null;
 const directions = producer ?? contextual;
 if (!notesEnabled) directions.close();
 report.interventions = directions.records;
@@ -551,7 +566,7 @@ async function observeClient(afterTurn, transcript) {
   if (producer) {
     // Coverage only: the producer reads turns, calls Sol and sends notes on its own tick.
     try {
-      const graded = await evaluateInterview({ planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(transcript), revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
+      const graded = await judgeTopicCoverage({ planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(transcript), revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(3000) });
       if (!closing) coverage = mergeCoverage(coverage, graded.objectives);
     } catch (error) { report.errors.push(`Participant grading failed (${error.name}).`); }
     return;
@@ -725,14 +740,14 @@ try {
   if (report.finalized && report.transcript.some(entry => entry.speaker === 'trainee')) {
     const common = { revision: report.transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) };
     report[isInterview ? 'interview' : 'trainee'] = isInterview
-      ? await evaluateInterview({ ...common, planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(report.transcript) })
+      ? await judgeTopicCoverage({ ...common, planId: scenarioId, voiceId: clientId, transcript: archivedTranscriptSchema.parse(report.transcript) })
       : await evaluateTrainee({ ...common, scenarioId, clientId, transcript: report.transcript });
   }
 } catch (error) { report.errors.push(`Final evaluation failed (${error.name}).`); }
 finally {
   directions.close(); clearTimeout(deadline); clearInterval(producerTimer); clearTimeout(pacing); ws.close();
   await Promise.all(observations);
-  if (producer) { await producer.settle(); report.producer = producer.summary(); }
+  if (producer) { await producerBackground.settle(); report.producer = producer.summary(); }
   report.interventions = directions.records;
   report.turnGaps = interviewTurnGaps(report.transcript);
   if (report.thoughtPauses.some(item => item.audibleSamFrames > 0)) report.errors.push('Sam spoke during a participant thought pause.');

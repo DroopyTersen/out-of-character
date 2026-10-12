@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionSnapshot } from '../../core/simulator/types';
 import { LiveConnection, stableLink, type Attempt, type ConnectionSnapshot, type Link } from '../../interview-engine/client/liveConnection';
+import { ParticipantIntent } from '../../interview-engine/client/participantIntent';
 import type { StartInput, SubmitTextReply } from '../../interview-engine/shared/protocol';
 import { silentLevels } from '../../interview-engine/client/audioLevels';
 import { pollTarget, pollTransport } from '../../interview-engine/client/transport';
@@ -58,6 +59,8 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
   const [levels, setLevels] = useState(silentLevels);
   const [link, setLink] = useState<Link>(stableLink);
   const connection = useRef<LiveConnection<S> | null>(null);
+  // Intent survives a replacement connection; a new attempt starts with fresh preferences and answer identity.
+  const intent = useRef(new ParticipantIntent());
   const generation = useRef(0);
   // Connection callbacks outlive renders; submit with the endpoint prepared at Start.
   const reportActions = useRef(report);
@@ -93,11 +96,12 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
 
   function begin(choice: AttemptChoice, saved?: SavedAttempt) {
     connection.current?.dispose();
+    if (!saved) intent.current = new ParticipantIntent();
     const attempt = ++generation.current;
-    let reachedLive = false;
-    setError(null); setSnapshot(null); setMuted(false); setLevels(silentLevels); setLink(stableLink); setPhase(saved ? 'paused' : 'connecting');
+    // A rejoined attempt is already saved; a new one is saved once its conversation starts.
+    let remembered = !!saved;
+    setError(null); setSnapshot(null); setMuted(intent.current.muted); setLevels(silentLevels); setLink(stableLink); setPhase(saved ? 'paused' : 'connecting');
     const active = () => generation.current === attempt;
-    const beginReport = () => reportActions.current.begin(live.attempt.id);
     // A rejoined attempt stays on the routes it started on.
     const route = saved?.route ?? sessions;
     const transport = pollTransport(route);
@@ -111,67 +115,76 @@ export function useSimulator<S extends ConnectionSnapshot = SessionSnapshot>(rep
     } }, {
       snapshot: value => {
         if (!active()) return;
-        // A rejoined attempt had already started.
-        if (!reachedLive && (value.status === 'live' || saved)) {
-          reachedLive = true;
-          if (!saved) savedAttempts.write(kind, { ...live.attempt, ...choice, route });
+        if (!remembered && value.status === 'live') {
+          remembered = true;
+          savedAttempts.write(kind, { ...live.attempt, ...choice, route });
         }
         setSnapshot(value);
         const status = value.status;
-        if (status === 'ended' || status === 'interrupted') {
-          savedAttempts.clear(kind);
-          setPhase(reachedLive ? 'debrief' : 'selection');
-          if (reachedLive) beginReport();
-        }
-        // After the conversation starts, reconnecting media is part of the pause.
-        else setPhase(reachedLive && status === 'connecting' ? 'paused' : status);
+        // `closed` follows a terminal snapshot. After the conversation starts, reconnecting media is part of the pause.
+        if (status !== 'ended' && status !== 'interrupted') setPhase(current => status === 'connecting' && current !== 'connecting' ? 'paused' : status);
       },
       levels: value => { if (active()) setLevels(value); },
-      error: (message, fatal) => {
-        if (!active()) return;
-        setError(message);
-        if (!fatal) return;
-        savedAttempts.clear(kind);
-        setPhase(reachedLive ? 'debrief' : 'selection');
-        if (reachedLive) beginReport();
-      },
+      error: message => { if (active()) setError(message); },
       link: value => {
         if (!active()) return;
         setLink(value);
         if (value.state === 'resuming') setError(null);
       },
+      closed: ({ outcome, reachedLive }) => {
+        if (!active()) return;
+        // An unanswered end may have left the attempt held: rejoin it, paused, to resume or end it again.
+        if (outcome === 'unconfirmed' && reachedLive) {
+          const held = { ...live.attempt, ...choice, route };
+          savedAttempts.write(kind, held);
+          begin(choice, held);
+          setError('Ending did not reach the server. Your attempt is paused; resume it or end it again.');
+          return;
+        }
+        savedAttempts.clear(kind);
+        setPhase(reachedLive ? 'debrief' : 'selection');
+        if (reachedLive) reportActions.current.begin(live.attempt.id);
+      },
     }, saved);
+    intent.current.apply(live);
     connection.current = live;
     reportActions.current.prepare(pollTarget(route, live.attempt));
     void (saved ? live.reattach() : live.start(choice.scenarioId, choice.clientId));
   }
 
-  async function end() {
-    const attempt = generation.current;
-    const cancelled = phase === 'connecting';
+  function end() {
     savedAttempts.clear(kind);
+    setError(null);
     setPhase('ending');
-    await connection.current?.end();
-    if (generation.current === attempt) setPhase(cancelled ? 'selection' : 'debrief');
+    void connection.current?.end();
   }
   function reset() {
     generation.current++;
     report.cancel();
     savedAttempts.clear(kind);
     connection.current?.dispose(); connection.current = null;
+    intent.current = new ParticipantIntent();
     setPhase('selection'); setSnapshot(null); setError(null); setMuted(false); setLevels(silentLevels); setLink(stableLink);
   }
-  /** A nonempty typed draft pauses the microphone; without a connection there is nothing to protect. */
-  function setComposing(value: boolean) { connection.current?.setComposing(value); }
+  /** A nonempty typed draft pauses the microphone, including on a replacement connection. */
+  function setComposing(value: boolean) {
+    intent.current.composing = value;
+    connection.current?.setComposing(value);
+  }
   /** Sends one typed answer; a superseded attempt never reports it accepted. */
   async function submitText(text: string): Promise<SubmitTextReply> {
-    const live = connection.current, attempt = generation.current;
+    const live = connection.current, attempt = generation.current, participant = intent.current;
     if (!live) throw new Error('The interview is not live.');
-    const reply = await live.submitText(text);
+    const reply = await live.submitText(participant.answer(text));
+    participant.acknowledged(reply.acceptedId);
     if (generation.current !== attempt) throw new Error('The interview is not live.');
     return reply;
   }
-  function toggleMute() { setMuted(value => { connection.current?.mute(!value); return !value; }); }
+  function toggleMute() {
+    intent.current.muted = !intent.current.muted;
+    connection.current?.mute(intent.current.muted);
+    setMuted(intent.current.muted);
+  }
   // Locally lost media is paused before the server's state says so.
   const held = link.state === 'paused' || link.state === 'resuming';
   const shown: SimulatorPhase = held && phase === 'live' ? 'paused' : phase;

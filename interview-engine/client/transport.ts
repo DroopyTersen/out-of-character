@@ -5,6 +5,8 @@ export type ProtocolAction = 'start' | 'ready' | 'poll' | 'pause' | 'resume' | '
 export type RequestOptions = {
   /** The attempt the command belongs to; its capability authorizes every command. */
   attempt: Attempt;
+  /** Optional diagnostic clock sample, measured around this request. */
+  onServerTime?: (sentAtMs: number, receivedAtMs: number, serverAt: number) => void;
   timeoutMs: number;
   /** Outlives the page, for a closure sent while it unloads. A keepalive request ignores `signal`. */
   keepalive?: boolean;
@@ -22,7 +24,8 @@ export class SessionUnanswered extends Error {}
 /** One HTTP POST per command: `baseUrl` starts an attempt and `baseUrl/:id/:action` carries the rest, each with the Bearer capability. */
 export function pollTransport(baseUrl: string): ProtocolTransport {
   return {
-    async request(action, body, { attempt, timeoutMs, keepalive = false, signal }) {
+    async request(action, body, { attempt, timeoutMs, keepalive = false, signal, onServerTime }) {
+      const sentAtMs = performance.now();
       const response = await fetch(action === 'start' ? baseUrl : `${baseUrl}/${attempt.id}/${action}`, {
         method: 'POST', headers: { Authorization: `Bearer ${attempt.capability}`, 'Content-Type': 'application/json' },
         ...(body ? { body: JSON.stringify(body) } : {}), keepalive,
@@ -32,6 +35,8 @@ export function pollTransport(baseUrl: string): ProtocolTransport {
         if (error instanceof DOMException && error.name === 'TimeoutError') throw new SessionUnanswered('The server took too long to answer.');
         throw error;
       });
+      const serverTime = response.headers.get('X-Interview-Server-Time');
+      if (serverTime) onServerTime?.(sentAtMs, performance.now(), Number(serverTime));
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok || !result) throw new SessionRequestError(result?.error || 'The interview connection is unavailable.', response.status);
       return result;

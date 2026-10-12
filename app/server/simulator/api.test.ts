@@ -46,17 +46,17 @@ test('poll forwards a validated activity report and rejects malformed reports be
   expect((await handleSimulator(f.request(path, { active: true, audio: false, padding: 'x'.repeat(500) }), f.env))!.status).toBe(413);
   expect(f.calls).toHaveLength(1);
 });
-test('poll forwards Sam’s output quiet, bounded, and nothing about the participant’s microphone', async () => {
+test('poll forwards sequenced activity and bounds diagnostics', async () => {
   const f = fixture();
   const path = `sessions/${id}/poll`;
-  const report = { active: true, audio: true, outputQuietMs: null, sequence: 9 };
+  const report = { active: true, audio: true, sequence: 9 };
   expect((await handleSimulator(f.request(path, report), f.env))!.status).toBe(200);
   expect(await f.calls[0]!.json() as typeof report).toEqual(report);
-  for (const outputQuietMs of [-1, 1.5, 60_001, 'soon']) expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs }), f.env))!.status).toBe(400);
-  expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs: null, extra: 1 }), f.env))!.status).toBe(400);
+  for (const sequence of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, 'soon']) expect((await handleSimulator(f.request(path, { active: false, audio: false, sequence }), f.env))!.status).toBe(400);
+  expect((await handleSimulator(f.request(path, { active: false, audio: false, extra: 1 }), f.env))!.status).toBe(400);
   // The largest report a browser sends stays inside the poll bound.
   const network = { ms: 600_000, received: 1_000_000, lost: 1_000_000, concealed: 0.123456789, jitterMs: 60_000, sentLost: 1_000_000, rttMs: 60_000 };
-  expect((await handleSimulator(f.request(path, { active: false, audio: false, outputQuietMs: 60_000, sequence: Number.MAX_SAFE_INTEGER, network }), f.env))!.status).toBe(200);
+  expect((await handleSimulator(f.request(path, { active: false, audio: false, sequence: Number.MAX_SAFE_INTEGER, network }), f.env))!.status).toBe(200);
   expect(f.calls).toHaveLength(2);
 });
 test('interviews no longer start here, while a running one still polls, ends and reports within the capability boundary', async () => {

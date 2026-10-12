@@ -1,6 +1,5 @@
-// What Jev reads from a win/loss debrief: the criterion for each topic and the rubric for each reading. Server-only.
-import type { ReadingRubric } from '../../interview-engine/shared/spec';
-import type { SalesReadingId, salesTopics } from './public';
+// What Jev reads from a win/loss debrief: the criterion for each topic. Server-only.
+import type { salesTopics } from './public';
 
 type TopicId = (typeof salesTopics)[number]['objectives'][number]['id'];
 
@@ -29,40 +28,4 @@ export const salesRules: Partial<Record<TopicId, { creditRule: string; explored?
   },
   'vendor-team': { creditRule: 'Credit only words about the vendor’s own team. Praise or criticism of a competitor’s sales team does not cover this topic.' },
   'vendor-fit': { creditRule: 'Credit only words about the vendor’s product. A competitor’s strengths count only when compared directly with the vendor’s.' },
-};
-
-const readingCriteria = {
-  candor: [
-    'The participant gives only polite, generic reasons and sidesteps clear questions about the decision.',
-    'The participant hints at real reasons but retreats to a safe answer when asked to say more; a stated confidentiality limit is not a fault.',
-    'The participant gives honest reasons within reasonable limits, including what the vendor did poorly.',
-    'The participant shares uncomfortable reasons, such as internal politics, a doubt about the vendor, or a mistake on their own side.',
-    'The participant gives a frank account of why the decision went the way it did, including what is awkward to say, while keeping appropriate boundaries.',
-  ],
-  specificity: [
-    'Only generalities, such as “better fit” or “price”, are offered when concrete detail is requested.',
-    'Some context is present, but few moments, comparisons, or criteria are identified.',
-    'The participant gives at least one concrete moment, comparison, or criterion that clarifies the decision.',
-    'Several grounded details explain what was compared, when the decision shifted, and why.',
-    'Precise examples connect criteria, moments, people, and the outcome without claiming more than the participant knows.',
-  ],
-  perspective: [
-    'The participant speaks only for themselves and cannot or will not describe anyone else’s view when it matters.',
-    'The participant mentions others in the buying group but only in passing.',
-    'The participant describes at least one other person’s view of the decision with some attribution.',
-    'The participant contrasts how different people or teams in the buying group saw the options.',
-    'The participant gives a clear picture of how the buying group’s views differed and how they were resolved, with attribution.',
-  ],
-} as const;
-
-const readingTask = {
-  candor: 'How candidly does the participant give the real reasons behind the decision? Declining to share a price or a name is a boundary, not low candor. Length and strong language are not evidence.',
-  specificity: 'How concrete are the participant’s moments, comparisons and criteria? A short answer naming a precise reason can be strong; a long vague one is not.',
-  perspective: 'How well does the participant describe how others in the buying group saw the decision, not only their own view? A sole decision-maker who says so plainly is not low perspective.',
-} as const;
-
-export const salesRubrics: Record<SalesReadingId, ReadingRubric> = {
-  candor: { task: readingTask.candor, criteria: readingCriteria.candor },
-  specificity: { task: readingTask.specificity, criteria: readingCriteria.specificity },
-  perspective: { task: readingTask.perspective, criteria: readingCriteria.perspective },
 };

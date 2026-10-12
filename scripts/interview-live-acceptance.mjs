@@ -72,7 +72,7 @@ await context.addInitScript(() => {
 });
 
 const page = await context.newPage();
-const report = { checkedAt: new Date().toISOString(), route: '/interview', voice: 'sam-gleam', voiceClickAttempts: 0, syntheticMicrophone: true, fixturePlayed: false, opening: false, openingText: '', audiblePeak: 0, reply: false, firstAudibleAfterFixtureMs: null, samAudibleDuringFixture: false, snapshots: [], requests: [], quietMeasurement: { measured: false, polledAfterMute: false, trackMuted: false, polledAfterUnmute: false }, reportStream: null, finalization: null, summary: null, resources: null, errors: [] };
+const report = { checkedAt: new Date().toISOString(), route: '/interview', voice: 'sam-gleam', voiceClickAttempts: 0, syntheticMicrophone: true, fixturePlayed: false, opening: false, openingText: '', audiblePeak: 0, reply: false, firstAudibleAfterFixtureMs: null, samAudibleDuringFixture: false, snapshots: [], requests: [], microphone: { polledAfterMute: false, trackMuted: false, polledAfterUnmute: false }, reportStream: null, finalization: null, summary: null, resources: null, errors: [] };
 const snapshots = report.snapshots;
 let lastClientText = '';
 let lastClientChangeAt = 0;
@@ -145,7 +145,6 @@ try {
   report.remoteMedia = beforeInput.media;
 
   const polls = () => report.requests.filter(item => item.action === 'poll').map(item => item.activity);
-  const measured = await waitUntil(() => polls().some(item => item.outputQuietMs >= 1000), 10_000);
   const beforeMuteSequence = polls().at(-1)?.sequence ?? -1;
   await page.getByRole('button', { name: 'Mic on', exact: true }).click();
   const polledAfterMute = await waitUntil(() => polls().some(item => item.sequence > beforeMuteSequence), 5000);
@@ -154,8 +153,8 @@ try {
   await page.getByRole('button', { name: 'Mic off', exact: true }).click();
   const polledAfterUnmute = await waitUntil(() => polls().some(item => item.sequence > beforeUnmuteSequence), 5000);
   const trackUnmuted = await page.evaluate(() => window.__interviewAudit.sourceTrack.enabled);
-  report.quietMeasurement = { measured, polledAfterMute, trackMuted, polledAfterUnmute, trackUnmuted };
-  if (!measured || !polledAfterMute || !trackMuted || !polledAfterUnmute || !trackUnmuted) throw new Error('Output quiet measurement, polling, or microphone mute/unmute failed.');
+  report.microphone = { polledAfterMute, trackMuted, polledAfterUnmute, trackUnmuted };
+  if (!polledAfterMute || !trackMuted || !polledAfterUnmute || !trackUnmuted) throw new Error('Polling or microphone mute/unmute failed.');
 
   // The same synthetic audio checks whether a silent opening can still respond to input.
   await page.evaluate(() => window.__interviewAudit.playFixture());
@@ -179,8 +178,8 @@ finally {
   try {
     // Summary status uses an unmetered poll after End. Audit only live activity reports.
     const sequences = report.requests.filter(item => item.action === 'poll').map(item => item.activity.sequence);
-    report.quietMeasurement.sequenceOrdered = sequences.every((value, index) => Number.isInteger(value) && (!index || value > sequences[index - 1]));
-    if (!report.quietMeasurement.sequenceOrdered) report.errors.push('Activity reports did not have increasing sequence numbers.');
+    report.microphone.sequenceOrdered = sequences.every((value, index) => Number.isInteger(value) && (!index || value > sequences[index - 1]));
+    if (!report.microphone.sequenceOrdered) report.errors.push('Activity reports did not have increasing sequence numbers.');
     if (ownedSession?.id) {
       await page.getByRole('button', { name: 'End interview', exact: true }).click({ timeout: 2_000 }).catch(() => report.errors.push('End interview button did not complete.'));
       let ended = await waitUntil(() => snapshots.some(item => item.status === 'ended' || item.status === 'interrupted'), 30_000);

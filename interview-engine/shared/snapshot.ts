@@ -5,15 +5,13 @@ export type SessionStatus = 'connecting' | 'live' | 'paused' | 'ending' | 'ended
 export type SessionPause = { reason: 'browser' | 'provider' | 'restart'; pausedAt: number; resumeBy: number; resumes: number; maxResumes: number };
 /** The interview ends at endsAt unless the participant acts (idle) or wraps up (limit, capacity). */
 export type SessionWarning = { kind: 'idle' | 'limit' | 'capacity'; endsAt: number };
-/** Whether the latest readings reflect the latest words. */
+/** Whether the latest topic coverage reflects the latest words. */
 export type FeedbackStatus = 'waiting' | 'current' | 'delayed' | 'unavailable';
 
 /** How far a topic has been covered. Set aside means the participant declined it, cannot speak to it, or says it does not apply. */
 export const COVERAGE_LEVELS = ['not-yet', 'touched', 'explored', 'set-aside'] as const;
 export type CoverageLevel = typeof COVERAGE_LEVELS[number];
 
-/** One reading of the participant (for example specificity), on Jev's scale. */
-export type ReadingValue<S extends string = Speaker> = { value: number | null; distribution: Record<string, number> | null; evidence: Evidence<S> | null };
 /** `probability` is P(explored); `achieved` means explored. */
 export type InterviewObjectiveReading<S extends string = Speaker> = {
   id: string;
@@ -26,9 +24,8 @@ export type InterviewObjectiveReading<S extends string = Speaker> = {
   level: CoverageLevel;
   levels: Record<CoverageLevel, number> | null;
 };
-export type InterviewEvaluation<R extends string = string, S extends string = Speaker> = {
+export type InterviewEvaluation<S extends string = Speaker> = {
   revision: number;
-  readings: Record<R, ReadingValue<S>>;
   objectives: InterviewObjectiveReading<S>[];
   model: string;
   durationMs: number;
@@ -42,7 +39,7 @@ export type InterviewBackground = {
 };
 
 /** What the browser renders during and after an interview. The narrative is not part of it; the host serves that separately. */
-export type InterviewSnapshot<R extends string = string> = {
+export type InterviewSnapshot = {
   id: string;
   planId: string;
   voiceId: string;
@@ -54,8 +51,8 @@ export type InterviewSnapshot<R extends string = string> = {
   /** Present while paused, and while a resume is connecting. */
   pause: SessionPause | null;
   transcript: Passage[];
-  /** Coverage of the spec's objectives and the participant readings, re-judged as the conversation goes. */
-  evaluation: InterviewEvaluation<R> | null;
+  /** Coverage of the spec's objectives, re-judged as the conversation goes. */
+  evaluation: InterviewEvaluation | null;
   feedbackStatus: FeedbackStatus;
   background: InterviewBackground[];
   message: string | null;

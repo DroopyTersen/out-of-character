@@ -35,7 +35,7 @@ Two adapter checks matter before semantic testing:
 
 | Lane | Source and application contract |
 | --- | --- |
-| Interview silence | `interview-engine/interview/session/silence.server.ts`: `interview-silence-v2`; last 8 passages; `P(continue) >= .85`; transcript inactivity of 4 seconds; 3-second request deadline; once per unchanged revision; 120-check cap. Current checks are **not audio-level gated**. |
+| Interview silence | `interview-engine/judging/judgeConversationSilence.server.ts`: `interview-silence-v2`; last 8 passages; `P(continue) >= .85`; transcript inactivity of 4 seconds; 3-second request deadline; once per unchanged revision; 120-check cap. Current checks are **not audio-level gated**. |
 | Interview turn | `conversation/ranking.server.ts`: `ranking-rubric-v5`; full settled prefix; focus, new project facts, new feedback, natural-next probability and open/answered/declined/stalled state per open thread. `producer.server.ts` uses a 3-second deadline. Novelty or feedback at `.8` can wake Sol, subject to existing eligibility and budgets. |
 | Thread action | `conversation/ranking.ts` and `notes.ts`: retain current ranking, `.1` switching margin, holds, lead changes and note suppression. Raw score agreement alone is insufficient. |
 | Interview grade | `conversation/evaluate.server.ts`: `interview-rubric-v8`; 0–4 readings with observable gate `.8`; explored coverage requires `.85`; supported set-aside requires `.5`; evidence must resolve to a participant passage. Live/final deadlines are 3/8 seconds. |
@@ -138,7 +138,7 @@ Keep the experiment code under `ai/decisions/`; do not edit runtime factories to
 3. `run.ts`: select provider/lane/cases/repeats, enforce caps, interleave order, persist each result/error immediately, never overwrite historical evidence. The default invocation should prepare/show a run without calling providers; an explicit paid mode executes it.
 4. `report.ts`: apply current readers/ranking, score frozen expectations, output per-case paired results, critical failures, uncertainty and cost/latency summaries. Report model errors and unreadable cases even when no semantic score exists.
 
-For silence/turn/final-grade, call the engine's existing `evaluateSilence`, `evaluateTurn`, and `evaluateInterview` with injected models. For simulator/game, existing wrappers instantiate TypeSafe internally; initially import public question builders and answer readers in the experiment. If a tiny evaluation-model injection is needed for full path parity, make it separately and verify current behavior before comparison. Do not build a generic provider framework.
+For silence/turn/final-grade, call the engine's existing `judgeConversationSilence`, `evaluateTurn`, and `evaluateInterview` with injected models. For simulator/game, existing wrappers instantiate TypeSafe internally; initially import public question builders and answer readers in the experiment. If a tiny evaluation-model injection is needed for full path parity, make it separately and verify current behavior before comparison. Do not build a generic provider framework.
 
 One private result record must retain: case/source IDs, split, input and payload hashes, cutoff/map identity, requested/resolved model, rubric/adapter versions, repetition/order, start/end/duration, status, response request ID if supplied, safe raw answers, normalized answers, downstream action, expected label/evidence, usage/cost or `unknown`, and error category. Never serialize request authorization headers or arbitrary SDK error bodies.
 
@@ -146,7 +146,7 @@ Current reproducible commands (no provider calls):
 
 ```sh
 bun scripts/interview-replay.ts output/interview-review/2026-10-08-506432d/archive-row.json output/interview-review/2026-10-08-production-1343bc9/archive-row.json
-bun test interview-engine/interview/session/silence.server.test.ts interview-engine/interview/session/session.server.test.ts interview-engine/interview/conversation/ranking.server.test.ts interview-engine/interview/conversation/ranking.test.ts interview-engine/interview/conversation/evaluate.server.test.ts
+bun test interview-engine/judging/judgeConversationSilence.server.test.ts interview-engine/interview/session/session.server.test.ts interview-engine/interview/reasoning/ranking.server.test.ts interview-engine/interview/reasoning/ranking.test.ts interview-engine/interview/reasoning/evaluate.server.test.ts
 ```
 
 The paired runner now exists at `ai/decisions/run.ts`, with report generation at `ai/decisions/report.ts`. See the measured-results document for current commands. Existing paid scripts such as `ai/interview/run.ts`, `ai/simulator/run.ts`, and `scripts/interview-silence-probe.ts` remain Jev-only; their historical results were preserved.

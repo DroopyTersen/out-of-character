@@ -1,6 +1,7 @@
 import { foundryConfig, foundryConfigured } from '../../../ai/foundry.server';
 import { foundryProviders } from '../../../interview-engine/providers/providers.server';
-import { activitySchema, CAPABILITY, narrativeRequestSchema, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema, type NarrativeRequest } from '../../../interview-engine/shared/protocol';
+import { activitySchema, CAPABILITY, readySchema, resumeSchema, startSchema, SUBMIT_TEXT_BODY_LIMIT, submitTextSchema} from '../../../interview-engine/shared/protocol';
+import { narrativeRequestSchema, type NarrativeRequest } from '../../reports/report.types';
 import { routeDebriefs, workerDebriefs, type DebriefGates } from './debriefs';
 import { BodyError, boundedJson, jsonResponse } from '../http';
 import { importedNarrative, narrateWith } from './narrative';
@@ -99,14 +100,14 @@ export async function routeInterview(request: Request, gates: InterviewGates): P
     const [, id, action] = match as unknown as [string, string, string];
     if (action === 'report' && !gates.available()) return jsonResponse({ error: 'Final reviews are currently unavailable.' }, 503);
     let body: string | undefined;
-    if (action === 'poll' && request.body) {
-      const activity = activitySchema.safeParse(await boundedJson(request, 384));
+    if (['poll', 'pause', 'end'].includes(action) && request.body) {
+      const activity = activitySchema.safeParse(await boundedJson(request, 8 * 1024));
       if (!activity.success) return jsonResponse({ error: 'Invalid activity report.' }, 400);
       body = JSON.stringify(activity.data);
     }
     // A ready may carry the browser's current activity; one without a body still connects.
     if (action === 'ready' && request.body) {
-      const activity = readySchema.safeParse(await boundedJson(request, 384));
+      const activity = readySchema.safeParse(await boundedJson(request, 8 * 1024));
       if (!activity.success) return jsonResponse({ error: 'Invalid activity report.' }, 400);
       if (activity.data) body = JSON.stringify(activity.data);
     }

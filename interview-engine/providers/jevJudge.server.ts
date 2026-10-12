@@ -1,5 +1,5 @@
 import { createTypeSafeAi } from '@ai-sdk/typesafe-ai';
-import type { Judge } from './judge.server';
+import type { Judge } from './judgeProvider.server';
 
 /** The one Jev version: the practice simulator and the evaluation arms judge with it. */
 export const JEV_MODEL = 'jev-1.13.0';

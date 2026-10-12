@@ -1,3 +1,4 @@
+import { inlineBackground } from '../interview-engine/adapters/memory.server.ts';
 import { createJevJudge } from '../interview-engine/providers/jevJudge.server.ts';
 import { spec } from '../interviews/project-closeout/spec.ts';
 import { foundryProviders } from '../interview-engine/providers/providers.server.ts';
@@ -5,13 +6,16 @@ import { generateText, Output } from 'ai';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { foundryConfig, foundryProvider, foundryUrl } from '../ai/foundry.server.ts';
-import { evaluateInterview } from '../ai/interview/evaluate.server.ts';
-import { settledPrefix } from '../ai/interview/map.server.ts';
+import { judgeTopicCoverage } from '../ai/interview/evaluate.server.ts';
+import { generateMap } from '../ai/interview/map.server.ts';
 import { interviewers, interviewOpening } from '../ai/interview/scenario.server.ts';
-import { InterviewProducer, producerServices } from '../interview-engine/interview/conversation/producer.server.ts';
+import { InterviewProducer } from '../interview-engine/reasoning/interviewProducer.server.ts';
+import { evaluateTurn } from '../interview-engine/judging/judgeConversationTurn.server.ts';
+import { lookupInterviewBackground } from '../interview-engine/reasoning/backgroundResearch.server.ts';
+import { modelName } from '../interview-engine/providers/providers.server.ts';
 import { liveConfiguration, NO_EXTERNAL_TASK } from '../app/server/simulator/live.server.ts';
 import { INTERVIEW_SCENARIO_ID, isBackchannel, mergeCoverage, yieldsTurn } from '../core/interview.ts';
-import { appendTranscript, settledTranscript } from '../interview-engine/interview/session/transcript.ts';
+import { SessionTranscript } from '../interview-engine/session/sessionTranscript.ts';
 
 // Realistic closeout rehearsal. A fictional participant, written turn by turn by the fast model and voiced by local
 // speech synthesis, is interviewed by the live Sam with the real producer, timed as the server times it: from the
@@ -94,18 +98,27 @@ const report = {
 const ws = new WebSocket(foundryUrl(foundry, '/live/sessions').replace('https:', 'wss:'), { headers: { 'api-key': foundry.apiKey } });
 const send = event => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(JSON.stringify(event)); return true; };
 const provider = foundryProvider(foundry);
-const passageUpdatedAt = new Map();
-const settled = () => settledTranscript(report.transcript, passageUpdatedAt, Date.now());
-const prefix = () => { const ready = new Set(settled()); return settledPrefix(report.transcript, entry => ready.has(entry)); };
+const dialogue = new SessionTranscript();
+const prefix = () => dialogue.settledPrefix(Date.now());
 const received = [];
 let current = null, offset = 0, inputBytes = 0, inputStartedAt = 0, inputEnded = 0, lastOutput = 0, samCursor = 0, audibleUntil = 0;
 let samSince = '', generating = false, closing = false, offersSeen = 0, coverage = [], grading = null, pacing, deadline;
 const inputMs = () => Date.now() - inputStartedAt;
 const startedAt = Date.now();
+const producerBackground = inlineBackground();
+const providers = foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) });
 const producer = new InterviewProducer({
   // Short: Sol's cache key, which includes it, is capped at 64 characters.
-  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec, providers: foundryProviders({ ...foundry, judge: createJevJudge({ apiKey: process.env.TYPESAFE_API_KEY }) }), services: producerServices,
-  settled: prefix, coverage: () => coverage, send,
+  attemptId: `rh-${crypto.randomUUID()}`, startedAt, spec,
+  models: { agent: modelName(providers.language.agent), fast: modelName(providers.language.fast) }, thresholds: providers.judge.thresholds,
+  services: {
+    generateMap: input => generateMap({ ...input, structured: providers.structured }),
+    evaluateTurn: input => evaluateTurn({ ...input, judge: providers.judge.model }),
+    lookupInterviewBackground: input => lookupInterviewBackground({ ...input, model: providers.language.fast, webSearch: providers.webSearch }),
+  },
+  settled: prefix, coverage: () => coverage,
+  send: note => send({ type: 'session.thinking.append', event_id: note.id, delegation_id: null, content: note.content }),
+  waitUntil: work => producerBackground.track(work),
 });
 const producerTimer = setInterval(() => producer.tick(), 100);
 const close = () => { if (closing) return; closing = true; clearTimeout(pacing); clearInterval(producerTimer); producer.close(); send({ type: 'session.close' }); };
@@ -156,7 +169,7 @@ async function reply() {
 function grade() {
   if (grading || closing) return;
   const transcript = [...report.transcript];
-  grading = evaluateInterview({ planId: INTERVIEW_SCENARIO_ID, voiceId: interviewerId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) })
+  grading = judgeTopicCoverage({ planId: INTERVIEW_SCENARIO_ID, voiceId: interviewerId, transcript, revision: transcript.length, apiKey: process.env.TYPESAFE_API_KEY, signal: AbortSignal.timeout(15_000) })
     .then(graded => { if (!closing) coverage = mergeCoverage(coverage, graded.objectives); }, error => report.errors.push(`Grading failed (${error.name}).`))
     .finally(() => { grading = null; });
 }
@@ -205,10 +218,9 @@ await new Promise(resolve => {
       pace();
     } else if (value.type === 'session.input_transcript.delta' || value.type === 'session.output_transcript.delta') {
       if (value.type === 'session.output_transcript.delta') { lastOutput = Date.now(); samSince += value.delta; }
-      const next = appendTranscript(report.transcript, { speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms });
-      const changed = next.find(entry => !report.transcript.includes(entry));
-      report.transcript = next;
-      if (changed) { passageUpdatedAt.set(changed.id, Date.now()); producer.transcriptChanged(changed, next[next.indexOf(changed) - 1]?.id ?? null); }
+      const changed = dialogue.appendSpeech({ id: value.event_id, speaker: value.type === 'session.input_transcript.delta' ? 'participant' : 'interviewer', text: value.delta, startMs: value.start_ms, endMs: value.end_ms }, { epoch: 1, offsetMs: 0 }, Date.now());
+      report.transcript = dialogue.entries;
+      if (changed) producer.transcriptChanged(changed, report.transcript[report.transcript.indexOf(changed) - 1]?.id ?? null);
     } else if (value.type === 'session.output_audio.delta') {
       const audio = Buffer.from(value.delta, 'base64');
       // Played as it arrives, after anything still queued, on the input clock.
@@ -240,7 +252,7 @@ await new Promise(resolve => {
 });
 clearTimeout(deadline); clearTimeout(pacing); clearInterval(producerTimer); ws.close();
 await grading;
-await producer.settle();
+await producerBackground.settle();
 const at = ms => Math.round(ms - startedAt + (startedAt - inputStartedAt));
 report.producer = producer.summary();
 report.notes = producer.records.filter(item => item.source === 'note').map(note => ({

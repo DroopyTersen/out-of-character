@@ -1,7 +1,7 @@
 import type { InterviewSnapshot } from '../../../interview-engine/shared/snapshot';
-import type { NarrativeStatus } from '../../../interview-engine/interview/session/checkpoint';
+import type { NarrativeStatus } from '../../reports/report.types';
 import type { ArchiveProvenance } from '../simulator/archive.server';
-import { fitRecords, type ProducerLogRecord } from '../../../interview-engine/interview/conversation/records';
+import { fitRecords, type ProducerLogRecord } from '../../../interview-engine/reasoning/conversationRecords';
 
 export type InterviewArchiveWrite = {
   /** The spec the attempt ran under: the archive never assumes one. */
@@ -10,7 +10,7 @@ export type InterviewArchiveWrite = {
   state: 'partial' | 'final';
   capturedAt: number;
   snapshot: InterviewSnapshot;
-  narrative: NarrativeStatus | null;
+  narrative?: NarrativeStatus | null;
   provenance: ArchiveProvenance;
   interventions: ProducerLogRecord[];
 };
@@ -26,7 +26,7 @@ export async function writeInterviewArchive(db: D1Database, { specId, specVersio
     state === 'final' ? capturedAt : null, state, snapshot.status, snapshot.finalization,
     snapshot.feedbackStatus, snapshot.usageSeconds, snapshot.message,
     JSON.stringify(snapshot.transcript), snapshot.evaluation ? JSON.stringify(snapshot.evaluation) : null,
-    narrative?.status ?? 'pending', narrative?.text ?? null,
+    narrative?.status ?? (state === 'final' && !snapshot.transcript.some(passage => passage.speaker === 'participant') ? 'unavailable' : 'pending'), narrative?.text ?? null,
     JSON.stringify(provenance), '[]', specId, specVersion,
   ];
   // Producer records take whatever the rest of the row leaves.
@@ -45,14 +45,19 @@ export async function writeInterviewArchive(db: D1Database, { specId, specVersio
       session_status = excluded.session_status, finalization = excluded.finalization,
       feedback_status = excluded.feedback_status, usage_seconds = excluded.usage_seconds,
       message = excluded.message, transcript_json = excluded.transcript_json,
-      evaluation_json = excluded.evaluation_json, summary_status = excluded.summary_status,
-      summary_text = excluded.summary_text, provenance_json = excluded.provenance_json,
+      evaluation_json = excluded.evaluation_json,
+      summary_status = CASE WHEN excluded.summary_status = 'pending' THEN interview_attempts.summary_status ELSE excluded.summary_status END,
+      summary_text = CASE WHEN excluded.summary_status = 'pending' THEN interview_attempts.summary_text ELSE excluded.summary_text END,
+      provenance_json = CASE
+        WHEN json_type(excluded.provenance_json, '$.interviewSummary') IS NULL
+          AND json_type(interview_attempts.provenance_json, '$.interviewSummary') IS NOT NULL
+        THEN json_set(excluded.provenance_json, '$.interviewSummary', json_extract(interview_attempts.provenance_json, '$.interviewSummary'))
+        ELSE excluded.provenance_json END,
       cues_json = excluded.cues_json, spec_id = excluded.spec_id, spec_version = excluded.spec_version,
       interventions_json = excluded.interventions_json
     WHERE (interview_attempts.archive_state = 'partial' OR excluded.archive_state = 'final')
       AND (excluded.updated_at >= interview_attempts.updated_at OR
         (interview_attempts.archive_state = 'partial' AND excluded.archive_state = 'final'))
-      AND NOT (interview_attempts.summary_status IN ('ready', 'unavailable') AND excluded.summary_status = 'pending')
   `).bind(...columns).run();
   if (!result.success) throw new Error('Interview archive write failed.');
 }

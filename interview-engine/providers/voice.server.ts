@@ -7,18 +7,41 @@ export type WebSocketLike = {
   addEventListener(type: 'close' | 'error', listener: () => void): void;
 };
 
-/**
- * Turns the provider's answer to an upgrade request into an open socket, or null when the response carries none.
- * Cloudflare: `response.webSocket` after `accept()`. The platform difference is an argument, not a seam.
- */
-export type SocketOpener<Socket extends WebSocketLike = WebSocketLike> = (response: Response) => Socket | null;
+/** What opening the control socket came to: an open socket, a session the provider no longer has, or a failure. */
+export type ControlOpening<Socket extends WebSocketLike = WebSocketLike> = { status: 'open'; socket: Socket } | { status: 'gone' } | { status: 'failed' };
 
-/** The voice model: one provider session per media connection, steered over its control socket. */
-export type VoiceProvider<Socket extends WebSocketLike = WebSocketLike> = {
-  /** Creates a provider session for the browser's SDP offer and returns its id and SDP answer. */
+/**
+ * Opens the provider's control WebSocket at `url` with the provider's `headers`, which fetch cannot do. The platform
+ * supplies it: Bun's WebSocket client, or Cloudflare's upgrade fetch and `response.webSocket`. `signal` bounds the
+ * handshake only. `gone` is a 404 or 410: the session ended; any other failed handshake is `failed`.
+ */
+export type ControlOpener<Socket extends WebSocketLike = WebSocketLike> = (request: { url: string; headers: Record<string, string>; signal: AbortSignal }) => Promise<ControlOpening<Socket>>;
+
+/** Provider events in the engine's names, independent of the wire protocol. */
+export type VoiceEvent =
+  | { type: 'transcript'; id?: string; speaker: 'participant' | 'interviewer'; text: string; startMs: number; endMs: number }
+  | { type: 'closed'; reason: string | null; usageSeconds: number | null }
+  | { type: 'acknowledged'; id: string; startMs?: number; endMs?: number }
+  | { type: 'delegation'; id: string; target: string | null }
+  | { type: 'error'; id?: string };
+
+export type VoiceInput = { kind: 'instruction' | 'context'; id: string; content: string; delegationId?: string };
+export type VoiceHandlers = { event(event: VoiceEvent): void; dropped(): void };
+export type VoiceConnection = {
+  readonly connected: boolean;
+  send(input: VoiceInput): boolean;
+  /** Confirms provider closure, reattaching if needed; incoming transcript is still delivered while closing. */
+  close(): Promise<void>;
+  /** Drops this owner's control connection without ending the provider session. */
+  detach(): void;
+};
+
+/** The voice model: one provider session per media connection, steered over its control connection. */
+export type VoiceProvider = {
+  /** Exact deployment identity when the adapter can provide it. */
+  modelId?: string;
   create(input: { sdp: string; voice: string; instructions: string }): Promise<{ id: string; sdp: string }>;
-  /** Opens the session's control socket: provider events in, instructions out. */
-  attach(id: string): Promise<Socket>;
-  /** Closes a provider session by id and waits for the provider to confirm. A session that no longer exists is closed. */
-  close(id: string): Promise<void>;
+  attach(id: string, handlers?: VoiceHandlers): Promise<VoiceConnection>;
+  /** Closes a provider session by id. A session that no longer exists is closed. */
+  close(id: string, handlers?: VoiceHandlers): Promise<void>;
 };

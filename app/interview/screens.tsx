@@ -1,8 +1,8 @@
 import type { Passage } from '../../interview-engine/shared/transcript';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowRight, Check, ChevronDown, Clipboard, FileText, LoaderCircle, Mic, MicOff, Minus, RotateCcw, Send, Volume2 } from 'lucide-react';
-import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewReadings, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewEvaluation, type InterviewReadingId, type InterviewSummaryContent } from '../../core/interview';
-import type { Client, FeedbackStatus } from '../../core/simulator/types';
+import { COVERAGE_LEVEL_LABELS, coverageConfidence, interviewTopics, interviewVoices, INTERVIEWER_NAME, type InterviewBackground, type InterviewEvaluation, type InterviewSummaryContent } from '../../core/interview';
+import type { Client } from '../../core/simulator/types';
 import type { InterviewSnapshot as EngineSnapshot } from '../../interview-engine/shared/snapshot';
 import type { AudioLevels } from '../../interview-engine/client/audioLevels';
 import { TYPED_TEXT_LIMIT } from '../../interview-engine/shared/protocol';
@@ -12,7 +12,7 @@ import { VoiceDisplay } from '../simulator/voice-display';
 import type { ReportStage, StreamedReportView } from '../simulator/use-report';
 
 /** The current interview uses the engine's canonical transcript and snapshot. */
-export type InterviewSnapshot = EngineSnapshot<InterviewReadingId>;
+export type InterviewSnapshot = EngineSnapshot;
 export type InterviewVoiceId = typeof interviewVoices[number]['id'];
 
 const SummaryMarkdown = lazy(() => import('./summary-markdown.client'));
@@ -111,32 +111,6 @@ function LiveTranscript({ entries }: { entries: Passage[] }) {
   const last = entries.at(-1);
   const { scroller, onScroll } = useStickToBottom(`${entries.length}:${last?.id ?? ''}:${last?.text.length ?? 0}`);
   return <InterviewTranscript entries={entries} scroller={scroller} onScroll={onScroll} />;
-}
-
-function InterviewReadings({ evaluation, status }: { evaluation: InterviewEvaluation | null | undefined; status: FeedbackStatus }) {
-  const labels = {
-    engagement: ['Limited response', 'Some response', 'Following along', 'Building the thread', 'Developing the story'],
-    openness: ['Little shared', 'Brief perspective', 'Some perspective', 'Tradeoffs shared', 'Nuanced account'],
-    specificity: ['General', 'Broad detail', 'Some specifics', 'Concrete', 'Rich detail'],
-  };
-  const readingStatus = status === 'current' ? 'Live observations' : status === 'delayed' || (status === 'unavailable' && evaluation) ? 'Latest observations' : status === 'unavailable' ? 'Observations unavailable' : 'Listening for details';
-  return <section className="interview-readings sim-panel">
-    <header><h2>Conversation readings</h2><span className="interview-feedback-state" data-status={status}>{readingStatus}</span></header>
-    <p>These reflect what you have shared so far. A concise answer can say a lot.</p>
-    <div className="interview-reading-list">{interviewReadings.map(item => {
-      const reading = evaluation?.readings[item.id];
-      const value = reading?.value;
-      const observation = value == null ? 'Not yet observed' : labels[item.id][Math.round(Math.max(0, Math.min(4, value)))];
-      return <div className="interview-reading" key={item.id}>
-        <div><strong>{item.label}</strong><span>{observation}{value != null && <small className="interview-reading-score" aria-label={`score ${value.toFixed(1)} of 4`}>{value.toFixed(1)}/4</small>}</span></div>
-        <small>{item.description}</small>
-      </div>;
-    })}</div>
-    {interviewReadings.some(item => evaluation?.readings[item.id].evidence) && <details className="interview-reading-evidence"><summary>From your words</summary>{interviewReadings.map(item => {
-      const evidence = evaluation?.readings[item.id].evidence;
-      return evidence && <div key={item.id}><strong>{item.label}</strong><blockquote>“{evidence.text}”</blockquote></div>;
-    })}</details>}
-  </section>;
 }
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
@@ -312,7 +286,7 @@ export function InterviewConversation({ voiceId, snapshot, phase, muted, levels,
         {showTranscript && <section className="interview-live-transcript sim-panel" id="interview-live-transcript" tabIndex={-1} ref={transcriptPanel}><header><h2>Conversation so far</h2><button className="quiet-button" onClick={closeTranscript}>{typing ? 'Hide' : 'Close'}</button></header><LiveTranscript entries={snapshot?.transcript ?? []} /></section>}
         <InterviewBackgroundLive notes={snapshot?.background} />
       </div>
-      <div className="interview-observations"><InterviewReadings evaluation={snapshot?.evaluation} status={phase === 'ending' && snapshot?.evaluation ? 'delayed' : snapshot?.feedbackStatus ?? 'waiting'} /><InterviewTopics evaluation={snapshot?.evaluation} /></div>
+      <div className="interview-observations"><InterviewTopics evaluation={snapshot?.evaluation} /></div>
     </div>
   </section>;
 }

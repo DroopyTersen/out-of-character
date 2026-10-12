@@ -35,7 +35,6 @@ Label thread readings from the transcript prefix plus the map available at that 
 
 For final grading, use the shipped objective criteria and reading rubrics with the transcript prefix. Cite participant passage IDs. Distinguish `not-yet`, `touched`, `explored`, and `set-aside`; uncertainty about one detail does not erase supported evidence about another. Public research and interviewer suggestions do not establish participant facts. A selected passage must support the claimed objective, not merely mention similar words.
 
-For scored readings, return an acceptable interval on the existing 0–4 rubric, an evidence ID, and a reason. Use unavailable when the dialogue does not support observation. Preserve ambiguity; do not make either evaluated provider the authority.
 
 ## Outcome grading
 

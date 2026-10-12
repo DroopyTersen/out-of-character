@@ -1,11 +1,12 @@
+import type { InterviewArchiveRow } from '../../../interview-engine/seams.server';
 import { RUBRIC_VERSION } from '../../../ai/simulator/rubric';
 import { actorBrief, getClient, getScenario, openingInstruction } from '../../../ai/simulator/scenarios.server';
 import { SIMULATOR_VERSION, type ClientEnding, type PublicSnapshot, type SessionPause, type SessionSnapshot } from '../../../core/simulator/types';
 import { LIVE_MODEL } from './live.server';
 import type { DirectorSummary, InterventionRecord } from '../../../core/simulator/director';
-import type { ProducerSummary } from '../../../interview-engine/interview/conversation/records';
+import type { ProducerSummary } from '../../../interview-engine/reasoning/conversationRecords';
 import type { NetworkRecord } from '../../../interview-engine/shared/network';
-import type { NarrativeProvenance } from '../../../interview-engine/shared/narrative';
+import type { NarrativeProvenance } from '../../reports/report.types';
 import type { ReportArchive } from './report';
 
 export async function writeReport(db: D1Database, id: string, report: ReportArchive): Promise<void> {
@@ -13,7 +14,7 @@ export async function writeReport(db: D1Database, id: string, report: ReportArch
   if (!result.success || result.meta.changes !== 1) throw new Error('Simulator report archive write failed.');
 }
 
-export type ArchiveProvenance = {
+export type ArchiveProvenance = Pick<InterviewArchiveRow['provenance'], 'brief' | 'opening' | 'models' | 'passageTimings' | 'media'> & {
   model: string;
   voice: string;
   rubricVersion: string;
